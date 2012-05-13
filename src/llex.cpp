@@ -69,35 +69,11 @@ void luaX_init (lua_State *L) {
   }
 }
 
-TString * stringf(lua_State * L, const char * fmt, ...) {
-	int N = 128;
-	char stack_buf[128];
-	char * buf = stack_buf;
-	while(1) {
-		va_list ap;
-		va_start(ap, fmt);
-		int n = vsnprintf(buf, N, fmt, ap);
-		if(n > -1 && n < N) {
-			if(buf != stack_buf)
-				free(buf);
-			return luaS_newlstr(L,buf,n);
-		}
-		if(n > -1)
-			N = n + 1;
-		else
-			N *= 2;
-		if(buf != stack_buf)
-			free(buf);
-		buf = (char*) malloc(N);
-	}
-}
-
-
 const char * luaX_token2str (LexState *ls, int token) {
   if (token < FIRST_RESERVED) {
 	assert(token == cast(unsigned char, token));
-    return getstr((lisprint(token)) ? stringf(ls->L,"'%c'", token) :
-                               stringf(ls->L,"char(%d)"));
+    return (lisprint(token)) ? luaS_cstringf(ls->L,"'%c'", token) :
+    		                   luaS_cstringf(ls->L,"char(%d)");
   }
   else {
 	const char *s = luaX_tokens[token - FIRST_RESERVED];
@@ -128,9 +104,9 @@ static l_noret report_error(const char * err) {
 }
 
 static l_noret lexerror (LexState *ls, const char * msg, int token) {
-  msg = getstr(stringf(ls->L,"%s:%d: %s", ls->source, ls->linenumber, msg));
+  msg = luaS_cstringf(ls->L,"%s:%d: %s", getstr(ls->source), ls->linenumber, msg);
   if (token)
-    msg = getstr(stringf(ls->L,"%s near %s", msg, txtToken(ls, token)));
+    msg = luaS_cstringf(ls->L,"%s near %s", msg, txtToken(ls, token));
   report_error(msg);
 }
 

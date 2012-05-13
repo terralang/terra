@@ -100,4 +100,38 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
 TString *luaS_new (lua_State *L, const char *str) {
   return luaS_newlstr(L, str, strlen(str));
 }
+TString * luaS_vstringf(lua_State * L, const char * fmt, va_list ap) {
+	int N = 128;
+	char stack_buf[128];
+	char * buf = stack_buf;
+	while(1) {
+		int n = vsnprintf(buf, N, fmt, ap);
+		if(n > -1 && n < N) {
+			if(buf != stack_buf)
+				free(buf);
+			return luaS_newlstr(L,buf,n);
+		}
+		if(n > -1)
+			N = n + 1;
+		else
+			N *= 2;
+		if(buf != stack_buf)
+			free(buf);
+		buf = (char*) malloc(N);
+	}
+}
+TString * luaS_stringf(lua_State * L, const char * fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	TString * ts = luaS_vstringf(L,fmt,ap);
+	va_end(ap);
+	return ts;
+}
+const char * luaS_cstringf(lua_State * L, const char * fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	TString * ts = luaS_vstringf(L,fmt,ap);
+	va_end(ap);
+	return getstr(ts);
+}
 

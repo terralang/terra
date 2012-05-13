@@ -10,6 +10,8 @@
 #include "lobject.h"
 #include "putil.h"
 
+#include <stdarg.h>
+
 #define sizestring(s)	(sizeof(union TString)+((s)->len+1)*sizeof(char))
 
 /* get the actual string (array of bytes) from a TString */
@@ -29,6 +31,10 @@
 LUAI_FUNC void luaS_resize (lua_State *L, int newsize);
 LUAI_FUNC TString *luaS_newlstr (lua_State *L, const char *str, size_t l);
 LUAI_FUNC TString *luaS_new (lua_State *L, const char *str);
+
+LUAI_FUNC TString *luaS_vstringf(lua_State * L, const char * fmt, va_list ap);
+LUAI_FUNC TString *luaS_stringf(lua_State * L, const char * fmt, ...);
+LUAI_FUNC const char *luaS_cstringf(lua_State * L, const char * fmt, ...);
 
 
 #endif
