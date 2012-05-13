@@ -16,13 +16,12 @@
 #include <assert.h>
 
 LUAI_FUNC void luaS_resize (lua_State *L, int newsize) {
+  //printf("\n\n\nRESIZING\n\n\n");
   int i;
   stringtable *tb = &L->strt;
   if (newsize > tb->size) {
-	if(tb->hash)
-		free(tb->hash);
-	tb->hash = (TString**) malloc(newsize * sizeof(TString*));
-    for (i = tb->size; i < newsize; i++) tb->hash[i] = NULL;
+	tb->hash = (TString**) realloc(tb->hash,newsize * sizeof(TString*));
+	for (i = tb->size; i < newsize; i++) tb->hash[i] = NULL;
   }
   /* rehash */
   for (i=0; i<tb->size; i++) {
@@ -59,6 +58,8 @@ static TString *newlstr (lua_State *L, const char *str, size_t l,
   totalsize = sizeof(TString) + ((l + 1) * sizeof(char));
   list = &tb->hash[lmod(h, tb->size)];
   ts =(TString*) malloc(totalsize);
+  ts->next = *list;
+  *list = ts;
   ts->len = l;
   ts->hash = h;
   ts->reserved = 0;
@@ -83,9 +84,15 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
     if (h == ts->hash &&
         ts->len == l &&
         (memcmp(str, getstr(ts), l * sizeof(char)) == 0)) {
+      //printf("string found: ");
+      //fwrite(str,1,l,stdout);
+      //printf("\n");
       return ts;
     }
   }
+  //printf("string not found: ");
+  //fwrite(str,1,l,stdout);
+  //printf("\n");
   return newlstr(L, str, l, h);  /* not found; create a new string */
 }
 

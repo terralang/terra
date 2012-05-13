@@ -82,7 +82,7 @@ TString * stringf(lua_State * L, const char * fmt, ...) {
 				free(buf);
 			return luaS_newlstr(L,buf,n);
 		}
-		else if(n > -1)
+		if(n > -1)
 			N = n + 1;
 		else
 			N *= 2;
