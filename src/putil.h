@@ -34,6 +34,7 @@ typedef struct stringtable {
 
 typedef struct lua_State {
 	stringtable strt;
+	int nCcalls;
 } lua_State;
 
 
@@ -87,5 +88,26 @@ typedef const char * (*lua_Reader) (lua_State *L, void *ud, size_t *sz);
 
 
 #define MAX_INT (INT_MAX-2)  /* maximum value of an int (-2 for safety) */
+
+/*
+** Marks the end of a patch list. It is an invalid value both as an absolute
+** address, and as a list link (would link an element to itself).
+*/
+#define NO_JUMP (-1)
+
+/*
+** maximum depth for nested C calls and syntactical nested non-terminals
+** in a program. (Value must fit in an unsigned short int.)
+*/
+#if !defined(LUAI_MAXCCALLS)
+#define LUAI_MAXCCALLS		200
+#endif
+
+/*
+@@ LUA_QL describes how error messages quote program elements.
+** CHANGE it if you want a different appearance.
+*/
+#define LUA_QL(x)	"'" x "'"
+#define LUA_QS		LUA_QL("%s")
 
 #endif

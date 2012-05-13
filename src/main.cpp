@@ -1,6 +1,7 @@
 #include "llex.h"
 #include "lstring.h"
 #include "lzio.h"
+#include "lparser.h"
 #include <string.h>
 lua_State ls;
 #include <assert.h>
@@ -26,6 +27,10 @@ int main(int argc, char ** argv) {
 	Zio zio;
 	lex.buff = (Mbuffer*) malloc(sizeof(Mbuffer));
 	luaZ_init(&ls,&zio,my_reader,NULL);
+	Dyndata dyd;
+#if 1
+	luaY_parser(&ls,&zio,lex.buff,&dyd,"foobar",zgetc(&zio));
+#else
 	luaX_setinput(&ls,&lex,&zio,name,zgetc(&zio));
 	do {
 		luaX_next(&lex);
@@ -44,5 +49,6 @@ int main(int argc, char ** argv) {
 		}
 		printf("\n");
 	} while(lex.t.token != TK_EOS);
+#endif
 	return 0;
 }

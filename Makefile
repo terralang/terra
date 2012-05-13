@@ -6,7 +6,7 @@ CC = /usr/local/bin/clang
 FLAGS = -g
 LFLAGS = -g 
 
-SRC = lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+SRC = lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = lexer
 
