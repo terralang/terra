@@ -7,10 +7,9 @@
 #ifndef lparser_h
 #define lparser_h
 
-#include "putil.h"
+#include "lutil.h"
 #include "lobject.h"
 #include "lzio.h"
-
 
 /*
 ** Expression descriptor
@@ -44,7 +43,7 @@ typedef struct FuncState {
 } FuncState;
 
 
-LUAI_FUNC void luaY_parser (lua_State *L, ZIO *z, Mbuffer *buff, const char *name, int firstchar);
+LUAI_FUNC void luaY_parser (luaP_State *L, ZIO *z, Mbuffer *buff, const char *name, int firstchar);
 
 
 #endif

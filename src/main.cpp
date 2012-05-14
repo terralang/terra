@@ -3,12 +3,13 @@
 #include "lzio.h"
 #include "lparser.h"
 #include <string.h>
-lua_State ls;
 #include <assert.h>
+
+
 
 char buf[512];
 FILE * file;
-const char * my_reader(lua_State *L, void *ud, size_t *sz) {
+const char * my_reader(luaP_State *L, void *ud, size_t *sz) {
 	char * r = fgets(buf,512,file);
 	if(r) {
 		*sz = strlen(r);
@@ -20,6 +21,10 @@ const char * my_reader(lua_State *L, void *ud, size_t *sz) {
 int main(int argc, char ** argv) {
 	assert(argc == 2);
 	file = fopen(argv[1],"r");
+	
+	lua_State * L = luaL_newstate();
+	luaP_State ls;
+	
 	luaS_resize(&ls,32);
 	luaX_init(&ls);
 	LexState lex;

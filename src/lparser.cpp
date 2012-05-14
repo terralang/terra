@@ -63,7 +63,7 @@ static l_noret error_expected (LexState *ls, int token) {
 
 
 static l_noret errorlimit (FuncState *fs, int limit, const char *what) {
-  lua_State *L = fs->ls->L;
+  luaP_State *L = fs->ls->L;
   const char *msg;
   int line = fs->f.linedefined;
   const char *where = (line == 0)
@@ -136,7 +136,7 @@ static void singlevar (LexState *ls, expdesc *var) {
 
 
 static void enterlevel (LexState *ls) {
-  lua_State *L = ls->L;
+  luaP_State *L = ls->L;
   ++L->nCcalls;
   checklimit(ls->fs, L->nCcalls, LUAI_MAXCCALLS, "C levels");
 }
@@ -162,7 +162,7 @@ static void leaveblock (FuncState *fs) {
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
-  lua_State *L = ls->L;
+  luaP_State *L = ls->L;
   Proto *f;
   fs->prev = ls->fs;  /* linked list of funcstates */
   fs->ls = ls;
@@ -175,7 +175,7 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
 
 
 static void close_func (LexState *ls) {
-  lua_State *L = ls->L;
+  luaP_State *L = ls->L;
   FuncState *fs = ls->fs;
   leaveblock(fs);
   ls->fs = fs->prev;
@@ -997,7 +997,7 @@ static void statement (LexState *ls) {
 /* }====================================================================== */
 
 
-void luaY_parser (lua_State *L, ZIO *z, Mbuffer *buff,
+void luaY_parser (luaP_State *L, ZIO *z, Mbuffer *buff,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;

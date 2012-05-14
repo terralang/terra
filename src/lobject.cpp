@@ -16,7 +16,7 @@ int luaO_hexavalue (int c) {
   else return ltolower(c) - 'a' + 10;
 }
 
-static lua_Number readhexa (const char **s, lua_Number r, int *count) {
+static luaP_Number readhexa (const char **s, luaP_Number r, int *count) {
   for (; lisxdigit(cast_uchar(**s)); (*s)++) {  /* read integer part */
     r = (r * 16.0) + cast_num(luaO_hexavalue(cast_uchar(**s)));
     (*count)++;
@@ -29,8 +29,8 @@ static lua_Number readhexa (const char **s, lua_Number r, int *count) {
 ** convert an hexadecimal numeric string to a number, following
 ** C99 specification for 'strtod'
 */
-static lua_Number lua_strx2number (const char *s, char **endptr) {
-  lua_Number r = 0.0;
+static luaP_Number luaP_strx2number (const char *s, char **endptr) {
+  luaP_Number r = 0.0;
   int e = 0, i = 0;
   int neg = 0;  /* 1 if number is negative */
   *endptr = cast(char *, s);  /* nothing is valid yet */
@@ -68,14 +68,14 @@ static lua_Number lua_strx2number (const char *s, char **endptr) {
 
 
 
-int luaO_str2d (const char *s, size_t len, lua_Number *result) {
+int luaO_str2d (const char *s, size_t len, luaP_Number *result) {
   char *endptr;
   if (strpbrk(s, "nN"))  /* reject 'inf' and 'nan' */
     return 0;
   else if (strpbrk(s, "xX"))  /* hexa? */
-    *result = lua_strx2number(s, &endptr);
+    *result = luaP_strx2number(s, &endptr);
   else
-    *result = lua_str2number(s, &endptr);
+    *result = luaP_str2number(s, &endptr);
   if (endptr == s) return 0;  /* nothing recognized */
   while (lisspace(cast_uchar(*endptr))) endptr++;
   return (endptr == s + len);  /* OK if no trailing characters */

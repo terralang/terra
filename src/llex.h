@@ -9,7 +9,7 @@
 
 //#include "lobject.h"
 #include "lzio.h"
-#include "putil.h"
+#include "lutil.h"
 
 #define FIRST_RESERVED	257
 
@@ -33,7 +33,7 @@ enum RESERVED {
 
 
 typedef union {
-  lua_Number r;
+  luaP_Number r;
   TString * ts;
 } SemInfo;  /* semantics information */
 
@@ -52,7 +52,7 @@ typedef struct LexState {
   Token t;  /* current token */
   Token lookahead;  /* look ahead token */
   struct FuncState *fs;  /* current function (parser) */
-  lua_State *L;
+  luaP_State *L;
   ZIO *z;  /* input stream */
   Mbuffer *buff;  /* buffer for tokens */
   TString * source;  /* current source name */
@@ -61,8 +61,8 @@ typedef struct LexState {
 } LexState;
 
 
-LUAI_FUNC void luaX_init (lua_State *L);
-LUAI_FUNC void luaX_setinput (lua_State *L, LexState *ls, ZIO *z,
+LUAI_FUNC void luaX_init (luaP_State *L);
+LUAI_FUNC void luaX_setinput (luaP_State *L, LexState *ls, ZIO *z,
                               TString * source, int firstchar);
 LUAI_FUNC TString * luaX_newstring (LexState *ls, const char *str, size_t l);
 LUAI_FUNC void luaX_next (LexState *ls);

@@ -7,7 +7,7 @@
 #ifndef lctype_h
 #define lctype_h
 
-#include "putil.h"
+#include "lutil.h"
 
 
 /*

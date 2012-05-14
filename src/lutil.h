@@ -1,18 +1,23 @@
-#ifndef putil_h
-#define putil_h
+#ifndef lutil_h
+#define lutil_h
 
 #include <stdio.h>
 #include <stdint.h>
 #include <limits.h>
 
+extern "C" {
+#include "lua.h"
+#include "lauxlib.h"
+}
+
 #define cast(t, exp)	((t)(exp))
 #define cast_byte(i)	cast(lu_byte, (i))
-#define cast_num(i)	cast(lua_Number, (i))
+#define cast_num(i)	cast(luaP_Number, (i))
 #define cast_int(i)	cast(int, (i))
 #define cast_uchar(i)	cast(unsigned char, (i))
 
 
-typedef double lua_Number;
+typedef double luaP_Number;
 typedef unsigned char lu_byte;
 typedef uint32_t lu_int32;
 
@@ -32,13 +37,14 @@ typedef struct stringtable {
   int size;
 } stringtable;
 
-typedef struct lua_State {
+typedef struct luaP_State {
 	stringtable strt;
 	int nCcalls;
-} lua_State;
+	lua_State * ls;
+} luaP_State;
 
 
-typedef const char * (*lua_Reader) (lua_State *L, void *ud, size_t *sz);
+typedef const char * (*luaP_Reader) (luaP_State *L, void *ud, size_t *sz);
 
 /*
 @@ LUAI_FUNC is a mark for all extern functions that are not to be

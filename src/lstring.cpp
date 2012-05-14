@@ -15,7 +15,7 @@
 
 #include <assert.h>
 
-LUAI_FUNC void luaS_resize (lua_State *L, int newsize) {
+LUAI_FUNC void luaS_resize (luaP_State *L, int newsize) {
   //printf("\n\n\nRESIZING\n\n\n");
   int i;
   stringtable *tb = &L->strt;
@@ -44,7 +44,7 @@ LUAI_FUNC void luaS_resize (lua_State *L, int newsize) {
 }
 
 
-static TString *newlstr (lua_State *L, const char *str, size_t l,
+static TString *newlstr (luaP_State *L, const char *str, size_t l,
                                        unsigned int h) {
   size_t totalsize;  /* total size of TString object */
   TString **list;  /* (pointer to) list where it will be inserted */
@@ -70,7 +70,7 @@ static TString *newlstr (lua_State *L, const char *str, size_t l,
 }
 
 
-TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
+TString *luaS_newlstr (luaP_State *L, const char *str, size_t l) {
   TString *o;
   unsigned int h = cast(unsigned int, l);  /* seed */
   size_t step = (l>>5)+1;  /* if string is too long, don't hash all its chars */
@@ -97,10 +97,10 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
 }
 
 
-TString *luaS_new (lua_State *L, const char *str) {
+TString *luaS_new (luaP_State *L, const char *str) {
   return luaS_newlstr(L, str, strlen(str));
 }
-TString * luaS_vstringf(lua_State * L, const char * fmt, va_list ap) {
+TString * luaS_vstringf(luaP_State * L, const char * fmt, va_list ap) {
 	int N = 128;
 	char stack_buf[128];
 	char * buf = stack_buf;
@@ -120,14 +120,14 @@ TString * luaS_vstringf(lua_State * L, const char * fmt, va_list ap) {
 		buf = (char*) malloc(N);
 	}
 }
-TString * luaS_stringf(lua_State * L, const char * fmt, ...) {
+TString * luaS_stringf(luaP_State * L, const char * fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
 	TString * ts = luaS_vstringf(L,fmt,ap);
 	va_end(ap);
 	return ts;
 }
-const char * luaS_cstringf(lua_State * L, const char * fmt, ...) {
+const char * luaS_cstringf(luaP_State * L, const char * fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
 	TString * ts = luaS_vstringf(L,fmt,ap);

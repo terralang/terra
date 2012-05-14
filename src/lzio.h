@@ -8,7 +8,7 @@
 #ifndef lzio_h
 #define lzio_h
 
-#include "putil.h"
+#include "lutil.h"
 #include <stdlib.h>
 
 #define EOZ	(-1)			/* end of stream */
@@ -41,8 +41,8 @@ static inline size_t luaZ_resizebuffer(void * state, Mbuffer * buf, size_t size)
 	return size;
 }
 
-LUAI_FUNC char *luaZ_openspace (lua_State *L, Mbuffer *buff, size_t n);
-LUAI_FUNC void luaZ_init (lua_State *L, ZIO *z, lua_Reader reader,
+LUAI_FUNC char *luaZ_openspace (luaP_State *L, Mbuffer *buff, size_t n);
+LUAI_FUNC void luaZ_init (luaP_State *L, ZIO *z, luaP_Reader reader,
                                         void *data);
 LUAI_FUNC size_t luaZ_read (ZIO* z, void* b, size_t n);	/* read next n bytes */
 
@@ -53,9 +53,9 @@ LUAI_FUNC size_t luaZ_read (ZIO* z, void* b, size_t n);	/* read next n bytes */
 struct Zio {
   size_t n;			/* bytes still unread */
   const char *p;		/* current position in buffer */
-  lua_Reader reader;		/* reader function */
+  luaP_Reader reader;		/* reader function */
   void* data;			/* additional data */
-  lua_State *L;			/* Lua state (for reader) */
+  luaP_State *L;			/* Lua state (for reader) */
 };
 
 
