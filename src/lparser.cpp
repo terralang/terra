@@ -27,16 +27,11 @@
 //#include "ltable.h"
 #include <vector>
 
-
-
 /* maximum number of local variables per function (must be smaller
    than 250, due to the bytecode format) */
 #define MAXVARS		200
 
-
 #define hasmultret(k)		((k) == VCALL || (k) == VVARARG)
-
-
 
 /*
 ** nodes for block list (list of active blocks)
@@ -161,6 +156,9 @@ static void leaveblock (FuncState *fs) {
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
   fs->bl = bl->previous;
+  for(int i = 0; i < bl->local_variables.size(); i++) {
+	  printf("v[%d] = %s\n",i,getstr(bl->local_variables[i]));
+  }
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
@@ -748,12 +746,11 @@ static void exp1 (LexState *ls, expdesc * e) {
 }
 
 
-static void forbody (LexState *ls, int line, int nvars, int isnum) {
+static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl) {
   /* forbody -> DO block */
-  BlockCnt bl;
   FuncState *fs = ls->fs;
   checknext(ls, TK_DO);
-  enterblock(fs, &bl, 0);  /* scope for declared variables */
+  enterblock(fs, bl, 0);  /* scope for declared variables */
   block(ls);
   leaveblock(fs);  /* end of scope for declared variables */
 }
@@ -762,7 +759,7 @@ static void forbody (LexState *ls, int line, int nvars, int isnum) {
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   FuncState *fs = ls->fs;
-  //TODO: remember the local variable!
+
   checknext(ls, '=');
   expdesc a,b,c;
   exp1(ls,&a);  /* initial value */
@@ -773,7 +770,9 @@ static void fornum (LexState *ls, TString *varname, int line) {
   else {  /* default step = 1 */
 
   }
-  forbody(ls, line, 1, 1);
+  BlockCnt bl;
+  bl.local_variables.push_back(varname);
+  forbody(ls, line, 1, 1, &bl);
 }
 
 
@@ -785,16 +784,17 @@ static void forlist (LexState *ls, TString *indexname) {
   int line;
 
   /* create declared variables */
-  //new_localvar(ls, indexname);
+  BlockCnt bl;
+  bl.local_variables.push_back(indexname);
   while (testnext(ls, ',')) {
-    str_checkname(ls);
-    //TODO: rembmer the local variables!
+    TString * name = str_checkname(ls);
+    bl.local_variables.push_back(name);
     nvars++;
   }
   checknext(ls, TK_IN);
   line = ls->linenumber;
   explist(ls, &e);
-  forbody(ls, line, nvars - 3, 0);
+  forbody(ls, line, nvars - 3, 0, &bl);
 }
 
 static void forstat (LexState *ls, int line) {
@@ -853,10 +853,10 @@ static void ifstat (LexState *ls, int line) {
 static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
-  str_checkname(ls);
+  TString * name = str_checkname(ls);
   body(ls, &b, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
-  //TODO: track local variables!
+  fs->bl->local_variables.push_back(name);
 }
 
 static void localstat (LexState *ls) {
@@ -865,8 +865,8 @@ static void localstat (LexState *ls) {
   int nexps;
   expdesc e;
   do {
-	str_checkname(ls);
-    //TODO: track local variables!
+	TString * name = str_checkname(ls);
+    ls->fs->bl->local_variables.push_back(name);
 	nvars++;
   } while (testnext(ls, ','));
   if (testnext(ls, '='))
