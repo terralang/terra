@@ -146,7 +146,7 @@ void luaX_setinput (lua_State *L, LexState *ls, ZIO *z, TString * source,
   ls->current = firstchar;
   ls->lookahead.token = TK_EOS;  /* no look-ahead token */
   ls->z = z;
-  //ls->fs = NULL;
+  ls->fs = NULL;
   ls->linenumber = 1;
   ls->lastline = 1;
   ls->source = source;

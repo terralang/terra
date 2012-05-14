@@ -55,7 +55,6 @@ typedef struct LexState {
   lua_State *L;
   ZIO *z;  /* input stream */
   Mbuffer *buff;  /* buffer for tokens */
-  struct Dyndata *dyd;  /* dynamic structures used by the parser */
   TString * source;  /* current source name */
   TString * envn;  /* environment variable name */
   char decpoint;  /* locale decimal point */

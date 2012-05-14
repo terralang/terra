@@ -27,9 +27,8 @@ int main(int argc, char ** argv) {
 	Zio zio;
 	lex.buff = (Mbuffer*) malloc(sizeof(Mbuffer));
 	luaZ_init(&ls,&zio,my_reader,NULL);
-	Dyndata dyd;
 #if 1
-	luaY_parser(&ls,&zio,lex.buff,&dyd,"foobar",zgetc(&zio));
+	luaY_parser(&ls,&zio,lex.buff,"foobar",zgetc(&zio));
 #else
 	luaX_setinput(&ls,&lex,&zio,name,zgetc(&zio));
 	do {
