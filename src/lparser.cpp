@@ -899,6 +899,21 @@ static void funcstat (LexState *ls, int line) {
   body(ls, &b, ismethod, line);
 }
 
+static int rewindbuffer(LexState * ls) {
+	//reset the output buffer to just before this token
+	OutputBuffer_rewind(&ls->output_buffer,1+strlen(luaX_token2str(ls,ls->t.token))); //+1 because the lexer will have looked passed the keyword to make sure it was over
+	return ls->output_buffer.N;
+}
+static void terrastat(LexState * ls, int line) {
+	ls->in_terra++;
+	Token t = ls->t;
+	funcstat(ls,line);
+	luaX_patchbegin(ls,&t);
+	OutputBuffer_printf(&ls->output_buffer,"terra.new_function({})");
+	luaX_patchend(ls,&t);
+	ls->in_terra--;
+}
+
 
 static void exprstat (LexState *ls) {
   /* stat -> func | assignment */
@@ -963,6 +978,9 @@ static void statement (LexState *ls) {
       funcstat(ls, line);
       break;
     }
+    case TK_TERRA: {
+      terrastat(ls,line);
+    } break;
     case TK_LOCAL: {  /* stat -> localstat */
       luaX_next(ls);  /* skip LOCAL */
       if (testnext(ls, TK_FUNCTION))  /* local function? */
@@ -1004,6 +1022,7 @@ void luaY_parser (luaP_State *L, ZIO *z, Mbuffer *buff,
   BlockCnt bl;
   TString *tname = luaS_new(L, name);
   lexstate.buff = buff;
+  OutputBuffer_init(&lexstate.output_buffer);
   luaX_setinput(L, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);
   luaX_next(&lexstate);  /* read first token */
@@ -1012,5 +1031,7 @@ void luaY_parser (luaP_State *L, ZIO *z, Mbuffer *buff,
   close_func(&lexstate);
   assert(!funcstate.prev && !lexstate.fs);
   /* all scopes should be correctly finished */
+  OutputBuffer_putc(&lexstate.output_buffer,'\0');
+  printf("%s",lexstate.output_buffer.data);
 }
 

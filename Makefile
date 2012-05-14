@@ -24,7 +24,6 @@ SRC = lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = lexer
 
-
 .PHONY:	all clean
 all:	$(EXECUTABLE)
 

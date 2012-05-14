@@ -26,8 +26,14 @@
 //#include "ltable.h"
 #include "lzio.h"
 
-#define next(ls) (ls->current = zgetc(ls->z))
 
+int next(LexState * ls) {
+	ls->current = zgetc(ls->z);
+	if(ls->current != EOZ) {
+		OutputBuffer_putc(&ls->output_buffer,ls->current == EOZ ? '\0' : ls->current);
+	}
+	return ls->current;
+}
 #define currIsNewline(ls)	(ls->current == '\n' || ls->current == '\r')
 
 
@@ -36,7 +42,7 @@ static const char *const luaX_tokens [] = {
     "and", "break", "do", "else", "elseif",
     "end", "false", "for", "function", "goto", "if",
     "in", "local", "nil", "not", "or", "repeat",
-    "return", "then", "true", "until", "while",
+    "return", "then", "true", "until", "while", "terra",
     "..", "...", "==", ">=", "<=", "~=", "::", "<eof>",
     "<number>", "<name>", "<string>"
 };
@@ -151,10 +157,64 @@ void luaX_setinput (luaP_State *L, LexState *ls, ZIO *z, TString * source,
   ls->lastline = 1;
   ls->source = source;
   ls->envn = luaS_new(L,"terra_parser");//luaS_new(L, LUA_ENV);  /* create env name */
+  ls->in_terra = 0;
+  ls->patchinfo.N = 0;
+  ls->patchinfo.space = 32;
+  ls->patchinfo.buffer = (char*)malloc(32);
+  if(firstchar != EOZ)
+	  OutputBuffer_putc(&ls->output_buffer,firstchar);
   luaZ_resizebuffer(ls->L, ls->buff, LUA_MINBUFFER);  /* initialize buffer */
 }
 
+void luaX_patchbegin(LexState *ls, Token * begin_token) {
+	//save everything from the current token to the end of the output buffer in the patch buffer
+	OutputBuffer * ob = &ls->output_buffer;
+	int n_bytes = ob->N - ls->t.seminfo.buffer_begin;
+	if(n_bytes > ls->patchinfo.space) {
+		int newsize = std::max(n_bytes, ls->patchinfo.space * 2);
+		ls->patchinfo.buffer = (char*) realloc(ls->patchinfo.buffer, newsize);
+		ls->patchinfo.space = newsize;
+	}
+	printf("patch size = %d\n",n_bytes);
+	memcpy(ls->patchinfo.buffer,ob->data + ls->t.seminfo.buffer_begin, n_bytes);
+	ls->patchinfo.buffer[n_bytes] = '\0';
+	printf("%s\n",ls->patchinfo.buffer);
+	ls->patchinfo.N = n_bytes;
 
+	//reset the output buffer to the beginning of the begin_token
+	ob->N = begin_token->seminfo.buffer_begin;
+	//retain the tokens leading whitespace for sanity...
+	while(1) {
+		switch(ob->data[ob->N]) {
+		case '\n': case '\r':
+			begin_token->seminfo.linebegin++;
+			/*fallthrough*/
+		case ' ': case '\f': case '\t': case '\v':
+			ob->N++;
+			break;
+		default:
+			goto loop_exit;
+		}
+	} loop_exit:
+	return;
+	//code can now safely write to this buffer
+}
+void luaX_patchend(LexState *ls, Token * begin_token) {
+	//first we need to pad with newlines, until we reach the original line count
+	OutputBuffer * ob = &ls->output_buffer;
+
+	for(int line = begin_token->seminfo.linebegin;
+		line < ls->t.seminfo.linebegin;
+		line++) {
+		OutputBuffer_putc(ob,'\n');
+	}
+	int offset = ob->N - ls->t.seminfo.buffer_begin;
+	//restore patch data
+	OutputBuffer_puts(ob,ls->patchinfo.N,ls->patchinfo.buffer);
+	//adjust to current tokens to have correct information
+	ls->t.seminfo.buffer_begin += offset;
+	ls->lookahead.seminfo.buffer_begin += offset;
+}
 
 /*
 ** =======================================================
@@ -371,6 +431,8 @@ static void read_string (LexState *ls, int del, SemInfo *seminfo) {
 
 static int llex (LexState *ls, SemInfo *seminfo) {
   luaZ_resetbuffer(ls->buff);
+  seminfo->buffer_begin = ls->output_buffer.N - 1; //- 1 because we already recorded the first token
+  seminfo->linebegin = ls->linenumber; //no -1 because we haven't incremented line info for this token yet
   for (;;) {
     switch (ls->current) {
       case '\n': case '\r': {  /* line breaks */

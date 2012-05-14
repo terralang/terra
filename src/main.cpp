@@ -27,14 +27,15 @@ int main(int argc, char ** argv) {
 	
 	luaS_resize(&ls,32);
 	luaX_init(&ls);
-	LexState lex;
 	TString * name = luaS_new(&ls,"foobar");
 	Zio zio;
-	lex.buff = (Mbuffer*) malloc(sizeof(Mbuffer));
+	Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
 	luaZ_init(&ls,&zio,my_reader,NULL);
 #if 1
-	luaY_parser(&ls,&zio,lex.buff,"foobar",zgetc(&zio));
+	luaY_parser(&ls,&zio,buff,"foobar",zgetc(&zio));
 #else
+	LexState lex;
+	lex.buff = buff;
 	luaX_setinput(&ls,&lex,&zio,name,zgetc(&zio));
 	do {
 		luaX_next(&lex);

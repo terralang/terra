@@ -10,6 +10,7 @@
 //#include "lobject.h"
 #include "lzio.h"
 #include "lutil.h"
+#include <vector>
 
 #define FIRST_RESERVED	257
 
@@ -22,19 +23,23 @@ enum RESERVED {
   TK_AND = FIRST_RESERVED, TK_BREAK,
   TK_DO, TK_ELSE, TK_ELSEIF, TK_END, TK_FALSE, TK_FOR, TK_FUNCTION,
   TK_GOTO, TK_IF, TK_IN, TK_LOCAL, TK_NIL, TK_NOT, TK_OR, TK_REPEAT,
-  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE,
+  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA,
   /* other terminal symbols */
   TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE, TK_DBCOLON, TK_EOS,
   TK_NUMBER, TK_NAME, TK_STRING
 };
 
 /* number of reserved words */
-#define NUM_RESERVED	(cast(int, TK_WHILE-FIRST_RESERVED+1))
+#define NUM_RESERVED	(cast(int, TK_TERRA-FIRST_RESERVED+1))
 
 
-typedef union {
-  luaP_Number r;
-  TString * ts;
+typedef struct {
+  union {
+	  luaP_Number r;
+	  TString * ts;
+  };
+  int linebegin; //line on which we _started_ parsing this token
+  int buffer_begin; //position in buffer where we _started_ parsing this token
 } SemInfo;  /* semantics information */
 
 
@@ -43,6 +48,54 @@ typedef struct Token {
   SemInfo seminfo;
 } Token;
 
+
+struct OutputBuffer {
+	int N;
+	int space;
+	char * data;
+};
+
+static inline void OutputBuffer_init(OutputBuffer * buf) {
+	buf->N = 0;
+	buf->space = 1024;
+	buf->data = (char*) malloc(buf->space);
+}
+static inline void OutputBuffer_resize(OutputBuffer * buf, int newsize) {
+	buf->N = std::min(newsize,buf->N);
+	buf->space = newsize;
+	buf->data = (char*) realloc(buf->data,newsize);
+}
+static inline void OutputBuffer_putc(OutputBuffer * buf, char c) {
+	if(buf->N == buf->space)
+		OutputBuffer_resize(buf,buf->space * 2);
+	buf->data[buf->N] = c;
+	buf->N++;
+}
+static inline void OutputBuffer_rewind(OutputBuffer * buf, int size) {
+	buf->N -= std::min(buf->N,size);
+}
+static inline void OutputBuffer_printf(OutputBuffer * buf,const char * fmt,...) {
+	va_list ap;
+	va_start(ap,fmt);
+	if(buf->N == buf->space)
+		OutputBuffer_resize(buf,buf->space * 2);
+	while(1) {
+		int most_written = buf->space - buf->N;
+		int n = vsnprintf(buf->data + buf->N, most_written, fmt, ap);
+		if(n > -1 && n < most_written) {
+			buf->N += n;
+			return;
+		}
+		OutputBuffer_resize(buf, buf->space * 2);
+	}
+}
+static inline void OutputBuffer_puts(OutputBuffer * buf, int N, const char * str) {
+	if(buf->N + N > buf->space) {
+		OutputBuffer_resize(buf,std::max(buf->space * 2,buf->N + N));
+	}
+	memcpy(buf->data + buf->N,str,N);
+	buf->data += N;
+}
 /* state of the lexer plus state of the parser when shared by all
    functions */
 typedef struct LexState {
@@ -58,6 +111,15 @@ typedef struct LexState {
   TString * source;  /* current source name */
   TString * envn;  /* environment variable name */
   char decpoint;  /* locale decimal point */
+
+  int in_terra;
+  OutputBuffer output_buffer;
+
+  struct {
+	  char * buffer;
+	  int N;
+	  int space;
+  } patchinfo; //data to fix up output stream when we insert terra information
 } LexState;
 
 
@@ -69,6 +131,7 @@ LUAI_FUNC void luaX_next (LexState *ls);
 LUAI_FUNC int luaX_lookahead (LexState *ls);
 LUAI_FUNC l_noret luaX_syntaxerror (LexState *ls, const char *s);
 LUAI_FUNC const char * luaX_token2str (LexState *ls, int token);
-
+LUAI_FUNC void luaX_patchbegin(LexState *ls, Token * begin_token);
+LUAI_FUNC void luaX_patchend(LexState *ls, Token * begin_token);
 
 #endif
