@@ -60,6 +60,12 @@ static inline void OutputBuffer_init(OutputBuffer * buf) {
 	buf->space = 1024;
 	buf->data = (char*) malloc(buf->space);
 }
+static inline void OutputBuffer_free(OutputBuffer * buf) {
+	buf->N = 0;
+	buf->space = 0;
+	free(buf->data);
+	buf->data = NULL;
+}
 static inline void OutputBuffer_resize(OutputBuffer * buf, int newsize) {
 	buf->N = std::min(newsize,buf->N);
 	buf->space = newsize;
@@ -107,7 +113,7 @@ typedef struct LexState {
   struct FuncState *fs;  /* current function (parser) */
   lua_State *L;
   int n_lua_objects; /*number of lua objects already in table of lua asts*/
-  luaP_State *LP;
+  terra_State *LP;
   ZIO *z;  /* input stream */
   Mbuffer *buff;  /* buffer for tokens */
   TString * source;  /* current source name */
@@ -125,8 +131,8 @@ typedef struct LexState {
 } LexState;
 
 
-LUAI_FUNC void luaX_init (luaP_State *L);
-LUAI_FUNC void luaX_setinput (luaP_State *L, LexState *ls, ZIO *z,
+LUAI_FUNC void luaX_init (terra_State *L);
+LUAI_FUNC void luaX_setinput (terra_State *L, LexState *ls, ZIO *z,
                               TString * source, int firstchar);
 LUAI_FUNC TString * luaX_newstring (LexState *ls, const char *str, size_t l);
 LUAI_FUNC void luaX_next (LexState *ls);

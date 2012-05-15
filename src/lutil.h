@@ -1,6 +1,8 @@
 #ifndef lutil_h
 #define lutil_h
 
+#include "terra.h"
+
 #include <stdio.h>
 #include <stdint.h>
 #include <limits.h>
@@ -31,19 +33,10 @@ typedef struct TString {
   size_t len;  /* number of characters in string */
 } TString;
 
-typedef struct stringtable {
-  TString **hash;
-  lu_int32 nuse;  /* number of elements */
-  int size;
-} stringtable;
-
-typedef struct luaP_State {
-	stringtable strt;
-	int nCcalls;
-} luaP_State;
 
 
-typedef const char * (*luaP_Reader) (luaP_State *L, void *ud, size_t *sz);
+
+typedef const char * (*luaP_Reader) (terra_State *L, void *ud, size_t *sz);
 
 /*
 @@ LUAI_FUNC is a mark for all extern functions that are not to be

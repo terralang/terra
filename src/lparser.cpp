@@ -105,7 +105,7 @@ static l_noret error_expected (LexState *ls, int token) {
 
 
 static l_noret errorlimit (FuncState *fs, int limit, const char *what) {
-  luaP_State *L = fs->ls->LP;
+  terra_State *L = fs->ls->LP;
   const char *msg;
   int line = fs->f.linedefined;
   const char *where = (line == 0)
@@ -178,7 +178,7 @@ static void singlevar (LexState *ls, expdesc *var) {
 
 
 static void enterlevel (LexState *ls) {
-  luaP_State *L = ls->LP;
+  terra_State *L = ls->LP;
   ++L->nCcalls;
   checklimit(ls->fs, L->nCcalls, LUAI_MAXCCALLS, "C levels");
 }
@@ -204,7 +204,7 @@ static void leaveblock (FuncState *fs) {
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
-  luaP_State *L = ls->LP;
+  terra_State *L = ls->LP;
   Proto *f;
   fs->prev = ls->fs;  /* linked list of funcstates */
   fs->ls = ls;
@@ -217,7 +217,7 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
 
 
 static void close_func (LexState *ls) {
-  luaP_State *L = ls->LP;
+  terra_State *L = ls->LP;
   FuncState *fs = ls->fs;
   leaveblock(fs);
   ls->fs = fs->prev;
@@ -1057,14 +1057,16 @@ static void statement (LexState *ls) {
 
 /* }====================================================================== */
 
-void luaY_parser (lua_State * L, luaP_State *lp,ZIO *z, Mbuffer *buff,
+void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;
   BlockCnt bl;
+  lua_State * L = T->L;
   lexstate.L = L;
-  TString *tname = luaS_new(lp, name);
+  TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
+  lexstate.n_lua_objects = 0;
   OutputBuffer_init(&lexstate.output_buffer);
   if(!lua_checkstack(L,TA_LAST_TOKEN + LUAI_MAXCCALLS)) {
 	  abort();
@@ -1076,7 +1078,7 @@ void luaY_parser (lua_State * L, luaP_State *lp,ZIO *z, Mbuffer *buff,
   lua_pushvalue(L,-1);
   lua_setfield(L,LUA_GLOBALSINDEX,"_terra_globals");
 
-  luaX_setinput(lp, &lexstate, z, tname, firstchar);
+  luaX_setinput(T, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);
   luaX_next(&lexstate);  /* read first token */
   statlist(&lexstate);  /* main body */
@@ -1088,10 +1090,10 @@ void luaY_parser (lua_State * L, luaP_State *lp,ZIO *z, Mbuffer *buff,
   assert(lua_gettop(L) == 0);
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
-  printf("%s",lexstate.output_buffer.data);
-  printf("\n\n");
+  printf("********* passing to lua ************\n%s\n*************************************\n",lexstate.output_buffer.data);
   if(luaL_dostring(L,lexstate.output_buffer.data)) {
-	  printf("error: %s\n",luaL_checkstring(L,-1));
+	 terra_reporterror(T,luaL_checkstring(L,-1));
   }
+  OutputBuffer_free(&lexstate.output_buffer);
 }
 

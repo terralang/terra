@@ -67,7 +67,7 @@ static void save (LexState *ls, int c) {
 }
 
 
-void luaX_init (luaP_State *L) {
+void luaX_init (terra_State *L) {
   int i;
   for (i=0; i<NUM_RESERVED; i++) {
     TString *ts = luaS_new(L, luaX_tokens[i]);
@@ -145,7 +145,7 @@ static void inclinenumber (LexState *ls) {
 }
 
 
-void luaX_setinput (luaP_State *LP, LexState *ls, ZIO *z, TString * source,
+void luaX_setinput (terra_State *LP, LexState *ls, ZIO *z, TString * source,
                     int firstchar) {
   ls->decpoint = '.';
   ls->LP = LP;
@@ -156,7 +156,7 @@ void luaX_setinput (luaP_State *LP, LexState *ls, ZIO *z, TString * source,
   ls->linenumber = 1;
   ls->lastline = 1;
   ls->source = source;
-  ls->envn = luaS_new(LP,"terra_parser");//luaS_new(L, LUA_ENV);  /* create env name */
+  ls->envn = luaS_new(LP,"<terra_parser>");//luaS_new(L, LUA_ENV);  /* create env name */
   ls->in_terra = 0;
   ls->patchinfo.N = 0;
   ls->patchinfo.space = 32;

@@ -28,13 +28,13 @@
 */
 #define eqstr(a,b)	((a) == (b))
 
-LUAI_FUNC void luaS_resize (luaP_State *L, int newsize);
-LUAI_FUNC TString *luaS_newlstr (luaP_State *L, const char *str, size_t l);
-LUAI_FUNC TString *luaS_new (luaP_State *L, const char *str);
+LUAI_FUNC void luaS_resize (terra_State *L, int newsize);
+LUAI_FUNC TString *luaS_newlstr (terra_State *L, const char *str, size_t l);
+LUAI_FUNC TString *luaS_new (terra_State *L, const char *str);
 
-LUAI_FUNC TString *luaS_vstringf(luaP_State * L, const char * fmt, va_list ap);
-LUAI_FUNC TString *luaS_stringf(luaP_State * L, const char * fmt, ...);
-LUAI_FUNC const char *luaS_cstringf(luaP_State * L, const char * fmt, ...);
+LUAI_FUNC TString *luaS_vstringf(terra_State * L, const char * fmt, va_list ap);
+LUAI_FUNC TString *luaS_stringf(terra_State * L, const char * fmt, ...);
+LUAI_FUNC const char *luaS_cstringf(terra_State * L, const char * fmt, ...);
 
 
 #endif
