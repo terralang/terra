@@ -61,7 +61,10 @@ enum TA_Globals {
 		int begin = lua_gettop(ls->L); \
 		(x); \
 		int end = lua_gettop(ls->L); \
-		assert(begin + n == end); \
+		if(begin + n != end) { \
+			fprintf(stderr,"%s:%d: unmatched return\n",__FILE__,__LINE__); \
+			luaX_syntaxerror(ls,"error"); \
+		} \
 	} else { \
 		(x); \
 	} \
@@ -132,6 +135,14 @@ static int new_table(LexState * ls, const char * str) {
 static int new_table_before(LexState * ls, const char * str) {
 	if(ls->in_terra) {
 		int t = new_table(ls,str);
+		lua_insert(ls->L,-2);
+		return t - 1;
+	} else return 0;
+}
+
+static int new_table_before(LexState * ls) {
+	if(ls->in_terra) {
+		int t = new_table(ls);
 		lua_insert(ls->L,-2);
 		return t - 1;
 	} else return 0;
@@ -262,6 +273,9 @@ static void checkname (LexState *ls, expdesc *e) {
 
 static void singlevar (LexState *ls, expdesc *var) {
   TString *varname = str_checkname(ls);
+  int tbl = new_table(ls,"var");
+  push_string(ls,varname);
+  add_field(ls,tbl,"name");
 }
 
 
@@ -373,11 +387,23 @@ static void fieldsel (LexState *ls, expdesc *v) {
   //luaK_indexed(fs, v, &key);
 }
 
+static void push_literal(LexState * ls, const char * typ) {
+	int lit = new_table_before(ls,"literal");
+	add_field(ls,lit,"value");
+	push_string(ls,typ);
+	add_field(ls,lit,"type");
+}
+static void push_double(LexState * ls, double d) {
+	if(ls->in_terra) {
+		lua_pushnumber(ls->L,d);
+	}
+}
 
 static void yindex (LexState *ls, expdesc *v) {
   /* index -> '[' expr ']' */
   luaX_next(ls);  /* skip the '[' */
-  expr(ls, v);
+  
+  RETURNS_1(expr(ls, v));  
   //luaK_exp2val(ls->fs, v);
   checknext(ls, ']');
 }
@@ -400,21 +426,27 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   /* recfield -> (NAME | `['exp1`]') = exp1 */
   FuncState *fs = ls->fs;
   expdesc key, val;
+  int tbl = new_table(ls,"recfield");
   if (ls->t.token == TK_NAME) {
     checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
-    checkname(ls, &key);
+    RETURNS_1(checkname(ls, &key));
+    push_literal(ls,"string");
   }
   else  /* ls->t.token == '[' */
-    yindex(ls, &key);
+    RETURNS_1(yindex(ls, &key));
+  add_field(ls,tbl,"key");
   cc->nh++;
   checknext(ls, '=');
-  expr(ls, &val);
+  RETURNS_1(expr(ls, &val));
+  add_field(ls,tbl,"value");
 }
 
 static void listfield (LexState *ls, struct ConsControl *cc) {
   /* listfield -> exp */
   expdesc val;
-  expr(ls, &val);
+  int tbl = new_table(ls,"listfield");
+  RETURNS_1(expr(ls, &val));
+  add_field(ls,tbl,"value");
   checklimit(ls->fs, cc->na, MAX_INT, "items in a constructor");
   cc->na++;
 }
@@ -449,12 +481,16 @@ static void constructor (LexState *ls, expdesc *t) {
   int line = ls->linenumber;
   struct ConsControl cc;
   cc.na = cc.nh = 0;
+  int tbl = new_table(ls,"constructor");
+  int records = new_table(ls);
   checknext(ls, '{');
   do {
     if (ls->t.token == '}') break;
-    field(ls, &cc);
+    RETURNS_1(field(ls, &cc));
+    add_entry(ls,records);
   } while (testnext(ls, ',') || testnext(ls, ';'));
   check_match(ls, '}', '{', line);
+  add_field(ls,tbl,"records");
 }
 
 /* }====================================================================== */
@@ -531,11 +567,11 @@ static int explist (LexState *ls, expdesc *v) {
   int n = 1;  /* at least one expression */
   int lst = new_table(ls);
   expr(ls, v);
-  //add_entry(ls,lst);
+  add_entry(ls,lst);
   while (testnext(ls, ',')) {
     //luaK_exp2nextreg(ls->fs, v);
     expr(ls, v);
-    //add_entry(ls,lst);
+    add_entry(ls,lst);
     n++;
   }
   return n;
@@ -550,18 +586,23 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
     case '(': {  /* funcargs -> `(' [ explist ] `)' */
       luaX_next(ls);
       if (ls->t.token == ')') {  /* arg list is empty? */
+      	new_table(ls); //empty return list
       } else {
-        explist(ls, &args);
+        RETURNS_1(explist(ls, &args));
       }
       check_match(ls, ')', '(', line);
       break;
     }
     case '{': {  /* funcargs -> constructor */
-      constructor(ls, &args);
+      RETURNS_1(constructor(ls, &args));
       break;
     }
     case TK_STRING: {  /* funcargs -> STRING */
       //codestring(ls, &args, ls->t.seminfo.ts);
+      int exps = new_table(ls);
+      push_string(ls,ls->t.seminfo.ts);
+      push_literal(ls,"string");
+      add_entry(ls,exps);
       luaX_next(ls);  /* must use `seminfo' before `next' */
       break;
     }
@@ -583,18 +624,17 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
-  push_string(ls,"<prefix>");
   switch (ls->t.token) {
     case '(': {
       int line = ls->linenumber;
       luaX_next(ls);
-      expr(ls, v);
+      RETURNS_1(expr(ls, v));
       check_match(ls, ')', '(', line);
       //luaK_dischargevars(ls->fs, v);
       return;
     }
     case TK_NAME: {
-      singlevar(ls, v);
+      RETURNS_1(singlevar(ls, v));
       return;
     }
     default: {
@@ -609,31 +649,42 @@ static void primaryexp (LexState *ls, expdesc *v) {
         prefixexp { `.' NAME | `[' exp `]' | `:' NAME funcargs | funcargs } */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  prefixexp(ls, v);
+  RETURNS_1(prefixexp(ls, v));
   for (;;) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
-        fieldsel(ls, v);
+        RETURNS_0(fieldsel(ls, v));
         break;
       }
       case '[': {  /* `[' exp1 `]' */
         expdesc key;
         //luaK_exp2anyregup(fs, v);
-        yindex(ls, &key);
+        
+        int tbl = new_table_before(ls,"index");
+        add_field(ls,tbl,"value");
+        RETURNS_1(yindex(ls, &key));
+        add_field(ls,tbl,"index");
         //luaK_indexed(fs, v, &key);
         break;
       }
       case ':': {  /* `:' NAME funcargs */
         expdesc key;
         luaX_next(ls);
-        checkname(ls, &key);
-        //luaK_self(fs, v, &key);
-        funcargs(ls, v, line);
+        int tbl = new_table_before(ls,"method");
+        add_field(ls,tbl,"value");
+        RETURNS_1(checkname(ls, &key));
+        add_field(ls,tbl,"name");
+        RETURNS_1(funcargs(ls, v, line));
+        add_field(ls,tbl,"arguments");
+        
         break;
       }
       case '(': case TK_STRING: case '{': {  /* funcargs */
         //luaK_exp2nextreg(fs, v);
-        funcargs(ls, v, line);
+        int tbl = new_table_before(ls,"apply");
+        add_field(ls,tbl,"value");
+        RETURNS_1(funcargs(ls, v, line));
+        add_field(ls,tbl,"arguments");
         break;
       }
       default: return;
@@ -648,21 +699,29 @@ static void simpleexp (LexState *ls, expdesc *v) {
   switch (ls->t.token) {
     case TK_NUMBER: {
       //v->u.nval = ls->t.seminfo.r;
+      push_double(ls,ls->t.seminfo.r);
+      push_literal(ls,"double");
       break;
     }
     case TK_STRING: {
+      push_string(ls,ls->t.seminfo.ts);
+      push_literal(ls,"string");
       break;
     }
     case TK_NIL: {
-      //init_exp(v, VNIL, 0);
+      push_double(ls,0);
+      push_literal(ls,"nil");
       break;
     }
     case TK_TRUE: {
       //init_exp(v, VTRUE, 0);
+      push_boolean(ls,true);
+      push_literal(ls,"boolean");
       break;
     }
     case TK_FALSE: {
-      //init_exp(v, VFALSE, 0);
+      push_boolean(ls,false);
+      push_literal(ls,"boolean");
       break;
     }
     case TK_DOTS: {  /* vararg */
@@ -769,19 +828,34 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   uop = getunopr(ls->t.token);
   if (uop != OPR_NOUNOPR) {
     int line = ls->linenumber;
+    int tbl = new_table(ls,"operator");
+    push_string(ls,luaX_token2str(ls,ls->t.token));
+    add_field(ls,tbl,"operator");
     luaX_next(ls);
-    subexpr(ls, v, UNARY_PRIORITY);
+    int exps = new_table(ls);
+    RETURNS_1(subexpr(ls, v, UNARY_PRIORITY));
+    add_entry(ls,exps);
+    add_field(ls,tbl,"operands");
   }
-  else simpleexp(ls, v);
+  else RETURNS_1(simpleexp(ls, v));
   /* expand while operators have priorities higher than `limit' */
   op = getbinopr(ls->t.token);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     expdesc v2;
     BinOpr nextop;
     int line = ls->linenumber;
+    int exps = new_table_before(ls);
+    add_entry(ls,exps); //add prefix to operator list
+    const char * token = luaX_token2str(ls,ls->t.token);
     luaX_next(ls);
     /* read sub-expression with higher priority */
-    nextop = subexpr(ls, &v2, priority[op].right);
+    RETURNS_1(nextop = subexpr(ls, &v2, priority[op].right));
+    add_entry(ls,exps);
+    
+    int tbl = new_table_before(ls,"operator");
+    add_field(ls,tbl,"operands");
+    push_string(ls,token);
+    add_field(ls,tbl,"operator");
     op = nextop;
   }
   leavelevel(ls);
@@ -790,7 +864,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
 
 
 static void expr (LexState *ls, expdesc *v) {
-  subexpr(ls, v, 0);
+  RETURNS_1(subexpr(ls, v, 0));
 }
 
 /* }==================================================================== */
@@ -825,22 +899,28 @@ struct LHS_assign {
   expdesc v;  /* variable (global, local, upvalue, or indexed) */
 };
 
-static void assignment (LexState *ls, struct LHS_assign *lh, int nvars) {
+static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs) {
   expdesc e;
   //TODO: audit, make sure this check still happens
   //check_condition(ls, vkisvar(lh->v.k), "syntax error");
   if (testnext(ls, ',')) {  /* assignment -> `,' primaryexp assignment */
     struct LHS_assign nv;
     nv.prev = lh;
-    primaryexp(ls, &nv.v);
+    RETURNS_1(primaryexp(ls, &nv.v));
+    //if(ls->in_terra)
+    //	lua_pop(ls->L,1);
+    add_entry(ls,lhs);
     checklimit(ls->fs, nvars + ls->LP->nCcalls, LUAI_MAXCCALLS,
                     "C levels");
-    assignment(ls, &nv, nvars+1);
+    RETURNS_0(assignment(ls, &nv, nvars+1,lhs));
   }
   else {  /* assignment -> `=' explist */
     int nexps;
     checknext(ls, '=');
-    nexps = explist(ls, &e);
+    int tbl = new_table_before(ls,"assignment");
+    add_field(ls,tbl,"lhs");
+    RETURNS_1(nexps = explist(ls, &e));
+    add_field(ls,tbl,"rhs");
   }
   //init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
 }
@@ -1132,12 +1212,15 @@ static void exprstat (LexState *ls) {
   FuncState *fs = ls->fs;
   struct LHS_assign v;
   RETURNS_1(primaryexp(ls, &v.v));
+  
   //TODO: audit. v.v.k is probably not set correctly, can check to see if '=' or ',' follows, must make sure VCALL gets propaged back here
   if (v.v.k == ECALL || (ls->t.token != '=' && ls->t.token != ','))  { /* stat -> func */
 
   } else {  /* stat -> assignment */
     v.prev = NULL;
-    assignment(ls, &v, 1);
+    int tbl = new_table_before(ls); //assignment list is put into a table
+    add_entry(ls,tbl);
+    RETURNS_0(assignment(ls, &v, 1,tbl)); //assignment will replace this table with the actual assignment node
   }
 }
 
