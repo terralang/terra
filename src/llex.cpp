@@ -78,13 +78,13 @@ void luaX_init (luaP_State *L) {
 const char * luaX_token2str (LexState *ls, int token) {
   if (token < FIRST_RESERVED) {
 	assert(token == cast(unsigned char, token));
-    return (lisprint(token)) ? luaS_cstringf(ls->L,"'%c'", token) :
-    		                   luaS_cstringf(ls->L,"char(%d)");
+    return (lisprint(token)) ? luaS_cstringf(ls->LP,"'%c'", token) :
+    		                   luaS_cstringf(ls->LP,"char(%d)");
   }
   else {
 	const char *s = luaX_tokens[token - FIRST_RESERVED];
 	if (token < TK_EOS) //TODO: why is this check here?
-	  return getstr(luaS_new(ls->L, s));
+	  return getstr(luaS_new(ls->LP, s));
 	else
 	  return s;
   }
@@ -97,7 +97,7 @@ static const char *txtToken (LexState *ls, int token) {
     case TK_STRING:
     case TK_NUMBER:
       save(ls, '\0');
-      return getstr(luaS_new(ls->L,luaZ_buffer(ls->buff)));
+      return getstr(luaS_new(ls->LP,luaZ_buffer(ls->buff)));
     default:
       return luaX_token2str(ls, token);
   }
@@ -110,9 +110,9 @@ static l_noret report_error(const char * err) {
 }
 
 static l_noret lexerror (LexState *ls, const char * msg, int token) {
-  msg = luaS_cstringf(ls->L,"%s:%d: %s", getstr(ls->source), ls->linenumber, msg);
+  msg = luaS_cstringf(ls->LP,"%s:%d: %s", getstr(ls->source), ls->linenumber, msg);
   if (token)
-    msg = luaS_cstringf(ls->L,"%s near %s", msg, txtToken(ls, token));
+    msg = luaS_cstringf(ls->LP,"%s near %s", msg, txtToken(ls, token));
   report_error(msg);
 }
 
@@ -127,7 +127,7 @@ l_noret luaX_syntaxerror (LexState *ls, const char *msg) {
 ** (by that time it should be anchored in function's prototype)
 */
 TString *luaX_newstring (LexState *ls, const char *str, size_t l) {
-  return luaS_newlstr(ls->L, str, l);  /* create new string */
+  return luaS_newlstr(ls->LP, str, l);  /* create new string */
 }
 
 /*
@@ -145,10 +145,10 @@ static void inclinenumber (LexState *ls) {
 }
 
 
-void luaX_setinput (luaP_State *L, LexState *ls, ZIO *z, TString * source,
+void luaX_setinput (luaP_State *LP, LexState *ls, ZIO *z, TString * source,
                     int firstchar) {
   ls->decpoint = '.';
-  ls->L = L;
+  ls->LP = LP;
   ls->current = firstchar;
   ls->lookahead.token = TK_EOS;  /* no look-ahead token */
   ls->z = z;
@@ -156,7 +156,7 @@ void luaX_setinput (luaP_State *L, LexState *ls, ZIO *z, TString * source,
   ls->linenumber = 1;
   ls->lastline = 1;
   ls->source = source;
-  ls->envn = luaS_new(L,"terra_parser");//luaS_new(L, LUA_ENV);  /* create env name */
+  ls->envn = luaS_new(LP,"terra_parser");//luaS_new(L, LUA_ENV);  /* create env name */
   ls->in_terra = 0;
   ls->patchinfo.N = 0;
   ls->patchinfo.space = 32;
@@ -175,10 +175,7 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 		ls->patchinfo.buffer = (char*) realloc(ls->patchinfo.buffer, newsize);
 		ls->patchinfo.space = newsize;
 	}
-	printf("patch size = %d\n",n_bytes);
 	memcpy(ls->patchinfo.buffer,ob->data + ls->t.seminfo.buffer_begin, n_bytes);
-	ls->patchinfo.buffer[n_bytes] = '\0';
-	printf("%s\n",ls->patchinfo.buffer);
 	ls->patchinfo.N = n_bytes;
 
 	//reset the output buffer to the beginning of the begin_token

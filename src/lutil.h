@@ -8,6 +8,7 @@
 extern "C" {
 #include "lua.h"
 #include "lauxlib.h"
+#include "lualib.h"
 }
 
 #define cast(t, exp)	((t)(exp))
@@ -20,7 +21,6 @@ extern "C" {
 typedef double luaP_Number;
 typedef unsigned char lu_byte;
 typedef uint32_t lu_int32;
-
 #define MAX_SIZET	((size_t)(~(size_t)0)-2)
 
 
@@ -40,7 +40,6 @@ typedef struct stringtable {
 typedef struct luaP_State {
 	stringtable strt;
 	int nCcalls;
-	lua_State * ls;
 } luaP_State;
 
 

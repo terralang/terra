@@ -94,7 +94,7 @@ static inline void OutputBuffer_puts(OutputBuffer * buf, int N, const char * str
 		OutputBuffer_resize(buf,std::max(buf->space * 2,buf->N + N));
 	}
 	memcpy(buf->data + buf->N,str,N);
-	buf->data += N;
+	buf->N += N;
 }
 /* state of the lexer plus state of the parser when shared by all
    functions */
@@ -105,7 +105,9 @@ typedef struct LexState {
   Token t;  /* current token */
   Token lookahead;  /* look ahead token */
   struct FuncState *fs;  /* current function (parser) */
-  luaP_State *L;
+  lua_State *L;
+  int n_lua_objects; /*number of lua objects already in table of lua asts*/
+  luaP_State *LP;
   ZIO *z;  /* input stream */
   Mbuffer *buff;  /* buffer for tokens */
   TString * source;  /* current source name */

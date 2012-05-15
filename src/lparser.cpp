@@ -27,6 +27,48 @@
 //#include "ltable.h"
 #include <vector>
 
+
+
+#define AST_TOKENS(_) \
+	_(kind) \
+	_(type)
+
+enum TA_Token {
+	TA_TOKEN_ZERO = 0, //tokens refer to stack locations in Lua, so should start at 1.
+#define MAKE_AST_ENUM(x) TA_##x,
+	AST_TOKENS(MAKE_AST_ENUM)
+	TA_LAST_TOKEN
+#undef MAKE_AST_ENUM
+};
+#define TA_NUM_TOKENS (TA_LAST_TOKEN - 1)
+
+enum TA_Globals {
+	TA_FUNCTION_TABLE = TA_LAST_TOKEN,
+	TA_LAST_GLOBAL
+};
+
+
+const char * token_to_string[] = {
+	""
+#define MAKE_AST_STRING(x) #x,
+	AST_TOKENS(MAKE_AST_STRING)
+	""
+};
+
+//helpers to ensure that the lua stack contains the right number of arguments after a call
+#define RETURNS_N(x,n) do { \
+	if(ls->in_terra) { \
+		int begin = lua_gettop(ls->L); \
+		(x); \
+		int end = lua_gettop(ls->L); \
+		assert(begin + n == end); \
+	} else { \
+		(x); \
+	} \
+} while(0)
+
+#define RETURNS_1(x) RETURNS_N(x,1)
+
 /* maximum number of local variables per function (must be smaller
    than 250, due to the bytecode format) */
 #define MAXVARS		200
@@ -58,12 +100,12 @@ static l_noret semerror (LexState *ls, const char *msg) {
 
 static l_noret error_expected (LexState *ls, int token) {
   luaX_syntaxerror(ls,
-      luaS_cstringf(ls->L, "%s expected", luaX_token2str(ls, token)));
+      luaS_cstringf(ls->LP, "%s expected", luaX_token2str(ls, token)));
 }
 
 
 static l_noret errorlimit (FuncState *fs, int limit, const char *what) {
-  luaP_State *L = fs->ls->L;
+  luaP_State *L = fs->ls->LP;
   const char *msg;
   int line = fs->f.linedefined;
   const char *where = (line == 0)
@@ -110,7 +152,7 @@ static void check_match (LexState *ls, int what, int who, int where) {
     if (where == ls->linenumber)
       error_expected(ls, what);
     else {
-      luaX_syntaxerror(ls, luaS_cstringf(ls->L,
+      luaX_syntaxerror(ls, luaS_cstringf(ls->LP,
              "%s expected (to close %s at line %d)",
               luaX_token2str(ls, what), luaX_token2str(ls, who), where));
     }
@@ -136,12 +178,12 @@ static void singlevar (LexState *ls, expdesc *var) {
 
 
 static void enterlevel (LexState *ls) {
-  luaP_State *L = ls->L;
+  luaP_State *L = ls->LP;
   ++L->nCcalls;
   checklimit(ls->fs, L->nCcalls, LUAI_MAXCCALLS, "C levels");
 }
 
-#define leavelevel(ls)	((ls)->L->nCcalls--)
+#define leavelevel(ls)	((ls)->LP->nCcalls--)
 
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
@@ -162,7 +204,7 @@ static void leaveblock (FuncState *fs) {
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
-  luaP_State *L = ls->L;
+  luaP_State *L = ls->LP;
   Proto *f;
   fs->prev = ls->fs;  /* linked list of funcstates */
   fs->ls = ls;
@@ -175,7 +217,7 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
 
 
 static void close_func (LexState *ls) {
-  luaP_State *L = ls->L;
+  luaP_State *L = ls->LP;
   FuncState *fs = ls->fs;
   leaveblock(fs);
   ls->fs = fs->prev;
@@ -662,7 +704,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars) {
     struct LHS_assign nv;
     nv.prev = lh;
     primaryexp(ls, &nv.v);
-    checklimit(ls->fs, nvars + ls->L->nCcalls, LUAI_MAXCCALLS,
+    checklimit(ls->fs, nvars + ls->LP->nCcalls, LUAI_MAXCCALLS,
                     "C levels");
     assignment(ls, &nv, nvars+1);
   }
@@ -689,7 +731,7 @@ static void gotostat (LexState *ls) {
     label = str_checkname(ls);
   else {
     luaX_next(ls);  /* skip break */
-    label = luaS_new(ls->L, "break");
+    label = luaS_new(ls->LP, "break");
   }
 
 }
@@ -897,19 +939,20 @@ static void funcstat (LexState *ls, int line) {
   luaX_next(ls);  /* skip FUNCTION */
   ismethod = funcname(ls, &v);
   body(ls, &b, ismethod, line);
+  if(ls->in_terra) {
+	  lua_pushstring(ls->L,"this is terra");
+  }
 }
 
-static int rewindbuffer(LexState * ls) {
-	//reset the output buffer to just before this token
-	OutputBuffer_rewind(&ls->output_buffer,1+strlen(luaX_token2str(ls,ls->t.token))); //+1 because the lexer will have looked passed the keyword to make sure it was over
-	return ls->output_buffer.N;
-}
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
 	Token t = ls->t;
-	funcstat(ls,line);
+	int obj_id = ls->n_lua_objects++;
+	lua_pushinteger(ls->L,obj_id);
+	RETURNS_1(funcstat(ls,line));
+	lua_settable(ls->L,TA_FUNCTION_TABLE);
 	luaX_patchbegin(ls,&t);
-	OutputBuffer_printf(&ls->output_buffer,"terra.new_function({})");
+	OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",obj_id);
 	luaX_patchend(ls,&t);
 	ls->in_terra--;
 }
@@ -1014,24 +1057,41 @@ static void statement (LexState *ls) {
 
 /* }====================================================================== */
 
-
-void luaY_parser (luaP_State *L, ZIO *z, Mbuffer *buff,
+void luaY_parser (lua_State * L, luaP_State *lp,ZIO *z, Mbuffer *buff,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;
   BlockCnt bl;
-  TString *tname = luaS_new(L, name);
+  lexstate.L = L;
+  TString *tname = luaS_new(lp, name);
   lexstate.buff = buff;
   OutputBuffer_init(&lexstate.output_buffer);
-  luaX_setinput(L, &lexstate, z, tname, firstchar);
+  if(!lua_checkstack(L,TA_LAST_TOKEN + LUAI_MAXCCALLS)) {
+	  abort();
+  }
+  for(int i = 0; i < TA_NUM_TOKENS; i++) {
+	  lua_pushstring(L,token_to_string[i+1]);
+  }
+  lua_newtable(L);//TA_FUNCTION_TABLE
+  lua_pushvalue(L,-1);
+  lua_setfield(L,LUA_GLOBALSINDEX,"_terra_globals");
+
+  luaX_setinput(lp, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);
   luaX_next(&lexstate);  /* read first token */
   statlist(&lexstate);  /* main body */
   check(&lexstate, TK_EOS);
   close_func(&lexstate);
   assert(!funcstate.prev && !lexstate.fs);
+  lua_pop(L,TA_NUM_TOKENS + 1);
+
+  assert(lua_gettop(L) == 0);
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
   printf("%s",lexstate.output_buffer.data);
+  printf("\n\n");
+  if(luaL_dostring(L,lexstate.output_buffer.data)) {
+	  printf("error: %s\n",luaL_checkstring(L,-1));
+  }
 }
 

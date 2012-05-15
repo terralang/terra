@@ -21,10 +21,11 @@ const char * my_reader(luaP_State *L, void *ud, size_t *sz) {
 int main(int argc, char ** argv) {
 	assert(argc == 2);
 	file = fopen(argv[1],"r");
-	
 	lua_State * L = luaL_newstate();
+	luaL_openlibs(L);
+	luaL_dofile(L,"src/terralib.lua");
+	assert (L);
 	luaP_State ls;
-	
 	luaS_resize(&ls,32);
 	luaX_init(&ls);
 	TString * name = luaS_new(&ls,"foobar");
@@ -32,7 +33,8 @@ int main(int argc, char ** argv) {
 	Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
 	luaZ_init(&ls,&zio,my_reader,NULL);
 #if 1
-	luaY_parser(&ls,&zio,buff,"foobar",zgetc(&zio));
+	assert(L);
+	luaY_parser(L,&ls,&zio,buff,"foobar",zgetc(&zio));
 #else
 	LexState lex;
 	lex.buff = buff;
