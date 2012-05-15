@@ -68,6 +68,7 @@ enum TA_Globals {
 } while(0)
 
 #define RETURNS_1(x) RETURNS_N(x,1)
+#define RETURNS_0(x) RETURNS_N(x,0)
 
 /* maximum number of local variables per function (must be smaller
    than 250, due to the bytecode format) */
@@ -126,6 +127,13 @@ static int new_table(LexState * ls, const char * str) {
 		push_string(ls,str);
 		add_field(ls, t,"kind");
 		return t;
+	} else return 0;
+}
+static int new_table_before(LexState * ls, const char * str) {
+	if(ls->in_terra) {
+		int t = new_table(ls,str);
+		lua_insert(ls->L,-2);
+		return t - 1;
 	} else return 0;
 }
 static void add_index(LexState * ls, int table, int n) {
@@ -248,7 +256,8 @@ static TString *str_checkname (LexState *ls) {
 }
 
 static void checkname (LexState *ls, expdesc *e) {
-	str_checkname(ls);
+	TString * str = str_checkname(ls);
+	push_string(ls,str);
 }
 
 static void singlevar (LexState *ls, expdesc *var) {
@@ -357,7 +366,10 @@ static void fieldsel (LexState *ls, expdesc *v) {
   expdesc key;
   //luaK_exp2anyregup(fs, v);
   luaX_next(ls);  /* skip the dot or colon */
+  int tbl = new_table_before(ls,"select");
+  add_field(ls,tbl,"value");
   checkname(ls, &key);
+  add_field(ls,tbl,"field");
   //luaK_indexed(fs, v, &key);
 }
 
@@ -493,13 +505,13 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line, Token * begi
   if (ismethod) {
   }
   int tbl = new_table(ls,"function");
-  parlist(ls);
+  RETURNS_1(parlist(ls));
   add_field(ls,tbl,"parameters");
   push_boolean(ls,new_fs.f.is_vararg);
   add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
   //TODO: check for ':' followed by type here
-  statlist(ls);
+  RETURNS_1(statlist(ls));
   add_field(ls,tbl,"statements");
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
@@ -571,6 +583,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
+  push_string(ls,"<prefix>");
   switch (ls->t.token) {
     case '(': {
       int line = ls->linenumber;
@@ -797,7 +810,7 @@ static void block (LexState *ls) {
   BlockCnt bl;
   int blk = new_table(ls,"block");
   enterblock(fs, &bl, 0);
-  statlist(ls);
+  RETURNS_1(statlist(ls));
   add_field(ls,blk,"statements");
   leaveblock(fs);
 }
@@ -835,8 +848,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars) {
 
 static void cond (LexState *ls, expdesc * v) {
   /* cond -> exp */
-  expr(ls, v);  /* read condition */
-  push_string(ls,"<cond>");
+  RETURNS_1(expr(ls, v));  /* read condition */
 }
 
 
@@ -868,7 +880,7 @@ static void labelstat (LexState *ls, TString *label, int line) {
   push_string(ls,getstr(label));
   add_field(ls,tbl,"value");
   while (ls->t.token == ';' || ls->t.token == TK_DBCOLON) {
-    statement(ls);
+    RETURNS_1(statement(ls));
     if(ls->in_terra)
     	lua_pop(ls->L,1); //discard the AST node
   }
@@ -885,11 +897,11 @@ static void whilestat (LexState *ls, int line) {
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
   expdesc c;
-  cond(ls,&c);
+  RETURNS_1(cond(ls,&c));
   add_field(ls,tbl,"condition");
   enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
-  block(ls);
+  RETURNS_1(block(ls));
   add_field(ls,tbl,"body");
   check_match(ls, TK_END, TK_WHILE, line);
   leaveblock(fs);
@@ -906,12 +918,12 @@ static void repeatstat (LexState *ls, int line) {
   luaX_next(ls);  /* skip REPEAT */
   int tbl = new_table(ls,"repeat");
   int blk = new_table(ls,"block");
-  statlist(ls);
+  RETURNS_1(statlist(ls));
   add_field(ls,blk,"statements");
   add_field(ls,tbl,"body");
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   expdesc c;
-  cond(ls,&c);
+  RETURNS_1(cond(ls,&c));
   add_field(ls,tbl,"condition");
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
@@ -998,27 +1010,37 @@ static void test_then_block (LexState *ls) {
   expdesc v;
   luaX_next(ls);  /* skip IF or ELSEIF */
   int tbl = new_table(ls,"ifbranch");
-  cond(ls, &v);  /* read condition */
+  RETURNS_1(cond(ls, &v));  /* read condition */
   add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
+  int discard_remainder = 0;
   if (ls->t.token == TK_GOTO || ls->t.token == TK_BREAK) {
     enterblock(fs, &bl, 0);  /* must enter block before 'goto' */
-    gotostat(ls);  /* handle goto/break */
+    int blk = new_table(ls,"block");
+    int stmts = new_table(ls);
+    RETURNS_1(gotostat(ls));  /* handle goto/break */
+    add_entry(ls,stmts);
+    add_field(ls,blk,"statements");
+    add_field(ls,tbl,"body");
     if (block_follow(ls, 0)) {  /* 'goto' is the entire block? */
       leaveblock(fs);
-      //add_field(ls,tbl,"then");
       return;  /* and that is it */
     }
     else {  /* must skip over 'then' part if condition is false */
+      discard_remainder = 1;
     }
   }
   else {  /* regular case (not goto/break) */
     enterblock(fs, &bl, 0);
   }
   int blk = new_table(ls,"block");
-  statlist(ls);  /* `then' part */
+  RETURNS_1(statlist(ls));  /* `then' part */
   add_field(ls,blk,"statements");
-  add_field(ls,tbl,"body");
+  if(!discard_remainder) {
+  	add_field(ls,tbl,"body");
+  } else {
+    if(ls->in_terra) lua_pop(ls->L,1); //discard block after goto
+  }
   leaveblock(fs);
 }
 
@@ -1027,15 +1049,15 @@ static void ifstat (LexState *ls, int line) {
   FuncState *fs = ls->fs;
   int tbl = new_table(ls,"if");
   int branches = new_table(ls);
-  test_then_block(ls);  /* IF cond THEN block */
+  RETURNS_1(test_then_block(ls));  /* IF cond THEN block */
   add_entry(ls,branches);
   while (ls->t.token == TK_ELSEIF) {
-    test_then_block(ls);  /* ELSEIF cond THEN block */
+    RETURNS_1(test_then_block(ls));  /* ELSEIF cond THEN block */
     add_entry(ls,branches);
   }
   add_field(ls,tbl,"branches");
   if (testnext(ls, TK_ELSE)) {
-    block(ls);  /* `else' part */
+    RETURNS_1(block(ls));  /* `else' part */
     add_field(ls,tbl,"else"); 
   }
   check_match(ls, TK_END, TK_IF, line);
@@ -1109,7 +1131,7 @@ static void exprstat (LexState *ls) {
   /* stat -> func | assignment */
   FuncState *fs = ls->fs;
   struct LHS_assign v;
-  primaryexp(ls, &v.v);
+  RETURNS_1(primaryexp(ls, &v.v));
   //TODO: audit. v.v.k is probably not set correctly, can check to see if '=' or ',' follows, must make sure VCALL gets propaged back here
   if (v.v.k == ECALL || (ls->t.token != '=' && ls->t.token != ','))  { /* stat -> func */
 
@@ -1129,7 +1151,7 @@ static void retstat (LexState *ls) {
   if (block_follow(ls, 1) || ls->t.token == ';')
     first = nret = 0;  /* return no values */
   else {
-    nret = explist(ls, &e);  /* optional return values */
+    RETURNS_1(nret = explist(ls, &e));  /* optional return values */
     add_field(ls,tbl,"expressions");
   }
   
@@ -1146,34 +1168,34 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_IF: {  /* stat -> ifstat */
-      ifstat(ls, line);
+      RETURNS_1(ifstat(ls, line));
       break;
     }
     case TK_WHILE: {  /* stat -> whilestat */
-      whilestat(ls, line);
+      RETURNS_1(whilestat(ls, line));
       break;
     }
     case TK_DO: {  /* stat -> DO block END */
       luaX_next(ls);  /* skip DO */
-      block(ls);
+      RETURNS_1(block(ls));
       check_match(ls, TK_END, TK_DO, line);
       break;
     }
     case TK_FOR: {  /* stat -> forstat */
       //TODO: AST
-      forstat(ls, line);
+      RETURNS_1(forstat(ls, line));
       break;
     }
     case TK_REPEAT: {  /* stat -> repeatstat */
-      repeatstat(ls, line);
+      RETURNS_1(repeatstat(ls, line));
       break;
     }
     case TK_FUNCTION: {  /* stat -> funcstat */
-      funcstat(ls, line);
+      RETURNS_1(funcstat(ls, line));
       break;
     }
     case TK_TERRA: {
-      terrastat(ls,line);
+      RETURNS_1(terrastat(ls,line));
     } break;
     case TK_LOCAL: {  /* stat -> localstat */
       luaX_next(ls);  /* skip LOCAL */
@@ -1183,28 +1205,29 @@ static void statement (LexState *ls) {
       } else if(testnext(ls,TK_TERRA)) {
       	check_no_terra(ls, "nested terra functions");
       	assert(!"implement local terra function statements");
-      } else
+      } else {
         localstat(ls);
+      }
       break;
     }
     case TK_DBCOLON: {  /* stat -> label */
       
       luaX_next(ls);  /* skip double colon */
-      labelstat(ls, str_checkname(ls), line);
+      RETURNS_1(labelstat(ls, str_checkname(ls), line));
       break;
     }
     case TK_RETURN: {  /* stat -> retstat */
       luaX_next(ls);  /* skip RETURN */
-      retstat(ls);
+      RETURNS_1(retstat(ls));
       break;
     }
     case TK_BREAK:   /* stat -> breakstat */
     case TK_GOTO: {  /* stat -> 'goto' NAME */
-      gotostat(ls);
+      RETURNS_1(gotostat(ls));
       break;
     }
     default: {  /* stat -> func | assignment */
-      exprstat(ls);
+      RETURNS_1(exprstat(ls));
       break;
     }
   }

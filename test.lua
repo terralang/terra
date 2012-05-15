@@ -9,6 +9,8 @@ b = terra()
  ::alabel::
  goto alabel
  break
+ a.b
+ if a then goto alabel end
  return 1
 end
 print("and done")
