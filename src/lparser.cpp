@@ -28,10 +28,12 @@
 #include <vector>
 
 
-
+#if 0
 #define AST_TOKENS(_) \
 	_(kind) \
-	_(type)
+	_(type) \
+	_(name) \
+	_(is_vararg) \
 
 enum TA_Token {
 	TA_TOKEN_ZERO = 0, //tokens refer to stack locations in Lua, so should start at 1.
@@ -41,18 +43,16 @@ enum TA_Token {
 #undef MAKE_AST_ENUM
 };
 #define TA_NUM_TOKENS (TA_LAST_TOKEN - 1)
-
-enum TA_Globals {
-	TA_FUNCTION_TABLE = TA_LAST_TOKEN,
-	TA_LAST_GLOBAL
-};
-
-
 const char * token_to_string[] = {
 	""
 #define MAKE_AST_STRING(x) #x,
 	AST_TOKENS(MAKE_AST_STRING)
 	""
+};
+#endif
+
+enum TA_Globals {
+	TA_FUNCTION_TABLE = 1
 };
 
 //helpers to ensure that the lua stack contains the right number of arguments after a call
@@ -84,7 +84,76 @@ typedef struct BlockCnt {
 } BlockCnt;
 
 
+static int new_table(LexState * ls) {
+	if(ls->in_terra) {
+		printf("(new table)\n");
+		lua_newtable(ls->L);
+		return lua_gettop(ls->L);
+	} else return 0;
+}
 
+//add field at the top of the stack to table
+#if 0
+static void add_field(LexState * ls, int table, TA_Token t) {
+	if(ls->in_terra) {
+		lua_pushvalue(ls->L,t);
+		lua_pushvalue(ls->L,-2);
+		lua_settable(ls->L,table);
+		lua_pop(ls->L,1);
+	}
+}
+#endif
+//this should eventually be optimized to use 'add_field' with tokens already on the stack
+static void add_field(LexState * ls, int table, const char * field) {
+	if(ls->in_terra) {
+		printf("consume field\n");
+		lua_pushstring(ls->L,field);
+		lua_pushvalue(ls->L,-2);
+		lua_settable(ls->L,table);
+		lua_pop(ls->L,1);
+	}
+}
+static void push_string(LexState * ls, const char * str) {
+	if(ls->in_terra) {
+		printf("push string: %s\n",str);
+		lua_pushstring(ls->L,str);
+	}
+}
+static int new_table(LexState * ls, const char * str) {
+	if(ls->in_terra) {
+		printf("push %s ",str);
+		int t = new_table(ls);
+		push_string(ls,str);
+		add_field(ls, t,"kind");
+		return t;
+	} else return 0;
+}
+static void add_index(LexState * ls, int table, int n) {
+	if(ls->in_terra) {
+	    printf("consume index\n");
+		lua_pushinteger(ls->L,n);
+		lua_pushvalue(ls->L,-2);
+		lua_settable(ls->L,table);
+		lua_pop(ls->L,1);
+	}
+}
+static int add_entry(LexState * ls, int table) {
+	if(ls->in_terra) {
+		int n = lua_objlen(ls->L,table);
+		add_index(ls,table,n+1);
+		return n+1;
+	} else return 0;
+}
+
+static void push_string(LexState * ls, TString * str) {
+	push_string(ls,getstr(str));
+}
+static void push_boolean(LexState * ls, int b) {
+	if(ls->in_terra) {
+		printf("push boolean\n");
+		lua_pushboolean(ls->L,b);
+	}
+}
 /*
 ** prototypes for recursive non-terminal functions
 */
@@ -259,12 +328,15 @@ static int block_follow (LexState *ls, int withuntil) {
 
 static void statlist (LexState *ls) {
   /* statlist -> { stat [`;'] } */
+  int tbl = new_table(ls);
   while (!block_follow(ls, 1)) {
     if (ls->t.token == TK_RETURN) {
       statement(ls);
+      add_entry(ls,tbl);
       return;  /* 'return' must be last statement */
     }
     statement(ls);
+    add_entry(ls,tbl);
   }
 }
 
@@ -371,13 +443,21 @@ static void parlist (LexState *ls) {
   /* parlist -> [ param { `,' param } ] */
   FuncState *fs = ls->fs;
   Proto *f = &fs->f;
+  int tbl = new_table(ls);
   int nparams = 0;
   f->is_vararg = 0;
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
     do {
       switch (ls->t.token) {
         case TK_NAME: {  /* param -> NAME */
-          str_checkname(ls);
+          TString * nm = str_checkname(ls);
+          int entry = new_table(ls);
+          push_string(ls,nm);
+          add_field(ls,entry,"name");
+          //TODO: if we are in terra parse the type and add it here
+          push_string(ls,"<todo: types>");
+          add_field(ls,entry,"type");
+          add_entry(ls,tbl);
           nparams++;
           break;
         }
@@ -393,7 +473,7 @@ static void parlist (LexState *ls) {
 }
 
 
-static void body (LexState *ls, expdesc *e, int ismethod, int line) {
+static void body (LexState *ls, expdesc *e, int ismethod, int line, Token * begin) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
   BlockCnt bl;
@@ -402,13 +482,25 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   checknext(ls, '(');
   if (ismethod) {
   }
+  int tbl = new_table(ls,"function");
   parlist(ls);
+  add_field(ls,tbl,"parameters");
+  push_boolean(ls,new_fs.f.is_vararg);
+  add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
+  //TODO: check for ':' followed by type here
   statlist(ls);
+  add_field(ls,tbl,"statements");
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
   //codeclosure(ls, new_fs.f, e);
   close_func(ls);
+  if(ls->in_terra) {
+	  luaX_patchbegin(ls,begin);
+	  int id = add_entry(ls,TA_FUNCTION_TABLE);
+	  OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",id);
+	  luaX_patchend(ls,begin);
+  }
 }
 
 
@@ -560,8 +652,18 @@ static void simpleexp (LexState *ls, expdesc *v) {
     }
     case TK_FUNCTION: {
       luaX_next(ls);
-      body(ls, v, 0, ls->linenumber);
+      body(ls, v, 0, ls->linenumber, NULL);
       return;
+    }
+    case TK_TERRA: {
+    	if(ls->in_terra)
+    		luaX_syntaxerror(ls,"nested terra functions are not supported");
+    	ls->in_terra++;
+    	Token t = ls->t;
+    	luaX_next(ls);
+    	body(ls,v,0,ls->linenumber,&t);
+    	ls->in_terra--;
+    	return;
     }
     default: {
       primaryexp(ls, v);
@@ -681,8 +783,10 @@ static void block (LexState *ls) {
   /* block -> statlist */
   FuncState *fs = ls->fs;
   BlockCnt bl;
+  int blk = new_table(ls,"block");
   enterblock(fs, &bl, 0);
   statlist(ls);
+  add_field(ls,blk,"statements");
   leaveblock(fs);
 }
 
@@ -862,13 +966,18 @@ static void test_then_block (LexState *ls) {
   FuncState *fs = ls->fs;
   expdesc v;
   luaX_next(ls);  /* skip IF or ELSEIF */
+  int tbl = new_table(ls,"ifbranch");
   expr(ls, &v);  /* read condition */
+  //TODO: remove when expressions push something
+  push_string(ls,"<cond>");
+  add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
   if (ls->t.token == TK_GOTO || ls->t.token == TK_BREAK) {
     enterblock(fs, &bl, 0);  /* must enter block before 'goto' */
     gotostat(ls);  /* handle goto/break */
     if (block_follow(ls, 0)) {  /* 'goto' is the entire block? */
       leaveblock(fs);
+      //add_field(ls,tbl,"then");
       return;  /* and that is it */
     }
     else {  /* must skip over 'then' part if condition is false */
@@ -877,18 +986,29 @@ static void test_then_block (LexState *ls) {
   else {  /* regular case (not goto/break) */
     enterblock(fs, &bl, 0);
   }
+  int blk = new_table(ls,"block");
   statlist(ls);  /* `then' part */
+  add_field(ls,blk,"statements");
+  add_field(ls,tbl,"body");
   leaveblock(fs);
 }
 
 static void ifstat (LexState *ls, int line) {
   /* ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END */
   FuncState *fs = ls->fs;
+  int tbl = new_table(ls,"if");
+  int branches = new_table(ls);
   test_then_block(ls);  /* IF cond THEN block */
-  while (ls->t.token == TK_ELSEIF)
+  add_entry(ls,branches);
+  while (ls->t.token == TK_ELSEIF) {
     test_then_block(ls);  /* ELSEIF cond THEN block */
-  if (testnext(ls, TK_ELSE))
+    add_entry(ls,branches);
+  }
+  add_field(ls,tbl,"branches");
+  if (testnext(ls, TK_ELSE)) {
     block(ls);  /* `else' part */
+    add_field(ls,tbl,"else"); 
+  }
   check_match(ls, TK_END, TK_IF, line);
 }
 
@@ -896,7 +1016,7 @@ static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
   TString * name = str_checkname(ls);
-  body(ls, &b, 0, ls->linenumber);  /* function created in next register */
+  body(ls, &b, 0, ls->linenumber,NULL);  /* function created in next register */
   /* debug information will only see the variable after this point! */
   fs->bl->local_variables.push_back(name);
 }
@@ -938,21 +1058,17 @@ static void funcstat (LexState *ls, int line) {
   expdesc v, b;
   luaX_next(ls);  /* skip FUNCTION */
   ismethod = funcname(ls, &v);
-  body(ls, &b, ismethod, line);
-  if(ls->in_terra) {
-	  lua_pushstring(ls->L,"this is terra");
-  }
+  body(ls, &b, ismethod, line,NULL);
 }
 
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
+	assert(!"incomplete (doesn't patch the token correctly)");
 	Token t = ls->t;
-	int obj_id = ls->n_lua_objects++;
-	lua_pushinteger(ls->L,obj_id);
 	RETURNS_1(funcstat(ls,line));
-	lua_settable(ls->L,TA_FUNCTION_TABLE);
+	int n = add_entry(ls,TA_FUNCTION_TABLE);
 	luaX_patchbegin(ls,&t);
-	OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",obj_id);
+	OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",n);
 	luaX_patchend(ls,&t);
 	ls->in_terra--;
 }
@@ -1068,12 +1184,13 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lexstate.buff = buff;
   lexstate.n_lua_objects = 0;
   OutputBuffer_init(&lexstate.output_buffer);
-  if(!lua_checkstack(L,TA_LAST_TOKEN + LUAI_MAXCCALLS)) {
+  if(!lua_checkstack(L,1 + LUAI_MAXCCALLS)) {
 	  abort();
   }
-  for(int i = 0; i < TA_NUM_TOKENS; i++) {
-	  lua_pushstring(L,token_to_string[i+1]);
-  }
+  //for(int i = 0; i < TA_NUM_TOKENS; i++) {
+	  //lua_pushstring(L,token_to_string[i+1]);
+	  //printf("pushing %s id = %d, id = %d\n", token_to_string[i+1], lua_gettop(L), (i+1));
+  //}
   lua_newtable(L);//TA_FUNCTION_TABLE
   lua_pushvalue(L,-1);
   lua_setfield(L,LUA_GLOBALSINDEX,"_terra_globals");
@@ -1085,14 +1202,14 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   check(&lexstate, TK_EOS);
   close_func(&lexstate);
   assert(!funcstate.prev && !lexstate.fs);
-  lua_pop(L,TA_NUM_TOKENS + 1);
+  lua_pop(L,1);
 
   assert(lua_gettop(L) == 0);
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
   printf("********* passing to lua ************\n%s\n*************************************\n",lexstate.output_buffer.data);
   if(luaL_dostring(L,lexstate.output_buffer.data)) {
-	 terra_reporterror(T,luaL_checkstring(L,-1));
+	 terra_reporterror(T,"%s\n",luaL_checkstring(L,-1));
   }
   OutputBuffer_free(&lexstate.output_buffer);
 }

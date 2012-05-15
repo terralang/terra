@@ -1,4 +1,8 @@
 print("hello world")
-terra my_function()
+b = terra()
+ if a then 
+ elseif b then 
+ else 
+ end
 end
 print("and done")
