@@ -154,6 +154,16 @@ static void push_boolean(LexState * ls, int b) {
 		lua_pushboolean(ls->L,b);
 	}
 }
+static void check_no_terra(LexState * ls, const char * thing) {
+	if(ls->in_terra) {
+		luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"%s cannot be nested in terra functions.",	thing));
+	}
+}
+static void check_terra(LexState * ls, const char * thing) {
+	if(!ls->in_terra) {
+		luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"%s cannot be used outside terra functions.",	thing));
+	}
+}
 /*
 ** prototypes for recursive non-terminal functions
 */
@@ -507,10 +517,13 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line, Token * begi
 static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { `,' expr } */
   int n = 1;  /* at least one expression */
+  int lst = new_table(ls);
   expr(ls, v);
+  //add_entry(ls,lst);
   while (testnext(ls, ',')) {
     //luaK_exp2nextreg(ls->fs, v);
     expr(ls, v);
+    //add_entry(ls,lst);
     n++;
   }
   return n;
@@ -656,8 +669,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       return;
     }
     case TK_TERRA: {
-    	if(ls->in_terra)
-    		luaX_syntaxerror(ls,"nested terra functions are not supported");
+    	check_no_terra(ls,"nested terra functions");
     	ls->in_terra++;
     	Token t = ls->t;
     	luaX_next(ls);
@@ -824,6 +836,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars) {
 static void cond (LexState *ls, expdesc * v) {
   /* cond -> exp */
   expr(ls, v);  /* read condition */
+  push_string(ls,"<cond>");
 }
 
 
@@ -831,23 +844,34 @@ static void gotostat (LexState *ls) {
   int line = ls->linenumber;
   TString *label;
   int g;
-  if (testnext(ls, TK_GOTO))
+  if (testnext(ls, TK_GOTO)) {
     label = str_checkname(ls);
-  else {
+    int tbl = new_table(ls,"goto");
+    push_string(ls,label);
+    add_field(ls,tbl,"label");
+  } else {
     luaX_next(ls);  /* skip break */
     label = luaS_new(ls->LP, "break");
+    int tbl = new_table(ls,"break");
   }
 
 }
 
 static void labelstat (LexState *ls, TString *label, int line) {
+  check_terra(ls,"goto labels");
   /* label -> '::' NAME '::' */
   FuncState *fs = ls->fs;
   checknext(ls, TK_DBCOLON);  /* skip double colon */
   /* create new entry for this label */
   /* skip other no-op statements */
-  while (ls->t.token == ';' || ls->t.token == TK_DBCOLON)
+  int tbl = new_table(ls,"label");
+  push_string(ls,getstr(label));
+  add_field(ls,tbl,"value");
+  while (ls->t.token == ';' || ls->t.token == TK_DBCOLON) {
     statement(ls);
+    if(ls->in_terra)
+    	lua_pop(ls->L,1); //discard the AST node
+  }
 
 }
 
@@ -856,14 +880,17 @@ static void whilestat (LexState *ls, int line) {
   /* whilestat -> WHILE cond DO block END */
   FuncState *fs = ls->fs;
   //int whileinit;
+  int tbl = new_table(ls,"while");
   int condexit;
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
   expdesc c;
   cond(ls,&c);
+  add_field(ls,tbl,"condition");
   enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
   block(ls);
+  add_field(ls,tbl,"body");
   check_match(ls, TK_END, TK_WHILE, line);
   leaveblock(fs);
 }
@@ -873,15 +900,19 @@ static void repeatstat (LexState *ls, int line) {
   /* repeatstat -> REPEAT block UNTIL cond */
   int condexit;
   FuncState *fs = ls->fs;
-  //int repeat_init = luaK_getlabel(fs);
   BlockCnt bl1, bl2;
   enterblock(fs, &bl1, 1);  /* loop block */
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
+  int tbl = new_table(ls,"repeat");
+  int blk = new_table(ls,"block");
   statlist(ls);
+  add_field(ls,blk,"statements");
+  add_field(ls,tbl,"body");
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   expdesc c;
   cond(ls,&c);
+  add_field(ls,tbl,"condition");
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
 }
@@ -967,9 +998,7 @@ static void test_then_block (LexState *ls) {
   expdesc v;
   luaX_next(ls);  /* skip IF or ELSEIF */
   int tbl = new_table(ls,"ifbranch");
-  expr(ls, &v);  /* read condition */
-  //TODO: remove when expressions push something
-  push_string(ls,"<cond>");
+  cond(ls, &v);  /* read condition */
   add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
   if (ls->t.token == TK_GOTO || ls->t.token == TK_BREAK) {
@@ -1022,6 +1051,7 @@ static void localfunc (LexState *ls) {
 }
 
 static void localstat (LexState *ls) {
+  check_no_terra(ls,"local keywords");
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
   int nvars = 0;
   int nexps;
@@ -1053,6 +1083,7 @@ static int funcname (LexState *ls, expdesc *v) {
 
 
 static void funcstat (LexState *ls, int line) {
+  check_no_terra(ls,"lua functions");
   /* funcstat -> FUNCTION funcname body */
   int ismethod;
   expdesc v, b;
@@ -1093,12 +1124,15 @@ static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
   FuncState *fs = ls->fs;
   expdesc e;
+  int tbl = new_table(ls,"return");
   int first, nret;  /* registers with returned values */
   if (block_follow(ls, 1) || ls->t.token == ';')
     first = nret = 0;  /* return no values */
   else {
     nret = explist(ls, &e);  /* optional return values */
+    add_field(ls,tbl,"expressions");
   }
+  
   testnext(ls, ';');  /* skip optional semicolon */
 }
 
@@ -1126,6 +1160,7 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_FOR: {  /* stat -> forstat */
+      //TODO: AST
       forstat(ls, line);
       break;
     }
@@ -1142,13 +1177,18 @@ static void statement (LexState *ls) {
     } break;
     case TK_LOCAL: {  /* stat -> localstat */
       luaX_next(ls);  /* skip LOCAL */
-      if (testnext(ls, TK_FUNCTION))  /* local function? */
+      if (testnext(ls, TK_FUNCTION)) { /* local function? */
+        check_no_terra(ls, "lua functions");
         localfunc(ls);
-      else
+      } else if(testnext(ls,TK_TERRA)) {
+      	check_no_terra(ls, "nested terra functions");
+      	assert(!"implement local terra function statements");
+      } else
         localstat(ls);
       break;
     }
     case TK_DBCOLON: {  /* stat -> label */
+      
       luaX_next(ls);  /* skip double colon */
       labelstat(ls, str_checkname(ls), line);
       break;
