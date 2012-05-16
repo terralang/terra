@@ -26,7 +26,7 @@
 #include "lstring.h"
 //#include "ltable.h"
 #include <vector>
-
+#include <set>
 
 #if 0
 #define AST_TOKENS(_) \
@@ -296,6 +296,8 @@ static void enterlevel (LexState *ls) {
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
   fs->bl = bl;
+  printf("entering block %lld\n", (long long int)bl);
+  printf("previous is %lld\n", (long long int)bl->previous);
 }
 
 static void breaklabel (LexState *ls) {
@@ -306,6 +308,8 @@ static void leaveblock (FuncState *fs) {
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
   fs->bl = bl->previous;
+  printf("leaving block %lld\n", (long long int)bl);
+  printf("now is %lld\n", (long long int)fs->bl);
   for(int i = 0; i < bl->local_variables.size(); i++) {
 	  printf("v[%d] = %s\n",i,getstr(bl->local_variables[i]));
   }
@@ -315,6 +319,7 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
   terra_State *L = ls->LP;
   Proto *f;
   fs->prev = ls->fs;  /* linked list of funcstates */
+  fs->bl = (fs->prev) ? ls->fs->bl : NULL;
   fs->ls = ls;
   ls->fs = fs;
   fs->f.linedefined = 0;
@@ -514,6 +519,8 @@ static void parlist (LexState *ls) {
         case TK_NAME: {  /* param -> NAME */
           TString * nm = str_checkname(ls);
           
+          fs->bl->local_variables.push_back(nm);
+          
           if(ls->in_terra) {
             expdesc e;
           	int entry = new_table(ls);
@@ -700,6 +707,25 @@ static void primaryexp (LexState *ls, expdesc *v) {
   }
 }
 
+//TODO: eventually we should record the set of possibly used symbols, and only quote the ones appearing in it
+static void print_captured_locals(LexState * ls) {
+	std::set<TString *> variables;
+	FuncState * fs = ls->fs;
+	for(BlockCnt * bl = fs->bl; bl != NULL; bl = bl->previous) {
+		printf("local variable size = %d\n",(int)bl->local_variables.size());
+		for(unsigned int i = 0; i < bl->local_variables.size(); i++) {
+			variables.insert(bl->local_variables[i]);
+		}
+	}
+	//setmetatable(tbl,{ _index = getfenv() })
+	OutputBuffer_printf(&ls->output_buffer,"function() return setmetatable({ ");
+	for(std::set<TString *>::iterator i = variables.begin(), end = variables.end();
+	    i != end;
+	    i++) {
+		OutputBuffer_printf(&ls->output_buffer,"%s = %s;",getstr(*i),getstr(*i));
+	}
+	OutputBuffer_printf(&ls->output_buffer," }, { __index = getfenv() }) end");
+}
 
 static void simpleexp (LexState *ls, expdesc *v) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
@@ -756,7 +782,9 @@ static void simpleexp (LexState *ls, expdesc *v) {
     	body(ls,v,0,ls->linenumber);
 	  	luaX_patchbegin(ls,&begin);
 	    int id = add_entry(ls,TA_FUNCTION_TABLE);
-	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G._terra_globals[%d])",id);
+	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G._terra_globals[%d],",id);
+	    print_captured_locals(ls);
+	    OutputBuffer_printf(&ls->output_buffer,")");
 	    luaX_patchend(ls,&begin);
     	ls->in_terra--;
     	return;
@@ -1203,7 +1231,9 @@ static void localterra (LexState *ls) {
   RETURNS_1(body(ls, &b, 0, ls->linenumber));
   int id = add_entry(ls,TA_FUNCTION_TABLE);
   luaX_patchbegin(ls,&begin);
-  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G._terra_globals[%d])",getstr(name),getstr(name),id);
+  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G._terra_globals[%d],",getstr(name),getstr(name),id);
+  print_captured_locals(ls);
+  OutputBuffer_printf(&ls->output_buffer,")");
   luaX_patchend(ls,&begin);
   /* debug information will only see the variable after this point! */
   ls->in_terra--;
@@ -1287,7 +1317,9 @@ static void terrastat(LexState * ls, int line) {
 	print_names(ls); //a.b.c.d
 	OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
 	print_names(ls);
-	OutputBuffer_printf(&ls->output_buffer,", _G._terra_globals[%d])",n);
+	OutputBuffer_printf(&ls->output_buffer,", _G._terra_globals[%d],",n);
+	print_captured_locals(ls);
+	OutputBuffer_printf(&ls->output_buffer,")");
 	luaX_patchend(ls,&begin);
 	ls->in_terra--;
 }
@@ -1420,6 +1452,7 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   LexState lexstate;
   FuncState funcstate;
   BlockCnt bl;
+  bl.previous = NULL;
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;

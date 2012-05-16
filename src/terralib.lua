@@ -31,8 +31,11 @@ function printElement(t)
 		printElem(t,"  ")
 	end
 end
-function terra.newfunction(olddef,newvariant)
+function terra.newfunction(olddef,newvariant,env)
     print("previous object: "..tostring(olddef))
 	printElement(newvariant)
+	print("local environment:")
+	local e = env()
+	printElement(e)
 	return newvariant
 end
