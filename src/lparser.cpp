@@ -1210,21 +1210,35 @@ static void localterra (LexState *ls) {
 }
 
 static void localstat (LexState *ls) {
-  check_no_terra(ls,"local keywords");
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
   int nvars = 0;
   int nexps;
   expdesc e;
+  int tbl = new_table(ls,"defvar");
+  int vars = new_table(ls);
   do {
 	TString * name = str_checkname(ls);
-    ls->fs->bl->local_variables.push_back(name);
+	if(!ls->in_terra)
+    	ls->fs->bl->local_variables.push_back(name);
 	nvars++;
+	int entry = new_table(ls);
+	push_string(ls,name);
+	add_field(ls,entry,"name");
+	if(ls->in_terra && testnext(ls,':')) {
+		expdesc e;
+		RETURNS_1(expr(ls,&e));
+		add_field(ls,entry,"type");
+	}
+	add_entry(ls,vars);
   } while (testnext(ls, ','));
-  if (testnext(ls, '='))
-    nexps = explist(ls, &e);
-  else {
+  add_field(ls,tbl,"variables");
+  if (testnext(ls, '=')) {
+    RETURNS_1(nexps = explist(ls, &e));
+  } else {
+    new_table(ls); //blank initializers
     nexps = 0;
   }
+  add_field(ls,tbl,"initializers");
 }
 
 static int funcname (LexState *ls, expdesc *v) {
@@ -1362,9 +1376,18 @@ static void statement (LexState *ls) {
       	check_no_terra(ls, "nested terra functions");
       	localterra(ls);
       } else {
+        check_no_terra(ls,"local keywords");
         localstat(ls);
       }
       break;
+    }
+    case TK_VAR: {
+    	luaX_next(ls); /* skip var */
+    	if(!ls->in_terra) {
+    		assert(!"NYI - global variables");
+    	}
+    	RETURNS_1(localstat(ls));
+    	break;	
     }
     case TK_DBCOLON: {  /* stat -> label */
       

@@ -26,6 +26,7 @@ b = terra(a : int,b : int) : int,int
  return #a.b.c.d[f]:e()
 end
 terra c(some : int,args : int)
+	var a = 1
 	return 4
 end
 a = {}
@@ -39,4 +40,7 @@ function b()
 end
 b()
 a = b
+terra foo(c : int) : int
+	var a : int, b = 4,5
+end
 print("and done")
