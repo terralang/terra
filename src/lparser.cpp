@@ -410,6 +410,13 @@ static void push_double(LexState * ls, double d) {
 	}
 }
 
+static void push_integer(LexState * ls, int64_t i) {
+	if(ls->in_terra) {
+		void * data = lua_newuserdata(ls->L,sizeof(int64_t));
+		*(int64_t*)data = i;
+	}
+}
+
 static void yindex (LexState *ls, expdesc *v) {
   /* index -> '[' expr ']' */
   luaX_next(ls);  /* skip the '[' */
@@ -733,8 +740,13 @@ static void simpleexp (LexState *ls, expdesc *v) {
   switch (ls->t.token) {
     case TK_NUMBER: {
       //v->u.nval = ls->t.seminfo.r;
-      push_double(ls,ls->t.seminfo.r);
-      push_literal(ls,"double");
+      if(ls->t.seminfo.is_integer) {
+        push_integer(ls,ls->t.seminfo.r);
+        push_literal(ls,"integer");
+      } else {
+        push_double(ls,ls->t.seminfo.r);
+        push_literal(ls,"double");
+      }
       break;
     }
     case TK_STRING: {

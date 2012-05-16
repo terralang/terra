@@ -38,6 +38,8 @@ typedef struct {
 	  luaP_Number r;
 	  TString * ts;
   };
+  int is_integer;
+  uint64_t i; //integer value, for terra
   int linebegin; //line on which we _started_ parsing this token
   int buffer_begin; //position in buffer where we _started_ parsing this token
 } SemInfo;  /* semantics information */

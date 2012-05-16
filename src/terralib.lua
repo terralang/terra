@@ -1,6 +1,6 @@
 print ("loaded terra lib")
 terra = {}
-function printElement(t) 
+function terra.printElement(t) 
 	local function header(t)
 		if type(t) == "table" then
 			return t["kind"] or ""
@@ -33,9 +33,9 @@ function printElement(t)
 end
 function terra.newfunction(olddef,newvariant,env)
     print("previous object: "..tostring(olddef))
-	printElement(newvariant)
+	terra.printElement(newvariant)
 	print("local environment:")
 	local e = env()
-	printElement(e)
+	terra.printElement(e)
 	return newvariant
 end

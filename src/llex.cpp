@@ -251,7 +251,15 @@ static void buffreplace (LexState *ls, char from, char to) {
 #endif
 
 
-#define buff2d(b,e)	luaO_str2d(luaZ_buffer(b), luaZ_bufflen(b) - 1, e)
+//#define buff2d(b,e)	luaO_str2d(luaZ_buffer(b), luaZ_bufflen(b) - 1, e)
+
+int buff2d(Mbuffer * b, SemInfo * seminfo) {
+	int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
+	char * end;
+	seminfo->i = strtoull(luaZ_buffer(b),&end,0);
+	seminfo->is_integer = *end == '\0';
+	return r;
+}
 
 /*
 ** in case of format error, try to change decimal point separator to
@@ -261,7 +269,7 @@ static void trydecpoint (LexState *ls, SemInfo *seminfo) {
   char old = ls->decpoint;
   ls->decpoint = getlocaledecpoint();
   buffreplace(ls, old, ls->decpoint);  /* try new decimal separator */
-  if (!buff2d(ls->buff, &seminfo->r)) {
+  if (!buff2d(ls->buff, seminfo)) {
     /* format error with correct decimal point: no more options */
     buffreplace(ls, ls->decpoint, '.');  /* undo change (for error message) */
     lexerror(ls, "malformed number", TK_NUMBER);
@@ -279,7 +287,7 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
   } while (lislalnum(ls->current) || ls->current == '.');
   save(ls, '\0');
   buffreplace(ls, '.', ls->decpoint);  /* follow locale for decimal point */
-  if (!buff2d(ls->buff, &seminfo->r))  /* format error? */
+  if (!buff2d(ls->buff, seminfo))  /* format error? */
     trydecpoint(ls, seminfo); /* try to update decimal point separator */
 }
 

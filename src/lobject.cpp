@@ -3,6 +3,7 @@
 #include <string.h>
 #include "lctype.h"
 #include "lobject.h"
+#include "llex.h"
 
 static int isneg (const char **s) {
   if (**s == '-') { (*s)++; return 1; }
