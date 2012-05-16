@@ -31,6 +31,8 @@ function printElement(t)
 		printElem(t,"  ")
 	end
 end
-function terra.newfunction(x)
-	printElement(x)
+function terra.newfunction(olddef,newvariant)
+    print("previous object: "..tostring(olddef))
+	printElement(newvariant)
+	return newvariant
 end

@@ -24,4 +24,17 @@ b = terra(a,b)
  for i,b,c in a,b,c do end
  return #a.b.c.d[f]:e()
 end
+terra c(some,args)
+	return 4
+end
+a = {}
+terra a.b(a)
+	print("me")
+end 
+terra a.b(c)
+end
+function b() 
+	local terra foo(a,b) end
+end
+b()
 print("and done")

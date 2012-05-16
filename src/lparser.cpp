@@ -268,12 +268,18 @@ static TString *str_checkname (LexState *ls) {
 
 static void checkname (LexState *ls, expdesc *e) {
 	TString * str = str_checkname(ls);
+	if(ls->record_names && ls->in_terra) {
+		ls->variable_names.push_back(str);
+	} 
 	push_string(ls,str);
 }
 
 static void singlevar (LexState *ls, expdesc *var) {
   TString *varname = str_checkname(ls);
-  int tbl = new_table(ls,"var");
+  if(ls->record_names && ls->in_terra) {
+    ls->variable_names.push_back(varname);
+  }
+  int tbl = new_table(ls,"var"); 
   push_string(ls,varname);
   add_field(ls,tbl,"name");
 }
@@ -531,7 +537,7 @@ static void parlist (LexState *ls) {
 }
 
 
-static void body (LexState *ls, expdesc *e, int ismethod, int line, Token * begin) {
+static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
   BlockCnt bl;
@@ -553,12 +559,6 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line, Token * begi
   check_match(ls, TK_END, TK_FUNCTION, line);
   //codeclosure(ls, new_fs.f, e);
   close_func(ls);
-  if(ls->in_terra) {
-	  luaX_patchbegin(ls,begin);
-	  int id = add_entry(ls,TA_FUNCTION_TABLE);
-	  OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",id);
-	  luaX_patchend(ls,begin);
-  }
 }
 
 
@@ -737,15 +737,19 @@ static void simpleexp (LexState *ls, expdesc *v) {
     }
     case TK_FUNCTION: {
       luaX_next(ls);
-      body(ls, v, 0, ls->linenumber, NULL);
+      body(ls, v, 0, ls->linenumber);
       return;
     }
     case TK_TERRA: {
     	check_no_terra(ls,"nested terra functions");
     	ls->in_terra++;
-    	Token t = ls->t;
+    	Token begin = ls->t;
     	luaX_next(ls);
-    	body(ls,v,0,ls->linenumber,&t);
+    	body(ls,v,0,ls->linenumber);
+	  	luaX_patchbegin(ls,&begin);
+	    int id = add_entry(ls,TA_FUNCTION_TABLE);
+	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G._terra_globals[%d])",id);
+	    luaX_patchend(ls,&begin);
     	ls->in_terra--;
     	return;
     }
@@ -1162,9 +1166,25 @@ static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
   TString * name = str_checkname(ls);
-  body(ls, &b, 0, ls->linenumber,NULL);  /* function created in next register */
+  body(ls, &b, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
   fs->bl->local_variables.push_back(name);
+}
+static void localterra (LexState *ls) {
+  expdesc b;
+  FuncState *fs = ls->fs;
+  Token begin = ls->t;
+  luaX_next(ls); //skip 'terra'
+  ls->in_terra++;
+  TString * name = str_checkname(ls);
+  fs->bl->local_variables.push_back(name);
+  RETURNS_1(body(ls, &b, 0, ls->linenumber));
+  int id = add_entry(ls,TA_FUNCTION_TABLE);
+  luaX_patchbegin(ls,&begin);
+  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G._terra_globals[%d])",getstr(name),getstr(name),id);
+  luaX_patchend(ls,&begin);
+  /* debug information will only see the variable after this point! */
+  ls->in_terra--;
 }
 
 static void localstat (LexState *ls) {
@@ -1188,11 +1208,12 @@ static void localstat (LexState *ls) {
 static int funcname (LexState *ls, expdesc *v) {
   /* funcname -> NAME {fieldsel} [`:' NAME] */
   int ismethod = 0;
-  singlevar(ls, v);
+  RETURNS_1(singlevar(ls, v));
   while (ls->t.token == '.')
-    fieldsel(ls, v);
+    RETURNS_0(fieldsel(ls, v));
   if (ls->t.token == ':') {
     ismethod = 1;
+    check_no_terra(ls,"method definitions");
     fieldsel(ls, v);
   }
   return ismethod;
@@ -1200,24 +1221,38 @@ static int funcname (LexState *ls, expdesc *v) {
 
 
 static void funcstat (LexState *ls, int line) {
-  check_no_terra(ls,"lua functions");
   /* funcstat -> FUNCTION funcname body */
   int ismethod;
   expdesc v, b;
   luaX_next(ls);  /* skip FUNCTION */
-  ismethod = funcname(ls, &v);
-  body(ls, &b, ismethod, line,NULL);
+  ls->record_names = 1;
+  RETURNS_1(ismethod = funcname(ls, &v));
+  if(ls->in_terra) {
+  	lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
+  }
+  ls->record_names = 0;
+  body(ls, &b, ismethod, line);
 }
 
+static void print_names(LexState * ls) {
+	assert(ls->variable_names.size() > 0);
+	OutputBuffer_printf(&ls->output_buffer,"%s",getstr(ls->variable_names[0]));
+	for(unsigned int i = 1; i < ls->variable_names.size(); i++) {
+		OutputBuffer_printf(&ls->output_buffer,".%s",getstr(ls->variable_names[i]));
+	}
+}
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
-	assert(!"incomplete (doesn't patch the token correctly)");
-	Token t = ls->t;
+	Token begin = ls->t;
+	ls->variable_names.clear();
 	RETURNS_1(funcstat(ls,line));
 	int n = add_entry(ls,TA_FUNCTION_TABLE);
-	luaX_patchbegin(ls,&t);
-	OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(_G._terra_globals[%d])",n);
-	luaX_patchend(ls,&t);
+	luaX_patchbegin(ls,&begin);
+	print_names(ls); //a.b.c.d
+	OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
+	print_names(ls);
+	OutputBuffer_printf(&ls->output_buffer,", _G._terra_globals[%d])",n);
+	luaX_patchend(ls,&begin);
 	ls->in_terra--;
 }
 
@@ -1289,6 +1324,7 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_FUNCTION: {  /* stat -> funcstat */
+      check_no_terra(ls,"lua functions");
       RETURNS_1(funcstat(ls, line));
       break;
     }
@@ -1300,9 +1336,9 @@ static void statement (LexState *ls) {
       if (testnext(ls, TK_FUNCTION)) { /* local function? */
         check_no_terra(ls, "lua functions");
         localfunc(ls);
-      } else if(testnext(ls,TK_TERRA)) {
+      } else if(ls->t.token == TK_TERRA) {
       	check_no_terra(ls, "nested terra functions");
-      	assert(!"implement local terra function statements");
+      	localterra(ls);
       } else {
         localstat(ls);
       }
@@ -1341,6 +1377,8 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   BlockCnt bl;
   lua_State * L = T->L;
   lexstate.L = L;
+  lexstate.in_terra = 0;
+  lexstate.record_names = 0;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
   lexstate.n_lua_objects = 0;
