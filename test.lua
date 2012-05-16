@@ -1,4 +1,3 @@
---[[
 b = terra(a : int,b : int) : int,int
  if a then 
  elseif b then 
@@ -44,10 +43,3 @@ terra foo(c : int) : int
 	var a : int, b = 4,5
 end
 print("and done")
-]]
-d = 4
-function b(a,b,c) 
-	local e = 4
-	terra foo() end
-end
-b(1,2,3)
