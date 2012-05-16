@@ -501,8 +501,6 @@ static void constructor (LexState *ls, expdesc *t) {
 
 /* }====================================================================== */
 
-
-
 static void parlist (LexState *ls) {
   /* parlist -> [ param { `,' param } ] */
   FuncState *fs = ls->fs;
@@ -515,13 +513,19 @@ static void parlist (LexState *ls) {
       switch (ls->t.token) {
         case TK_NAME: {  /* param -> NAME */
           TString * nm = str_checkname(ls);
-          int entry = new_table(ls);
-          push_string(ls,nm);
-          add_field(ls,entry,"name");
-          //TODO: if we are in terra parse the type and add it here
-          push_string(ls,"<todo: types>");
-          add_field(ls,entry,"type");
-          add_entry(ls,tbl);
+          
+          if(ls->in_terra) {
+            expdesc e;
+          	int entry = new_table(ls);
+            push_string(ls,nm);
+            add_field(ls,entry,"name");
+          
+          	checknext(ls,':');
+          	RETURNS_1(expr(ls,&e));
+          	add_field(ls,entry,"type");
+          	add_entry(ls,tbl);
+          }
+          
           nparams++;
           break;
         }
@@ -536,7 +540,7 @@ static void parlist (LexState *ls) {
   }
 }
 
-
+static int explist (LexState *ls, expdesc *v);
 static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
@@ -552,7 +556,11 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   push_boolean(ls,new_fs.f.is_vararg);
   add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
-  //TODO: check for ':' followed by type here
+  if(ls->in_terra && testnext(ls,':')) {
+    expdesc v;
+  	RETURNS_1(explist(ls,&v));
+  	add_field(ls,tbl,"return_types");
+  }
   RETURNS_1(statlist(ls));
   add_field(ls,tbl,"statements");
   new_fs.f.lastlinedefined = ls->linenumber;
@@ -774,13 +782,15 @@ typedef enum BinOpr {
 } BinOpr;
 
 
-typedef enum UnOpr { OPR_MINUS, OPR_NOT, OPR_LEN, OPR_NOUNOPR } UnOpr;
+typedef enum UnOpr { OPR_MINUS, OPR_NOT, OPR_LEN, OPR_DEREF, OPR_ADDR, OPR_NOUNOPR } UnOpr;
 
 static UnOpr getunopr (int op) {
   switch (op) {
     case TK_NOT: return OPR_NOT;
     case '-': return OPR_MINUS;
     case '#': return OPR_LEN;
+    case '&': return OPR_ADDR;
+    case '@': return OPR_DEREF;
     default: return OPR_NOUNOPR;
   }
 }
@@ -806,6 +816,17 @@ static BinOpr getbinopr (int op) {
     default: return OPR_NOBINOPR;
   }
 }
+static void check_lua_operator(LexState * ls, int op) {
+	if(!ls->in_terra) {
+		switch(op) {
+			case '&': case '@':
+				luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@ and & operators not supported in Lua code."));
+				break;
+			default:
+				break;
+		}
+	}
+}
 
 static const struct {
   lu_byte left;  /* left priority for each binary operator */
@@ -830,6 +851,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   UnOpr uop;
   enterlevel(ls);
   uop = getunopr(ls->t.token);
+  check_lua_operator(ls,ls->t.token);
   if (uop != OPR_NOUNOPR) {
     int line = ls->linenumber;
     int tbl = new_table(ls,"operator");

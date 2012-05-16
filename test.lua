@@ -1,5 +1,5 @@
 print("hello world")
-b = terra(a,b)
+b = terra(a : int,b : int) : int,int
  if a then 
  elseif b then 
  else 
@@ -19,22 +19,24 @@ b = terra(a,b)
  a = true,false,nil
  a = { [a] = 4, a = 4, 3 }
  a,b,c,d,e = b,c,4,"astring"
+ a = &b
  for i = 1,2 do end
  for i = 1,2,3 do end
  for i,b,c in a,b,c do end
  return #a.b.c.d[f]:e()
 end
-terra c(some,args)
+terra c(some : int,args : int)
 	return 4
 end
 a = {}
-terra a.b(a)
+terra a.b(a : int)
 	print("me")
 end 
-terra a.b(c)
+terra a.b(c : int)
 end
 function b() 
-	local terra foo(a,b) end
+	local terra foo(a : int,b : {int,int}) end
 end
 b()
+a = b
 print("and done")
