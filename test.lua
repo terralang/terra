@@ -19,6 +19,9 @@ b = terra(a,b)
  a = true,false,nil
  a = { [a] = 4, a = 4, 3 }
  a,b,c,d,e = b,c,4,"astring"
+ for i = 1,2 do end
+ for i = 1,2,3 do end
+ for i,b,c in a,b,c do end
  return #a.b.c.d[f]:e()
 end
 print("and done")

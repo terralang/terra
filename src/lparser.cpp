@@ -1020,7 +1020,7 @@ static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl
   FuncState *fs = ls->fs;
   checknext(ls, TK_DO);
   enterblock(fs, bl, 0);  /* scope for declared variables */
-  block(ls);
+  RETURNS_1(block(ls));
   leaveblock(fs);  /* end of scope for declared variables */
 }
 
@@ -1028,20 +1028,26 @@ static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   FuncState *fs = ls->fs;
-
+  int tbl = new_table(ls,"fornum");
+  push_string(ls,varname);
+  add_field(ls,tbl,"varname");
   checknext(ls, '=');
   expdesc a,b,c;
-  exp1(ls,&a);  /* initial value */
+  RETURNS_1(exp1(ls,&a));  /* initial value */
+  add_field(ls,tbl,"initial");
   checknext(ls, ',');
-  exp1(ls,&b);  /* limit */
-  if (testnext(ls, ','))
-    exp1(ls,&c);  /* optional step */
-  else {  /* default step = 1 */
+  RETURNS_1(exp1(ls,&b));  /* limit */
+  add_field(ls,tbl,"limit");
+  if (testnext(ls, ',')) {
+    RETURNS_1(exp1(ls,&c));  /* optional step */
+    add_field(ls,tbl,"step");
+  } else {  /* default step = 1 */
 
   }
   BlockCnt bl;
   bl.local_variables.push_back(varname);
-  forbody(ls, line, 1, 1, &bl);
+  RETURNS_1(forbody(ls, line, 1, 1, &bl));
+  add_field(ls,tbl,"body");
 }
 
 
@@ -1051,19 +1057,28 @@ static void forlist (LexState *ls, TString *indexname) {
   expdesc e;
   int nvars = 4;  /* gen, state, control, plus at least one declared var */
   int line;
-
+  int tbl = new_table(ls,"forlist");
+  int vars = new_table(ls);
+  push_string(ls,indexname);
+  add_entry(ls,vars);
   /* create declared variables */
   BlockCnt bl;
   bl.local_variables.push_back(indexname);
+  
   while (testnext(ls, ',')) {
     TString * name = str_checkname(ls);
+    push_string(ls,name);
+    add_entry(ls,vars);
     bl.local_variables.push_back(name);
     nvars++;
   }
+  add_field(ls,tbl,"variables");
   checknext(ls, TK_IN);
   line = ls->linenumber;
-  explist(ls, &e);
-  forbody(ls, line, nvars - 3, 0, &bl);
+  RETURNS_1(explist(ls, &e));
+  add_field(ls,tbl,"iterators");
+  RETURNS_1(forbody(ls, line, nvars - 3, 0, &bl));
+  add_field(ls,tbl,"body");
 }
 
 static void forstat (LexState *ls, int line) {
@@ -1075,8 +1090,8 @@ static void forstat (LexState *ls, int line) {
   luaX_next(ls);  /* skip `for' */
   varname = str_checkname(ls);  /* first variable name */
   switch (ls->t.token) {
-    case '=': fornum(ls, varname, line); break;
-    case ',': case TK_IN: forlist(ls, varname); break;
+    case '=': RETURNS_1(fornum(ls, varname, line)); break;
+    case ',': case TK_IN: RETURNS_1(forlist(ls, varname)); break;
     default: luaX_syntaxerror(ls, LUA_QL("=") " or " LUA_QL("in") " expected");
   }
   check_match(ls, TK_END, TK_FOR, line);
