@@ -52,7 +52,10 @@ const char * token_to_string[] = {
 #endif
 
 enum TA_Globals {
-	TA_FUNCTION_TABLE = 1
+	TA_TERRA_OBJECT = 1,
+	TA_FUNCTION_TABLE,
+	TA_TREE_METATABLE,
+	TA_LAST_GLOBAL
 };
 
 //helpers to ensure that the lua stack contains the right number of arguments after a call
@@ -129,6 +132,8 @@ static int new_table(LexState * ls, const char * str) {
 		int t = new_table(ls);
 		push_string(ls,str);
 		add_field(ls, t,"kind");
+		lua_pushvalue(ls->L,TA_TREE_METATABLE);
+		lua_setmetatable(ls->L,-2);
 		return t;
 	} else return 0;
 }
@@ -794,7 +799,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
     	body(ls,v,0,ls->linenumber);
 	  	luaX_patchbegin(ls,&begin);
 	    int id = add_entry(ls,TA_FUNCTION_TABLE);
-	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G._terra_globals[%d],",id);
+	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G.terra._trees[%d],",id);
 	    print_captured_locals(ls);
 	    OutputBuffer_printf(&ls->output_buffer,")");
 	    luaX_patchend(ls,&begin);
@@ -1243,7 +1248,7 @@ static void localterra (LexState *ls) {
   RETURNS_1(body(ls, &b, 0, ls->linenumber));
   int id = add_entry(ls,TA_FUNCTION_TABLE);
   luaX_patchbegin(ls,&begin);
-  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G._terra_globals[%d],",getstr(name),getstr(name),id);
+  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G.terra._trees[%d],",getstr(name),getstr(name),id);
   print_captured_locals(ls);
   OutputBuffer_printf(&ls->output_buffer,")");
   luaX_patchend(ls,&begin);
@@ -1329,7 +1334,7 @@ static void terrastat(LexState * ls, int line) {
 	print_names(ls); //a.b.c.d
 	OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
 	print_names(ls);
-	OutputBuffer_printf(&ls->output_buffer,", _G._terra_globals[%d],",n);
+	OutputBuffer_printf(&ls->output_buffer,", _G.terra._trees[%d],",n);
 	print_captured_locals(ls);
 	OutputBuffer_printf(&ls->output_buffer,")");
 	luaX_patchend(ls,&begin);
@@ -1480,10 +1485,18 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
 	  //lua_pushstring(L,token_to_string[i+1]);
 	  //printf("pushing %s id = %d, id = %d\n", token_to_string[i+1], lua_gettop(L), (i+1));
   //}
+  lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
+  assert(lua_gettop(L) == TA_TERRA_OBJECT);
+  
   lua_newtable(L);//TA_FUNCTION_TABLE
-  lua_pushvalue(L,-1);
-  lua_setfield(L,LUA_GLOBALSINDEX,"_terra_globals");
-
+  lua_setfield(L,-2,"_trees");
+  
+  lua_getfield(L,TA_TERRA_OBJECT,"_trees");
+  assert(lua_gettop(L) == TA_FUNCTION_TABLE);
+  
+  lua_getfield(L,TA_TERRA_OBJECT,"_metatree");
+  assert(lua_gettop(L) == TA_TREE_METATABLE);
+  
   luaX_setinput(T, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);
   luaX_next(&lexstate);  /* read first token */
@@ -1491,7 +1504,8 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   check(&lexstate, TK_EOS);
   close_func(&lexstate);
   assert(!funcstate.prev && !lexstate.fs);
-  lua_pop(L,1);
+  
+  lua_pop(L,TA_LAST_GLOBAL - 1);
 
   assert(lua_gettop(L) == 0);
   /* all scopes should be correctly finished */

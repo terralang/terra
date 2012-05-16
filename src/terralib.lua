@@ -1,5 +1,14 @@
 print ("loaded terra lib")
-terra = {}
+_G.terra = {}
+
+terra.default = {} --default match value
+terra.tree = {}
+function terra.tree:match(tbl)
+	fn = tbl[self.kind] or tbl[terra.default] or function() print("match error:"..self.kind) end
+	fn(tbl)
+end
+terra._metatree = { __index = terra.tree }
+
 function terra.printElement(t) 
 	local function header(t)
 		if type(t) == "table" then
@@ -31,6 +40,7 @@ function terra.printElement(t)
 		printElem(t,"  ")
 	end
 end
+
 function terra.newfunction(olddef,newvariant,env)
     print("previous object: "..tostring(olddef))
 	terra.printElement(newvariant)
@@ -38,4 +48,8 @@ function terra.newfunction(olddef,newvariant,env)
 	local e = env()
 	terra.printElement(e)
 	return newvariant
+end
+
+function terra.resolvetype(type_tree)
+	
 end
