@@ -823,6 +823,7 @@ typedef enum BinOpr {
   OPR_EQ, OPR_LT, OPR_LE,
   OPR_NE, OPR_GT, OPR_GE,
   OPR_AND, OPR_OR,
+  OPR_FUNC_PTR,
   OPR_NOBINOPR
 } BinOpr;
 
@@ -858,14 +859,15 @@ static BinOpr getbinopr (int op) {
     case TK_GE: return OPR_GE;
     case TK_AND: return OPR_AND;
     case TK_OR: return OPR_OR;
+    case TK_FUNC_PTR: return OPR_FUNC_PTR;
     default: return OPR_NOBINOPR;
   }
 }
 static void check_lua_operator(LexState * ls, int op) {
 	if(!ls->in_terra) {
 		switch(op) {
-			case '&': case '@':
-				luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@ and & operators not supported in Lua code."));
+			case '&': case '@': case TK_FUNC_PTR:
+				luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@, &, and -> operators not supported in Lua code."));
 				break;
 			default:
 				break;
@@ -881,7 +883,8 @@ static const struct {
    {10, 9}, {5, 4},                 /* ^, .. (right associative) */
    {3, 3}, {3, 3}, {3, 3},          /* ==, <, <= */
    {3, 3}, {3, 3}, {3, 3},          /* ~=, >, >= */
-   {2, 2}, {1, 1}                   /* and, or */
+   {2, 2}, {1, 1},                  /* and, or */
+   {10,9}                           /* function pointer*/
 };
 
 #define UNARY_PRIORITY	8  /* priority for unary operators */
@@ -911,6 +914,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   else RETURNS_1(simpleexp(ls, v));
   /* expand while operators have priorities higher than `limit' */
   op = getbinopr(ls->t.token);
+  check_lua_operator(ls,ls->t.token);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     expdesc v2;
     BinOpr nextop;
