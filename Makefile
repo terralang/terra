@@ -26,6 +26,8 @@ SRC = terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp l
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = lexer
 
+BIN2C = build/bin2c
+
 .PHONY:	all clean
 all:	$(EXECUTABLE)
 
@@ -47,6 +49,9 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	
 $(EXECUTABLE):	$(addprefix build/, $(OBJS))
 	$(CXX) $^ -o $@ $(LFLAGS)
+
+$(BIN2C):	src/bin2c.c
+	$(CC) -O3 -o $@ $<
 	
 clean:
 	rm -rf build/*.o build/*.d
