@@ -23,7 +23,7 @@ terra_State * terra_newstate() {
 	luaL_openlibs(T->L);
 	//TODO: embed in executable
 	if(luaL_dofile(T->L,"src/terralib.lua")) {
-		terra_reporterror(T,luaL_checkstring(T->L,-1));
+		terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));
 		free(T);
 		return NULL;
 	}

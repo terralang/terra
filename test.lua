@@ -32,8 +32,8 @@ a = {}
 terra a.b(a : int)
 	print("me")
 end 
-terra a.b(c : int)
-end
+--terra a.b(c : int)
+--end
 function b() 
 	local terra foo(a : int,b : {int,int}) end
 end

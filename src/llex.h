@@ -145,5 +145,6 @@ LUAI_FUNC l_noret luaX_syntaxerror (LexState *ls, const char *s);
 LUAI_FUNC const char * luaX_token2str (LexState *ls, int token);
 LUAI_FUNC void luaX_patchbegin(LexState *ls, Token * begin_token);
 LUAI_FUNC void luaX_patchend(LexState *ls, Token * begin_token);
+const char * luaX_token2rawstr(LexState * ls, int token);
 
 #endif

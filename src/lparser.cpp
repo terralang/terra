@@ -55,6 +55,7 @@ enum TA_Globals {
 	TA_TERRA_OBJECT = 1,
 	TA_FUNCTION_TABLE,
 	TA_TREE_METATABLE,
+	TA_LIST_METATABLE,
 	TA_LAST_GLOBAL
 };
 
@@ -93,9 +94,17 @@ typedef struct BlockCnt {
 
 static int new_table(LexState * ls) {
 	if(ls->in_terra) {
-		printf("(new table)\n");
+		//printf("(new table)\n");
 		lua_newtable(ls->L);
 		return lua_gettop(ls->L);
+	} else return 0;
+}
+static int new_list(LexState * ls) {
+	if(ls->in_terra) {
+		int t = new_table(ls); //printf("(new table)\n");
+		lua_pushvalue(ls->L,TA_LIST_METATABLE);
+		lua_setmetatable(ls->L,-2);
+		return t;
 	} else return 0;
 }
 
@@ -113,7 +122,7 @@ static void add_field(LexState * ls, int table, TA_Token t) {
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
 	if(ls->in_terra) {
-		printf("consume field\n");
+		//printf("consume field\n");
 		lua_pushstring(ls->L,field);
 		lua_pushvalue(ls->L,-2);
 		lua_settable(ls->L,table);
@@ -122,13 +131,13 @@ static void add_field(LexState * ls, int table, const char * field) {
 }
 static void push_string(LexState * ls, const char * str) {
 	if(ls->in_terra) {
-		printf("push string: %s\n",str);
+		//printf("push string: %s\n",str);
 		lua_pushstring(ls->L,str);
 	}
 }
 static int new_table(LexState * ls, const char * str) {
 	if(ls->in_terra) {
-		printf("push %s ",str);
+		//printf("push %s ",str);
 		int t = new_table(ls);
 		push_string(ls,str);
 		add_field(ls, t,"kind");
@@ -145,16 +154,16 @@ static int new_table_before(LexState * ls, const char * str) {
 	} else return 0;
 }
 
-static int new_table_before(LexState * ls) {
+static int new_list_before(LexState * ls) {
 	if(ls->in_terra) {
-		int t = new_table(ls);
+		int t = new_list(ls);
 		lua_insert(ls->L,-2);
 		return t - 1;
 	} else return 0;
 }
 static void add_index(LexState * ls, int table, int n) {
 	if(ls->in_terra) {
-	    printf("consume index\n");
+	    //printf("consume index\n");
 		lua_pushinteger(ls->L,n);
 		lua_pushvalue(ls->L,-2);
 		lua_settable(ls->L,table);
@@ -174,7 +183,7 @@ static void push_string(LexState * ls, TString * str) {
 }
 static void push_boolean(LexState * ls, int b) {
 	if(ls->in_terra) {
-		printf("push boolean\n");
+		//printf("push boolean\n");
 		lua_pushboolean(ls->L,b);
 	}
 }
@@ -301,8 +310,8 @@ static void enterlevel (LexState *ls) {
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
   fs->bl = bl;
-  printf("entering block %lld\n", (long long int)bl);
-  printf("previous is %lld\n", (long long int)bl->previous);
+  //printf("entering block %lld\n", (long long int)bl);
+  //printf("previous is %lld\n", (long long int)bl->previous);
 }
 
 static void breaklabel (LexState *ls) {
@@ -313,11 +322,11 @@ static void leaveblock (FuncState *fs) {
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
   fs->bl = bl->previous;
-  printf("leaving block %lld\n", (long long int)bl);
-  printf("now is %lld\n", (long long int)fs->bl);
-  for(int i = 0; i < bl->local_variables.size(); i++) {
-	  printf("v[%d] = %s\n",i,getstr(bl->local_variables[i]));
-  }
+  //printf("leaving block %lld\n", (long long int)bl);
+  //printf("now is %lld\n", (long long int)fs->bl);
+  //for(int i = 0; i < bl->local_variables.size(); i++) {
+  //	  printf("v[%d] = %s\n",i,getstr(bl->local_variables[i]));
+  //}
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
@@ -377,7 +386,7 @@ static int block_follow (LexState *ls, int withuntil) {
 
 static void statlist (LexState *ls) {
   /* statlist -> { stat [`;'] } */
-  int tbl = new_table(ls);
+  int tbl = new_list(ls);
   while (!block_follow(ls, 1)) {
     if (ls->t.token == TK_RETURN) {
       statement(ls);
@@ -505,7 +514,7 @@ static void constructor (LexState *ls, expdesc *t) {
   struct ConsControl cc;
   cc.na = cc.nh = 0;
   int tbl = new_table(ls,"constructor");
-  int records = new_table(ls);
+  int records = new_list(ls);
   checknext(ls, '{');
   do {
     if (ls->t.token == '}') break;
@@ -522,7 +531,7 @@ static void parlist (LexState *ls) {
   /* parlist -> [ param { `,' param } ] */
   FuncState *fs = ls->fs;
   Proto *f = &fs->f;
-  int tbl = new_table(ls);
+  int tbl = new_list(ls);
   int nparams = 0;
   f->is_vararg = 0;
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
@@ -535,7 +544,7 @@ static void parlist (LexState *ls) {
           
           if(ls->in_terra) {
             expdesc e;
-          	int entry = new_table(ls);
+          	int entry = new_table(ls,"entry");
             push_string(ls,nm);
             add_field(ls,entry,"name");
           
@@ -580,8 +589,10 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   	RETURNS_1(explist(ls,&v));
   	add_field(ls,tbl,"return_types");
   }
+  int blk = new_table(ls,"block");
   RETURNS_1(statlist(ls));
-  add_field(ls,tbl,"statements");
+  add_field(ls,blk,"statements");
+  add_field(ls,tbl,"body");
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
   //codeclosure(ls, new_fs.f, e);
@@ -592,7 +603,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
 static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { `,' expr } */
   int n = 1;  /* at least one expression */
-  int lst = new_table(ls);
+  int lst = new_list(ls);
   expr(ls, v);
   add_entry(ls,lst);
   while (testnext(ls, ',')) {
@@ -613,7 +624,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
     case '(': {  /* funcargs -> `(' [ explist ] `)' */
       luaX_next(ls);
       if (ls->t.token == ')') {  /* arg list is empty? */
-      	new_table(ls); //empty return list
+      	new_list(ls); //empty return list
       } else {
         RETURNS_1(explist(ls, &args));
       }
@@ -626,7 +637,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
     }
     case TK_STRING: {  /* funcargs -> STRING */
       //codestring(ls, &args, ls->t.seminfo.ts);
-      int exps = new_table(ls);
+      int exps = new_list(ls);
       push_string(ls,ls->t.seminfo.ts);
       push_literal(ls,"string");
       add_entry(ls,exps);
@@ -724,7 +735,7 @@ static void print_captured_locals(LexState * ls) {
 	std::set<TString *> variables;
 	FuncState * fs = ls->fs;
 	for(BlockCnt * bl = fs->bl; bl != NULL; bl = bl->previous) {
-		printf("local variable size = %d\n",(int)bl->local_variables.size());
+		//printf("local variable size = %d\n",(int)bl->local_variables.size());
 		for(unsigned int i = 0; i < bl->local_variables.size(); i++) {
 			variables.insert(bl->local_variables[i]);
 		}
@@ -747,7 +758,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
       //v->u.nval = ls->t.seminfo.r;
       if(ls->t.seminfo.is_integer) {
         push_integer(ls,ls->t.seminfo.r);
-        push_literal(ls,"integer");
+        push_literal(ls,"int64");
       } else {
         push_double(ls,ls->t.seminfo.r);
         push_literal(ls,"double");
@@ -767,12 +778,12 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case TK_TRUE: {
       //init_exp(v, VTRUE, 0);
       push_boolean(ls,true);
-      push_literal(ls,"boolean");
+      push_literal(ls,"bool");
       break;
     }
     case TK_FALSE: {
       push_boolean(ls,false);
-      push_literal(ls,"boolean");
+      push_literal(ls,"bool");
       break;
     }
     case TK_DOTS: {  /* vararg */
@@ -903,10 +914,10 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   if (uop != OPR_NOUNOPR) {
     int line = ls->linenumber;
     int tbl = new_table(ls,"operator");
-    push_string(ls,luaX_token2str(ls,ls->t.token));
+    push_string(ls,luaX_token2rawstr(ls,ls->t.token));
     add_field(ls,tbl,"operator");
     luaX_next(ls);
-    int exps = new_table(ls);
+    int exps = new_list(ls);
     RETURNS_1(subexpr(ls, v, UNARY_PRIORITY));
     add_entry(ls,exps);
     add_field(ls,tbl,"operands");
@@ -919,9 +930,9 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     expdesc v2;
     BinOpr nextop;
     int line = ls->linenumber;
-    int exps = new_table_before(ls);
+    int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
-    const char * token = luaX_token2str(ls,ls->t.token);
+    const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
     /* read sub-expression with higher priority */
     RETURNS_1(nextop = subexpr(ls, &v2, priority[op].right));
@@ -1133,7 +1144,7 @@ static void forlist (LexState *ls, TString *indexname) {
   int nvars = 4;  /* gen, state, control, plus at least one declared var */
   int line;
   int tbl = new_table(ls,"forlist");
-  int vars = new_table(ls);
+  int vars = new_list(ls);
   push_string(ls,indexname);
   add_entry(ls,vars);
   /* create declared variables */
@@ -1187,7 +1198,7 @@ static void test_then_block (LexState *ls) {
   if (ls->t.token == TK_GOTO || ls->t.token == TK_BREAK) {
     enterblock(fs, &bl, 0);  /* must enter block before 'goto' */
     int blk = new_table(ls,"block");
-    int stmts = new_table(ls);
+    int stmts = new_list(ls);
     RETURNS_1(gotostat(ls));  /* handle goto/break */
     add_entry(ls,stmts);
     add_field(ls,blk,"statements");
@@ -1218,7 +1229,7 @@ static void ifstat (LexState *ls, int line) {
   /* ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END */
   FuncState *fs = ls->fs;
   int tbl = new_table(ls,"if");
-  int branches = new_table(ls);
+  int branches = new_list(ls);
   RETURNS_1(test_then_block(ls));  /* IF cond THEN block */
   add_entry(ls,branches);
   while (ls->t.token == TK_ELSEIF) {
@@ -1228,7 +1239,7 @@ static void ifstat (LexState *ls, int line) {
   add_field(ls,tbl,"branches");
   if (testnext(ls, TK_ELSE)) {
     RETURNS_1(block(ls));  /* `else' part */
-    add_field(ls,tbl,"else"); 
+    add_field(ls,tbl,"orelse"); 
   }
   check_match(ls, TK_END, TK_IF, line);
 }
@@ -1266,13 +1277,13 @@ static void localstat (LexState *ls) {
   int nexps;
   expdesc e;
   int tbl = new_table(ls,"defvar");
-  int vars = new_table(ls);
+  int vars = new_list(ls);
   do {
 	TString * name = str_checkname(ls);
 	if(!ls->in_terra)
     	ls->fs->bl->local_variables.push_back(name);
 	nvars++;
-	int entry = new_table(ls);
+	int entry = new_table(ls,"entry");
 	push_string(ls,name);
 	add_field(ls,entry,"name");
 	if(ls->in_terra && testnext(ls,':')) {
@@ -1286,7 +1297,7 @@ static void localstat (LexState *ls) {
   if (testnext(ls, '=')) {
     RETURNS_1(nexps = explist(ls, &e));
   } else {
-    new_table(ls); //blank initializers
+    new_list(ls); //blank initializers
     nexps = 0;
   }
   add_field(ls,tbl,"initializers");
@@ -1357,7 +1368,7 @@ static void exprstat (LexState *ls) {
 
   } else {  /* stat -> assignment */
     v.prev = NULL;
-    int tbl = new_table_before(ls); //assignment list is put into a table
+    int tbl = new_list_before(ls); //assignment list is put into a table
     add_entry(ls,tbl);
     RETURNS_0(assignment(ls, &v, 1,tbl)); //assignment will replace this table with the actual assignment node
   }
@@ -1498,8 +1509,11 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lua_getfield(L,TA_TERRA_OBJECT,"_trees");
   assert(lua_gettop(L) == TA_FUNCTION_TABLE);
   
-  lua_getfield(L,TA_TERRA_OBJECT,"_metatree");
+  lua_getfield(L,TA_TERRA_OBJECT,"tree");
   assert(lua_gettop(L) == TA_TREE_METATABLE);
+  
+  lua_getfield(L,TA_TERRA_OBJECT,"list");
+  assert(lua_gettop(L) == TA_LIST_METATABLE);
   
   luaX_setinput(T, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);

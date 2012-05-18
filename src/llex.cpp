@@ -75,6 +75,14 @@ void luaX_init (terra_State *L) {
   }
 }
 
+const char * luaX_token2rawstr(LexState * ls, int token) {
+	if(token < FIRST_RESERVED) {
+		assert(token == cast(unsigned char, token));
+		return luaS_cstringf(ls->LP,"%c",token);
+	} else {
+		return luaX_tokens[token - FIRST_RESERVED];
+	}
+}
 const char * luaX_token2str (LexState *ls, int token) {
   if (token < FIRST_RESERVED) {
 	assert(token == cast(unsigned char, token));
@@ -181,8 +189,8 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 	}
 	memcpy(ls->patchinfo.buffer,ob->data + ls->t.seminfo.buffer_begin, n_bytes);
 	ls->patchinfo.N = n_bytes;
-	ls->patchinfo.buffer[ls->patchinfo.N] = '\0';
-	printf("buffer is %s\n",ls->patchinfo.buffer);
+	//ls->patchinfo.buffer[ls->patchinfo.N] = '\0';
+	//printf("buffer is %s\n",ls->patchinfo.buffer);
 
 	//reset the output buffer to the beginning of the begin_token
 	ob->N = begin_token->seminfo.buffer_begin;
