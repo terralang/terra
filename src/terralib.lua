@@ -32,7 +32,7 @@ function terra.tree:printraw()
 	local function printElem(t,spacing)
 		if(type(t) == "table") then
 			for k,v in pairs(t) do
-				if k ~= "kind" then
+				if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
 					local prefix = spacing..k..": "
 					print(prefix..header(v))
 					if isList(v) then
@@ -93,7 +93,7 @@ function terra.newfunction(olddef,newtree,env)
 	if olddef then
 		error("NYI - overloaded functions",2)
 	end
-	local obj = { untypedtree = newtree, envfunction = env }
+	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env }
 	return setmetatable(obj,terra.func)
 end
 
@@ -189,13 +189,23 @@ function terra.resolveprimary(tree,env)
 end
 --takes an AST representing a type and returns a type object from the type table
 
+--terra.printlocation
+--and terra.opensourcefile are inserted by C wrapper
+function terra.printsource(ctx,anchor)
+	if not ctx.func.filehandle then
+		ctx.func.filehandle = terra.opensourcefile(ctx.func.filename)
+	end
+	terra.printlocation(ctx.func.filehandle,anchor.offset)
+end
+
 function terra.reporterror(ctx,anchor,...)
 	ctx.has_errors = true
-	io.write("error:<todo>: ")
+	io.write(ctx.func.filename..":"..anchor.linenumber..": ")
 	for _,v in ipairs({...}) do
 		io.write(tostring(v))
 	end
 	io.write("\n")
+	terra.printsource(ctx,anchor)
 	return terra.types.error
 end
 
@@ -429,6 +439,11 @@ function terra.func:typecheck()
 	result:printraw()
 	print("Return Stmts:")
 	return_stmts:printraw()
+	
+	if ctx.func.filehandle then
+		terra.closesourcefile(ctx.func.filehandle)
+		ctx.func.filehandle = nil
+	end
 	--[[
 	
 	2. register the parameter list as a variant of this function (ensure it is unique) and create table to hold the result of type checking

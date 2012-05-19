@@ -143,6 +143,15 @@ static int new_table(LexState * ls, const char * str) {
 		add_field(ls, t,"kind");
 		lua_pushvalue(ls->L,TA_TREE_METATABLE);
 		lua_setmetatable(ls->L,-2);
+		
+		lua_pushstring(ls->L,"linenumber");
+		lua_pushinteger(ls->L,ls->linenumber);
+		lua_settable(ls->L,t);
+		
+		lua_pushstring(ls->L,"offset");
+		lua_pushinteger(ls->L,ls->currentoffset - 2);
+		lua_settable(ls->L,t);
+		
 		return t;
 	} else return 0;
 }
@@ -596,6 +605,10 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
   //codeclosure(ls, new_fs.f, e);
+  
+  push_string(ls,getstr(ls->source));
+  add_field(ls,tbl,"filename");
+  
   close_func(ls);
 }
 

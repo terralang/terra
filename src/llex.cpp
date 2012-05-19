@@ -30,6 +30,7 @@
 int next(LexState * ls) {
 	ls->current = zgetc(ls->z);
 	if(ls->current != EOZ) {
+		ls->currentoffset++;
 		OutputBuffer_putc(&ls->output_buffer,ls->current == EOZ ? '\0' : ls->current);
 	}
 	return ls->current;
@@ -158,6 +159,7 @@ void luaX_setinput (terra_State *LP, LexState *ls, ZIO *z, TString * source,
   ls->decpoint = '.';
   ls->LP = LP;
   ls->current = firstchar;
+  ls->currentoffset = 0;
   ls->lookahead.token = TK_EOS;  /* no look-ahead token */
   ls->z = z;
   ls->fs = NULL;
