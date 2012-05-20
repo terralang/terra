@@ -57,6 +57,11 @@ function terra.tree:copy(new_tree)
 	end
 	return setmetatable(new_tree,getmetatable(self))
 end
+function terra.newtree(ref,body)
+	body.offset = ref.offset
+	body.linenumber = ref.linenumber
+	return setmetatable(body,terra.tree)
+end
 
 function terra.istree(v) 
 	return terra.tree == getmetatable(v)
@@ -111,23 +116,52 @@ do --construct type table that holds the singleton value representing each uniqu
    --eventually this will be linked to the LLVM object representing the type
    --and any information about the operators defined on the type
 	local types = {}
-	local base_types = { ["bool"] = 1, 
-	                     ["int8"] = 1, ["int16"] = 2, ["int32"] = 4, ["int64"] = 8,
-	                     ["uint8"] = 1,["uint16"] = 2,["uint32"] = 4,["uint64"] = 8,
-	                     ["float"] = 4, ["double"] = 8,
-	                     ["void"] = 9 }
+	
+	
 	types.type = {} --all types have this as their metatable
 	types.type.__index = types.type
 	
 	function types.type:__tostring()
 		return self.name
 	end
-	
-	types.table = {}
-	
+	function types.type:isintegral()
+		return self.kind == "builtin" and self.type == "integer"
+	end
+	function types.type:isarithmetic()
+		return self.kind == "builtin" and (self.type == "integer" or self.type == "float")
+	end
+	function types.type:islogical()
+		return self.kind == "builtin" and self.type == "logical"
+	end
+	function types.type:canbeord()
+		return self:isintegral() or self:islogical()
+	end
 	local function mktyp(v)
 		return setmetatable(v,types.type)
 	end
+		
+	function types.istype(v)
+		return getmetatable(v) == types.type
+	end
+	
+	types.table = {}
+	
+	--initialize integral types
+	local integer_sizes = {1,2,4,8}
+	for _,size in ipairs(integer_sizes) do
+		for _,s in ipairs{true,false} do
+			local name = "int"..tostring(size * 8)
+			if not s then
+				name = "u"..name
+			end
+			local typ = mktyp { kind = "builtin", bytes = size, type = "integer", signed = s, name = name}
+			types.table[name] = typ
+		end
+	end  
+	types.table["float"] = mktyp { kind = "builtin", bytes = 4, type = "float", name = "float" }
+	types.table["double"] = mktyp { kind = "builtin", bytes = 8, type = "float", name = "double" }
+	types.table["void"] = mktyp { kind = "builtin", type = "void", name = "void" }
+	types.table["bool"] = mktyp { kind = "builtin", bytes = 1, type = "logical", name = "bool" }
 	
 	types.error = mktyp { kind = "error", name = "error" } --object representing where the typechecker failed
 	
@@ -146,15 +180,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		--TODO
 	end
 	function types.builtin(name)
-		local t = types.table[name]
-		if t then
-			return t
-		elseif base_types[name] == nil then
-			return nil
-		else
-			types.table[name] = mktyp { kind = "builtin", name = name, size = base_types[name] }
-			return types.table[name]
-		end
+		return types.table[name] or types.error
 	end
 	function types.struct(fieldnames,fieldtypes,listtypes)
 		--TODO
@@ -169,17 +195,13 @@ do --construct type table that holds the singleton value representing each uniqu
 		--TODO
 	end
 	
-	
-	for typ,_ in pairs(base_types) do
+	for name,typ in pairs(types.table) do
 		--introduce builtin types into global namespace
-		_G[typ] = types.builtin(typ) 
+		print("type ".. name)
+		_G[name] = typ 
 	end
 	_G["int"] = int32
 	_G["long"] = int64
-	
-	function types.istype(v)
-		return getmetatable(v) == types.type
-	end
 	
 	terra.types = types
 end
@@ -266,14 +288,14 @@ statements:
 "return" (done - except for final check)
 
 expressions:
-"var"
-"select"
-"literal"
+"var" (done)
+"select" (done - except struct extract)
+"literal" (done)
 "constructor"
 "index"
 "method"
 "apply"
-"operator"
+"operator" (done - except pointer operators)
 
 
 other:
@@ -287,8 +309,11 @@ other:
 terra.list = {} --used for all ast lists
 setmetatable(terra.list,{ __index = table })
 terra.list.__index = terra.list
-function terra.newlist()
-	return setmetatable({},terra.list)
+function terra.newlist(lst)
+	if lst == nil then
+		lst = {}
+	end
+	return setmetatable(lst,terra.list)
 end
 
 function terra.list:map(fn)
@@ -315,6 +340,59 @@ function terra.func:typecheck()
 	
 	local function resolvetype(t)
 		return terra.resolvetype(ctx,t)
+	end
+	
+	local function insertcast(exp,typ)
+		if typ == exp.type then
+			return exp
+		else
+			--TODO: check that the cast is valid and insert the specific kind of cast 
+			--so that codegen in llvm is easy
+			return terra.newtree(exp, { kind = "cast", from = exp.type, to = typ, expression = exp })
+		end
+	end
+	
+	local function typematch(op,lstmt,rstmt)
+		local function err()
+			terra.reporterror(ctx,op,"incompatible types: ",lstmt.type," and ",rstmt.type)
+		end
+		
+		local function castleft()
+			return rstmt.type,insertcast(lstmt,rstmt.type),rstmt
+		end
+		local function castright()
+			return lstmt.type,lstmt,insertcast(rstmt,lstmt.type) 
+		end
+		
+		if lstmt.type == rstmt.type then return lstmt.type,lstmt,rstmt end
+		if lstmt.type == terra.types.error or rstmt.type == terra.types.error then return terra.types.error,lstmt,rstmt end
+		
+		print(lstmt.type, rstmt.type)
+		if lstmt.type.kind == "builtin" and rstmt.type.kind == "builtin" then
+			if lstmt.type.type == "integer" and rstmt.type.type == "integer" then
+				if lstmt.type.size < rstmt.type.size then
+					return castleft()
+				elseif lstmt.type.size > rstmt.type.size then
+					return castright()
+				elseif lstmt.type.signed then --signed versus unsigned
+					return castleft()
+				else
+					return castright()
+				end
+			elseif lstmt.type.type == "integer" and rstmt.type.type == "float" then
+				return castleft()
+			elseif lstmt.type.type == "float" and rstmt.type.type == "integer" then
+				return castright()
+			elseif lstmt.type.type == "float" and rstmt.type.type == "float" then
+				return double, insertcast(lstmt,double), insertcast(rstmt,double)
+			else
+				err()
+				return terra.types.error,lstmt,rstmt
+			end
+		else
+			err()
+			return terra.types.error,lstmt,rstmt
+		end
 	end
 	
 	-- 1. generate types for parameters, if return types exists generate a types for them as well
@@ -347,13 +425,116 @@ function terra.func:typecheck()
 		env = getmetatable(env).__index
 	end
 	
-	local checkexp,checkstmt
-	checkexp = function(e)
+	local checkexp,checkstmt, checkexpraw
+	
+	
+	local function checkunary(ee,property)
+		local e = checkexp(ee.operands[1])
+		if e.type ~= terra.types.error and not e.type[property](e.type) then
+			terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",t)
+			return e:copy { type = terra.types.error }
+		end
+		return ee:copy { type = e.type, operands = terra.newlist{e} }
+	end	
+	local function checkbinary(e,property)
+		if #e.operands == 1 then
+			return checkunary(e,property)
+		end
+		local t,l,r = typematch(e,checkexp(e.operands[1]),checkexp(e.operands[2]))
+		if t ~= terra.types.error and not t[property](t) then
+			terra.reporterror(ctx,e,"arguments of binary operators are not valid type but ",t)
+			return e:copy { type = terra.types.error }
+		end
+		return e:copy { type = t, operands = terra.newlist {l,r} }
+	end
+	
+	
+	local function checkbinaryarith(e)
+		return checkbinary(e,"isarithmetic")
+	end
+
+	local function checkintegralarith(e)
+		return checkbinary(e,"isintegral")
+	end
+	local function checkcomparision(e)
+		local t,l,r = typematch(e,checkexp(e.operands[1]),checkexp(e.operands[2]))
+		return e:copy { type = bool, operands = terra.newlist {l,r} }
+	end
+	local function checklogicalorintegral(e)
+		return checkbinary(e,"canbeord")
+	end
+	
+	local operator_table = {
+		["-"] = checkbinaryarith;
+		["+"] = checkbinaryarith;
+		["*"] = checkbinaryarith;
+		["/"] = checkbinaryarith;
+		["%"] = checkintegralarith;
+		["<"] = checkcomparision;
+		["<="] = checkcomparision;
+		[">"] = checkcomparision;
+		[">="] =  checkcomparision;
+		["=="] = checkcomparision;
+		["~="] = checkcomparision;
+		["and"] = checklogicalorintegral;
+		["or"] = checklogicalorintegral;
+		["not"] = checklogicalorintegral;
+	}
+ 
+	
+	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
 		if e:is "literal" then
 			return e:copy { type = terra.types.builtin(e.type) }
+		elseif e:is "var" then
+			local v = env[e.name]
+			if v ~= nil then
+				return e:copy { type = v.type, definition = v }
+			end
+			v = self:env()[e.name]  
+			if v ~= nil then
+				return v
+			else
+				terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
+				return e:copy { type = terra.types.error }
+			end
+		elseif e:is "select" then
+			local v = checkexpraw(e.value)
+			if terra.istree(v) then
+				error("NYI - struct selection")
+			else
+				local v = type(v) == "table" and v[e.field]
+				if v ~= nil then
+					return v
+				else
+					terra.reporterror(ctx,e,"no field ",e.field," in object")
+					return e:copy { type = terra.types.error }
+				end
+			end
+		elseif e:is "operator" then
+			local op = operator_table[e.operator]
+			if op == nil then
+				terra.reporterror(ctx,e,"operator ",e.operator," not defined in terra code.")
+				return e:copy { type = terra.types.error }
+			else
+				return op(e)
+			end
 		end
 		error("NYI - "..e.kind,2)
 	end
+	function checkexp(ee)
+		local e = checkexpraw(ee)
+		if terra.istree(e) then
+			return e
+		elseif type(e) == "number" then
+			return terra.newtree(ee, { kind = "literal", value = e, type = double })
+		elseif type(e) == "boolean" then
+			return terra.newtree(ee, { kind = "literal", value = e, type = bool })
+		else 
+			terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
+			return ee:copy { type = terra.types.error }
+		end
+	end
+	
 	local function checkexptyp(re,target)
 		local e = checkexp(re)
 		if e.type ~= target then
@@ -367,7 +548,7 @@ function terra.func:typecheck()
 		local b = checkstmt(s.body)
 		return s:copy {condition = e, body = b}
 	end
-	checkstmt = function(s)
+	function checkstmt(s)
 		if s:is "block" then
 			enterblock()
 			local r = s.statements:map(checkstmt)
@@ -410,7 +591,7 @@ function terra.func:typecheck()
 				local typ,r
 				if v.type then 
 					typ = resolvetype(v.type)
-					r = checkexptyp(s.initializers[i],typ)
+					r = insertcast(checkexp(s.initializers[i]),typ)
 				else
 					r = checkexp(s.initializers[i])
 					typ = r.type

@@ -945,13 +945,15 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     int line = ls->linenumber;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
+    int tbl = new_table_before(ls,"operator"); //need to create this before we call next to ensure we record the right position
+    exps++; //we just put a table before it, so it is one higher on the stack
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
     /* read sub-expression with higher priority */
     RETURNS_1(nextop = subexpr(ls, &v2, priority[op].right));
     add_entry(ls,exps);
     
-    int tbl = new_table_before(ls,"operator");
+   
     add_field(ls,tbl,"operands");
     push_string(ls,token);
     add_field(ls,tbl,"operator");
@@ -998,6 +1000,14 @@ struct LHS_assign {
   expdesc v;  /* variable (global, local, upvalue, or indexed) */
 };
 
+static void lhsexp(LexState * ls, expdesc * v) {
+	if(ls->t.token == '@') {
+		expr(ls,v);
+	} else {
+		primaryexp(ls,v);
+	}
+}
+
 static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs) {
   expdesc e;
   //TODO: audit, make sure this check still happens
@@ -1005,7 +1015,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs)
   if (testnext(ls, ',')) {  /* assignment -> `,' primaryexp assignment */
     struct LHS_assign nv;
     nv.prev = lh;
-    RETURNS_1(primaryexp(ls, &nv.v));
+    RETURNS_1(lhsexp(ls, &nv.v));
     //if(ls->in_terra)
     //	lua_pop(ls->L,1);
     add_entry(ls,lhs);
@@ -1369,12 +1379,11 @@ static void terrastat(LexState * ls, int line) {
 	ls->in_terra--;
 }
 
-
 static void exprstat (LexState *ls) {
   /* stat -> func | assignment */
   FuncState *fs = ls->fs;
   struct LHS_assign v;
-  RETURNS_1(primaryexp(ls, &v.v));
+  RETURNS_1(lhsexp(ls, &v.v));
   
   //TODO: audit. v.v.k is probably not set correctly, can check to see if '=' or ',' follows, must make sure VCALL gets propaged back here
   if (v.v.k == ECALL || (ls->t.token != '=' && ls->t.token != ','))  { /* stat -> func */
