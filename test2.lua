@@ -18,6 +18,10 @@ terra foobar(a : A.foo, b : &int) : int
 	return 1
 ]]
 	var e =  1 + 3.3
+	e = 3.3
+	--var f = &e
+	--var g = @f
+	--e,f = 3,&e
 end
 foobar()
 foobar()

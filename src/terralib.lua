@@ -136,6 +136,9 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:canbeord()
 		return self:isintegral() or self:islogical()
 	end
+	function types.type:ispointer()
+		return self.kind == "pointer"
+	end
 	local function mktyp(v)
 		return setmetatable(v,types.type)
 	end
@@ -171,7 +174,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		local name = "&"..typ.name 
 		local value = types.table[name]
 		if value == nil then
-			value = mktyp { kind = "pointer", typ = typ, name = name }
+			value = mktyp { kind = "pointer", type = typ, name = name }
 			types.table[name] = value
 		end
 		return value
@@ -425,11 +428,10 @@ function terra.func:typecheck()
 		env = getmetatable(env).__index
 	end
 	
-	local checkexp,checkstmt, checkexpraw
-	
+	local checkexp,checkstmt, checkexpraw, checkrvalue
 	
 	local function checkunary(ee,property)
-		local e = checkexp(ee.operands[1])
+		local e = checkrvalue(ee.operands[1])
 		if e.type ~= terra.types.error and not e.type[property](e.type) then
 			terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",t)
 			return e:copy { type = terra.types.error }
@@ -440,7 +442,7 @@ function terra.func:typecheck()
 		if #e.operands == 1 then
 			return checkunary(e,property)
 		end
-		local t,l,r = typematch(e,checkexp(e.operands[1]),checkexp(e.operands[2]))
+		local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
 		if t ~= terra.types.error and not t[property](t) then
 			terra.reporterror(ctx,e,"arguments of binary operators are not valid type but ",t)
 			return e:copy { type = terra.types.error }
@@ -457,13 +459,37 @@ function terra.func:typecheck()
 		return checkbinary(e,"isintegral")
 	end
 	local function checkcomparision(e)
-		local t,l,r = typematch(e,checkexp(e.operands[1]),checkexp(e.operands[2]))
+		local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
 		return e:copy { type = bool, operands = terra.newlist {l,r} }
 	end
 	local function checklogicalorintegral(e)
 		return checkbinary(e,"canbeord")
 	end
 	
+	local function checklvalue(ee)
+		local e = checkexp(ee)
+		if not e.lvalue then
+			terra.reporterror(ctx,e,"argument operator must be an lvalue")
+			e.type = terra.types.error
+		end
+		return e
+	end
+	local function checkaddressof(ee)
+		local e = checklvalue(ee.operands[1])
+		local ty = terra.types.pointer(e.type)
+		return ee:copy { type = ty, operands = terra.newlist{e} }
+	end
+	local function checkdereference(ee)
+		local e = checkrvalue(ee.operands[1])
+		local ret = ee:copy { operands = terra.newlist{e}, lvalue = true }
+		if not e.type:ispointer() then
+			terra.reporterror(ctx,e,"argument of dereference is not a pointer type but ",e.type)
+			ret.type = terra.types.error 
+		else
+			ret.type = e.type.type
+		end
+		return ret
+	end
 	local operator_table = {
 		["-"] = checkbinaryarith;
 		["+"] = checkbinaryarith;
@@ -479,16 +505,25 @@ function terra.func:typecheck()
 		["and"] = checklogicalorintegral;
 		["or"] = checklogicalorintegral;
 		["not"] = checklogicalorintegral;
+		["&"] = checkaddressof;
+		["@"] = checkdereference;
 	}
  
-	
+	function checkrvalue(e)
+		local ee = checkexp(e)
+		if ee.lvalue then
+			return terra.newtree(e,{ kind = "ltor", type = ee.type, expression = ee })
+		else
+			return ee
+		end
+	end
 	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
 		if e:is "literal" then
 			return e:copy { type = terra.types.builtin(e.type) }
 		elseif e:is "var" then
 			local v = env[e.name]
 			if v ~= nil then
-				return e:copy { type = v.type, definition = v }
+				return e:copy { type = v.type, definition = v, lvalue = true }
 			end
 			v = self:env()[e.name]  
 			if v ~= nil then
@@ -536,7 +571,7 @@ function terra.func:typecheck()
 	end
 	
 	local function checkexptyp(re,target)
-		local e = checkexp(re)
+		local e = checkrvalue(re)
 		if e.type ~= target then
 			terra.reporterror(ctx,e,"expected a ",target," expression but found ",e.type)
 			e.type = terra.types.error
@@ -555,7 +590,7 @@ function terra.func:typecheck()
 			leaveblock()
 			return s:copy {statements = r}
 		elseif s:is "return" then
-			local rstmt = s:copy { expressions = s.expressions:map(checkexp) }
+			local rstmt = s:copy { expressions = s.expressions:map(checkrvalue) }
 			return_stmts:insert(rstmt)
 			return rstmt
 		elseif s:is "label" then
@@ -591,9 +626,9 @@ function terra.func:typecheck()
 				local typ,r
 				if v.type then 
 					typ = resolvetype(v.type)
-					r = insertcast(checkexp(s.initializers[i]),typ)
+					r = insertcast(checkrvalue(s.initializers[i]),typ)
 				else
-					r = checkexp(s.initializers[i])
+					r = checkrvalue(s.initializers[i])
 					typ = r.type
 				end
 				lhs:insert(v:copy { type = typ })
@@ -604,6 +639,19 @@ function terra.func:typecheck()
 				env[v.name] = v
 			end
 			return s:copy { variables = lhs, initializers = rhs }
+		elseif s:is "assignment" then
+			if #s.lhs ~= #s.rhs then
+				error("NYI - multiple return values")
+			end
+			local lhs = terra.newlist()
+			local rhs = terra.newlist()
+			for i,l in ipairs(s.lhs) do
+				local ll = checklvalue(l)
+				local rr = insertcast(checkrvalue(s.rhs[i]),ll.type)
+				lhs:insert(ll)
+				rhs:insert(rr)
+			end
+			return s:copy { lhs = lhs, rhs = rhs }
 		end
 		error("NYI - "..s.kind,2)
 	end
