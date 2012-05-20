@@ -1,23 +1,29 @@
+
 .SUFFIXES:
 UNAME := $(shell uname)
-
-
-LUAJIT_VERSION=LuaJIT-2.0.0-beta10
-LUAJIT_URL=http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUAJIT_TAR=$(LUAJIT_VERSION).tar.gz
-LUAJIT_DIR=build/$(LUAJIT_VERSION)
-LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
-
-LIBS += -lluajit
-LIB_PATH += -Lbuild
-INCLUDE_PATH += -I$(LUAJIT_DIR)/src
-
-PACKAGE_DEPS += $(LUAJIT_LIB)
 
 CXX = /usr/local/bin/clang++
 CC = /usr/local/bin/clang
 FLAGS = -g $(INCLUDE_PATH)
-LFLAGS = -g $(LIB_PATH) $(LIBS) 
+LFLAGS = -g
+
+#luajit will be downloaded automatically (it's much smaller than llvm)
+LUAJIT_VERSION=LuaJIT-2.0.0-beta10
+LUAJIT_URL=http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
+LUAJIT_TAR=$(LUAJIT_VERSION).tar.gz
+LUAJIT_DIR=build/$(LUAJIT_VERSION)
+
+LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
+
+LFLAGS += -Lbuild -lluajit
+INCLUDE_PATH += -I$(LUAJIT_DIR)/src
+
+# point LLVM_CONFIG at the llvm-config binary for your llvm distribution
+LLVM_CONFIG=$(shell which llvm-config)
+LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
+FLAGS += $(shell $(LLVM_CONFIG) --cxxflags)
+
+PACKAGE_DEPS += $(LUAJIT_LIB)
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
