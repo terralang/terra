@@ -130,6 +130,7 @@ int terra_dofile(terra_State * T, const char * file) {
 	}
 	Zio zio;
 	Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
+	memset(buff,0,sizeof(Mbuffer));
 	luaZ_init(T,&zio,file_reader,&fileinfo);
 	luaY_parser(T,&zio,buff,file,zgetc(&zio));
 	fclose(fileinfo.file);

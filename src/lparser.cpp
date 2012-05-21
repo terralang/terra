@@ -1505,6 +1505,9 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;
+  //memset(&lexstate,0,sizeof(LexState));
+  //memset(&funcstate,0,sizeof(FuncState));
+  
   BlockCnt bl;
   bl.previous = NULL;
   lua_State * L = T->L;

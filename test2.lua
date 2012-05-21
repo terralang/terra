@@ -1,6 +1,6 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : A.foo, b : &int) : int64
+terra foobar(a : double, b : double) : double
 --[[
 	::alabel::
 	goto alabel
@@ -16,13 +16,19 @@ terra foobar(a : A.foo, b : &int) : int64
 	elseif false then
 	end
 	return 1
-]]
 	var e =  1 + 3.3
 	e = 1
 	return 1
 	--var f = &e
 	--var g = @f
-	--e,f = 3,&e
+	--e,f = 3,&e]]
+	var c = a + b
+	return c
 end
-foobar()
-foobar()
+foobar:compile()
+--no fancy wrappers to call the function yet, so use luajit's ffi....
+local ffi = require("ffi")
+ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
+local func = ffi.cast("my_struct*",foobar.fptr)
+print("EXECUTING FUNCTION:")
+print(func.fn(1,2))
