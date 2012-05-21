@@ -21,7 +21,7 @@ INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 # point LLVM_CONFIG at the llvm-config binary for your llvm distribution
 LLVM_CONFIG=$(shell which llvm-config)
 LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
-FLAGS += $(shell $(LLVM_CONFIG) --cxxflags)
+FLAGS += $(shell $(LLVM_CONFIG) --cxxflags) -O0
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
@@ -30,7 +30,7 @@ LFLAGS += -pagezero_size 10000 -image_base 100000000
 
 SRC = tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
-EXECUTABLE = lexer
+EXECUTABLE = terra
 
 BIN2C = build/bin2c
 

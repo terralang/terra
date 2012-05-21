@@ -99,7 +99,8 @@ function terra.newfunction(olddef,newtree,env)
 	if olddef then
 		error("NYI - overloaded functions",2)
 	end
-	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env }
+	local fname = newtree.filename:gsub(".","_") .. newtree.offset --todo if a user writes terra foo, pass in the string "foo"
+	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
 	return setmetatable(obj,terra.func)
 end
 
@@ -164,7 +165,6 @@ do --construct type table that holds the singleton value representing each uniqu
 	end  
 	types.table["float"] = mktyp { kind = "builtin", bytes = 4, type = "float", name = "float" }
 	types.table["double"] = mktyp { kind = "builtin", bytes = 8, type = "float", name = "double" }
-	types.table["void"] = mktyp { kind = "builtin", type = "void", name = "void" }
 	types.table["bool"] = mktyp { kind = "builtin", bytes = 1, type = "logical", name = "bool" }
 	
 	types.error = mktyp { kind = "error", name = "error" } --object representing where the typechecker failed
@@ -195,8 +195,16 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.named(typ)
 		--TODO
 	end
-	function types.functype(arguments,results)
-		--TODO
+	function types.functype(parameters,returns)
+		local function getname(t) return t.name end
+		local a = parameters:map(getname):mkstring("{",",","}")
+		local r = returns:map(getname):mkstring("{",",","}")
+		local name = a.."->"..r
+		local value = types.table[name]
+		if value == nil then
+			value = mktyp { kind = "functype", parameters = parameters, returns = returns, name = name }
+		end
+		return value
 	end
 	
 	for name,typ in pairs(types.table) do
@@ -209,11 +217,6 @@ do --construct type table that holds the singleton value representing each uniqu
 	
 	terra.types = types
 end
-
-function terra.resolveprimary(tree,env)
-	
-end
---takes an AST representing a type and returns a type object from the type table
 
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
@@ -336,6 +339,18 @@ function terra.list:printraw()
 		end
 	end
 end
+function terra.list:mkstring(begin,sep,finish)
+	if sep == nil then
+		begin,sep,finish = "",begin,""
+	end
+	local len = #self
+	if len == 0 then return begin..finish end
+	local str = begin .. tostring(self[1])
+	for i = 2,len do
+		str = str .. sep .. tostring(self[i])
+	end
+	return str..finish
+end
 
 
 function terra.func:typecheck()
@@ -401,9 +416,11 @@ function terra.func:typecheck()
 	
 	-- 1. generate types for parameters, if return types exists generate a types for them as well
 	local typed_parameters = terra.newlist()
+	local parameter_types = terra.newlist() --just the types, used to create the function type
 	for _,v in ipairs(ftree.parameters) do
 		local typ = resolvetype(v.type)
 		typed_parameters:insert( v:copy({ type = typ }) )
+		parameter_types:insert( typ )
 		--print(v.name,parameters_to_type[v.name])
 	end
 	
@@ -700,7 +717,7 @@ function terra.func:typecheck()
 	end
 	
 	
-	local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, return_types = return_types }
+	local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
 	
 	print("TypedTree")
 	typedtree:printraw()
