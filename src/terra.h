@@ -4,6 +4,8 @@
 #include <stdarg.h>
 #include <string.h>
 
+struct terra_CompilerState;
+
 typedef struct stringtable {
 	struct TString **hash;
 	uint32_t nuse;  /* number of elements */
@@ -11,7 +13,8 @@ typedef struct stringtable {
 } stringtable;
 
 typedef struct terra_State {
-	struct lua_State * L;	
+	struct lua_State * L;
+	struct terra_CompilerState * C;
 //for parser
 	stringtable strt;
 	int nCcalls;

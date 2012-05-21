@@ -1,6 +1,6 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : A.foo, b : &int) : int
+terra foobar(a : A.foo, b : &int) : int64
 --[[
 	::alabel::
 	goto alabel
@@ -18,7 +18,8 @@ terra foobar(a : A.foo, b : &int) : int
 	return 1
 ]]
 	var e =  1 + 3.3
-	e = 3.3
+	e = 1
+	return 1
 	--var f = &e
 	--var g = @f
 	--e,f = 3,&e

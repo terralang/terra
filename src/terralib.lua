@@ -84,6 +84,7 @@ function terra.func:compile()
 	terra.tree.printraw(self:env())
 	self.typedtree = self:typecheck()
 	--now call llvm to compile...
+	terra.compile(self)
 	print("NYI - compile")
 end
 
@@ -200,7 +201,7 @@ do --construct type table that holds the singleton value representing each uniqu
 	
 	for name,typ in pairs(types.table) do
 		--introduce builtin types into global namespace
-		print("type ".. name)
+		-- print("type ".. name)
 		_G[name] = typ 
 	end
 	_G["int"] = int32
@@ -591,7 +592,10 @@ function terra.func:typecheck()
 			return s:copy {statements = r}
 		elseif s:is "return" then
 			local rstmt = s:copy { expressions = s.expressions:map(checkrvalue) }
-			return_stmts:insert(rstmt)
+			local rtypes = rstmt.expressions:map( function(exp)
+				return exp.type
+			end )
+			return_stmts:insert( { type = rtypes, stmt = rstmt })
 			return rstmt
 		elseif s:is "label" then
 			labels[s.value] = s --replace value with label definition
@@ -664,15 +668,49 @@ function terra.func:typecheck()
 	end
 	
 	
-	print("Typed Tree:")
-	result:printraw()
 	print("Return Stmts:")
+	
+	local return_types
+	if #return_stmts == 0 then
+		return_types = terra.newlist()
+	else 
+		for _,stmt in ipairs(return_stmts) do
+			if return_types == nil then
+				return_types = stmt.type
+			else
+				if #return_types ~= #stmt.type then
+					terra.reporterror(ctx,stmt.stmt,"returning a different length from previous return")
+				else
+					for i,v in ipairs(return_types) do 
+						if v ~= stmt.type[i] then
+							terra.reporterror(ctx,stmt.stmt, "returning type ",stmt.type[i], " but expecting ", v)
+							error("NYI - type meet for return types")
+						end
+					end
+				end
+			end
+		end
+	end
 	return_stmts:printraw()
+	
 	
 	if ctx.func.filehandle then
 		terra.closesourcefile(ctx.func.filehandle)
 		ctx.func.filehandle = nil
 	end
+	
+	
+	local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, return_types = return_types }
+	
+	print("TypedTree")
+	typedtree:printraw()
+	
+	if ctx.has_errors then
+		error("Errors reported during compilation.")
+	end
+	
+	return typedtree
+	
 	--[[
 	
 	2. register the parameter list as a variant of this function (ensure it is unique) and create table to hold the result of type checking

@@ -3,6 +3,7 @@
 #include "lstring.h"
 #include "lzio.h"
 #include "lparser.h"
+#include "tcompiler.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -83,6 +84,7 @@ static int closesourcefile(lua_State * L) {
 terra_State * terra_newstate() {
 	terra_State * T = (terra_State*) malloc(sizeof(terra_State));
 	assert(T);
+	memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
 	T->L = luaL_newstate();
 	assert (T->L);
 	luaL_openlibs(T->L);
@@ -104,6 +106,9 @@ terra_State * terra_newstate() {
 	
 	luaS_resize(T,32);
 	luaX_init(T);
+	
+	terra_compilerinit(T);
+	
 	return T;	
 }
 

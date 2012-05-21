@@ -298,11 +298,11 @@ static void checkname (LexState *ls, expdesc *e) {
 }
 
 static void singlevar (LexState *ls, expdesc *var) {
+  int tbl = new_table(ls,"var"); 
   TString *varname = str_checkname(ls);
   if(ls->record_names && ls->in_terra) {
     ls->variable_names.push_back(varname);
   }
-  int tbl = new_table(ls,"var"); 
   push_string(ls,varname);
   add_field(ls,tbl,"name");
 }
