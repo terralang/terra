@@ -587,7 +587,7 @@ function terra.func:typecheck()
 				return op(e)
 			end
 		end
-		error("NYI - "..e.kind,2)
+		error("NYI - "..terra.kinds[e.kind],2)
 	end
 	function checkexp(ee)
 		local e = checkexpraw(ee)
@@ -712,8 +712,10 @@ function terra.func:typecheck()
 				rhs:insert(rr)
 			end
 			return s:copy { lhs = lhs, rhs = rhs }
+		else 
+			return checkrvalue(s)
 		end
-		error("NYI - "..s.kind,2)
+		error("NYI - "..terra.kinds[s.kind],2)
 	end
 	
 	local result = checkstmt(ftree.body)

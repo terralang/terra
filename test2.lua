@@ -1,12 +1,10 @@
 A = { foo = long }
 anumber = { foo = 100 }
 terra foobar(a : double, b : double) : double
-	
-	while a < b do
-		a = a + a
-	end
-	
-	return a
+	var d = 100
+	d
+	var e = 100.3
+	return e
 end
 foobar:compile()
 --no fancy wrappers to call the function yet, so use luajit's ffi....

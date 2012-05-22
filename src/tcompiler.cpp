@@ -101,14 +101,21 @@ struct Obj {
 		pop(2);
 		return r;
 	}
-	int64_t integer(const char * field) {
+	uint64_t integer(const char * field) {
 		push();
 		lua_getfield(L,-1,field);
 		const void * ud = lua_touserdata(L,-1);
 		pop(2);
-		int64_t i = *(const int64_t*)ud;
+		uint64_t i = *(const uint64_t*)ud;
 		return i;
 	}
+    bool boolean(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        bool v = lua_toboolean(L,-1);
+        pop(2);
+        return v;
+    }
 	const char * string(const char * field) {
 		push();
 		lua_getfield(L,-1,field);
@@ -521,6 +528,20 @@ if(t->type->isIntegerTy()) { \
 				}
 				
 			} break;
+            case T_literal: {
+                TType * t = typeOfValue(exp);
+                
+                if(t->islogical) {
+                   bool b = exp->boolean("value"); 
+                   return ConstantInt::get(t->type,b);
+                } else if(t->type->isIntegerTy()) {
+                    uint64_t integer = exp->integer("value");
+                    return ConstantInt::get(t->type, integer);
+                } else {
+                    double dbl = exp->number("value");
+                    return ConstantFP::get(t->type, dbl);
+                }
+            } break;
 			default: {
 				assert(!"NYI - exp");
 			} break;
@@ -745,7 +766,7 @@ if(t->type->isIntegerTy()) { \
 				}
             } break;
 			default: {
-				assert(!"NYI - stmt");
+                emitExp(stmt);
 			} break;
 		}
 	}
