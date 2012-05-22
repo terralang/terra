@@ -547,6 +547,14 @@ if(t->type->isIntegerTy()) { \
         BB = bb;
         B->SetInsertPoint(BB);
     }
+    void setBreaktable(Obj * loop, BasicBlock * exit) {
+        //set the break table for this loop to point to the loop exit
+        Obj breaktable;
+        loop->obj("breaktable",&breaktable);
+        
+        lua_pushlightuserdata(L, exit);
+        breaktable.setfield("value");
+    }
 	void emitStmt(Obj * stmt) {		
 		if(!BB) //dead code, no emitting
             return;
@@ -601,14 +609,7 @@ if(t->type->isIntegerTy()) { \
     
                 BasicBlock * merge = createBB("merge");
                 
-                
-                //set the break table for this loop to point to the loop exit
-                Obj breaktable;
-                stmt->obj("breaktable",&breaktable);
-                
-                lua_pushlightuserdata(L, merge);
-                breaktable.setfield("value");
-                
+                setBreaktable(stmt,merge);
                 
                 B->CreateCondBr(v, loopBody, merge);
                 
@@ -641,6 +642,25 @@ if(t->type->isIntegerTy()) { \
                 setInsertBlock(footer);
             } break;
             case T_repeat: {
+                Obj cond,body;
+                stmt->obj("condition",&cond);
+                stmt->obj("body",&body);
+                
+                BasicBlock * loopBody = createAndInsertBB("repeatbody");
+                BasicBlock * merge = createBB("merge");
+                
+                setBreaktable(stmt,merge);
+                
+                B->CreateBr(loopBody);
+                setInsertBlock(loopBody);
+                emitStmt(&body);
+                if(BB) {
+                    Value * c = emitCond(&cond);
+                    B->CreateCondBr(c, merge, loopBody);
+                }
+                insertBB(merge);
+                setInsertBlock(merge);
+                
             } break;
 			case T_defvar: {
 				std::vector<Value *> rhs;

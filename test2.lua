@@ -1,9 +1,10 @@
 A = { foo = long }
 anumber = { foo = 100 }
 terra foobar(a : double, b : double)
-	while (a < b) do
+	repeat
+		var d = a
 		break
-	end
+	until a > b
 	return a
 end
 foobar:compile()
