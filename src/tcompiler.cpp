@@ -725,6 +725,24 @@ if(t->type->isIntegerTy()) { \
 				}
 			} break;
             case T_assignment: {
+                std::vector<Value *> rhsexps;
+				Obj rhss;
+				stmt->obj("rhs",&rhss);
+				int N = rhss.size();
+				for(int i = 0; i < N; i++) {
+					Obj rhs;
+					rhss.objAt(i,&rhs);
+					rhsexps.push_back(emitExp(&rhs));
+				}
+				Obj lhss;
+				stmt->obj("lhs",&lhss);
+				N = lhss.size();
+				for(int i = 0; i < N; i++) {
+					Obj lhs;
+					lhss.objAt(i,&lhs);
+                    Value * lhsexp = emitExp(&lhs);
+					B->CreateStore(rhsexps[i],lhsexp);
+				}
             } break;
 			default: {
 				assert(!"NYI - stmt");
