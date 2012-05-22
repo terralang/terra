@@ -1,11 +1,11 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : double, b : double)
-	repeat
-		var d = a
-		break
-	until a > b
-	return a
+terra foobar(a : double, b : double) : double
+	
+	goto alabel
+	var d = b + a
+	::alabel::
+	
 end
 foobar:compile()
 --no fancy wrappers to call the function yet, so use luajit's ffi....

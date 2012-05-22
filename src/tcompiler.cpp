@@ -298,6 +298,15 @@ struct TerraCompiler {
 		v->setfield("value");
 		return a;
 	}
+    int numReturnValues() {
+        Obj typedtree;
+        funcobj.obj("typedtree",&typedtree);
+        Obj typ;
+        typedtree.obj("type",&typ);
+        Obj returns;
+        typ.obj("returns",&returns);
+        return returns.size();
+    }
 	void run(terra_State * _T) {
 		T = _T;
 		L = T->L;
@@ -334,6 +343,14 @@ struct TerraCompiler {
 		Obj body;
 		typedtree.obj("body",&body);
 		emitStmt(&body);
+        if(BB) { //no terminating return statment, we need to insert one
+            if(numReturnValues() == 0) {
+                B->CreateRetVoid();
+            } else {
+                FunctionType * ftype = cast<FunctionType>(func_type->type);
+                B->CreateRet(UndefValue::get(ftype->getReturnType()));
+            }
+        }
 		
 		C->m->dump();
 		verifyFunction(*func);
@@ -555,10 +572,26 @@ if(t->type->isIntegerTy()) { \
         lua_pushlightuserdata(L, exit);
         breaktable.setfield("value");
     }
+    BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
+        BasicBlock * bb = (BasicBlock *) lbl->ud("basicblock");
+        if(!bb) {
+            bb = createBB(lbl->string("value"));
+            lua_pushlightuserdata(L,bb);
+            lbl->setfield("basicblock");
+        }
+        return bb;
+    }
 	void emitStmt(Obj * stmt) {		
-		if(!BB) //dead code, no emitting
+		T_Kind kind = stmt->kind("kind");
+        if(!BB) { //dead code, no emitting
+            if(kind == T_label) { //unless there is a label, then someone can jump here
+                BasicBlock * bb = getOrCreateBlockForLabel(stmt);
+                insertBB(bb);
+                setInsertBlock(bb);
+            }
             return;
-        switch(stmt->kind("kind")) {
+        }
+        switch(kind) {
 			case T_block: {
 				Obj stmts;
 				stmt->obj("statements",&stmts);
@@ -583,8 +616,17 @@ if(t->type->isIntegerTy()) { \
                 BB = NULL;
 			} break;
             case T_label: {
+                BasicBlock * bb = getOrCreateBlockForLabel(stmt);
+                B->CreateBr(bb);
+                insertBB(bb);
+                setInsertBlock(bb);
             } break;
             case T_goto: {
+                Obj lbl;
+                stmt->obj("definition",&lbl);
+                BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
+                B->CreateBr(bb);
+                BB = NULL;
             } break;
             case T_break: {
                 Obj def;
