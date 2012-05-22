@@ -18,9 +18,11 @@ function terra.tree:is(value)
 	return self.kind == terra.kinds[value]
 end
 function terra.tree:printraw()
-	local function header(t)
+	local function header(key,t)
 		if type(t) == "table" then
 			return terra.kinds[t["kind"]] or ""
+		elseif (key == "type" or key == "operator") and type(t) == "number" then
+			return terra.kinds[t] .. " (enum " .. tostring(t) .. ")"
 		else
 			return tostring(t)
 		end
@@ -33,7 +35,7 @@ function terra.tree:printraw()
 			for k,v in pairs(t) do
 				if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
 					local prefix = spacing..k..": "
-					print(prefix..header(v))
+					print(prefix..header(k,v))
 					if isList(v) then
 						printElem(v,string.rep(" ",2+#spacing))
 					else
@@ -43,7 +45,7 @@ function terra.tree:printraw()
 			end
 		end
 	end
-	print(header(self))
+	print(header(nil,self))
 	if type(self) == "table" then
 		printElem(self,"  ")
 	end
@@ -238,7 +240,7 @@ end
 
 function terra.resolvetype(ctx,t)
 	local function err(msg)
-		return terra.reporterror(ctx,t,msg,t)
+		return terra.reporterror(ctx,t,msg)
 	end
 	local function check(t)
 		if terra.types.istype(t) then
@@ -256,13 +258,13 @@ function terra.resolvetype(ctx,t)
 		elseif t:is "literal" then
 			return t
 		else
-			return err "unsupported expression in type: "
+			return err "unsupported expression in type"
 		end
 	end
 	if t:is "index" then
 		return err "array types not implemented"
 	elseif t:is "operator" then
-		if t.operator ~= "&" then return err "unsupported operator on type: " end
+		if terra.kinds[t.operator] ~= "&" then return err "unsupported operator on type" end
 		local value = terra.resolvetype(ctx,t.operands[1])
 		return terra.types.pointer(value)
 	else
@@ -365,7 +367,7 @@ function terra.func:typecheck()
 		else
 			--TODO: check that the cast is valid and insert the specific kind of cast 
 			--so that codegen in llvm is easy
-			return terra.newtree(exp, { kind = "cast", from = exp.type, to = typ, expression = exp })
+			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, expression = exp })
 		end
 	end
 	
@@ -562,9 +564,11 @@ function terra.func:typecheck()
 				end
 			end
 		elseif e:is "operator" then
-			local op = operator_table[e.operator]
+			local op_string = terra.kinds[e.operator]
+			local op = operator_table[op_string]
 			if op == nil then
-				terra.reporterror(ctx,e,"operator ",e.operator," not defined in terra code.")
+				print(e.operator)
+				terra.reporterror(ctx,e,"operator ",op_string," not defined in terra code.")
 				return e:copy { type = terra.types.error }
 			else
 				return op(e)
@@ -577,9 +581,9 @@ function terra.func:typecheck()
 		if terra.istree(e) then
 			return e
 		elseif type(e) == "number" then
-			return terra.newtree(ee, { kind = "literal", value = e, type = double })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = double })
 		elseif type(e) == "boolean" then
-			return terra.newtree(ee, { kind = "literal", value = e, type = bool })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = bool })
 		else 
 			terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
 			return ee:copy { type = terra.types.error }

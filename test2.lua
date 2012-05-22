@@ -1,6 +1,6 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : double, e : &double)
+terra foobar(a : double, b : double)
 --[[
 	::alabel::
 	goto alabel
@@ -18,12 +18,12 @@ terra foobar(a : double, e : &double)
 	return 1
 	var e =  1 + 3.3
 	e = 1
-	return 1 ]]
+	return 1
 	var f = &e
 	var g = @f
-	e,f = 3,&e
-	--var c = a + b
-	return a
+	e,f = 3,&e ]]
+	var c = a + b
+	return c
 end
 foobar:compile()
 --no fancy wrappers to call the function yet, so use luajit's ffi....

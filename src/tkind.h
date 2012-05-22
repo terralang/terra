@@ -58,7 +58,8 @@ _(functype,"functype") \
 _(float,"float") \
 _(integer,"integer") \
 _(logical,"logical") \
-_(ltor,"ltor")
+_(ltor,"ltor") \
+_(cast,"cast")
 
 enum T_Kind {
 	#define T_KIND_ENUM(a,str) T_##a,

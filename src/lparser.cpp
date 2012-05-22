@@ -29,34 +29,12 @@
 #include <vector>
 #include <set>
 
-#if 0
-#define AST_TOKENS(_) \
-	_(kind) \
-	_(type) \
-	_(name) \
-	_(is_vararg) \
-
-enum TA_Token {
-	TA_TOKEN_ZERO = 0, //tokens refer to stack locations in Lua, so should start at 1.
-#define MAKE_AST_ENUM(x) TA_##x,
-	AST_TOKENS(MAKE_AST_ENUM)
-	TA_LAST_TOKEN
-#undef MAKE_AST_ENUM
-};
-#define TA_NUM_TOKENS (TA_LAST_TOKEN - 1)
-const char * token_to_string[] = {
-	""
-#define MAKE_AST_STRING(x) #x,
-	AST_TOKENS(MAKE_AST_STRING)
-	""
-};
-#endif
-
 enum TA_Globals {
 	TA_TERRA_OBJECT = 1,
 	TA_FUNCTION_TABLE,
 	TA_TREE_METATABLE,
 	TA_LIST_METATABLE,
+	TA_KINDS_TABLE,
 	TA_LAST_GLOBAL
 };
 
@@ -134,6 +112,13 @@ static void push_string(LexState * ls, const char * str) {
 	if(ls->in_terra) {
 		//printf("push string: %s\n",str);
 		lua_pushstring(ls->L,str);
+	}
+}
+static void push_kind(LexState * ls, const char * str) {
+	if(ls->in_terra) {
+		lua_pushstring(ls->L,str);
+		lua_gettable(ls->L,TA_KINDS_TABLE);
+		assert(!lua_isnil(ls->L,-1));
 	}
 }
 static int new_table(LexState * ls, T_Kind k) {
@@ -928,7 +913,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   if (uop != OPR_NOUNOPR) {
     int line = ls->linenumber;
     int tbl = new_table(ls,T_operator);
-    push_string(ls,luaX_token2rawstr(ls,ls->t.token));
+    push_kind(ls,luaX_token2rawstr(ls,ls->t.token));
     add_field(ls,tbl,"operator");
     luaX_next(ls);
     int exps = new_list(ls);
@@ -956,7 +941,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     
    
     add_field(ls,tbl,"operands");
-    push_string(ls,token);
+    push_kind(ls,token);
     add_field(ls,tbl,"operator");
     op = nextop;
   }
@@ -1522,10 +1507,6 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   if(!lua_checkstack(L,1 + LUAI_MAXCCALLS)) {
 	  abort();
   }
-  //for(int i = 0; i < TA_NUM_TOKENS; i++) {
-	  //lua_pushstring(L,token_to_string[i+1]);
-	  //printf("pushing %s id = %d, id = %d\n", token_to_string[i+1], lua_gettop(L), (i+1));
-  //}
   lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
   assert(lua_gettop(L) == TA_TERRA_OBJECT);
   
@@ -1540,6 +1521,8 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   
   lua_getfield(L,TA_TERRA_OBJECT,"list");
   assert(lua_gettop(L) == TA_LIST_METATABLE);
+  lua_getfield(L,TA_TERRA_OBJECT,"kinds");
+  assert(lua_gettop(L) == TA_KINDS_TABLE);
   
   luaX_setinput(T, &lexstate, z, tname, firstchar);
   open_mainfunc(&lexstate, &funcstate, &bl);
