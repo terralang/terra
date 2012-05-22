@@ -90,7 +90,7 @@ struct Obj {
 	}
 	void objAt(int i, Obj * r) {
 		push();
-		lua_rawgeti(L,-1,i);
+		lua_rawgeti(L,-1,i+1); //stick to 0-based indexing in C code...
 		r->initFromStack(L,ref_table);
 		pop();
 	}
@@ -191,7 +191,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 	bool islogical;
 };
 
-struct Compiler {
+struct TerraCompiler {
 	lua_State * L;
 	terra_State * T;
 	terra_CompilerState * C;
@@ -247,14 +247,14 @@ struct Compiler {
 						rt = Type::getVoidTy(*C->ctx);
 					} else if(sz == 1) {
 						Obj r0;
-						rets.objAt(1,&r0);
+						rets.objAt(0,&r0);
 						TType * r0t = getType(&r0);
 						rt = r0t->type;
 					} else {
 						terra_reporterror(T,"NYI - multiple returns\n");
 					}
 					int psz = params.size();
-					for(int i = 1; i <= psz; i++) {
+					for(int i = 0; i < psz; i++) {
 						Obj p;
 						params.objAt(i,&p);
 						TType * pt = getType(&p);
@@ -310,7 +310,7 @@ struct Compiler {
 		typedtree.obj("parameters",&parameters);
 		int nP = parameters.size();
 		Function::arg_iterator ai = func->arg_begin();
-		for(int i = 1; i <= nP; i++) {
+		for(int i = 0; i < nP; i++) {
 			Obj p;
 			parameters.objAt(i,&p);
 			AllocaInst * a = allocVar(&p);
@@ -337,6 +337,107 @@ struct Compiler {
 		assert(lua_gettop(T->L) == ref_table);
 		delete B;
 	}
+    Value * emitUnary(Obj * exp, Obj * ao) {
+        TType * t = typeOfValue(exp);
+        Value * a = emitExp(ao);
+        switch(exp->kind("operator")) {
+            case T_not:
+                return B->CreateNot(a);
+                break;
+            case T_minus:
+                if(t->type->isIntegerTy()) {
+                    return B->CreateNeg(a);
+                } else {
+                    return B->CreateFNeg(a);
+                }
+                break;
+            case T_addressof: /*fallthrough*/
+            case T_dereference:
+                //addressof and dereference are no-ops since 
+                //typechecking inserted l-to-r values for when
+                //where the pointers need to be dereferenced
+                return a;
+                break;
+            default:
+                assert(!"NYI - unary");
+                break;
+        }
+    }
+    Value * emitCompare(Obj * exp, Obj * ao, Value * a, Value * b) {
+        TType * t = typeOfValue(ao);
+#define RETURN_OP(op) \
+if(t->type->isIntegerTy()) { \
+    return B->CreateICmp(CmpInst::ICMP_##op,a,b); \
+} else { \
+    return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
+}
+#define RETURN_SOP(op) \
+if(t->type->isIntegerTy()) { \
+    if(t->issigned) { \
+        return B->CreateICmp(CmpInst::ICMP_S##op,a,b); \
+    } else { \
+        return B->CreateICmp(CmpInst::ICMP_U##op,a,b); \
+    } \
+} else { \
+    return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
+}
+        
+        switch(exp->kind("operator")) {
+            case T_ne: RETURN_OP(NE) break;
+            case T_eq: RETURN_OP(EQ) break;
+            case T_lt: RETURN_SOP(LT) break;
+            case T_gt: RETURN_SOP(GT) break;
+            case T_ge: RETURN_SOP(GE) break;
+            case T_le: RETURN_SOP(LE) break;
+            default: 
+                assert(!"unknown op");
+                return NULL;
+                break;
+        }
+#undef RETURN_OP
+#undef RETURN_SOP
+    }
+    
+    Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
+        TType * t = typeOfValue(exp);
+        Value * a = emitExp(ao);
+        Value * b = emitExp(bo);
+#define RETURN_OP(op) \
+if(t->type->isIntegerTy()) { \
+    return B->Create##op(a,b); \
+} else { \
+    return B->CreateF##op(a,b); \
+}
+#define RETURN_SOP(op) \
+if(t->type->isIntegerTy()) { \
+    if(t->issigned) { \
+        return B->CreateS##op(a,b); \
+    } else { \
+        return B->CreateU##op(a,b); \
+    } \
+} else { \
+    return B->CreateF##op(a,b); \
+}
+        switch(exp->kind("operator")) {
+            case T_add: RETURN_OP(Add) break;
+            case T_sub: RETURN_OP(Sub) break;
+            case T_mul: RETURN_OP(Mul) break;
+            case T_div: RETURN_SOP(Div) break;
+            case T_mod: RETURN_SOP(Rem) break;
+            case T_pow: return B->CreateXor(a, b);
+            case T_and: return B->CreateAnd(a,b);
+            case T_or: return B->CreateOr(a,b);
+            case T_ne: case T_eq: case T_lt: case T_gt: case T_ge: case T_le: {
+                Value * v = emitCompare(exp,ao,a,b);
+                return B->CreateZExt(v, t->type);
+            } break;
+            default:
+                assert(!"NYI - binary");
+                break;
+        }
+#undef RETURN_OP
+#undef RETURN_SOP
+    }
 	Value * emitExp(Obj * exp) {
 		switch(exp->kind("kind")) {
 			case T_var:  {
@@ -353,18 +454,42 @@ struct Compiler {
 				return B->CreateLoad(v);
 			} break;
 			case T_operator: {
-				//ASSUMING + for now
-				TType * t = typeOfValue(exp);
-				Obj exps;
-				exp->obj("operands",&exps);
-				if(t->type->isFPOrFPVectorTy()) {
-					Obj a,b;
-					exps.objAt(1,&a);
-					exps.objAt(2,&b);
-					return B->CreateFAdd(emitExp(&a),emitExp(&b));
-				} else {
-					assert(!"NYI - integer +");
+				
+                Obj exps;
+                exp->obj("operands",&exps);
+                int N = exps.size();
+                if(N == 1) {
+                    Obj a;
+                    exps.objAt(0,&a);
+                    return emitUnary(exp,&a);
+                } else if(N == 2) {
+                    Obj a,b;
+                    exps.objAt(0,&a);
+                    exps.objAt(1,&b);
+                    return emitBinary(exp,&a,&b);
+                } else {
+                    assert(!"NYI - greater than 2 operands?");
+                    return NULL;
+                }
+				switch(exp->kind("operator")) {
+					case T_add: {
+						TType * t = typeOfValue(exp);
+						Obj exps;
+						
+						if(t->type->isFPOrFPVectorTy()) {
+							Obj a,b;
+							exps.objAt(0,&a);
+							exps.objAt(1,&b);
+							return B->CreateFAdd(emitExp(&a),emitExp(&b));
+						} else {
+							assert(!"NYI - integer +");
+						}
+					} break;
+					default: {
+						assert(!"NYI - op");
+					} break;
 				}
+				
 			} break;
 			default: {
 				assert(!"NYI - exp");
@@ -377,7 +502,7 @@ struct Compiler {
 				Obj stmts;
 				stmt->obj("statements",&stmts);
 				int N = stmts.size();
-				for(int i = 1; i <= N; i++) {
+				for(int i = 0; i < N; i++) {
 					Obj s;
 					stmts.objAt(i,&s);
 					emitStmt(&s);
@@ -388,7 +513,7 @@ struct Compiler {
 				Obj inits;
 				stmt->obj("initializers",&inits);
 				int N = inits.size();
-				for(int i = 1; i <= N; i++) {
+				for(int i = 0; i < N; i++) {
 					Obj init;
 					inits.objAt(i,&init);
 					rhs.push_back(emitExp(&init));
@@ -396,11 +521,11 @@ struct Compiler {
 				Obj vars;
 				stmt->obj("variables",&vars);
 				N = inits.size();
-				for(int i = 1; i <= N; i++) {
+				for(int i = 0; i < N; i++) {
 					Obj v;
 					vars.objAt(i,&v);
 					AllocaInst * a = allocVar(&v);
-					B->CreateStore(rhs[i-1],a);
+					B->CreateStore(rhs[i],a);
 				}
 			} break;
 			case T_return: {
@@ -410,7 +535,7 @@ struct Compiler {
 					B->CreateRetVoid();
 				} else {
 					Obj r;
-					exps.objAt(1,&r);
+					exps.objAt(0,&r);
 					Value * v = emitExp(&r);
 					B->CreateRet(v);
 				}
@@ -427,7 +552,7 @@ static int terra_compile(lua_State * L) { //entry point into compiler from lua c
 	assert(T->L == L);
 	
 	{
-		Compiler c;
+		TerraCompiler c;
 		c.run(T);
 	} //scope to ensure that c.func is destroyed before we pop the reference table off the stack
 	

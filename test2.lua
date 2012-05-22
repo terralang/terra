@@ -1,6 +1,17 @@
 A = { foo = long }
 anumber = { foo = 100 }
 terra foobar(a : double, b : double)
+	var c = a*b
+	return  b % a
+end
+foobar:compile()
+--no fancy wrappers to call the function yet, so use luajit's ffi....
+local ffi = require("ffi")
+ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
+local func = ffi.cast("my_struct*",foobar.fptr)
+print("EXECUTING FUNCTION:")
+print(func.fn(3,4))
+
 --[[
 	::alabel::
 	goto alabel
@@ -22,13 +33,3 @@ terra foobar(a : double, b : double)
 	var f = &e
 	var g = @f
 	e,f = 3,&e ]]
-	var c = a + b
-	return c
-end
-foobar:compile()
---no fancy wrappers to call the function yet, so use luajit's ffi....
-local ffi = require("ffi")
-ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
-local func = ffi.cast("my_struct*",foobar.fptr)
-print("EXECUTING FUNCTION:")
-print(func.fn(1,2))

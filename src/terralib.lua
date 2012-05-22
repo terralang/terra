@@ -487,7 +487,7 @@ function terra.func:typecheck()
 	local function checklvalue(ee)
 		local e = checkexp(ee)
 		if not e.lvalue then
-			terra.reporterror(ctx,e,"argument operator must be an lvalue")
+			terra.reporterror(ctx,e,"argument to operator must be an lvalue")
 			e.type = terra.types.error
 		end
 		return e
@@ -513,7 +513,7 @@ function terra.func:typecheck()
 		["+"] = checkbinaryarith;
 		["*"] = checkbinaryarith;
 		["/"] = checkbinaryarith;
-		["%"] = checkintegralarith;
+		["%"] = checkbinaryarith;
 		["<"] = checkcomparision;
 		["<="] = checkcomparision;
 		[">"] = checkcomparision;
@@ -525,6 +525,7 @@ function terra.func:typecheck()
 		["not"] = checklogicalorintegral;
 		["&"] = checkaddressof;
 		["@"] = checkdereference;
+		["^"] = checkintegralarith;
 	}
  
 	function checkrvalue(e)

@@ -36,5 +36,4 @@ LUAI_FUNC TString *luaS_vstringf(terra_State * L, const char * fmt, va_list ap);
 LUAI_FUNC TString *luaS_stringf(terra_State * L, const char * fmt, ...);
 LUAI_FUNC const char *luaS_cstringf(terra_State * L, const char * fmt, ...);
 
-
 #endif
