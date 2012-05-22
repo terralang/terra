@@ -4,6 +4,8 @@
 #include "lzio.h"
 #include "lparser.h"
 #include "tcompiler.h"
+#include "tkind.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -88,6 +90,11 @@ terra_State * terra_newstate() {
 	T->L = luaL_newstate();
 	assert (T->L);
 	luaL_openlibs(T->L);
+	lua_newtable(T->L);
+	lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
+	
+	terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
+	
 	//TODO: embed in executable
 	if(luaL_dofile(T->L,"src/terralib.lua")) {
 		terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));

@@ -1,5 +1,4 @@
 io.write("loading terra lib...")
-_G.terra = {}
 
 --[[
 some experiments with ffi to call function given a function pointer
@@ -13,15 +12,15 @@ func.fn(1,2)
 terra.tree = {} --metatype for trees
 terra.tree.__index = terra.tree
 function terra.tree:__tostring()
-	return self.kind.." <todo: retrieve from file>"
+	return terra.kinds[self.kind].." <todo: retrieve from file>"
 end
 function terra.tree:is(value)
-	return self.kind == value
+	return self.kind == terra.kinds[value]
 end
 function terra.tree:printraw()
 	local function header(t)
 		if type(t) == "table" then
-			return t["kind"] or ""
+			return terra.kinds[t["kind"]] or ""
 		else
 			return tostring(t)
 		end
@@ -126,19 +125,19 @@ do --construct type table that holds the singleton value representing each uniqu
 		return self.name
 	end
 	function types.type:isintegral()
-		return self.kind == "builtin" and self.type == "integer"
+		return self.kind == terra.kinds.builtin and self.type == terra.kinds.integer
 	end
 	function types.type:isarithmetic()
-		return self.kind == "builtin" and (self.type == "integer" or self.type == "float")
+		return self.kind == terra.kinds.builtin and (self.type == terra.kinds.integer or self.type == terra.kinds.float)
 	end
 	function types.type:islogical()
-		return self.kind == "builtin" and self.type == "logical"
+		return self.kind == terra.kinds.builtin and self.type == terra.kinds.logical
 	end
 	function types.type:canbeord()
 		return self:isintegral() or self:islogical()
 	end
 	function types.type:ispointer()
-		return self.kind == "pointer"
+		return self.kind == terra.kinds.pointer
 	end
 	local function mktyp(v)
 		return setmetatable(v,types.type)
@@ -158,15 +157,15 @@ do --construct type table that holds the singleton value representing each uniqu
 			if not s then
 				name = "u"..name
 			end
-			local typ = mktyp { kind = "builtin", bytes = size, type = "integer", signed = s, name = name}
+			local typ = mktyp { kind = terra.kinds.builtin, bytes = size, type = terra.kinds.integer, signed = s, name = name}
 			types.table[name] = typ
 		end
 	end  
-	types.table["float"] = mktyp { kind = "builtin", bytes = 4, type = "float", name = "float" }
-	types.table["double"] = mktyp { kind = "builtin", bytes = 8, type = "float", name = "double" }
-	types.table["bool"] = mktyp { kind = "builtin", bytes = 1, type = "logical", name = "bool" }
+	types.table["float"] = mktyp { kind = terra.kinds.builtin, bytes = 4, type = terra.kinds.float, name = "float" }
+	types.table["double"] = mktyp { kind = terra.kinds.builtin, bytes = 8, type = terra.kinds.float, name = "double" }
+	types.table["bool"] = mktyp { kind = terra.kinds.builtin, bytes = 1, type = terra.kinds.logical, name = "bool" }
 	
-	types.error = mktyp { kind = "error", name = "error" } --object representing where the typechecker failed
+	types.error = mktyp { kind = terra.kinds.error , name = "error" } --object representing where the typechecker failed
 	
 	function types.pointer(typ)
 		if typ == types.error then return types.error end
@@ -174,7 +173,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		local name = "&"..typ.name 
 		local value = types.table[name]
 		if value == nil then
-			value = mktyp { kind = "pointer", type = typ, name = name }
+			value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
 			types.table[name] = value
 		end
 		return value
@@ -201,7 +200,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		local name = a.."->"..r
 		local value = types.table[name]
 		if value == nil then
-			value = mktyp { kind = "functype", parameters = parameters, returns = returns, name = name }
+			value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name }
 		end
 		return value
 	end
@@ -386,8 +385,8 @@ function terra.func:typecheck()
 		if lstmt.type == terra.types.error or rstmt.type == terra.types.error then return terra.types.error,lstmt,rstmt end
 		
 		print(lstmt.type, rstmt.type)
-		if lstmt.type.kind == "builtin" and rstmt.type.kind == "builtin" then
-			if lstmt.type.type == "integer" and rstmt.type.type == "integer" then
+		if lstmt.type.kind == terra.kinds.builtin and rstmt.type.kind == terra.kinds.builtin then
+			if lstmt.type.type == terra.kinds.integer and rstmt.type.type == terra.kinds.integer then
 				if lstmt.type.size < rstmt.type.size then
 					return castleft()
 				elseif lstmt.type.size > rstmt.type.size then
@@ -397,11 +396,11 @@ function terra.func:typecheck()
 				else
 					return castright()
 				end
-			elseif lstmt.type.type == "integer" and rstmt.type.type == "float" then
+			elseif lstmt.type.type == terra.kinds.integer and rstmt.type.type == terra.kinds.float then
 				return castleft()
-			elseif lstmt.type.type == "float" and rstmt.type.type == "integer" then
+			elseif lstmt.type.type == terra.kinds.float and rstmt.type.type == terra.kinds.integer then
 				return castright()
-			elseif lstmt.type.type == "float" and rstmt.type.type == "float" then
+			elseif lstmt.type.type == terra.kinds.float and rstmt.type.type == terra.kinds.float then
 				return double, insertcast(lstmt,double), insertcast(rstmt,double)
 			else
 				err()
@@ -529,7 +528,7 @@ function terra.func:typecheck()
 	function checkrvalue(e)
 		local ee = checkexp(e)
 		if ee.lvalue then
-			return terra.newtree(e,{ kind = "ltor", type = ee.type, expression = ee })
+			return terra.newtree(e,{ kind = terra.kinds.ltor, type = ee.type, expression = ee })
 		else
 			return ee
 		end

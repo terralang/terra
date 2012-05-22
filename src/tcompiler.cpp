@@ -1,4 +1,5 @@
 #include "tcompiler.h"
+#include "tkind.h"
 #include "terra.h"
 extern "C" {
 #include "lua.h"
@@ -144,20 +145,12 @@ struct Obj {
 		assert(lua_gettop(L) >= ref_table);
 		lua_rawgeti(L,ref_table,ref);
 	}
-	void begin_match(const char * field) {
-		pushfield(field);
-	}
-	int matches(const char * key) {
-		lua_pushstring(L,key);
-		int e = lua_rawequal(L,-1,-2);
-		pop();
-		if(e) {
-			end_match();
-		}
-		return e;
-	}
-	void end_match() {
-		pop();
+	T_Kind kind(const char * field) {
+		push();
+		lua_getfield(L,-1,field);
+		int k = luaL_checkint(L,-1);
+		pop(2);
+		return (T_Kind) k;
 	}
 	void setfield(const char * key) { //sets field to value on top of the stack and pops it off
 		push();
@@ -212,59 +205,67 @@ struct Compiler {
 			t = (TType*) lua_newuserdata(T->L,sizeof(TType));
 			memset(t,0,sizeof(TType));
 			typ->setfield("llvm_type");
-			typ->begin_match("kind");
-			if(typ->matches("builtin")) {
-				int bytes = typ->number("bytes");
-				typ->begin_match("type");
-				if(typ->matches("float")) {
-					if(bytes == 4) {
-						t->type = Type::getFloatTy(*C->ctx);
-					} else {
-						assert(bytes == 8);
-						t->type = Type::getDoubleTy(*C->ctx);
+			switch(typ->kind("kind")) {
+				case T_builtin: {
+					int bytes = typ->number("bytes");
+					switch(typ->kind("type")) {
+						case T_float: {
+							if(bytes == 4) {
+								t->type = Type::getFloatTy(*C->ctx);
+							} else {
+								assert(bytes == 8);
+								t->type = Type::getDoubleTy(*C->ctx);
+							}
+						} break;
+						case T_integer: {
+							t->issigned = typ->number("signed");
+							t->type = Type::getIntNTy(*C->ctx,bytes * 8);
+						} break;
+						case T_logical: {
+							t->type = Type::getInt8Ty(*C->ctx);
+							t->islogical = true;
+						} break;
+						default: {
+							printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
+							terra_reporterror(T,"type not understood");
+						} break;
 					}
-				} else if(typ->matches("integer")) {
-					t->issigned = typ->number("signed");
-					t->type = Type::getIntNTy(*C->ctx,bytes * 8);
-				} else if(typ->matches("logical")) {
-					t->type = Type::getInt8Ty(*C->ctx);
-					t->islogical = true;
-				} else {
-					terra_reporterror(T,"type not understood");
-					typ->end_match();
-				}
-			} else if(typ->matches("pointer")) {
-				Obj base;
-				typ->obj("type",&base);
-				t->type = PointerType::getUnqual(getType(&base)->type);
-			} else if(typ->matches("functype")) {
-				std::vector<Type*> arguments;
-				Obj params,rets;
-				typ->obj("parameters",&params);
-				typ->obj("returns",&rets);
-				int sz = rets.size();
-				Type * rt; 
-				if(sz == 0) {
-					rt = Type::getVoidTy(*C->ctx);
-				} else if(sz == 1) {
-					Obj r0;
-					rets.objAt(1,&r0);
-					TType * r0t = getType(&r0);
-					rt = r0t->type;
-				} else {
-					terra_reporterror(T,"NYI - multiple returns");
-				}
-				int psz = params.size();
-				for(int i = 1; i <= psz; i++) {
-					Obj p;
-					params.objAt(i,&p);
-					TType * pt = getType(&p);
-					arguments.push_back(pt->type);
-				}
-				t->type = FunctionType::get(rt,arguments,false); 
-			} else {
-				typ->end_match();
-				terra_reporterror(T,"type not understood");
+				} break;
+				case T_pointer: {
+					Obj base;
+					typ->obj("type",&base);
+					t->type = PointerType::getUnqual(getType(&base)->type);
+				} break;
+				case T_functype: {
+					std::vector<Type*> arguments;
+					Obj params,rets;
+					typ->obj("parameters",&params);
+					typ->obj("returns",&rets);
+					int sz = rets.size();
+					Type * rt; 
+					if(sz == 0) {
+						rt = Type::getVoidTy(*C->ctx);
+					} else if(sz == 1) {
+						Obj r0;
+						rets.objAt(1,&r0);
+						TType * r0t = getType(&r0);
+						rt = r0t->type;
+					} else {
+						terra_reporterror(T,"NYI - multiple returns\n");
+					}
+					int psz = params.size();
+					for(int i = 1; i <= psz; i++) {
+						Obj p;
+						params.objAt(i,&p);
+						TType * pt = getType(&p);
+						arguments.push_back(pt->type);
+					}
+					t->type = FunctionType::get(rt,arguments,false); 
+				} break;
+				default: {
+					printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
+					terra_reporterror(T,"type not understood\n");
+				} break;
 			}
 			assert(t && t->type);
 		}
@@ -337,21 +338,22 @@ struct Compiler {
 		delete B;
 	}
 	Value * emitExp(Obj * exp) {
-		exp->begin_match("kind");
-		if(exp->matches("var")) {
-			Obj def;
-			exp->obj("definition",&def);
-			Value * v = (Value*) def.ud("value");
-			assert(v);
-			return v;
-		} else if(exp->matches("ltor")) {
-			Obj e;
-			exp->obj("expression",&e);
-			Value * v = emitExp(&e);
-			return B->CreateLoad(v);
-		} else if(exp->matches("operator")) {
-			exp->begin_match("operator");
-			if(exp->matches("+")) {
+		switch(exp->kind("kind")) {
+			case T_var:  {
+				Obj def;
+				exp->obj("definition",&def);
+				Value * v = (Value*) def.ud("value");
+				assert(v);
+				return v;
+			} break;
+			case T_ltor: {
+				Obj e;
+				exp->obj("expression",&e);
+				Value * v = emitExp(&e);
+				return B->CreateLoad(v);
+			} break;
+			case T_operator: {
+				//ASSUMING + for now
 				TType * t = typeOfValue(exp);
 				Obj exps;
 				exp->obj("operands",&exps);
@@ -363,56 +365,59 @@ struct Compiler {
 				} else {
 					assert(!"NYI - integer +");
 				}
-			} else {
-				assert(!"NYI - operator");
-			}
-		} else {
-			assert(!"NYI - exp");
+			} break;
+			default: {
+				assert(!"NYI - exp");
+			} break;
 		}
 	}
-	void emitStmt(Obj * stmt) {
-		stmt->begin_match("kind");
-		if(stmt->matches("block")) {
-			Obj stmts;
-			stmt->obj("statements",&stmts);
-			int N = stmts.size();
-			for(int i = 1; i <= N; i++) {
-				Obj s;
-				stmts.objAt(i,&s);
-				emitStmt(&s);
-			}
-		} else if(stmt->matches("defvar")) {
-			std::vector<Value *> rhs;
-			Obj inits;
-			stmt->obj("initializers",&inits);
-			int N = inits.size();
-			for(int i = 1; i <= N; i++) {
-				Obj init;
-				inits.objAt(i,&init);
-				rhs.push_back(emitExp(&init));
-			}
-			Obj vars;
-			stmt->obj("variables",&vars);
-			N = inits.size();
-			for(int i = 1; i <= N; i++) {
-				Obj v;
-				vars.objAt(i,&v);
-				AllocaInst * a = allocVar(&v);
-				B->CreateStore(rhs[i-1],a);
-			}
-		} else if(stmt->matches("return")) {
-			Obj exps;
-			stmt->obj("expressions",&exps);
-			if(exps.size() == 0) {
-				B->CreateRetVoid();
-			} else {
-				Obj r;
-				exps.objAt(1,&r);
-				Value * v = emitExp(&r);
-				B->CreateRet(v);
-			}
-		} else {
-			assert(!"NYI - stmt");
+	void emitStmt(Obj * stmt) {		
+		switch(stmt->kind("kind")) {
+			case T_block: {
+				Obj stmts;
+				stmt->obj("statements",&stmts);
+				int N = stmts.size();
+				for(int i = 1; i <= N; i++) {
+					Obj s;
+					stmts.objAt(i,&s);
+					emitStmt(&s);
+				}
+			} break;
+			case T_defvar: {
+				std::vector<Value *> rhs;
+				Obj inits;
+				stmt->obj("initializers",&inits);
+				int N = inits.size();
+				for(int i = 1; i <= N; i++) {
+					Obj init;
+					inits.objAt(i,&init);
+					rhs.push_back(emitExp(&init));
+				}
+				Obj vars;
+				stmt->obj("variables",&vars);
+				N = inits.size();
+				for(int i = 1; i <= N; i++) {
+					Obj v;
+					vars.objAt(i,&v);
+					AllocaInst * a = allocVar(&v);
+					B->CreateStore(rhs[i-1],a);
+				}
+			} break;
+			case T_return: {
+				Obj exps;
+				stmt->obj("expressions",&exps);
+				if(exps.size() == 0) {
+					B->CreateRetVoid();
+				} else {
+					Obj r;
+					exps.objAt(1,&r);
+					Value * v = emitExp(&r);
+					B->CreateRet(v);
+				}
+			} break;
+			default: {
+				assert(!"NYI - stmt");
+			} break;
 		}
 	}
 };

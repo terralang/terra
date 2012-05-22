@@ -28,7 +28,7 @@ PACKAGE_DEPS += $(LUAJIT_LIB)
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 
-SRC = tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+SRC = tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = terra
 
