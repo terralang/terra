@@ -435,7 +435,7 @@ function terra.func:typecheck()
 	end
 	
 	
-	local labels = {} --map from label name to definition (or, if undefined to the first goto using that label)
+	local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
 	local loop_depth = 0
 	
 	local env = parameters_to_type
@@ -618,10 +618,25 @@ function terra.func:typecheck()
 			return_stmts:insert( { type = rtypes, stmt = rstmt })
 			return rstmt
 		elseif s:is "label" then
-			labels[s.value] = s --replace value with label definition
+			local lbls = labels[s.value] or terra.newlist()
+			if terra.istree(lbls) then
+				terra.reporterror(ctx,s,"label defined twice")
+				terra.reporterror(ctx,lbls,"previous definition here")
+			else
+				for _,v in ipairs(lbls) do
+					v.definition = s
+				end
+			end
+			labels[s.value] = s
 			return s
 		elseif s:is "goto" then
-			labels[s.label] = labels[s.label] or s --only replace definition if not already defined
+			local lbls = labels[s.label] or terra.newlist()
+			if terra.istree(lbls) then
+				s.definition = lbls
+			else
+				lbls:insert(s)
+			end
+			labels[s.label] = lbls
 			return s 
 		elseif s:is "break" then
 			if loop_depth == 0 then
@@ -682,8 +697,8 @@ function terra.func:typecheck()
 	
 	local result = checkstmt(ftree.body)
 	for _,v in pairs(labels) do
-		if v:is "goto" then
-			terra.reporterror(ctx,v,"goto to undefined label")
+		if not terra.istree(v) then
+			terra.reporterror(ctx,v[1],"goto to undefined label")
 		end
 	end
 	
