@@ -17,6 +17,8 @@ end
 function terra.tree:is(value)
 	return self.kind == terra.kinds[value]
 end
+ 
+
 function terra.tree:printraw()
 	local function header(key,t)
 		if type(t) == "table" then
@@ -50,6 +52,7 @@ function terra.tree:printraw()
 		printElem(self,"  ")
 	end
 end
+
 function terra.tree:copy(new_tree)
 	for k,v in pairs(self) do
 		if not new_tree[k] then
@@ -436,7 +439,6 @@ function terra.func:typecheck()
 	
 	
 	local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
-	local loop_depth = 0
 	
 	local env = parameters_to_type
 	local function enterblock()
@@ -444,6 +446,16 @@ function terra.func:typecheck()
 	end
 	local function leaveblock()
 		env = getmetatable(env).__index
+	end
+	
+	local loopstmts = terra.newlist()
+	local function enterloop()
+		local bt = {}
+		loopstmts:insert(bt)
+		return bt
+	end
+	local function leaveloop()
+		loopstmts:remove()
 	end
 	
 	local checkexp,checkstmt, checkexpraw, checkrvalue
@@ -639,22 +651,31 @@ function terra.func:typecheck()
 			labels[s.label] = lbls
 			return s 
 		elseif s:is "break" then
-			if loop_depth == 0 then
+			local ss = s:copy({})
+			if #loopstmts == 0 then
 				terra.reporterror(ctx,s,"break found outside a loop")
+			else
+				ss.breaktable = loopstmts[#loopstmts]
 			end
-			return s
+			return ss
 		elseif s:is "while" then
-			return checkcondbranch(s)
+			local breaktable = enterloop()
+			local r = checkcondbranch(s)
+			r.breaktable = breaktable
+			leaveloop()
+			return r
 		elseif s:is "if" then
 			local br = s.branches:map(checkcondbranch)
-			local els = s.orelse and checkstmt(s.orelse)
+			local els = (s.orelse and checkstmt(s.orelse)) or terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist() })
 			return s:copy{ branches = br, orelse = els }
 		elseif s:is "repeat" then
+			local breaktable = enterloop()
 			enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
 			local new_blk = s.body:copy { statements = s.body.statements:map(checkstmt) }
 			local e = checkexptyp(s.condition,bool)
 			leaveblock()
-			return s:copy { body = new_blk, condition = e }
+			leaveloop()
+			return s:copy { body = new_blk, condition = e, breaktable = breaktable }
 		elseif s:is "defvar" then
 			if #s.variables ~= #s.initializers then
 				error("NYI - multiple return values/uneven initializer lists")

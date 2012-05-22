@@ -153,12 +153,25 @@ struct Obj {
 		return (T_Kind) k;
 	}
 	void setfield(const char * key) { //sets field to value on top of the stack and pops it off
-		push();
+		assert(!lua_isnil(L,-1));
+        push();
 		lua_pushvalue(L,-2);
 		lua_setfield(L,-2,key);
 		pop(2);
 	}
 	void dump() {
+        printf("object is:\n");
+        
+        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getfield(L,-1,"tree");
+        
+        lua_getfield(L,-1,"printraw");
+        push();
+        lua_call(L, 1, 0);
+        
+        lua_pop(L,2);
+        
+        printf("stack is:\n");
 		int n = lua_gettop(L);
 		for (int i = 1; i <= n; i++) {
 			printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
@@ -496,8 +509,48 @@ if(t->type->isIntegerTy()) { \
 			} break;
 		}
 	}
+    BasicBlock * createBB(const char * name) {
+        BasicBlock * bb = BasicBlock::Create(*C->ctx, name);
+        return bb;
+    }
+    BasicBlock * createAndInsertBB(const char * name) {
+        BasicBlock * bb = createBB(name);
+        insertBB(bb);
+        return bb;
+    }
+    void insertBB(BasicBlock * bb) {
+        func->getBasicBlockList().push_back(bb);
+    }
+    Value * emitCond(Obj * cond) {
+        return B->CreateTrunc(emitExp(cond), Type::getInt1Ty(*C->ctx));
+    }
+    void emitIfBranch(Obj * ifbranch, BasicBlock * footer) {
+        Obj cond,body;
+        ifbranch->obj("condition", &cond);
+        ifbranch->obj("body",&body);
+        Value * v = emitCond(&cond);
+        BasicBlock * thenBB = createAndInsertBB("then");
+        BasicBlock * continueif = createBB("else");
+        B->CreateCondBr(v, thenBB, continueif);
+        
+        setInsertBlock(thenBB);
+        
+        emitStmt(&body);
+        if(BB)
+            B->CreateBr(footer);
+        insertBB(continueif);
+        setInsertBlock(continueif);
+        
+    }
+    
+    void setInsertBlock(BasicBlock * bb) {
+        BB = bb;
+        B->SetInsertPoint(BB);
+    }
 	void emitStmt(Obj * stmt) {		
-		switch(stmt->kind("kind")) {
+		if(!BB) //dead code, no emitting
+            return;
+        switch(stmt->kind("kind")) {
 			case T_block: {
 				Obj stmts;
 				stmt->obj("statements",&stmts);
@@ -508,6 +561,87 @@ if(t->type->isIntegerTy()) { \
 					emitStmt(&s);
 				}
 			} break;
+            case T_return: {
+				Obj exps;
+				stmt->obj("expressions",&exps);
+				if(exps.size() == 0) {
+					B->CreateRetVoid();
+				} else {
+					Obj r;
+					exps.objAt(0,&r);
+					Value * v = emitExp(&r);
+					B->CreateRet(v);
+				}
+                BB = NULL;
+			} break;
+            case T_label: {
+            } break;
+            case T_goto: {
+            } break;
+            case T_break: {
+                Obj def;
+                stmt->obj("breaktable",&def);
+                BasicBlock * breakpoint = (BasicBlock *) def.ud("value");
+                assert(breakpoint);
+                B->CreateBr(breakpoint);
+                BB = NULL;
+            } break;
+            case T_while: {
+                Obj cond,body;
+                stmt->obj("condition",&cond);
+                stmt->obj("body",&body);
+                BasicBlock * condBB = createAndInsertBB("condition");
+                
+                B->CreateBr(condBB);
+                
+                setInsertBlock(condBB);
+                
+                Value * v = emitCond(&cond);
+                BasicBlock * loopBody = createAndInsertBB("whilebody");
+    
+                BasicBlock * merge = createBB("merge");
+                
+                
+                //set the break table for this loop to point to the loop exit
+                Obj breaktable;
+                stmt->obj("breaktable",&breaktable);
+                
+                lua_pushlightuserdata(L, merge);
+                breaktable.setfield("value");
+                
+                
+                B->CreateCondBr(v, loopBody, merge);
+                
+                setInsertBlock(loopBody);
+                
+                emitStmt(&body);
+                
+                if(BB)
+                    B->CreateBr(condBB);
+                
+                insertBB(merge);
+                setInsertBlock(merge);
+            } break;
+            case T_if: {
+                Obj branches;
+                stmt->obj("branches",&branches);
+                int N = branches.size();
+                BasicBlock * footer = createBB("merge");
+                for(int i = 0; i < N; i++) {
+                    Obj branch;
+                    branches.objAt(i,&branch);
+                    emitIfBranch(&branch,footer);
+                }
+                Obj orelse;
+                stmt->obj("orelse",&orelse);
+                emitStmt(&orelse);
+                if(BB)
+                    B->CreateBr(footer);
+                insertBB(footer);
+                setInsertBlock(footer);
+            } break;
+            case T_repeat: {
+            } break;
 			case T_defvar: {
 				std::vector<Value *> rhs;
 				Obj inits;
@@ -528,18 +662,8 @@ if(t->type->isIntegerTy()) { \
 					B->CreateStore(rhs[i],a);
 				}
 			} break;
-			case T_return: {
-				Obj exps;
-				stmt->obj("expressions",&exps);
-				if(exps.size() == 0) {
-					B->CreateRetVoid();
-				} else {
-					Obj r;
-					exps.objAt(0,&r);
-					Value * v = emitExp(&r);
-					B->CreateRet(v);
-				}
-			} break;
+            case T_assignment: {
+            } break;
 			default: {
 				assert(!"NYI - stmt");
 			} break;
