@@ -435,8 +435,60 @@ if(t->type->isIntegerTy()) { \
 #undef RETURN_SOP
     }
     
+    Value * emitLazyLogical(TType * t, Obj * ao, Obj * bo, bool isAnd) {
+        /*
+        AND (isAnd == true)
+        bool result;
+        bool a = <a>;
+        if(a) {
+            result = <b>;
+        } else {
+            result = a;
+        }
+        OR
+        bool result;
+        bool a = <a>;
+        if(a) {
+            result = a;
+        } else {
+            result = <b>;
+        }
+        */
+        Value * result = B->CreateAlloca(t->type);
+        Value * a = emitExp(ao);
+        Value * acond = emitCond(a);
+        BasicBlock * stmtB = createAndInsertBB("logicalcont");
+        BasicBlock * emptyB = createAndInsertBB("logicalnop");
+        BasicBlock * mergeB = createAndInsertBB("merge");
+        B->CreateCondBr(acond, (isAnd) ? stmtB : emptyB, (isAnd) ? emptyB : stmtB);
+        setInsertBlock(stmtB);
+        Value * b = emitExp(bo);
+        B->CreateStore(b, result);
+        B->CreateBr(mergeB);
+        setInsertBlock(emptyB);
+        B->CreateStore(a, result);
+        B->CreateBr(mergeB);
+        setInsertBlock(mergeB);
+        return B->CreateLoad(result, "logicalop");
+    }
     Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
         TType * t = typeOfValue(exp);
+        
+        T_Kind kind = exp->kind("operator");
+        
+        //check for lazy operators before evaluateing arguments
+        if(t->islogical) {
+            switch(kind) {
+                case T_and:
+                    return emitLazyLogical(t,ao,bo,true);
+                case T_or:
+                    return emitLazyLogical(t,ao,bo,false);
+                default:
+                    break;
+            }
+        }
+        
+        //ok, we have eager operators, lets evalute the arguments then emit
         Value * a = emitExp(ao);
         Value * b = emitExp(bo);
 #define RETURN_OP(op) \
@@ -455,7 +507,7 @@ if(t->type->isIntegerTy()) { \
 } else { \
     return B->CreateF##op(a,b); \
 }
-        switch(exp->kind("operator")) {
+        switch(kind) {
             case T_add: RETURN_OP(Add) break;
             case T_sub: RETURN_OP(Sub) break;
             case T_mul: RETURN_OP(Mul) break;
@@ -501,10 +553,8 @@ if(t->type->isIntegerTy()) { \
         } else if(from->type->isFloatingPointTy()) {
             if(to->type->isIntegerTy()) {
                 if(to->issigned) {
-                    printf("SIGNED\n");
                     return B->CreateFPToSI(exp, to->type);
                 } else {
-                    printf("UNSIGNED\n");
                     return B->CreateFPToUI(exp, to->type);
                 }
             } else if(to->type->isFloatingPointTy()) {
@@ -613,7 +663,10 @@ if(t->type->isIntegerTy()) { \
         func->getBasicBlockList().push_back(bb);
     }
     Value * emitCond(Obj * cond) {
-        return B->CreateTrunc(emitExp(cond), Type::getInt1Ty(*C->ctx));
+        return emitCond(emitExp(cond));
+    }
+    Value * emitCond(Value * cond) {
+        return B->CreateTrunc(cond, Type::getInt1Ty(*C->ctx));
     }
     void emitIfBranch(Obj * ifbranch, BasicBlock * footer) {
         Obj cond,body;

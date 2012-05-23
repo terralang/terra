@@ -26,10 +26,12 @@ FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FO
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
+INCLUDE_PATH += -Ibuild
+
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 
-SRC = tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+SRC = terralib.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = terra
 
@@ -59,7 +61,12 @@ $(EXECUTABLE):	$(addprefix build/, $(OBJS))
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
+
+build/terralib.def:	$(BIN2C) src/terralib.lua
+	$(BIN2C) src/terralib.lua > $@
 	
+build/terralib.o:	build/terralib.def
+
 clean:
 	rm -rf build/*.o build/*.d
 	rm -rf $(EXECUTABLE)

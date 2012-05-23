@@ -5,6 +5,7 @@
 #include "lparser.h"
 #include "tcompiler.h"
 #include "tkind.h"
+#include "terralib.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -95,9 +96,12 @@ terra_State * terra_newstate() {
 	
 	terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
 	
-	//TODO: embed in executable
-	if(luaL_dofile(T->L,"src/terralib.lua")) {
-		terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));
+    const char * lib_string;
+    size_t lib_size = terra_library(&lib_string);
+    if(luaL_loadbuffer(T->L, lib_string, lib_size, "terralib.lua") 
+       || lua_pcall(T->L,0,LUA_MULTRET,0)) {
+    //if(luaL_dofile(T->L, "src/terralib.lua")) {
+        terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));
 		free(T);
 		return NULL;
 	}

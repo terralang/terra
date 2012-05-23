@@ -1,0 +1,15 @@
+#!../build/LuaJIT-2.0.0-beta10/src/luajit
+local results = {}
+for line in io.popen("ls"):lines() do
+	if string.sub(line,-2) == ".t" then
+		if os.execute("../terra "..line) ~= 0 then
+			results[line] = "FAIL"
+		else
+			results[line] = "pass"
+		end
+	end
+end
+
+for k,v in pairs(results) do
+	print(k,v)
+end

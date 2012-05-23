@@ -1549,7 +1549,14 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
   printf("********* passing to lua ************\n%s\n*************************************\n",lexstate.output_buffer.data);
-  if(luaL_dostring(L,lexstate.output_buffer.data)) {
+  
+  //loadbuffer doesn't like null terminators, so rewind to before them
+  while(lexstate.output_buffer.data[lexstate.output_buffer.N-1] == '\0' && lexstate.output_buffer.N > 0) {
+    lexstate.output_buffer.N--;
+  }
+  if(luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name)
+     || lua_pcall(L, 0, LUA_MULTRET, 0)) {
+  //if(luaL_dostring(L,lexstate.output_buffer.data)) {
 	 terra_reporterror(T,"%s\n",luaL_checkstring(L,-1));
   }
   OutputBuffer_free(&lexstate.output_buffer);

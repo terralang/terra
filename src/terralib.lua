@@ -124,7 +124,7 @@ function terra.newfunction(olddef,newtree,env)
 	if olddef then
 		error("NYI - overloaded functions",2)
 	end
-	local fname = newtree.filename:gsub("%.","_") .. newtree.offset --todo if a user writes terra foo, pass in the string "foo"
+	local fname = newtree.filename:gsub("[^A-Za-z0-9]","_") .. newtree.offset --todo if a user writes terra foo, pass in the string "foo"
 	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
 	return setmetatable(obj,terra.func)
 end
