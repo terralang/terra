@@ -238,7 +238,7 @@ struct TerraCompiler {
 							}
 						} break;
 						case T_integer: {
-							t->issigned = typ->number("signed");
+							t->issigned = typ->boolean("signed");
 							t->type = Type::getIntNTy(*C->ctx,bytes * 8);
 						} break;
 						case T_logical: {
@@ -475,6 +475,51 @@ if(t->type->isIntegerTy()) { \
 #undef RETURN_OP
 #undef RETURN_SOP
     }
+    Value * emitCast(TType * from, TType * to, Value * exp) {
+        int fsize = from->type->getPrimitiveSizeInBits();
+        int tsize = to->type->getPrimitiveSizeInBits(); 
+        if(from->type->isIntegerTy()) {
+            if(to->type->isIntegerTy()) {
+                if(fsize > tsize) {
+                    return B->CreateTrunc(exp, to->type);
+                } else if(fsize == tsize) {
+                    return exp; //no-op in llvm since its types are not signed
+                } else {
+                    if(from->issigned) {
+                        B->CreateSExt(exp, to->type);
+                    } else {
+                        B->CreateZExt(exp, to->type);
+                    }
+                }
+            } else if(to->type->isFloatingPointTy()) {
+                if(from->issigned) {
+                    return B->CreateSIToFP(exp, to->type);
+                } else {
+                    return B->CreateUIToFP(exp, to->type);
+                }
+            } else goto nyi;
+        } else if(from->type->isFloatingPointTy()) {
+            if(to->type->isIntegerTy()) {
+                if(to->issigned) {
+                    printf("SIGNED\n");
+                    return B->CreateFPToSI(exp, to->type);
+                } else {
+                    printf("UNSIGNED\n");
+                    return B->CreateFPToUI(exp, to->type);
+                }
+            } else if(to->type->isFloatingPointTy()) {
+                if(fsize < tsize) {
+                    return B->CreateFPExt(exp, to->type);
+                } else {
+                    return B->CreateFPTrunc(exp, to->type);
+                }
+            } else goto nyi;
+        } else goto nyi;
+    nyi:
+        assert(!"NYI - casts");
+        return NULL;
+        
+    }
 	Value * emitExp(Obj * exp) {
 		switch(exp->kind("kind")) {
 			case T_var:  {
@@ -541,6 +586,14 @@ if(t->type->isIntegerTy()) { \
                     double dbl = exp->number("value");
                     return ConstantFP::get(t->type, dbl);
                 }
+            } break;
+            case T_cast: {
+                Obj a;
+                Obj to,from;
+                exp->obj("expression",&a);
+                exp->obj("to",&to);
+                exp->obj("from",&from);
+                return emitCast(getType(&from),getType(&to),emitExp(&a));
             } break;
 			default: {
 				assert(!"NYI - exp");

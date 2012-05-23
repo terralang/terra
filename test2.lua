@@ -1,10 +1,10 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : double, b : double)
-	if a > b then
+terra foobar(a : double, b : double) : double
+	if a < 100 then
 		return a
 	else
-		return b
+		return 400
 	end
 end
 foobar:compile()
@@ -13,7 +13,7 @@ local ffi = require("ffi")
 ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
 local func = ffi.cast("my_struct*",foobar.fptr)
 print("EXECUTING FUNCTION:")
-print(func.fn(2,5))
+print(func.fn(200,5))
 
 --[[
 	::alabel::

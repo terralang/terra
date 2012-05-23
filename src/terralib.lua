@@ -373,9 +373,9 @@ function terra.func:typecheck()
 		else
 			--TODO: check that the cast is valid and insert the specific kind of cast 
 			--so that codegen in llvm is easy
-			if typ.kind ~= terra.kinds.builtin or exp.type.kind ~= terra.kinds.builtin then
+			if typ.kind ~= terra.kinds.builtin or exp.type.kind ~= terra.kinds.builtin or typ:islogical() or exp.type:islogical() then
 				terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
-			end
+            end
 			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, expression = exp })
 		end
 	end
