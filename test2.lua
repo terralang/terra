@@ -1,19 +1,24 @@
-A = { foo = long }
-anumber = { foo = 100 }
-terra foobar(a : double, b : double) : double
-	if a < 100 then
-		return a
-	else
-		return 400
+local Num = int
+terra fib(a : Num) : Num
+	var i,c,p = 0,1,1
+	while i < a do
+		c,p = c + p,c
+		i = i + 1
 	end
+	return c
 end
-foobar:compile()
+for i = 0,10 do
+	print(fib(i))
+end
+
+--foobar:compile()
 --no fancy wrappers to call the function yet, so use luajit's ffi....
-local ffi = require("ffi")
-ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
-local func = ffi.cast("my_struct*",foobar.fptr)
-print("EXECUTING FUNCTION:")
-print(func.fn(200,5))
+--local ffi = require("ffi")
+--ffi.cdef("typedef struct { double (*fn)(double,double); } my_struct;") 
+--local func = ffi.cast("my_struct*",foobar.fptr)
+--print("EXECUTING FUNCTION:")
+--print(func.fn(200,5))
+
 
 --[[
 	::alabel::

@@ -8,6 +8,7 @@ ffi.cdef("typedef struct { void (*fn)(double,double); } my_struct;")
 func = ffi.cast("my_struct*",functest)
 func.fn(1,2)
 ]]
+local ffi = require("ffi")
 
 terra.tree = {} --metatype for trees
 terra.tree.__index = terra.tree
@@ -81,6 +82,26 @@ end
 function terra.func:type()
 	
 end
+function terra.func:makewrapper()
+	local fntyp = self.typedtree.type
+	
+	local rt
+	if #fntyp.returns == 0 then
+		rt = "void"
+	else --only supports a single return right now
+		rt = fntyp.returns[1]:cstring()
+	end
+	local function getcstring(t)
+		return t:cstring()
+	end
+	local pa = fntyp.parameters:map(getcstring):mkstring("(",",",")")
+	local ntyp = self.name.."_t"
+	local cdef = "typedef struct { "..rt.." (*fn)"..pa.."; } "..ntyp..";"
+	print(cdef)
+	ffi.cdef(cdef)
+	self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
+end
+
 function terra.func:compile()
 	print("compiling function:")
     self.untypedtree:printraw()
@@ -89,13 +110,14 @@ function terra.func:compile()
 	self.typedtree = self:typecheck()
 	--now call llvm to compile...
 	terra.compile(self)
+	self:makewrapper()
 end
 
 function terra.func:__call(...)
 	if not self.typedtree then
 		self:compile()
 	end
-	print("NYI - invoke terra function")
+	return self.ffiwrapper.fn(...)
 end
 
 function terra.newfunction(olddef,newtree,env)
@@ -147,6 +169,20 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:ispointer()
 		return self.kind == terra.kinds.pointer
 	end
+	function types.type:cstring()
+		if self:isintegral() then
+			return tostring(self).."_t"
+		elseif self:isfloat() then
+			return tostring(self)
+		elseif self:ispointer() then
+			return self.type.."*"
+		elseif self:islogical() then
+			return "unsigned char"
+		else
+			error("NYI - cstring")
+		end
+	end
+	
 	local function mktyp(v)
 		return setmetatable(v,types.type)
 	end
@@ -376,7 +412,7 @@ function terra.func:typecheck()
 			if typ.kind ~= terra.kinds.builtin or exp.type.kind ~= terra.kinds.builtin or typ:islogical() or exp.type:islogical() then
 				terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
             end
-			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, expression = exp })
+			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
 		end
 	end
 	
