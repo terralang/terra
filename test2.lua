@@ -1,10 +1,11 @@
 A = { foo = long }
 anumber = { foo = 100 }
-terra foobar(a : double, b : double) : double
-	var d = 100
-	d
-	var e = 100.3
-	return e
+terra foobar(a : double, b : double)
+	if a > b then
+		return a
+	else
+		return b
+	end
 end
 foobar:compile()
 --no fancy wrappers to call the function yet, so use luajit's ffi....

@@ -132,6 +132,9 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:isintegral()
 		return self.kind == terra.kinds.builtin and self.type == terra.kinds.integer
 	end
+	function types.type:isfloat()
+		return self.kind == terra.kinds.builtin and self.type == terra.kinds.float
+	end
 	function types.type:isarithmetic()
 		return self.kind == terra.kinds.builtin and (self.type == terra.kinds.integer or self.type == terra.kinds.float)
 	end
@@ -365,56 +368,52 @@ function terra.func:typecheck()
 	end
 	
 	local function insertcast(exp,typ)
-		if typ == exp.type then
+		if typ == exp.type or typ == terra.types.error or exp.type == terra.types.error then
 			return exp
 		else
 			--TODO: check that the cast is valid and insert the specific kind of cast 
 			--so that codegen in llvm is easy
+			if typ.kind ~= terra.kinds.builtin or exp.type.kind ~= terra.kinds.builtin then
+				terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
+			end
 			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, expression = exp })
 		end
 	end
 	
-	local function typematch(op,lstmt,rstmt)
+	local function typemeet(op,a,b)
 		local function err()
-			terra.reporterror(ctx,op,"incompatible types: ",lstmt.type," and ",rstmt.type)
+			terra.reporterror(ctx,op,"incompatible types: ",a," and ",b)
 		end
-		
-		local function castleft()
-			return rstmt.type,insertcast(lstmt,rstmt.type),rstmt
-		end
-		local function castright()
-			return lstmt.type,lstmt,insertcast(rstmt,lstmt.type) 
-		end
-		
-		if lstmt.type == rstmt.type then return lstmt.type,lstmt,rstmt end
-		if lstmt.type == terra.types.error or rstmt.type == terra.types.error then return terra.types.error,lstmt,rstmt end
-		
-		print(lstmt.type, rstmt.type)
-		if lstmt.type.kind == terra.kinds.builtin and rstmt.type.kind == terra.kinds.builtin then
-			if lstmt.type.type == terra.kinds.integer and rstmt.type.type == terra.kinds.integer then
-				if lstmt.type.size < rstmt.type.size then
-					return castleft()
-				elseif lstmt.type.size > rstmt.type.size then
-					return castright()
-				elseif lstmt.type.signed then --signed versus unsigned
-					return castleft()
-				else
-					return castright()
+		if a == terra.types.error or b == terra.types.error then
+			return terra.types.error
+		elseif a == b then
+			return a
+		elseif a.kind == terra.kinds.builtin and b.kind == terra.kinds.builtin then
+			if a:isintegral() and b:isintegral() then
+				if a.bytes < b.bytes then
+					return b
+				elseif b.bytes > a.bytes then
+					return a
+				elseif a.signed then
+					return b
+				else --a is unsigned but b is signed
+					return a
 				end
-			elseif lstmt.type.type == terra.kinds.integer and rstmt.type.type == terra.kinds.float then
-				return castleft()
-			elseif lstmt.type.type == terra.kinds.float and rstmt.type.type == terra.kinds.integer then
-				return castright()
-			elseif lstmt.type.type == terra.kinds.float and rstmt.type.type == terra.kinds.float then
-				return double, insertcast(lstmt,double), insertcast(rstmt,double)
-			else
-				err()
-				return terra.types.error,lstmt,rstmt
+			elseif a:isintegral() and b:isfloat() then
+				return b
+			elseif a:isfloat() and b:isintegral() then
+				return a
+			elseif a:isfloat() and b:isfloat() then
+				return double
 			end
 		else
 			err()
-			return terra.types.error,lstmt,rstmt
+			return terra.types.error
 		end
+	end
+	local function typematch(op,lstmt,rstmt)
+		local inputtype = typemeet(op,lstmt.type,rstmt.type)
+		return inputtype, insertcast(lstmt,inputtype), insertcast(rstmt,inputtype)
 	end
 	
 	-- 1. generate types for parameters, if return types exists generate a types for them as well
@@ -428,9 +427,6 @@ function terra.func:typecheck()
 	end
 	
 	local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
-	if ftree.return_types then
-		return_stmts:insert({ type = ftree.return_types:map(resolvetype), stmt = nil })
-	end
 	
 	local parameters_to_type = {}
 	for _,v in ipairs(typed_parameters) do
@@ -624,10 +620,7 @@ function terra.func:typecheck()
 			return s:copy {statements = r}
 		elseif s:is "return" then
 			local rstmt = s:copy { expressions = s.expressions:map(checkrvalue) }
-			local rtypes = rstmt.expressions:map( function(exp)
-				return exp.type
-			end )
-			return_stmts:insert( { type = rtypes, stmt = rstmt })
+			return_stmts:insert( rstmt )
 			return rstmt
 		elseif s:is "label" then
 			local lbls = labels[s.value] or terra.newlist()
@@ -728,29 +721,41 @@ function terra.func:typecheck()
 	
 	print("Return Stmts:")
 	
+	
 	local return_types
-	if #return_stmts == 0 then
-		return_types = terra.newlist()
-	else 
-		for _,stmt in ipairs(return_stmts) do
-			if return_types == nil then
-				return_types = stmt.type
-			else
-				if #return_types ~= #stmt.type then
-					terra.reporterror(ctx,stmt.stmt,"returning a different length from previous return")
+	if ftree.return_types then --take the return types to be as specified
+		return_types = ftree.return_types:map(resolvetype)
+	else --calculate the meet of all return type to calculate the actual return type
+		if #return_stmts == 0 then
+			return_types = terra.newlist()
+		else
+			for _,stmt in ipairs(return_stmts) do
+				if return_types == nil then
+					return_types = terra.newlist()
+					for i,exp in ipairs(stmt.expressions) do
+						return_types[i] = exp.type
+					end
 				else
-					for i,v in ipairs(return_types) do 
-						if v ~= stmt.type[i] then
-							terra.reporterror(ctx,stmt.stmt, "returning type ",stmt.type[i], " but expecting ", v)
-							error("NYI - type meet for return types")
+					if #return_types ~= #stmt.expressions then
+						terra.reporterror(ctx,stmt.stmt,"returning a different length from previous return")
+					else
+						for i,exp in ipairs(stmt.expressions) do
+							return_types[i] = typemeet(exp,return_types[i],exp.type)
 						end
 					end
 				end
 			end
 		end
 	end
-	return_stmts:printraw()
-	
+	print("RT",return_types)
+	--now cast each return expression to the expected return type
+	for _,stmt in ipairs(return_stmts) do
+		local exps = terra.newlist()
+		for i,exp in ipairs(stmt.expressions) do
+			exps:insert(insertcast(exp,return_types[i]))
+		end
+		stmt.expressions = exps
+	end
 	
 	if ctx.func.filehandle then
 		terra.closesourcefile(ctx.func.filehandle)
