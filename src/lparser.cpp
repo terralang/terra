@@ -581,7 +581,18 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
     expdesc v;
-  	RETURNS_1(explist(ls,&v));
+      if(testnext(ls,'(')) {
+          if(testnext(ls,')')) { //zero args
+              new_list(ls);
+          } else { //(arg0,args1,...)
+              RETURNS_1(explist(ls,&v));
+              checknext(ls,')');
+          }
+      } else { //single arg: arg0 
+          int lst = new_list(ls);
+          RETURNS_1(expr(ls,&v));
+          add_entry(ls,lst);
+      }
   	add_field(ls,tbl,"return_types");
   }
   int blk = new_table(ls,T_block);
