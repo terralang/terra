@@ -669,6 +669,16 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 ** =======================================================================
 */
 
+static void dump_stack(lua_State * L, int elem) {
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"tree");
+        
+    lua_getfield(L,-1,"printraw");
+    lua_pushvalue(L, -3 + elem);
+    lua_call(L, 1, 0);
+        
+    lua_pop(L,2);
+}
 
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
@@ -677,6 +687,15 @@ static void prefixexp (LexState *ls, expdesc *v) {
       int line = ls->linenumber;
       luaX_next(ls);
       RETURNS_1(expr(ls, v));
+      if(ls->in_terra) {
+        lua_getfield(ls->L, -1, "kind");
+        T_Kind k = (T_Kind) luaL_checkint(ls->L, -1);
+        lua_pop(ls->L,1);
+        if(k == T_apply || k == T_method) { //if an call was parenthesized, mark it as only returned one argument
+            int tbl = new_table_before(ls, T_identity);
+            add_field(ls, tbl, "value");
+        }
+      }
       check_match(ls, ')', '(', line);
       //luaK_dischargevars(ls->fs, v);
       return;

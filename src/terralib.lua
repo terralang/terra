@@ -33,8 +33,15 @@ function terra.tree:printraw()
  	local function isList(t)
  		return type(t) == "table" and #t ~= 0
  	end
+ 	local parents = {}
+ 	
 	local function printElem(t,spacing)
 		if(type(t) == "table") then
+			if parents[t] then
+				print(#spacing,"<cyclic reference>")
+				return
+			end
+			parents[t] = true
 			for k,v in pairs(t) do
 				if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
 					local prefix = spacing..k..": "
@@ -46,6 +53,7 @@ function terra.tree:printraw()
 					end
 				end
 			end
+			parents[t] = nil
 		end
 	end
 	print(header(nil,self))
@@ -79,7 +87,31 @@ function terra.func:env()
 	self.envfunction = nil --we don't need the closure anymore
 	return self.envtbl
 end
-function terra.func:type()
+function terra.func:type(ctx)
+	if self.typedtree then --already compiled
+		return self.typedtree.type
+	elseif self.cachedtype then --we resolved the type already
+		return self.cachedtype
+	else --we need to compile the function now because it has been referenced
+		if self.iscompiling then
+			if self.untypedtree.return_types then --we are already compiling this function, but the return types are listed, so we can resolve the type anyway	
+				local params = terra.newlist()
+				local function rt(t) return terra.resolvetype(ctx,t) end
+				for _,v in ipairs(self.untypedtree.parameters) do
+					params:insert(rt(v.type))
+				end
+				local rets = self.untypedtree.return_types:map(rt)
+				self.cachedtype = terra.types.functype(params,rets) --for future calls
+				return self.cachedtype
+			else
+				terra.reporterror(ctx,self.untypedtree,"recursively called function needs an explicit return type")
+				return terra.types.error
+			end
+		else
+			self:compile(ctx)
+			return self.typedtree.type
+		end
+	end
 	
 end
 function terra.func:makewrapper()
@@ -102,15 +134,24 @@ function terra.func:makewrapper()
 	self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
 end
 
-function terra.func:compile()
+function terra.func:compile(ctx)
+	ctx = ctx or {} -- if this is a top level compile, create a new compilation context
 	print("compiling function:")
     self.untypedtree:printraw()
 	print("with local environment:")
 	terra.tree.printraw(self:env())
-	self.typedtree = self:typecheck()
-	--now call llvm to compile...
-	terra.compile(self)
-	self:makewrapper()
+	self.typedtree = self:typecheck(ctx)
+	
+	if ctx.has_errors then 
+		if ctx.func == nil then --if this was not the top level compile we let type-checking of other functions continue, 
+		                        --though we don't actually compile because of the errors
+			error("Errors reported during compilation.")
+		end
+	else 
+		--now call llvm to compile...
+		terra.compile(self)
+		self:makewrapper()
+	end
 end
 
 function terra.func:__call(...)
@@ -395,8 +436,12 @@ function terra.list:mkstring(begin,sep,finish)
 end
 
 
-function terra.func:typecheck()
-	local ctx = { func = self }
+function terra.func:typecheck(ctx)
+	
+	local oldfunc = ctx.func --save old function and set the current compiling function to this one
+	ctx.func = self
+	self.iscompiling = true --to catch recursive compilation calls
+	
 	local ftree = ctx.func.untypedtree
 	
 	local function resolvetype(t)
@@ -783,7 +828,7 @@ function terra.func:typecheck()
 			end
 		end
 	end
-	print("RT",return_types)
+	
 	--now cast each return expression to the expected return type
 	for _,stmt in ipairs(return_stmts) do
 		local exps = terra.newlist()
@@ -804,18 +849,14 @@ function terra.func:typecheck()
 	print("TypedTree")
 	typedtree:printraw()
 	
-	if ctx.has_errors then
-		error("Errors reported during compilation.")
-	end
-	
+	ctx.func = oldfunc
+	self.iscompiling = nil
 	return typedtree
 	
 	--[[
 	
 	2. register the parameter list as a variant of this function (ensure it is unique) and create table to hold the result of type checking
-	3. initialize (variable -> type) map with parameter list and write enterblock, leave block functions
-	4. initialize list of return statements used to determine the return type/check the marked return type was valid
-	5. typecheck statement list, start with
+	5. typecheck statement list, start with (done)
 	   -- arithmetic and logical operators on simple number types (no casting)
 	   -- if and while statements
 	   -- var statements (multiple cases)
@@ -833,6 +874,21 @@ function terra.func:typecheck()
 	   -- numeric for loop
 	   -- iterator loop
 	   make sure to track lvalues for all typed expressions
+       
+handling multi-returns:
+checkparameterlist function:
+         checks a list of expressions where the last one may be a function call with multiple returns
+         generates an object that has the list of typed (single value) expressions, and
+         an optional multi-valued (2+ values) return function (single value returns can go in expression list)
+         the return values from the multi-function are placed in a (seperate?) list with a type, a reference to the
+         function call that generated them and then their index into the argument list
+         
+         function calls found during a checkexp will just return their first (if any) value, or a special void type that cannot
+         be cast/operated on by anything else
+         
+         codegen will need to handle two cases:
+         1. function truncated to 0 or 1 and return value (NULL if 0)
+         2. multi-return function (2+ arguments) return pointer to structure holding the return values
 	]]
 end
 io.write("done\n")
