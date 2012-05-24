@@ -31,7 +31,7 @@ INCLUDE_PATH += -Ibuild
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 
-SRC = terralib.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+SRC = tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 OBJS = $(SRC:.cpp=.o)
 EXECUTABLE = terra
 
@@ -62,14 +62,11 @@ $(EXECUTABLE):	$(addprefix build/, $(OBJS))
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
 
-build/terralib.def:	$(BIN2C) src/terralib.lua
-	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.raw
-	$(BIN2C) build/terralib.raw > $@
+build/terralib.h:	src/terralib.lua
+	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 	
-build/terralib.o:	build/terralib.def
-
 clean:
-	rm -rf build/*.o build/*.d build/terralib.def build/terralib.raw
+	rm -rf build/*.o build/*.d built/terralib.h
 	rm -rf $(EXECUTABLE)
 
 purge:	clean
@@ -77,7 +74,7 @@ purge:	clean
 	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
-build/%.d:	src/%.cpp
-	@g++ $(FLAGS)  -MG -MM -MT '$@ $(@:.d=.o)' $< -o $@
+build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h
+	@g++ $(FLAGS)  -MM -MT '$@ $(@:.d=.o)' $< -o $@
 	
 -include $(DEPENDENCIES)

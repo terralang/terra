@@ -5,7 +5,6 @@
 #include "lparser.h"
 #include "tcompiler.h"
 #include "tkind.h"
-#include "terralib.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -84,6 +83,10 @@ static int closesourcefile(lua_State * L) {
 }
 
 
+//defines terralib bytecodes
+#include "terralib.h"
+
+
 terra_State * terra_newstate() {
 	terra_State * T = (terra_State*) malloc(sizeof(terra_State));
 	assert(T);
@@ -96,9 +99,7 @@ terra_State * terra_newstate() {
 	
 	terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
 	
-    const char * lib_string;
-    size_t lib_size = terra_library(&lib_string);
-    if(luaL_loadbuffer(T->L, lib_string, lib_size, "terralib.lua") 
+    if(luaL_loadbuffer(T->L, luaJIT_BC_terralib, luaJIT_BC_terralib_SIZE, "terralib.lua") 
        || lua_pcall(T->L,0,LUA_MULTRET,0)) {
     //if(luaL_dofile(T->L, "src/terralib.lua")) {
         terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));
