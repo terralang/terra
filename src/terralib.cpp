@@ -4,9 +4,9 @@ static const char data[] = {
 
 #include "terralib.def"
     
-'\n'
+'\0'
 };
 size_t terra_library(const char ** tdata) {
     *tdata = data;
-    return sizeof(data);
+    return sizeof(data) - 1;
 }

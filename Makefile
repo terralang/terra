@@ -54,7 +54,7 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make)
 	cp $(LUAJIT_DIR)/src/libluajit.a build/libluajit.a
-
+	ln -s $(LUAJIT_VERSION)/lib build/jit
 	
 $(EXECUTABLE):	$(addprefix build/, $(OBJS))
 	$(CXX) $^ -o $@ $(LFLAGS)
@@ -63,12 +63,13 @@ $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
 
 build/terralib.def:	$(BIN2C) src/terralib.lua
-	$(BIN2C) src/terralib.lua > $@
+	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.raw
+	$(BIN2C) build/terralib.raw > $@
 	
 build/terralib.o:	build/terralib.def
 
 clean:
-	rm -rf build/*.o build/*.d
+	rm -rf build/*.o build/*.d build/terralib.def build/terralib.raw
 	rm -rf $(EXECUTABLE)
 
 purge:	clean
