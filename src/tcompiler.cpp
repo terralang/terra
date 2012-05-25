@@ -538,9 +538,9 @@ if(t->type->isIntegerTy()) { \
                     return exp; //no-op in llvm since its types are not signed
                 } else {
                     if(from->issigned) {
-                        B->CreateSExt(exp, to->type);
+                        return B->CreateSExt(exp, to->type);
                     } else {
-                        B->CreateZExt(exp, to->type);
+                        return B->CreateZExt(exp, to->type);
                     }
                 }
             } else if(to->type->isFloatingPointTy()) {
@@ -708,6 +708,42 @@ if(t->type->isIntegerTy()) { \
         }
         return bb;
     }
+    
+    Value * emitCall(Obj * call) {
+        assert(!"NYI - call");
+        return NULL;
+    }
+    void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
+        
+        Obj params;
+        
+        paramlist->obj("parameters",&params);
+        
+        int minN = paramlist->number("minsize");
+        int maxN = paramlist->number("maxsize");
+        if(minN != 0) {
+            //emit arguments before possible function call
+            for(int i = 0; i < minN - 1; i++) {
+                Obj v;
+                params.objAt(i,&v);
+                results->push_back(emitExp(&v));
+            }
+            Obj call;
+            //if there is a function call, emit it now
+            if(paramlist->obj("call",&call)) {
+                Value * rvalues = emitCall(&call);
+                lua_pushlightuserdata(L, rvalues);
+                call.setfield("returnvalues");
+            }
+            //emit last argument, or (if there was a call) the list of extractors from the function call
+            for(int i = minN - 1; i < maxN; i++) {
+                Obj v;
+                params.objAt(i,&v);
+                results->push_back(emitExp(&v));
+            }
+        }
+        
+    }
 	void emitStmt(Obj * stmt) {		
 		T_Kind kind = stmt->kind("kind");
         if(!BB) { //dead code, no emitting
@@ -833,17 +869,14 @@ if(t->type->isIntegerTy()) { \
             } break;
 			case T_defvar: {
 				std::vector<Value *> rhs;
-				Obj inits;
+                
+                Obj inits;
 				stmt->obj("initializers",&inits);
-				int N = inits.size();
-				for(int i = 0; i < N; i++) {
-					Obj init;
-					inits.objAt(i,&init);
-					rhs.push_back(emitExp(&init));
-				}
+                emitParameterList(&inits, &rhs);
+				
 				Obj vars;
 				stmt->obj("variables",&vars);
-				N = inits.size();
+				int N = vars.size();
 				for(int i = 0; i < N; i++) {
 					Obj v;
 					vars.objAt(i,&v);
@@ -855,15 +888,10 @@ if(t->type->isIntegerTy()) { \
                 std::vector<Value *> rhsexps;
 				Obj rhss;
 				stmt->obj("rhs",&rhss);
-				int N = rhss.size();
-				for(int i = 0; i < N; i++) {
-					Obj rhs;
-					rhss.objAt(i,&rhs);
-					rhsexps.push_back(emitExp(&rhs));
-				}
+				emitParameterList(&rhss,&rhsexps);
 				Obj lhss;
 				stmt->obj("lhs",&lhss);
-				N = lhss.size();
+				int N = lhss.size();
 				for(int i = 0; i < N; i++) {
 					Obj lhs;
 					lhss.objAt(i,&lhs);

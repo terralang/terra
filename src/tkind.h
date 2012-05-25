@@ -60,7 +60,8 @@ _(integer,"integer") \
 _(logical,"logical") \
 _(ltor,"ltor") \
 _(cast,"cast") \
-_(identity,"identity")
+_(identity,"identity") \
+_(extractreturn,"extractreturn")
 
 enum T_Kind {
 	#define T_KIND_ENUM(a,str) T_##a,

@@ -169,6 +169,9 @@ function terra.newfunction(olddef,newtree,env)
 	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
 	return setmetatable(obj,terra.func)
 end
+function terra.isfunction(obj)
+	return getmetatable(obj) == terra.func
+end
 
 --[[
 types take the form
@@ -616,7 +619,72 @@ function terra.func:typecheck(ctx)
 		["@"] = checkdereference;
 		["^"] = checkintegralarith;
 	}
- 
+	
+	
+	local checkparameterlist, checkcall
+	function checkparameterlist(anchor,params)
+		local exps = terra.newlist()
+		for i = 1,#params - 1 do
+			exps:insert(checkrvalue(params[i]))
+		end
+		local minsize = #exps
+		local multiret = nil
+		
+		if #params ~= 0 then --handle the case where the last value returns multiple things
+			minsize = minsize + 1
+			local last = params[#params]
+			if last.kind == terra.kinds.apply or last.kind == terra.kinds.method then
+				local multifunc = checkcall(last,true) --must return at least one value
+				if #multifunc.types == 1 then
+					exps:insert(multifunc) --just insert it as a normal single-return function
+				else --remember the multireturn function and insert extract nodes into the expsresion list
+					multiret = multifunc
+					for i,v in multifunc.types do
+						simpleexps:insert(terra.newtree(multiret,{ kind = terra.kinds.extractreturn, index = (i-1), call = multiret }))
+					end
+				end
+			else
+				exps:insert(checkrvalue(last))
+			end
+		end
+		
+		local maxsize = #exps
+		return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, multiret = multiret })
+	end
+	local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value 'false'), paramlist is a parameter list that might have a multiple return value at the end
+		if #typelist > paramlist.maxsize then
+			terra.reporterror(ctx,paramlist,"expected at least "..#typelist.." parameters, but found only "..paramlist.maxsize)
+		elseif #typelist < paramlist.minsize then
+			terra.reporterror(ctx,paramlist,"expected no more than "..#typelist.." parameters, but found at least "..paramlist.minsize)
+		end
+		for i,typ in ipairs(typelist) do
+			if typ and i <= paramlist.maxsize then
+				paramlist.parameters[i] = insertcast(paramlist.parameters[i],typ)
+			end
+		end
+	end
+	function checkcall(exp, mustreturnatleast1)
+		local raw = checkexpraw(exp.value)
+		if terra.isfunction(raw) then
+			local fntyp = raw:type(ctx)
+			local paramlist = checkparameterlist(exp,exp.arguments)
+			insertcasts(fntyp.parameters,paramlist)
+			
+			print("FTYPE",fntyp)
+			local typ
+			if #fntyp.returns >= 1 then
+				typ = fntyp.returns[1]
+			elseif mustreturnatleast1 then
+				terra.reporterror(ctx,exp,"expected call to return at least 1 value")
+				typ = terra.types.error
+			end --otherwise this is used in statement context and does not require a type
+			
+			return exp:copy { arguments = paramlist,  value = raw, type = typ, types = typ.returns }
+		else
+			error("NYI - check call on non-literal function calls")
+		end
+	end
+	
 	function checkrvalue(e)
 		local ee = checkexp(e)
 		if ee.lvalue then
@@ -663,8 +731,17 @@ function terra.func:typecheck(ctx)
 			else
 				return op(e)
 			end
+		elseif e:is "identity" then --simply a passthrough
+			local e = checkexpraw(e.value)
+			if terra.istree(e) then
+				return e:copy { type = e.type, value = e }
+			else
+				return e
+			end
+		elseif e:is "apply" then
+			return checkcall(e,true)
 		end
-		error("NYI - "..terra.kinds[e.kind],2)
+		error("NYI - expression "..terra.kinds[e.kind],2)
 	end
 	function checkexp(ee)
 		local e = checkexpraw(ee)
@@ -693,6 +770,8 @@ function terra.func:typecheck(ctx)
 		local b = checkstmt(s.body)
 		return s:copy {condition = e, body = b}
 	end
+
+
 	function checkstmt(s)
 		if s:is "block" then
 			enterblock()
@@ -751,41 +830,51 @@ function terra.func:typecheck(ctx)
 			leaveloop()
 			return s:copy { body = new_blk, condition = e, breaktable = breaktable }
 		elseif s:is "defvar" then
-			if #s.variables ~= #s.initializers then
-				error("NYI - multiple return values/uneven initializer lists")
-			end
-			local lhs = terra.newlist()
-			local rhs = terra.newlist()
+			
+			local params = checkparameterlist(s,s.initializers)
+			
+			local vtypes = terra.newlist()
 			for i,v in ipairs(s.variables) do
-				local typ,r
-				if v.type then 
+				local typ = false
+				if v.type then
 					typ = resolvetype(v.type)
-					r = insertcast(checkrvalue(s.initializers[i]),typ)
-				else
-					r = checkrvalue(s.initializers[i])
-					typ = r.type
 				end
-				lhs:insert(v:copy { type = typ })
-				rhs:insert(r)
+				vtypes:insert(typ)
 			end
+			
+			insertcasts(vtypes,params)
+			
+			local lhs = terra.newlist()
+			for i,v in ipairs(s.variables) do
+				lhs:insert(v:copy { type = v.type or ( (params.parameters[i] and params.parameters[i].type) or terra.types.error) }) 
+			end
+			
 			--add the variables to current environment
 			for i,v in ipairs(lhs) do
 				env[v.name] = v
 			end
-			return s:copy { variables = lhs, initializers = rhs }
+			return s:copy { variables = lhs, initializers = params }
+			
 		elseif s:is "assignment" then
-			if #s.lhs ~= #s.rhs then
-				error("NYI - multiple return values")
-			end
+			
+			local params = checkparameterlist(s,s.rhs)
+			
 			local lhs = terra.newlist()
-			local rhs = terra.newlist()
+			local vtypes = terra.newlist()
 			for i,l in ipairs(s.lhs) do
 				local ll = checklvalue(l)
-				local rr = insertcast(checkrvalue(s.rhs[i]),ll.type)
+				vtypes:insert(ll.type)
 				lhs:insert(ll)
-				rhs:insert(rr)
 			end
-			return s:copy { lhs = lhs, rhs = rhs }
+			
+			insertcasts(vtypes,params)
+			
+			return s:copy { lhs = lhs, rhs = params }
+			
+		elseif s:is "apply" then
+			return checkcall(s,false) --allowed to be void
+		elseif s:is "method" then
+			error ("NYI - methods")
 		else 
 			return checkrvalue(s)
 		end
