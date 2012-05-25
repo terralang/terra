@@ -839,7 +839,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
     	body(ls,v,0,ls->linenumber);
 	  	luaX_patchbegin(ls,&begin);
 	    int id = add_entry(ls,TA_FUNCTION_TABLE);
-	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G.terra._trees[%d],",id);
+	    OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G.terra._trees[%d],nil,",id);
 	    print_captured_locals(ls);
 	    OutputBuffer_printf(&ls->output_buffer,")");
 	    luaX_patchend(ls,&begin);
@@ -1302,7 +1302,7 @@ static void localterra (LexState *ls) {
   RETURNS_1(body(ls, &b, 0, ls->linenumber));
   int id = add_entry(ls,TA_FUNCTION_TABLE);
   luaX_patchbegin(ls,&begin);
-  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G.terra._trees[%d],",getstr(name),getstr(name),id);
+  OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G.terra._trees[%d],\"%s\",",getstr(name),getstr(name),id,getstr(name));
   print_captured_locals(ls);
   OutputBuffer_printf(&ls->output_buffer,")");
   luaX_patchend(ls,&begin);
@@ -1388,7 +1388,9 @@ static void terrastat(LexState * ls, int line) {
 	print_names(ls); //a.b.c.d
 	OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
 	print_names(ls);
-	OutputBuffer_printf(&ls->output_buffer,", _G.terra._trees[%d],",n);
+	OutputBuffer_printf(&ls->output_buffer,", _G.terra._trees[%d],\"",n);
+    print_names(ls);
+    OutputBuffer_printf(&ls->output_buffer,"\",");
 	print_captured_locals(ls);
 	OutputBuffer_printf(&ls->output_buffer,")");
 	luaX_patchend(ls,&begin);

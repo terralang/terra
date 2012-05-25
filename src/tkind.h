@@ -61,7 +61,8 @@ _(logical,"logical") \
 _(ltor,"ltor") \
 _(cast,"cast") \
 _(identity,"identity") \
-_(extractreturn,"extractreturn")
+_(extractreturn,"extractreturn") \
+_(parameterlist,"parameterlist")
 
 enum T_Kind {
 	#define T_KIND_ENUM(a,str) T_##a,

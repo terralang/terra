@@ -37,8 +37,11 @@ EXECUTABLE = terra
 
 BIN2C = build/bin2c
 
-.PHONY:	all clean
+.PHONY:	all clean purge test
 all:	$(EXECUTABLE)
+
+test:	$(EXECUTABLE)
+	(cd tests; ./run)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 	$(CXX) $(FLAGS) $< -c -o $@

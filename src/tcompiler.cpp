@@ -271,7 +271,14 @@ struct TerraCompiler {
 						TType * r0t = getType(&r0);
 						rt = r0t->type;
 					} else {
-						terra_reporterror(T,"NYI - multiple returns\n");
+                        std::vector<Type *> types;
+                        for(int i = 0; i < sz; i++) {
+                            Obj r;
+                            rets.objAt(i,&r);
+                            TType * rt = getType(&r);
+                            types.push_back(rt->type);
+                        }
+                        rt = StructType::get(*C->ctx,types);
 					}
 					int psz = params.size();
 					for(int i = 0; i < psz; i++) {
@@ -314,28 +321,41 @@ struct TerraCompiler {
         typ.obj("returns",&returns);
         return returns.size();
     }
+    Function * getOrCreateFunction(Obj * funcobj) {
+		Function * fn = (Function *) funcobj->ud("llvm_function");
+        if(!fn) {
+            Obj ftype;
+            funcobj->obj("type",&ftype);
+            TType * func_type = getType(&ftype);
+            const char * name = funcobj->string("name");
+            fn = Function::Create(cast<FunctionType>(func_type->type), Function::ExternalLinkage,name, C->m);
+            lua_pushlightuserdata(L,fn);
+            funcobj->setfield("llvm_function");
+        }
+        return fn;
+    }
 	void run(terra_State * _T) {
 		T = _T;
 		L = T->L;
 		C = T->C;
 		B = new IRBuilder<>(*C->ctx);
-		//create lua table to hold object references anchored on stack
+		
+        //create lua table to hold object references anchored on stack
 		lua_newtable(T->L);
 		int ref_table = lua_gettop(T->L);
 		lua_pushvalue(T->L,-2); //the original argument
 		funcobj.initFromStack(T->L, ref_table);
 		
-		Obj typedtree;
-		funcobj.obj("typedtree",&typedtree);
-		Obj ftype;
-		typedtree.obj("type",&ftype);
-		TType * func_type = getType(&ftype);
-		const char * name = funcobj.string("name");
-		func = Function::Create(cast<FunctionType>(func_type->type), Function::ExternalLinkage,name, C->m);
-		BB = BasicBlock::Create(*C->ctx,"entry",func);
-		B->SetInsertPoint(BB);
+        func = getOrCreateFunction(&funcobj);
 		
-		Obj parameters;
+        BB = BasicBlock::Create(*C->ctx,"entry",func);
+		
+        B->SetInsertPoint(BB);
+		
+        Obj typedtree;
+        Obj parameters;
+        
+		funcobj.obj("typedtree",&typedtree);
 		typedtree.obj("parameters",&parameters);
 		int nP = parameters.size();
 		Function::arg_iterator ai = func->arg_begin();
@@ -354,8 +374,7 @@ struct TerraCompiler {
             if(numReturnValues() == 0) {
                 B->CreateRetVoid();
             } else {
-                FunctionType * ftype = cast<FunctionType>(func_type->type);
-                B->CreateRet(UndefValue::get(ftype->getReturnType()));
+                B->CreateRet(UndefValue::get(func->getReturnType()));
             }
         }
 		
@@ -645,6 +664,19 @@ if(t->type->isIntegerTy()) { \
                 exp->obj("from",&from);
                 return emitCast(getType(&from),getType(&to),emitExp(&a));
             } break;
+            case T_apply: {
+                Value * v = emitCall(exp,true);
+                assert(v);
+                return v;
+            } break;
+            case T_extractreturn: {
+                Obj index,resulttable,value;
+                int idx = exp->number("index");
+                exp->obj("result",&resulttable);
+                Value * v = (Value *) resulttable.ud("struct");
+                assert(v);
+                return B->CreateExtractValue(v, idx);
+            } break;
 			default: {
 				assert(!"NYI - exp");
 			} break;
@@ -709,9 +741,34 @@ if(t->type->isIntegerTy()) { \
         return bb;
     }
     
-    Value * emitCall(Obj * call) {
-        assert(!"NYI - call");
-        return NULL;
+    Value * emitCall(Obj * call, bool truncateto1arg) {
+        Obj paramlist;
+        Obj returns;
+        Obj func;
+        call->obj("arguments",&paramlist);
+        call->obj("types",&returns);
+        call->obj("value",&func);
+        
+        Function * fn = getOrCreateFunction(&func);
+        
+        std::vector<Value *> params;
+        
+        emitParameterList(&paramlist,&params);
+        
+        Value * result = B->CreateCall(fn, params);
+        int returnsN = returns.size();
+        if(returnsN == 0) {
+            return NULL;
+        } else if(returnsN == 1) {
+            assert(truncateto1arg); //single return functions should not appear as multi-return calls
+            return result;
+        } else {
+            if(truncateto1arg) {
+                return B->CreateExtractValue(result, 0);
+            } else {
+                return result; //return the struct itself so that it can be linked to the extract expressions
+            }
+        }
     }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
         
@@ -720,7 +777,7 @@ if(t->type->isIntegerTy()) { \
         paramlist->obj("parameters",&params);
         
         int minN = paramlist->number("minsize");
-        int maxN = paramlist->number("maxsize");
+        int sizeN = paramlist->number("size");
         if(minN != 0) {
             //emit arguments before possible function call
             for(int i = 0; i < minN - 1; i++) {
@@ -731,12 +788,14 @@ if(t->type->isIntegerTy()) { \
             Obj call;
             //if there is a function call, emit it now
             if(paramlist->obj("call",&call)) {
-                Value * rvalues = emitCall(&call);
+                Value * rvalues = emitCall(&call,false);
+                Obj result;
+                call.obj("result",&result);
                 lua_pushlightuserdata(L, rvalues);
-                call.setfield("returnvalues");
+                result.setfield("struct");
             }
             //emit last argument, or (if there was a call) the list of extractors from the function call
-            for(int i = minN - 1; i < maxN; i++) {
+            for(int i = minN - 1; i < sizeN; i++) {
                 Obj v;
                 params.objAt(i,&v);
                 results->push_back(emitExp(&v));
@@ -768,14 +827,27 @@ if(t->type->isIntegerTy()) { \
             case T_return: {
 				Obj exps;
 				stmt->obj("expressions",&exps);
-				if(exps.size() == 0) {
+                
+                std::vector<Value *> results;
+                emitParameterList(&exps, &results);
+                
+				if(results.size() == 0) {
 					B->CreateRetVoid();
+				} else if (results.size() == 1) {
+					B->CreateRet(results[0]);
 				} else {
-					Obj r;
-					exps.objAt(0,&r);
-					Value * v = emitExp(&r);
-					B->CreateRet(v);
-				}
+                    //multiple return values, create structural type to hold each then insert the results
+                    std::vector<Type*> types;
+                    for(int i = 0; i < results.size(); i++) {
+                        types.push_back(results[i]->getType());
+                    }
+                    Type * st = StructType::get(*C->ctx, types);
+                    Value * r = UndefValue::get(st);
+                    for(int i = 0; i < results.size(); i++) {
+                        r = B->CreateInsertValue(r, results[i], i);
+                    }
+                    B->CreateRet(r);
+                }
                 BB = NULL;
 			} break;
             case T_label: {

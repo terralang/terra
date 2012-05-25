@@ -34,14 +34,17 @@ function terra.tree:printraw()
  		return type(t) == "table" and #t ~= 0
  	end
  	local parents = {}
- 	
+ 	local depth = 0
 	local function printElem(t,spacing)
 		if(type(t) == "table") then
 			if parents[t] then
 				print(#spacing,"<cyclic reference>")
 				return
+			elseif depth > 0 and terra.isfunction(t) then
+				return --don't print the entire nested function...
 			end
 			parents[t] = true
+			depth = depth + 1
 			for k,v in pairs(t) do
 				if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
 					local prefix = spacing..k..": "
@@ -53,6 +56,7 @@ function terra.tree:printraw()
 					end
 				end
 			end
+			depth = depth - 1
 			parents[t] = nil
 		end
 	end
@@ -87,11 +91,9 @@ function terra.func:env()
 	self.envfunction = nil --we don't need the closure anymore
 	return self.envtbl
 end
-function terra.func:type(ctx)
-	if self.typedtree then --already compiled
-		return self.typedtree.type
-	elseif self.cachedtype then --we resolved the type already
-		return self.cachedtype
+function terra.func:gettype(ctx)
+	if self.type then --already typechecked
+		return self.type
 	else --we need to compile the function now because it has been referenced
 		if self.iscompiling then
 			if self.untypedtree.return_types then --we are already compiling this function, but the return types are listed, so we can resolve the type anyway	
@@ -101,15 +103,15 @@ function terra.func:type(ctx)
 					params:insert(rt(v.type))
 				end
 				local rets = self.untypedtree.return_types:map(rt)
-				self.cachedtype = terra.types.functype(params,rets) --for future calls
-				return self.cachedtype
+				self.type = terra.types.functype(params,rets) --for future calls
+				return self.type
 			else
 				terra.reporterror(ctx,self.untypedtree,"recursively called function needs an explicit return type")
 				return terra.types.error
 			end
 		else
 			self:compile(ctx)
-			return self.typedtree.type
+			return self.type
 		end
 	end
 	
@@ -120,8 +122,18 @@ function terra.func:makewrapper()
 	local rt
 	if #fntyp.returns == 0 then
 		rt = "void"
-	else --only supports a single return right now
+	elseif #fntyp.returns == 1 then
 		rt = fntyp.returns[1]:cstring()
+	else
+		local rtype = "typedef struct { "
+		for i,v in ipairs(fntyp.returns) do
+			rtype = rtype..v:cstring().." v"..tostring(i).."; "
+		end
+		local rname = self.name.."_return_t"
+		rtype = rtype .. " } "..rname..";"
+		print(rtype)
+		ffi.cdef(rtype)
+		rt = rname
 	end
 	local function getcstring(t)
 		return t:cstring()
@@ -141,7 +153,8 @@ function terra.func:compile(ctx)
 	print("with local environment:")
 	terra.tree.printraw(self:env())
 	self.typedtree = self:typecheck(ctx)
-	
+	self.type = self.typedtree.type
+    
 	if ctx.has_errors then 
 		if ctx.func == nil then --if this was not the top level compile we let type-checking of other functions continue, 
 		                        --though we don't actually compile because of the errors
@@ -158,17 +171,34 @@ function terra.func:__call(...)
 	if not self.typedtree then
 		self:compile()
 	end
-	return self.ffiwrapper.fn(...)
+	local result = self.ffiwrapper.fn(...)
+    --TODO: generate code to do this for each function rather than interpret it on every call
+    local nr = #self.typedtree.type.returns
+    if nr > 1 then
+        local rs = {}
+        for i = 1,nr do
+            table.insert(rs,result["v"..i])
+        end
+        return unpack(rs)
+    else
+        return result
+    end
 end
 
-function terra.newfunction(olddef,newtree,env)
-	if olddef then
-		error("NYI - overloaded functions",2)
-	end
-	local fname = newtree.filename:gsub("[^A-Za-z0-9]","_") .. newtree.offset --todo if a user writes terra foo, pass in the string "foo"
-	local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
-	return setmetatable(obj,terra.func)
+do 
+    local name_count = 0
+    function terra.newfunction(olddef,newtree,name,env)
+        if olddef then
+            error("NYI - overloaded functions",2)
+        end
+        local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
+        local fname = rawname:gsub("[^A-Za-z0-9]","_") .. name_count --todo if a user writes terra foo, pass in the string "foo"
+        name_count = name_count + 1
+        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
+        return setmetatable(obj,terra.func)
+    end
 end
+
 function terra.isfunction(obj)
 	return getmetatable(obj) == terra.func
 end
@@ -639,8 +669,9 @@ function terra.func:typecheck(ctx)
 					exps:insert(multifunc) --just insert it as a normal single-return function
 				else --remember the multireturn function and insert extract nodes into the expsresion list
 					multiret = multifunc
-					for i,v in multifunc.types do
-						simpleexps:insert(terra.newtree(multiret,{ kind = terra.kinds.extractreturn, index = (i-1), call = multiret }))
+					multiret.result = {} --table to link this result with extractors
+					for i,t in ipairs(multifunc.types) do
+						exps:insert(terra.newtree(multiret,{ kind = terra.kinds.extractreturn, index = (i-1), result = multiret.result, type = t}))
 					end
 				end
 			else
@@ -649,7 +680,7 @@ function terra.func:typecheck(ctx)
 		end
 		
 		local maxsize = #exps
-		return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, multiret = multiret })
+		return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, call = multiret })
 	end
 	local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value 'false'), paramlist is a parameter list that might have a multiple return value at the end
 		if #typelist > paramlist.maxsize then
@@ -662,15 +693,15 @@ function terra.func:typecheck(ctx)
 				paramlist.parameters[i] = insertcast(paramlist.parameters[i],typ)
 			end
 		end
+        paramlist.size = #typelist
 	end
 	function checkcall(exp, mustreturnatleast1)
 		local raw = checkexpraw(exp.value)
 		if terra.isfunction(raw) then
-			local fntyp = raw:type(ctx)
+			local fntyp = raw:gettype(ctx)
 			local paramlist = checkparameterlist(exp,exp.arguments)
 			insertcasts(fntyp.parameters,paramlist)
 			
-			print("FTYPE",fntyp)
 			local typ
 			if #fntyp.returns >= 1 then
 				typ = fntyp.returns[1]
@@ -679,7 +710,7 @@ function terra.func:typecheck(ctx)
 				typ = terra.types.error
 			end --otherwise this is used in statement context and does not require a type
 			
-			return exp:copy { arguments = paramlist,  value = raw, type = typ, types = typ.returns }
+			return exp:copy { arguments = paramlist,  value = raw, type = typ, types = fntyp.returns }
 		else
 			error("NYI - check call on non-literal function calls")
 		end
@@ -779,7 +810,7 @@ function terra.func:typecheck(ctx)
 			leaveblock()
 			return s:copy {statements = r}
 		elseif s:is "return" then
-			local rstmt = s:copy { expressions = s.expressions:map(checkrvalue) }
+			local rstmt = s:copy { expressions = checkparameterlist(s,s.expressions) }
 			return_stmts:insert( rstmt )
 			return rstmt
 		elseif s:is "label" then
@@ -899,32 +930,39 @@ function terra.func:typecheck(ctx)
 		if #return_stmts == 0 then
 			return_types = terra.newlist()
 		else
+			local minsize,maxsize
 			for _,stmt in ipairs(return_stmts) do
 				if return_types == nil then
 					return_types = terra.newlist()
-					for i,exp in ipairs(stmt.expressions) do
+					for i,exp in ipairs(stmt.expressions.parameters) do
 						return_types[i] = exp.type
 					end
+					minsize = stmt.expressions.minsize
+					maxsize = stmt.expressions.maxsize
 				else
-					if #return_types ~= #stmt.expressions then
-						terra.reporterror(ctx,stmt.stmt,"returning a different length from previous return")
+					minsize = math.max(minsize,stmt.expressions.minsize)
+					maxsize = math.min(maxsize,stmt.expressions.maxsize)
+					if minsize > maxsize then
+						terra.reporterror(ctx,stmt,"returning a different length from previous return")
 					else
 						for i,exp in ipairs(stmt.expressions) do
-							return_types[i] = typemeet(exp,return_types[i],exp.type)
+							if i <= maxsize then
+								return_types[i] = typemeet(exp,return_types[i],exp.type)
+							end
 						end
 					end
 				end
 			end
+			while #return_types > maxsize do
+				table.remove(return_types)
+			end
+			
 		end
 	end
 	
 	--now cast each return expression to the expected return type
 	for _,stmt in ipairs(return_stmts) do
-		local exps = terra.newlist()
-		for i,exp in ipairs(stmt.expressions) do
-			exps:insert(insertcast(exp,return_types[i]))
-		end
-		stmt.expressions = exps
+		insertcasts(return_types,stmt.expressions)
 	end
 	
 	if ctx.func.filehandle then
