@@ -900,61 +900,6 @@ if(t->type->isIntegerTy()) { \
                 insertBB(merge);
                 setInsertBlock(merge);
             } break;
-            case T_fornum: {
-                Obj init,limit,varname,body,step;
-                
-                stmt->obj("initial",&init);
-                stmt->obj("limit",&limit);
-                stmt->obj("varname",&varname);
-                stmt->obj("body",&body);
-                
-                Value * var = allocVar(&varname); 
-                Value * initV = emitExp(&init);
-                Value * limitV = emitExp(&limit);
-                Value * stepV;
-                TType * typ = typeOfValue(&varname);
-                bool integral = typ->type->isIntegerTy();
-                if(stmt->obj("step",&step)) {
-                    stepV = emitExp(&step);
-                } else {
-                    if(integral) {
-                        stepV = ConstantInt::get(typ->type, 1);
-                    } else {
-                        stepV = ConstantFP::get(typ->type, 1.0);
-                    }
-                }
-                B->CreateStore(initV,var);
-                BasicBlock * cond = createAndInsertBB("fornumcond");
-                BasicBlock * bodyB = createAndInsertBB("fornumbody");
-                BasicBlock * merge = createBB("merge");
-                setBreaktable(stmt, merge);
-                B->CreateBr(cond);
-                setInsertBlock(cond);
-                Value * varLoad = B->CreateLoad(var, "fori");
-                Value * p;
-                if(integral) {
-                    if(typ->issigned)
-                        p = B->CreateICmpSLT(varLoad, limitV);
-                    else
-                        p = B->CreateICmpULT(varLoad, limitV);
-                } else {
-                    p = B->CreateFCmpOLT(varLoad, limitV);
-                }
-                B->CreateCondBr(p, bodyB, merge);
-                setInsertBlock(bodyB);
-                emitStmt(&body);
-                if(BB) {
-                    Value * next;
-                    if(integral)
-                        next = B->CreateAdd(varLoad, stepV);
-                    else
-                        next = B->CreateFAdd(varLoad, stepV);
-                    B->CreateStore(next, var);
-                    B->CreateBr(cond);
-                }
-                insertBB(merge);
-                setInsertBlock(merge);
-            } break;
             case T_if: {
                 Obj branches;
                 stmt->obj("branches",&branches);

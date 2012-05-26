@@ -902,26 +902,63 @@ function terra.func:typecheck(ctx)
 			
 			return s:copy { lhs = lhs, rhs = params }
 		elseif s:is "fornum" then
-			local initial,limit,step = checkrvalue(s.initial), checkrvalue(s.limit), (s.step and checkrvalue(s.step))
-			local num_type = typemeet(s.initial,initial.type,limit.type)
-			if step then
-				num_type = typemeet(s.step,num_type,step.type)
-				step = insertcast(step,num_type)
-			end
-			if num_type ~= terra.types.error and not num_type:isarithmetic() then
-				terra.reporterror(ctx,s,"expected an arithmetic type but found ",num_type)
-				num_type = terra.types.error
-			end
-			initial = insertcast(initial,num_type)
-			limit = insertcast(limit,num_type)
-			local varname = { name = s.varname, type = num_type }
-			local breaktable = enterloop()
-			enterblock()
-			env[s.varname] = varname
-			local body = checkstmt(s.body)
-			leaveblock()
-			leaveloop()
-			return s:copy { initial = initial, limit = limit, step = step, varname = varname, breaktable = breaktable, body = body }
+            function mkdefs(...)
+                local lst = terra.newlist()
+                for i,v in pairs({...}) do
+                    lst:insert( terra.newtree(s,{ kind = terra.kinds.entry, name = v }) )
+                end
+                return lst
+            end
+            
+            function mkvar(a)
+                return terra.newtree(s,{ kind = terra.kinds["var"], name = a })
+            end
+            
+            function mkop(op,a,b)
+               return terra.newtree(s, {
+                kind = terra.kinds.operator;
+                operator = terra.kinds[op];
+                operands = terra.newlist { mkvar(a), mkvar(b) };
+                })
+            end
+
+            local dv = terra.newtree(s, { 
+                kind = terra.kinds.defvar;
+                variables = mkdefs(s.varname,"<limit>","<step>");
+                initializers = terra.newlist({s.initial,s.limit,s.step})
+            })
+            
+            local lt = mkop("<",s.varname,"<limit>")
+            
+            local newstmts = terra.newlist()
+            for _,v in pairs(s.body.statements) do
+                newstmts:insert(v)
+            end
+            
+            local p1 = mkop("+",s.varname,"<step>")
+            local as = terra.newtree(s, {
+                kind = terra.kinds.assignment;
+                lhs = terra.newlist({mkvar(s.varname)});
+                rhs = terra.newlist({p1});
+            })
+            
+            
+            newstmts:insert(as)
+            
+            local nbody = terra.newtree(s, {
+                kind = terra.kinds.block;
+                statements = newstmts;
+            })
+            
+            local wh = terra.newtree(s, {
+                kind = terra.kinds["while"];
+                condition = lt;
+                body = nbody;
+            })
+        
+            local desugared = terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist {dv,wh} } )
+            desugared:printraw()
+            return checkstmt(desugared)
 		elseif s:is "apply" then
 			return checkcall(s,false) --allowed to be void
 		elseif s:is "method" then

@@ -1165,10 +1165,11 @@ static void fornum (LexState *ls, TString *varname, int line) {
   add_field(ls,tbl,"limit");
   if (testnext(ls, ',')) {
     RETURNS_1(exp1(ls,&c));  /* optional step */
-    add_field(ls,tbl,"step");
   } else {  /* default step = 1 */
-
+    push_integer(ls, 1);
+    push_literal(ls, "int64");
   }
+  add_field(ls,tbl,"step");
   BlockCnt bl;
   bl.local_variables.push_back(varname);
   RETURNS_1(forbody(ls, line, 1, 1, &bl));
