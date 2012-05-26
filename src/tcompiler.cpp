@@ -927,6 +927,7 @@ if(t->type->isIntegerTy()) { \
                 BasicBlock * cond = createAndInsertBB("fornumcond");
                 BasicBlock * bodyB = createAndInsertBB("fornumbody");
                 BasicBlock * merge = createBB("merge");
+                setBreaktable(stmt, merge);
                 B->CreateBr(cond);
                 setInsertBlock(cond);
                 Value * varLoad = B->CreateLoad(var, "fori");
