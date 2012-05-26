@@ -901,7 +901,27 @@ function terra.func:typecheck(ctx)
 			insertcasts(vtypes,params)
 			
 			return s:copy { lhs = lhs, rhs = params }
-			
+		elseif s:is "fornum" then
+			local initial,limit,step = checkrvalue(s.initial), checkrvalue(s.limit), (s.step and checkrvalue(s.step))
+			local num_type = typemeet(s.initial,initial.type,limit.type)
+			if step then
+				num_type = typemeet(s.step,num_type,step.type)
+				step = insertcast(step,num_type)
+			end
+			if num_type ~= terra.types.error and not num_type:isarithmetic() then
+				terra.reporterror(ctx,s,"expected an arithmetic type but found ",num_type)
+				num_type = terra.types.error
+			end
+			initial = insertcast(initial,num_type)
+			limit = insertcast(limit,num_type)
+			local varname = { name = s.varname, type = num_type }
+			local breaktable = enterloop()
+			enterblock()
+			env[s.varname] = varname
+			local body = checkstmt(s.body)
+			leaveblock()
+			leaveloop()
+			return s:copy { initial = initial, limit = limit, step = step, varname = varname, breaktable = breaktable, body = body }
 		elseif s:is "apply" then
 			return checkcall(s,false) --allowed to be void
 		elseif s:is "method" then

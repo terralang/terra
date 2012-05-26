@@ -786,7 +786,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case TK_NUMBER: {
       //v->u.nval = ls->t.seminfo.r;
       if(ls->t.seminfo.is_integer) {
-        push_integer(ls,ls->t.seminfo.r);
+        push_integer(ls,ls->t.seminfo.i);
         push_literal(ls,"int64");
       } else {
         push_double(ls,ls->t.seminfo.r);
