@@ -120,6 +120,7 @@ function terra.func:makewrapper()
 	local fntyp = self.typedtree.type
 	
 	local rt
+	local rname
 	if #fntyp.returns == 0 then
 		rt = "void"
 	elseif #fntyp.returns == 1 then
@@ -129,16 +130,23 @@ function terra.func:makewrapper()
 		for i,v in ipairs(fntyp.returns) do
 			rtype = rtype..v:cstring().." v"..tostring(i).."; "
 		end
-		local rname = self.name.."_return_t"
+		rname = self.name.."_return_t"
+		self.ffireturnname = rname.."[1]"
 		rtype = rtype .. " } "..rname..";"
 		print(rtype)
 		ffi.cdef(rtype)
-		rt = rname
+		rt = "void"
 	end
 	local function getcstring(t)
 		return t:cstring()
 	end
-	local pa = fntyp.parameters:map(getcstring):mkstring("(",",",")")
+	local pa = fntyp.parameters:map(getcstring)
+	
+	if #fntyp.returns > 1 then
+		pa:insert(1,rname .. "*")
+	end
+	
+	pa = pa:mkstring("(",",",")")
 	local ntyp = self.name.."_t"
 	local cdef = "typedef struct { "..rt.." (*fn)"..pa.."; } "..ntyp..";"
 	print(cdef)
@@ -171,17 +179,20 @@ function terra.func:__call(...)
 	if not self.typedtree then
 		self:compile()
 	end
-	local result = self.ffiwrapper.fn(...)
+	
     --TODO: generate code to do this for each function rather than interpret it on every call
     local nr = #self.typedtree.type.returns
     if nr > 1 then
+    	local result = ffi.new(self.ffireturnname)
+        self.ffiwrapper.fn(result,...)
+        local rv = result[0]
         local rs = {}
         for i = 1,nr do
-            table.insert(rs,result["v"..i])
+            table.insert(rs,rv["v"..i])
         end
         return unpack(rs)
     else
-        return result
+        return self.ffiwrapper.fn(...)
     end
 end
 

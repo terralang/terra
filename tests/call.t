@@ -42,6 +42,7 @@ terra baz7(a : int)
 	end
 end
 local test = require("test")
+
 test.eq(foo(2,3),6)
 test.eq(baz(1,2),10)
 test.eq(baz3(),6)

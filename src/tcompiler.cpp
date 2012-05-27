@@ -207,6 +207,7 @@ static void terra_compile_llvm(terra_State * T) {
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
 	Type * type;
+    bool issretfunc;
 	bool issigned;
 	bool islogical;
 };
@@ -219,6 +220,7 @@ struct TerraCompiler {
 	BasicBlock * BB; //current basic block
 	Obj funcobj;
 	Function * func;
+    TType * func_type;
 	TType * getType(Obj * typ) {
 		TType * t = (TType*) typ->ud("llvm_type");
 		if(t == NULL) {
@@ -278,7 +280,10 @@ struct TerraCompiler {
                             TType * rt = getType(&r);
                             types.push_back(rt->type);
                         }
-                        rt = StructType::get(*C->ctx,types);
+                        rt = Type::getVoidTy(*C->ctx);
+                        Type * st = StructType::get(*C->ctx,types);
+                        arguments.push_back(PointerType::get(st,0));
+                        t->issretfunc = true;
 					}
 					int psz = params.size();
 					for(int i = 0; i < psz; i++) {
@@ -312,27 +317,22 @@ struct TerraCompiler {
 		v->setfield("value");
 		return a;
 	}
-    int numReturnValues() {
-        Obj typedtree;
-        funcobj.obj("typedtree",&typedtree);
-        Obj typ;
-        typedtree.obj("type",&typ);
-        Obj returns;
-        typ.obj("returns",&returns);
-        return returns.size();
-    }
-    Function * getOrCreateFunction(Obj * funcobj) {
+
+    void getOrCreateFunction(Obj * funcobj, Function ** rfn, TType ** rtyp) {
 		Function * fn = (Function *) funcobj->ud("llvm_function");
+        Obj ftype;
+        funcobj->obj("type",&ftype);
+        *rtyp = getType(&ftype);
         if(!fn) {
-            Obj ftype;
-            funcobj->obj("type",&ftype);
-            TType * func_type = getType(&ftype);
             const char * name = funcobj->string("name");
-            fn = Function::Create(cast<FunctionType>(func_type->type), Function::ExternalLinkage,name, C->m);
+            fn = Function::Create(cast<FunctionType>((*rtyp)->type), Function::ExternalLinkage,name, C->m);
+            if ((*rtyp)->issretfunc) {
+                fn->arg_begin()->addAttr(Attribute::StructRet | Attribute::NoAlias);
+            } 
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
         }
-        return fn;
+        *rfn = fn;
     }
 	void run(terra_State * _T) {
 		T = _T;
@@ -346,7 +346,8 @@ struct TerraCompiler {
 		lua_pushvalue(T->L,-2); //the original argument
 		funcobj.initFromStack(T->L, ref_table);
 		
-        func = getOrCreateFunction(&funcobj);
+        
+        getOrCreateFunction(&funcobj,&func,&func_type);
 		
         BB = BasicBlock::Create(*C->ctx,"entry",func);
 		
@@ -359,6 +360,8 @@ struct TerraCompiler {
 		typedtree.obj("parameters",&parameters);
 		int nP = parameters.size();
 		Function::arg_iterator ai = func->arg_begin();
+        if(func_type->issretfunc)
+            ++ai; //first argument is the return structure, skip it when loading arguments
 		for(int i = 0; i < nP; i++) {
 			Obj p;
 			parameters.objAt(i,&p);
@@ -371,11 +374,7 @@ struct TerraCompiler {
 		typedtree.obj("body",&body);
 		emitStmt(&body);
         if(BB) { //no terminating return statment, we need to insert one
-            if(numReturnValues() == 0) {
-                B->CreateRetVoid();
-            } else {
-                B->CreateRet(UndefValue::get(func->getReturnType()));
-            }
+            emitReturnUndef();
         }
 		
 		C->m->dump();
@@ -384,6 +383,7 @@ struct TerraCompiler {
 		C->m->dump();
 		
 		void * ptr = C->ee->getPointerToFunction(func);
+        
 		void ** data = (void**) lua_newuserdata(L,sizeof(void*));
 		assert(ptr);
 		*data = ptr;
@@ -393,6 +393,7 @@ struct TerraCompiler {
 		assert(lua_gettop(T->L) == ref_table);
 		delete B;
 	}
+    
     Value * emitUnary(Obj * exp, Obj * ao) {
         TType * t = typeOfValue(exp);
         Value * a = emitExp(ao);
@@ -675,7 +676,10 @@ if(t->type->isIntegerTy()) { \
                 exp->obj("result",&resulttable);
                 Value * v = (Value *) resulttable.ud("struct");
                 assert(v);
-                return B->CreateExtractValue(v, idx);
+                v->dump();
+                int64_t idxs[] = {0,idx};
+                Value * addr = emitCGEP(v,idxs,2);
+                return B->CreateLoad(addr);
             } break;
 			default: {
 				assert(!"NYI - exp");
@@ -740,7 +744,13 @@ if(t->type->isIntegerTy()) { \
         }
         return bb;
     }
-    
+    Value * emitCGEP(Value * st, int64_t * idxs, size_t N) {
+        std::vector<Value *> ivalues;
+        for(size_t i = 0; i < N; i++) {
+            ivalues.push_back(ConstantInt::get(Type::getInt32Ty(*C->ctx),idxs[i]));
+        }
+        return B->CreateGEP(st, ivalues);
+    }
     Value * emitCall(Obj * call, bool truncateto1arg) {
         Obj paramlist;
         Obj returns;
@@ -749,14 +759,25 @@ if(t->type->isIntegerTy()) { \
         call->obj("types",&returns);
         call->obj("value",&func);
         
-        Function * fn = getOrCreateFunction(&func);
+        Function * fn;
+        TType * ftyp;
+        getOrCreateFunction(&func,&fn,&ftyp);
         
         std::vector<Value *> params;
+        int returnsN = returns.size();
+        
+        Value * sret = NULL;
+        if(returnsN > 1) {
+            //create struct to hold the list
+            PointerType * pt = cast<PointerType>(fn->arg_begin()->getType());
+            sret = B->CreateAlloca(pt->getElementType());
+            params.push_back(sret);
+        }
         
         emitParameterList(&paramlist,&params);
         
         Value * result = B->CreateCall(fn, params);
-        int returnsN = returns.size();
+        
         if(returnsN == 0) {
             return NULL;
         } else if(returnsN == 1) {
@@ -764,10 +785,20 @@ if(t->type->isIntegerTy()) { \
             return result;
         } else {
             if(truncateto1arg) {
-                return B->CreateExtractValue(result, 0);
+                int64_t idx[] = {0,0};
+                Value * addr = emitCGEP(sret,idx,2);
+                return B->CreateLoad(addr, "ret");
             } else {
-                return result; //return the struct itself so that it can be linked to the extract expressions
+                return sret; //return the pointer to the struct itself so that it can be linked to the extract expressions
             }
+        }
+    }
+    void emitReturnUndef() {
+        Type * rt = func->getReturnType();
+        if(rt->isVoidTy()) {
+            B->CreateRetVoid();
+        } else {
+            B->CreateRet(UndefValue::get(rt));
         }
     }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
@@ -836,17 +867,15 @@ if(t->type->isIntegerTy()) { \
 				} else if (results.size() == 1) {
 					B->CreateRet(results[0]);
 				} else {
-                    //multiple return values, create structural type to hold each then insert the results
-                    std::vector<Type*> types;
+                    //multiple return values, look up the sret pointer
+                    Value * st = func->arg_begin();
+                    
                     for(int i = 0; i < results.size(); i++) {
-                        types.push_back(results[i]->getType());
+                        int64_t idx[] = {0,i};
+                        Value * addr = emitCGEP(st,idx,2);
+                        B->CreateStore(results[i], addr);
                     }
-                    Type * st = StructType::get(*C->ctx, types);
-                    Value * r = UndefValue::get(st);
-                    for(int i = 0; i < results.size(); i++) {
-                        r = B->CreateInsertValue(r, results[i], i);
-                    }
-                    B->CreateRet(r);
+                    B->CreateRetVoid();
                 }
                 BB = NULL;
 			} break;
