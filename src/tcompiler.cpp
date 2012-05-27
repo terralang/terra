@@ -228,7 +228,7 @@ struct TerraCompiler {
 			memset(t,0,sizeof(TType));
 			typ->setfield("llvm_type");
 			switch(typ->kind("kind")) {
-				case T_builtin: {
+				case T_primitive: {
 					int bytes = typ->number("bytes");
 					switch(typ->kind("type")) {
 						case T_float: {
@@ -335,6 +335,7 @@ struct TerraCompiler {
         *rfn = fn;
     }
 	void run(terra_State * _T) {
+		printf("RUN!\n");
 		T = _T;
 		L = T->L;
 		C = T->C;
@@ -667,7 +668,6 @@ if(t->type->isIntegerTy()) { \
             } break;
             case T_apply: {
                 Value * v = emitCall(exp,true);
-                assert(v);
                 return v;
             } break;
             case T_extractreturn: {

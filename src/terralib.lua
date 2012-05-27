@@ -216,7 +216,7 @@ end
 
 --[[
 types take the form
-builtin(name)
+primitive(name)
 pointer(typ)
 array(typ,N)
 struct(types)
@@ -236,17 +236,20 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:__tostring()
 		return self.name
 	end
+	function types.type:isprimitive()
+		return self.kind == terra.kinds.primitive
+	end
 	function types.type:isintegral()
-		return self.kind == terra.kinds.builtin and self.type == terra.kinds.integer
+		return self.kind == terra.kinds.primitive and self.type == terra.kinds.integer
 	end
 	function types.type:isfloat()
-		return self.kind == terra.kinds.builtin and self.type == terra.kinds.float
+		return self.kind == terra.kinds.primitive and self.type == terra.kinds.float
 	end
 	function types.type:isarithmetic()
-		return self.kind == terra.kinds.builtin and (self.type == terra.kinds.integer or self.type == terra.kinds.float)
+		return self.kind == terra.kinds.primitive and (self.type == terra.kinds.integer or self.type == terra.kinds.float)
 	end
 	function types.type:islogical()
-		return self.kind == terra.kinds.builtin and self.type == terra.kinds.logical
+		return self.kind == terra.kinds.primitive and self.type == terra.kinds.logical
 	end
 	function types.type:canbeord()
 		return self:isintegral() or self:islogical()
@@ -260,7 +263,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		elseif self:isfloat() then
 			return tostring(self)
 		elseif self:ispointer() then
-			return self.type.."*"
+			return self.type:cstring().."*"
 		elseif self:islogical() then
 			return "unsigned char"
 		else
@@ -268,15 +271,24 @@ do --construct type table that holds the singleton value representing each uniqu
 		end
 	end
 	
+	
+		
+	
+	--map from unique type identifier string to the metadata for the type
+	types.table = {}
+	
+	--map from object that holds the table of methods to the internal object that holds the information about the type
+	types.methodtabletotype = {}
+	
 	local function mktyp(v)
+		v.methods = {} --create new blank method table
+		types.methodtabletotype[v.methods] = v --associate this method table with this type
 		return setmetatable(v,types.type)
 	end
-		
-	function types.istype(v)
-		return getmetatable(v) == types.type
-	end
 	
-	types.table = {}
+	function types.astype(v)
+		return types.methodtabletotype[v] --if v is not a type, then this returns nil
+	end
 	
 	--initialize integral types
 	local integer_sizes = {1,2,4,8}
@@ -286,19 +298,19 @@ do --construct type table that holds the singleton value representing each uniqu
 			if not s then
 				name = "u"..name
 			end
-			local typ = mktyp { kind = terra.kinds.builtin, bytes = size, type = terra.kinds.integer, signed = s, name = name}
+			local typ = mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s, name = name}
 			types.table[name] = typ
 		end
 	end  
-	types.table["float"] = mktyp { kind = terra.kinds.builtin, bytes = 4, type = terra.kinds.float, name = "float" }
-	types.table["double"] = mktyp { kind = terra.kinds.builtin, bytes = 8, type = terra.kinds.float, name = "double" }
-	types.table["bool"] = mktyp { kind = terra.kinds.builtin, bytes = 1, type = terra.kinds.logical, name = "bool" }
+	
+	types.table["float"] = mktyp { kind = terra.kinds.primitive, bytes = 4, type = terra.kinds.float, name = "float" }
+	types.table["double"] = mktyp { kind = terra.kinds.primitive, bytes = 8, type = terra.kinds.float, name = "double" }
+	types.table["bool"] = mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical, name = "bool" }
 	
 	types.error = mktyp { kind = terra.kinds.error , name = "error" } --object representing where the typechecker failed
 	
 	function types.pointer(typ)
 		if typ == types.error then return types.error end
-		
 		local name = "&"..typ.name 
 		local value = types.table[name]
 		if value == nil then
@@ -310,7 +322,7 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.array(typ,sz)
 		--TODO
 	end
-	function types.builtin(name)
+	function types.primitive(name)
 		return types.table[name] or types.error
 	end
 	function types.struct(fieldnames,fieldtypes,listtypes)
@@ -335,9 +347,12 @@ do --construct type table that holds the singleton value representing each uniqu
 	end
 	
 	for name,typ in pairs(types.table) do
-		--introduce builtin types into global namespace
+		--introduce primitive types into global namespace
+		-- outside of the typechecker and internal terra modules
+		-- types are represented by their unique method table
+		-- which is why we assign the name to typ.methods not typ
 		-- print("type ".. name)
-		_G[name] = typ 
+		_G[name] = typ.methods 
 	end
 	_G["int"] = int32
 	_G["long"] = int64
@@ -370,11 +385,8 @@ function terra.resolvetype(ctx,t)
 		return terra.reporterror(ctx,t,msg)
 	end
 	local function check(t)
-		if terra.types.istype(t) then
-			return t 
-		else 
-			err "not a type: " 
-		end
+		local typ = terra.types.astype(t)
+		return typ or err "not a type: " 
 	end
 	local function primary(t)
 		if t:is "select" then
@@ -498,7 +510,7 @@ function terra.func:typecheck(ctx)
 		else
 			--TODO: check that the cast is valid and insert the specific kind of cast 
 			--so that codegen in llvm is easy
-			if typ.kind ~= terra.kinds.builtin or exp.type.kind ~= terra.kinds.builtin or typ:islogical() or exp.type:islogical() then
+			if not typ:isprimitive() or not exp.type:isprimitive() or typ:islogical() or exp.type:islogical() then
 				terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
             end
 			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
@@ -513,7 +525,7 @@ function terra.func:typecheck(ctx)
 			return terra.types.error
 		elseif a == b then
 			return a
-		elseif a.kind == terra.kinds.builtin and b.kind == terra.kinds.builtin then
+		elseif a.kind == terra.kinds.primitive and b.kind == terra.kinds.primitive then
 			if a:isintegral() and b:isintegral() then
 				if a.bytes < b.bytes then
 					return b
@@ -529,7 +541,7 @@ function terra.func:typecheck(ctx)
 			elseif a:isfloat() and b:isintegral() then
 				return a
 			elseif a:isfloat() and b:isfloat() then
-				return double
+				return terra.types.astype(double)
 			end
 		else
 			err()
@@ -611,7 +623,7 @@ function terra.func:typecheck(ctx)
 	end
 	local function checkcomparision(e)
 		local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
-		return e:copy { type = bool, operands = terra.newlist {l,r} }
+		return e:copy { type = terra.types.astype(bool), operands = terra.newlist {l,r} }
 	end
 	local function checklogicalorintegral(e)
 		return checkbinary(e,"canbeord")
@@ -737,7 +749,7 @@ function terra.func:typecheck(ctx)
 	end
 	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
 		if e:is "literal" then
-			return e:copy { type = terra.types.builtin(e.type) }
+			return e:copy { type = terra.types.primitive(e.type) }
 		elseif e:is "var" then
 			local v = env[e.name]
 			if v ~= nil then
@@ -790,9 +802,9 @@ function terra.func:typecheck(ctx)
 		if terra.istree(e) then
 			return e
 		elseif type(e) == "number" then
-			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = double })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.astype(double) })
 		elseif type(e) == "boolean" then
-			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = bool })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.astype(bool) })
 		else 
 			terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
 			return ee:copy { type = terra.types.error }
@@ -808,7 +820,7 @@ function terra.func:typecheck(ctx)
 		return e
 	end
 	local function checkcondbranch(s)
-		local e = checkexptyp(s.condition,bool)
+		local e = checkexptyp(s.condition,terra.types.astype(bool))
 		local b = checkstmt(s.body)
 		return s:copy {condition = e, body = b}
 	end
@@ -867,7 +879,7 @@ function terra.func:typecheck(ctx)
 			local breaktable = enterloop()
 			enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
 			local new_blk = s.body:copy { statements = s.body.statements:map(checkstmt) }
-			local e = checkexptyp(s.condition,bool)
+			local e = checkexptyp(s.condition,terra.types.astype(bool))
 			leaveblock()
 			leaveloop()
 			return s:copy { body = new_blk, condition = e, breaktable = breaktable }

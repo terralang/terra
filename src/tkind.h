@@ -52,7 +52,7 @@ _(sub, "-") \
 _(var,"var") \
 _(while,"while") \
 _(pointer,"pointer") \
-_(builtin,"builtin") \
+_(primitive,"primitive") \
 _(error, "error") \
 _(functype,"functype") \
 _(float,"float") \
