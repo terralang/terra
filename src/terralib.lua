@@ -257,6 +257,9 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:ispointer()
 		return self.kind == terra.kinds.pointer
 	end
+	function types.type:isfunction()
+		return self.kind == terra.kinds.functype
+	end
 	function types.type:cstring()
 		if self:isintegral() then
 			return tostring(self).."_t"
@@ -270,9 +273,6 @@ do --construct type table that holds the singleton value representing each uniqu
 			error("NYI - cstring")
 		end
 	end
-	
-	
-		
 	
 	--map from unique type identifier string to the metadata for the type
 	types.table = {}
@@ -326,7 +326,9 @@ do --construct type table that holds the singleton value representing each uniqu
 		return types.table[name] or types.error
 	end
 	function types.struct(fieldnames,fieldtypes,listtypes)
+
 		--TODO
+		
 	end
 	function types.union(fieldnames,fieldtypes)
 		--TODO
@@ -884,31 +886,44 @@ function terra.func:typecheck(ctx)
 			leaveloop()
 			return s:copy { body = new_blk, condition = e, breaktable = breaktable }
 		elseif s:is "defvar" then
-			
-			local params = checkparameterlist(s,s.initializers)
-			
-			local vtypes = terra.newlist()
-			for i,v in ipairs(s.variables) do
-				local typ = false
-				if v.type then
-					typ = resolvetype(v.type)
-				end
-				vtypes:insert(typ)
-			end
-			
-			insertcasts(vtypes,params)
-			
 			local lhs = terra.newlist()
-			for i,v in ipairs(s.variables) do
-				lhs:insert(v:copy { type = v.type or ( (params.parameters[i] and params.parameters[i].type) or terra.types.error) }) 
-			end
-			
+			local res
+			if s.initializers then
+				local params = checkparameterlist(s,s.initializers)
+				
+				local vtypes = terra.newlist()
+				for i,v in ipairs(s.variables) do
+					local typ = false
+					if v.type then
+						typ = resolvetype(v.type)
+					end
+					vtypes:insert(typ)
+				end
+				
+				insertcasts(vtypes,params)
+				
+				for i,v in ipairs(s.variables) do
+					lhs:insert(v:copy { type = (params.parameters[i] and params.parameters[i].type) or terra.types.error }) 
+				end
+				
+				res = s:copy { variables = lhs, initializers = params }
+			else
+				for i,v in ipairs(s.variables) do
+					local typ = terra.types.error
+					if not v.type then
+						terra.reporterror(ctx,v,"type must be specified for unitialized variables")
+					else
+						typ = resolvetype(v.type)
+					end
+					lhs:insert(v:copy { type = typ })
+				end
+				res = s:copy { variables = lhs }
+			end		
 			--add the variables to current environment
 			for i,v in ipairs(lhs) do
 				env[v.name] = v
-			end
-			return s:copy { variables = lhs, initializers = params }
-			
+			end	
+			return res
 		elseif s:is "assignment" then
 			
 			local params = checkparameterlist(s,s.rhs)

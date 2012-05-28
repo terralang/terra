@@ -335,7 +335,6 @@ struct TerraCompiler {
         *rfn = fn;
     }
 	void run(terra_State * _T) {
-		printf("RUN!\n");
 		T = _T;
 		L = T->L;
 		C = T->C;
@@ -972,8 +971,9 @@ if(t->type->isIntegerTy()) { \
 				std::vector<Value *> rhs;
                 
                 Obj inits;
-				stmt->obj("initializers",&inits);
-                emitParameterList(&inits, &rhs);
+                bool has_inits = stmt->obj("initializers",&inits);
+                if(has_inits)
+                	emitParameterList(&inits, &rhs);
 				
 				Obj vars;
 				stmt->obj("variables",&vars);
@@ -982,7 +982,8 @@ if(t->type->isIntegerTy()) { \
 					Obj v;
 					vars.objAt(i,&v);
 					AllocaInst * a = allocVar(&v);
-					B->CreateStore(rhs[i],a);
+					if(has_inits)
+						B->CreateStore(rhs[i],a);
 				}
 			} break;
             case T_assignment: {

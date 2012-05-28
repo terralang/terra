@@ -1336,11 +1336,12 @@ static void localstat (LexState *ls) {
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
     RETURNS_1(nexps = explist(ls, &e));
+    add_field(ls,tbl,"initializers");
   } else {
-    new_list(ls); //blank initializers
+    //blank initializers
     nexps = 0;
   }
-  add_field(ls,tbl,"initializers");
+  
 }
 
 static int funcname (LexState *ls, expdesc *v) {
