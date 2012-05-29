@@ -283,7 +283,7 @@ static void checkname (LexState *ls, expdesc *e) {
 	push_string(ls,str);
 }
 
-static void singlevar (LexState *ls, expdesc *var) {
+static TString * singlevar (LexState *ls, expdesc *var, int register_as_local = 0) {
   int tbl = new_table(ls,T_var); 
   TString *varname = str_checkname(ls);
   if(ls->record_names && ls->in_terra) {
@@ -291,6 +291,7 @@ static void singlevar (LexState *ls, expdesc *var) {
   }
   push_string(ls,varname);
   add_field(ls,tbl,"name");
+  return varname;
 }
 
 
@@ -1354,10 +1355,13 @@ static void print_names(LexState * ls) {
 //terra variables appearing at global scope
 static void varname (LexState *ls, expdesc *v, int islocal) {
   /* funcname -> NAME {fieldsel} */
-  RETURNS_1(singlevar(ls, v));
+  TString * vname;
+  RETURNS_1(vname = singlevar(ls, v));
   if(!islocal) {
     while (ls->t.token == '.')
       RETURNS_0(fieldsel(ls, v));
+  } else {
+    ls->fs->bl->local_variables.push_back(vname);
   }
   int tbl = new_table_before(ls, T_entry);
   add_field(ls,tbl,"name");

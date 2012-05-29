@@ -75,6 +75,9 @@ function terra.tree:copy(new_tree)
 	return setmetatable(new_tree,getmetatable(self))
 end
 function terra.newtree(ref,body)
+	if not ref or not terra.istree(ref) then
+		error("not a tree?",2)
+	end
 	body.offset = ref.offset
 	body.linenumber = ref.linenumber
 	return setmetatable(body,terra.tree)
@@ -209,70 +212,36 @@ function terra.isglobalvar(obj)
 end
 
 function terra.globalvar:compile(ctx)
---[[ TODO: add a is_global to defvar, and change its behavior in the typechecker to handle declaring global variables instead of this complicated logic to accomplish the same thing
-	ctx = ctx or {}
-	local oldfn = ctx.func
-	local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
-	--1. create a new function: terra initfn() return <initializer_exp> end and compile it. This will return type information for arguments without explicit types
-	--2. initialize types to either their stated type, or to the type of the initializer function, and invoke the compiler to create actual global variables for them
-	--3. generate the wrapper function terra initwrapper() a,b,c...d = initfn() end, and invoke it to initialize the variables
-	-- note that the reason we don't initialize them in one step is so that we can determine what type they should be (1,2) before making the typechecker insert and check casts
-	-- an optimization would be to fold this into a special pass of the typechecker that knew how to handle global variables being declared
-	
-	globalinit.untypedtree:printraw()
-	--1. create initializer function
-	
-	local itree = globalinit.untypedtree
-	local fname = itree.filename
-	local inits = itree.initializers
-	
-	if inits then
-		local ret = terra.newtree(inits[1], { kind = terra.kinds["return"], expressions = terra.newlist(inits) }) 
-		local body = terra.newtree(inits[1], { kind = terra.kinds.block, statements = terra.newlist {ret} })
-		local ftree = terra.newtree(inits[1], { kind = terra.kinds["function"], parameters = terra.newlist(),
-									is_varargs = false, filename = fname, body = body, exactsize = #globalinit.variables})
-		local initfn = terra.newfunction(nil,ftree,nil,globalinit.envfunction)
-		local fntype = initfn:gettype(ctx)
-		
-		if fntype == terra.types.error then
-			for i,v in ipairs(globalinit.variables) do
-				v.type = terra.types.error
-			end
 
-		else 
-			if #globalinit.variables ~= #fntype.returns then
-				error("Sizes of returns don't match?")
-			end
-			ctx.func = initfn --needs to be set to resolve types with the correct environment
-			--2. initialize types
-			for i,v in globalinit.variables do
-				local init_type = fntype.returns[i]
-				local declared_type = itree.variables[i].type
-				if declared_type then
-					v.type = terra.resolvetype(ctx,declared_type)
-				else
-					v.type = init_type
-				end
-				if v.type ~= terra.types.error then
-					print("NYI - C function create global")
-					--terra.createglobal(v)
-				end
-			end
-			--3. create wrapper function
-			print("NYI - wrapper function and global variable resolution")
-		end
-	else --no initializers, just 
-		error("NYI - no initializers for global variable")
+	ctx = ctx or {}
+	local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
+	
+	
+	globalinit.initfn:compile(ctx)
+	
+	--TODO: we need to detect if initfn relies on a function (fn) already being compiled lower on the stack.
+	--if so, that means that fn uses these global variables, but the initializers for these global variables requires fn, which is a cyclic dependency.
+	--detecting this requires know if everything below the call to compile has been completed
+	
+	--running initfn will  initialize the variables
+	globalinit.initfn()
+	
+	local entries = globalinit.initfn.typedtree.body.statements[1].variables --extract definitions from generated function
+	for i,v in ipairs(globalinit.globals) do
+		v.tree = entries[i]
+		v.type = v.tree.type
 	end
-	ctx.func = oldfn
-]]
+	
 end
 function terra.globalvar:gettype(ctx) 
 	if self.type then
 		return self.type
 	else --we need to compile
 		self:compile(ctx)
-		return self.type
+		if self.type == nil then
+			error("nil type?")
+		end
+		return self.tree.type
 	end
 end
 
@@ -290,8 +259,11 @@ do  --constructor functions for terra functions and variables
     end
     
     function terra.newvariables(tree,env)
-    	local varlist = terra.newlist()
-    	local globalinit = {untypedtree = tree, envfunction = env}
+    	local globals = terra.newlist()
+    	local varentries = terra.newlist()
+    	
+    	local globalinit = {} --table to hold initialization information for this group of variables
+    	
     	for i,v in ipairs(tree.variables) do
     		local function nm(t) 
     			if t.kind == terra.kinds.var then
@@ -304,12 +276,24 @@ do  --constructor functions for terra functions and variables
     		end
     		local n = nm(v.name) .. "_" .. name_count
     		name_count = name_count + 1
-    		local gv = setmetatable({name = n, initializer = globalinit},terra.globalvar)
-    		varlist:insert(gv)
+    		
+    		local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = n, type = v.type })
+    		varentries:insert(varentry)
+    		
+    		local gv = setmetatable({initializer = globalinit},terra.globalvar)
+    		globals:insert(gv)
     	end
-    	globalinit.variables = varlist
+    	
+    	local anchor = tree.variables[1]
+    	local dv = terra.newtree(anchor, { kind = terra.kinds.defvar, variables = varentries, initializers = tree.initializers, isglobal = true})
+    	local body = terra.newtree(anchor, { kind = terra.kinds.block, statements = terra.newlist {dv} })
+		local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
+	                                          is_varargs = false, filename = tree.filename, body = body})
+    	
+    	globalinit.initfn = terra.newfunction(nil,ftree,nil,env)
+    	globalinit.globals = globals
 
-    	return unpack(varlist)
+    	return unpack(globals)
     end
 end
 
@@ -850,6 +834,15 @@ function terra.func:typecheck(ctx)
 		end
 	end
 	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
+		
+		local function resolveglobal(v) --attempt to treat the value as a terra global variable and return it as one if it is. Otherwise just pass the lua object through
+			if terra.isglobalvar(v) then
+				local typ = v:gettype(ctx) -- this will initialize the variable if it is not already
+				return terra.newtree(e, { kind = terra.kinds["var"], type = typ, name = v.tree.name, definition = v.tree, lvalue = true }) 
+			else
+				return v
+			end
+		end
 		if e:is "literal" then
 			return e:copy { type = terra.types.primitive(e.type) }
 		elseif e:is "var" then
@@ -859,7 +852,7 @@ function terra.func:typecheck(ctx)
 			end
 			v = self:env()[e.name]  
 			if v ~= nil then
-				return v
+				return resolveglobal(v)
 			else
 				terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
 				return e:copy { type = terra.types.error }
@@ -871,7 +864,7 @@ function terra.func:typecheck(ctx)
 			else
 				local v = type(v) == "table" and v[e.field]
 				if v ~= nil then
-					return v
+					return resolveglobal(v)
 				else
 					terra.reporterror(ctx,e,"no field ",e.field," in object")
 					return e:copy { type = terra.types.error }
@@ -1019,10 +1012,13 @@ function terra.func:typecheck(ctx)
 				end
 				res = s:copy { variables = lhs }
 			end		
-			--add the variables to current environment
-			for i,v in ipairs(lhs) do
-				env[v.name] = v
-			end	
+			--add the variables to current environment 
+			--unless they are global variables (which are resolved through lua's env)
+			if not s.isglobal then
+				for i,v in ipairs(lhs) do
+					env[v.name] = v
+				end
+			end
 			return res
 		elseif s:is "assignment" then
 			

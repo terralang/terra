@@ -308,6 +308,14 @@ struct TerraCompiler {
 		v->obj("type",&t);
 		return getType(&t);
 	}
+    GlobalVariable * allocGlobal(Obj * v) {
+        const char * name = v->string("name");
+        Type * typ = typeOfValue(v)->type;
+        GlobalVariable * gv = new GlobalVariable(*C->m, typ, false, GlobalValue::CommonLinkage, UndefValue::get(typ), name);
+        lua_pushlightuserdata(L, gv);
+        v->setfield("value");
+        return gv;
+    }
 	AllocaInst * allocVar(Obj * v) {
 		IRBuilder<> TmpB(&func->getEntryBlock(),
                           func->getEntryBlock().begin()); //make sure alloca are at the beginning of the function
@@ -978,12 +986,19 @@ if(t->type->isIntegerTy()) { \
 				Obj vars;
 				stmt->obj("variables",&vars);
 				int N = vars.size();
-				for(int i = 0; i < N; i++) {
+				bool isglobal = stmt->boolean("isglobal");
+                for(int i = 0; i < N; i++) {
 					Obj v;
 					vars.objAt(i,&v);
-					AllocaInst * a = allocVar(&v);
-					if(has_inits)
-						B->CreateStore(rhs[i],a);
+					Value * addr;
+                    
+                    if(isglobal) {
+                        addr = allocGlobal(&v);
+					} else {
+                        addr = allocVar(&v);
+                    }
+                    if(has_inits)
+						B->CreateStore(rhs[i],addr);
 				}
 			} break;
             case T_assignment: {
