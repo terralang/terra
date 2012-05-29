@@ -1404,10 +1404,8 @@ static void exprstat (LexState *ls) {
   FuncState *fs = ls->fs;
   struct LHS_assign v;
   RETURNS_1(lhsexp(ls, &v.v));
-  
-  //TODO: audit. v.v.k is probably not set correctly, can check to see if '=' or ',' follows, must make sure VCALL gets propaged back here
-  if (v.v.k == ECALL || (ls->t.token != '=' && ls->t.token != ','))  { /* stat -> func */
-
+  if(ls->t.token != '=' && ls->t.token != ',')  { /* stat -> func */
+    //nop
   } else {  /* stat -> assignment */
     v.prev = NULL;
     int tbl = new_list_before(ls); //assignment list is put into a table

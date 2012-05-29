@@ -22,7 +22,7 @@ INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 #LLVM_CONFIG=$(shell which llvm-config)
 LLVM_CONFIG=/usr/local/bin/llvm-config
 LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
-FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual
+FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O3  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 

@@ -675,7 +675,7 @@ if(t->type->isIntegerTy()) { \
                 exp->obj("result",&resulttable);
                 Value * v = (Value *) resulttable.ud("struct");
                 assert(v);
-                v->dump();
+                //v->dump();
                 int64_t idxs[] = {0,idx};
                 Value * addr = emitCGEP(v,idxs,2);
                 return B->CreateLoad(addr);
