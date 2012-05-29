@@ -196,7 +196,87 @@ function terra.func:__call(...)
     end
 end
 
-do 
+
+function terra.isfunction(obj)
+	return getmetatable(obj) == terra.func
+end
+
+terra.globalvar = {} --metatable for all global variables
+terra.globalvar.__index = terra.globalvar
+
+function terra.isglobalvar(obj)
+	return getmetatable(obj) == terra.globalvar
+end
+
+function terra.globalvar:compile(ctx)
+--[[ TODO: add a is_global to defvar, and change its behavior in the typechecker to handle declaring global variables instead of this complicated logic to accomplish the same thing
+	ctx = ctx or {}
+	local oldfn = ctx.func
+	local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
+	--1. create a new function: terra initfn() return <initializer_exp> end and compile it. This will return type information for arguments without explicit types
+	--2. initialize types to either their stated type, or to the type of the initializer function, and invoke the compiler to create actual global variables for them
+	--3. generate the wrapper function terra initwrapper() a,b,c...d = initfn() end, and invoke it to initialize the variables
+	-- note that the reason we don't initialize them in one step is so that we can determine what type they should be (1,2) before making the typechecker insert and check casts
+	-- an optimization would be to fold this into a special pass of the typechecker that knew how to handle global variables being declared
+	
+	globalinit.untypedtree:printraw()
+	--1. create initializer function
+	
+	local itree = globalinit.untypedtree
+	local fname = itree.filename
+	local inits = itree.initializers
+	
+	if inits then
+		local ret = terra.newtree(inits[1], { kind = terra.kinds["return"], expressions = terra.newlist(inits) }) 
+		local body = terra.newtree(inits[1], { kind = terra.kinds.block, statements = terra.newlist {ret} })
+		local ftree = terra.newtree(inits[1], { kind = terra.kinds["function"], parameters = terra.newlist(),
+									is_varargs = false, filename = fname, body = body, exactsize = #globalinit.variables})
+		local initfn = terra.newfunction(nil,ftree,nil,globalinit.envfunction)
+		local fntype = initfn:gettype(ctx)
+		
+		if fntype == terra.types.error then
+			for i,v in ipairs(globalinit.variables) do
+				v.type = terra.types.error
+			end
+
+		else 
+			if #globalinit.variables ~= #fntype.returns then
+				error("Sizes of returns don't match?")
+			end
+			ctx.func = initfn --needs to be set to resolve types with the correct environment
+			--2. initialize types
+			for i,v in globalinit.variables do
+				local init_type = fntype.returns[i]
+				local declared_type = itree.variables[i].type
+				if declared_type then
+					v.type = terra.resolvetype(ctx,declared_type)
+				else
+					v.type = init_type
+				end
+				if v.type ~= terra.types.error then
+					print("NYI - C function create global")
+					--terra.createglobal(v)
+				end
+			end
+			--3. create wrapper function
+			print("NYI - wrapper function and global variable resolution")
+		end
+	else --no initializers, just 
+		error("NYI - no initializers for global variable")
+	end
+	ctx.func = oldfn
+]]
+end
+function terra.globalvar:gettype(ctx) 
+	if self.type then
+		return self.type
+	else --we need to compile
+		self:compile(ctx)
+		return self.type
+	end
+end
+
+do  --constructor functions for terra functions and variables
     local name_count = 0
     function terra.newfunction(olddef,newtree,name,env)
         if olddef then
@@ -208,11 +288,31 @@ do
         local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
         return setmetatable(obj,terra.func)
     end
+    
+    function terra.newvariables(tree,env)
+    	local varlist = terra.newlist()
+    	local globalinit = {untypedtree = tree, envfunction = env}
+    	for i,v in ipairs(tree.variables) do
+    		local function nm(t) 
+    			if t.kind == terra.kinds.var then
+    				return t.name
+    			elseif t.kind == terra.kinds.select then
+    				return nm(t.value) .. "_" .. t.field
+    			else
+    				error("not a variable name?")
+    			end
+    		end
+    		local n = nm(v.name) .. "_" .. name_count
+    		name_count = name_count + 1
+    		local gv = setmetatable({name = n, initializer = globalinit},terra.globalvar)
+    		varlist:insert(gv)
+    	end
+    	globalinit.variables = varlist
+
+    	return unpack(varlist)
+    end
 end
 
-function terra.isfunction(obj)
-	return getmetatable(obj) == terra.func
-end
 
 --[[
 types take the form

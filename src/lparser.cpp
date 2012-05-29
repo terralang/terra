@@ -1311,6 +1311,102 @@ static void localterra (LexState *ls) {
   ls->in_terra--;
 }
 
+static void beginrecord(LexState *ls) {
+    if(ls->in_terra) {
+        ls->variable_names.clear();
+        ls->variable_seperators.clear();
+        ls->record_names = 1;
+    }
+}
+static void nextname(LexState * ls) {
+    if(ls->in_terra) {
+        ls->variable_seperators.push_back(ls->variable_names.size());
+    }
+}
+static void pauserecord(LexState * ls) {
+    ls->record_names = 0;
+}
+static void resumerecord(LexState * ls) {
+    ls->record_names = 1;
+}
+static void endrecord(LexState * ls) {
+    if(ls->in_terra) {
+        if(ls->variable_seperators.size() == 0)
+            nextname(ls);
+        ls->record_names = 0;
+    }
+}
+static void print_names(LexState * ls) {
+	assert(ls->variable_names.size() > 0);
+    int sep_idx = 0;
+	OutputBuffer_printf(&ls->output_buffer,"%s",getstr(ls->variable_names[0]));
+	for(unsigned int i = 1; i < ls->variable_names.size(); i++) {
+        if(ls->variable_seperators[sep_idx] == i) {
+            OutputBuffer_putc(&ls->output_buffer, ',');
+            sep_idx++;
+        } else {
+            OutputBuffer_putc(&ls->output_buffer, '.'); 
+        }
+		OutputBuffer_printf(&ls->output_buffer,"%s",getstr(ls->variable_names[i]));
+	}
+}
+
+//terra variables appearing at global scope
+static void varname (LexState *ls, expdesc *v, int islocal) {
+  /* funcname -> NAME {fieldsel} */
+  RETURNS_1(singlevar(ls, v));
+  if(!islocal) {
+    while (ls->t.token == '.')
+      RETURNS_0(fieldsel(ls, v));
+  }
+  int tbl = new_table_before(ls, T_entry);
+  add_field(ls,tbl,"name");
+  pauserecord(ls); //done record names that appear in the type, we just want to record global names
+  if(testnext(ls, ':')) {
+    expdesc e;
+    RETURNS_1(expr(ls,&e));
+    add_field(ls,tbl,"type");
+  }
+  resumerecord(ls);
+  nextname(ls);
+}
+
+static void terravar(LexState * ls, int islocal) {
+    ///take
+    // var a.b.c : int, c.e.d : bar = inits and change it into
+    // a.b.c,c.e.d,... = terra.newvariables(_G.terra.trees[%d],captured_locals);
+    Token begin = ls->t;
+    checknext(ls, TK_VAR);
+    ls->in_terra++;
+    expdesc v;
+    beginrecord(ls);
+    int varexp = new_table(ls, T_globalvar);
+    int names = new_list(ls);
+    RETURNS_1(varname(ls,&v,islocal));
+    add_entry(ls, names);
+    while(testnext(ls,',')) {
+        RETURNS_1(varname(ls,&v,islocal));
+        add_entry(ls,names);
+    }
+    endrecord(ls);
+    add_field(ls,varexp,"variables");
+    if(testnext(ls,'=')) {
+        RETURNS_1(explist(ls,&v));
+        add_field(ls,varexp,"initializers");
+    }
+    push_string(ls,getstr(ls->source));
+    add_field(ls,varexp,"filename");
+    int id = add_entry(ls,TA_FUNCTION_TABLE);
+    
+    luaX_patchbegin(ls,&begin);
+    print_names(ls);
+    OutputBuffer_printf(&ls->output_buffer," = terra.newvariables(_G.terra._trees[%d],",id);
+    print_captured_locals(ls);
+    OutputBuffer_printf(&ls->output_buffer,")");
+    luaX_patchend(ls,&begin);
+    ls->in_terra--;
+}
+
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
   int nvars = 0;
@@ -1358,32 +1454,25 @@ static int funcname (LexState *ls, expdesc *v) {
   return ismethod;
 }
 
-
 static void funcstat (LexState *ls, int line) {
   /* funcstat -> FUNCTION funcname body */
   int ismethod;
   expdesc v, b;
   luaX_next(ls);  /* skip FUNCTION */
-  ls->record_names = 1;
+  
+  beginrecord(ls);
   RETURNS_1(ismethod = funcname(ls, &v));
   if(ls->in_terra) {
   	lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
   }
-  ls->record_names = 0;
+  endrecord(ls);
   body(ls, &b, ismethod, line);
 }
 
-static void print_names(LexState * ls) {
-	assert(ls->variable_names.size() > 0);
-	OutputBuffer_printf(&ls->output_buffer,"%s",getstr(ls->variable_names[0]));
-	for(unsigned int i = 1; i < ls->variable_names.size(); i++) {
-		OutputBuffer_printf(&ls->output_buffer,".%s",getstr(ls->variable_names[i]));
-	}
-}
+
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
 	Token begin = ls->t;
-	ls->variable_names.clear();
 	RETURNS_1(funcstat(ls,line));
 	int n = add_entry(ls,TA_FUNCTION_TABLE);
 	luaX_patchbegin(ls,&begin);
@@ -1473,24 +1562,25 @@ static void statement (LexState *ls) {
     } break;
     case TK_LOCAL: {  /* stat -> localstat */
       luaX_next(ls);  /* skip LOCAL */
+      check_no_terra(ls,"local keywords");
       if (testnext(ls, TK_FUNCTION)) { /* local function? */
-        check_no_terra(ls, "lua functions");
         localfunc(ls);
       } else if(ls->t.token == TK_TERRA) {
-      	check_no_terra(ls, "nested terra functions");
       	localterra(ls);
+      } else if(ls->t.token == TK_VAR) {
+        terravar(ls,1);
       } else {
-        check_no_terra(ls,"local keywords");
         localstat(ls);
       }
       break;
     }
     case TK_VAR: {
-    	luaX_next(ls); /* skip var */
     	if(!ls->in_terra) {
-    		assert(!"NYI - global variables");
-    	}
-    	RETURNS_1(localstat(ls));
+    		terravar(ls,0);
+    	} else {
+            luaX_next(ls); /* skip var */
+            RETURNS_1(localstat(ls));
+        }
     	break;	
     }
     case TK_DBCOLON: {  /* stat -> label */
