@@ -44,7 +44,7 @@ void terra_compilerinit(struct terra_State * T) {
 	T->C->ctx = &getGlobalContext();
 	T->C->m = new Module("terra",*T->C->ctx);
 	std::string err;
-	T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).create();
+	T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
 	if (!T->C->ee) {
 		terra_reporterror(T,"llvm: %s\n",err.c_str());
 	}
