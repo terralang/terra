@@ -63,7 +63,9 @@ _(cast,"cast") \
 _(identity,"identity") \
 _(extractreturn,"extractreturn") \
 _(parameterlist,"parameterlist") \
-_(globalvar, "globalvar")
+_(globalvar, "globalvar") \
+_(struct, "struct") \
+_(structentry, "structentry") 
 
 enum T_Kind {
 	#define T_KIND_ENUM(a,str) T_##a,

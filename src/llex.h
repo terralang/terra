@@ -23,14 +23,14 @@ enum RESERVED {
   TK_AND = FIRST_RESERVED, TK_BREAK,
   TK_DO, TK_ELSE, TK_ELSEIF, TK_END, TK_FALSE, TK_FOR, TK_FUNCTION,
   TK_GOTO, TK_IF, TK_IN, TK_LOCAL, TK_NIL, TK_NOT, TK_OR, TK_REPEAT,
-  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA, TK_VAR,
+  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA, TK_VAR, TK_STRUCT,
   /* other terminal symbols */
   TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE, TK_DBCOLON, TK_FUNC_PTR, TK_EOS,
   TK_NUMBER, TK_NAME, TK_STRING
 };
 
 /* number of reserved words */
-#define NUM_RESERVED	(cast(int, TK_VAR-FIRST_RESERVED+1))
+#define NUM_RESERVED	(cast(int, TK_STRUCT-FIRST_RESERVED+1))
 
 
 typedef struct {
@@ -124,6 +124,7 @@ typedef struct LexState {
   char decpoint;  /* locale decimal point */
 
   int in_terra;
+  int in_terra_type;
   int record_names;
   std::vector<TString *> variable_names; //for patching the [local] terra a.b.c.d, and [local] var a.b.c.d sugar
   std::vector<int> variable_seperators;  //in name lists with multiple names, points to beginnings of new names

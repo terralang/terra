@@ -521,6 +521,103 @@ static void constructor (LexState *ls, expdesc *t) {
   add_field(ls,tbl,"records");
 }
 
+static void recstruct (LexState *ls) {
+  int tbl = new_table(ls,T_structentry);
+  expdesc key,val;
+  RETURNS_1(checkname(ls, &key));
+  add_field(ls,tbl,"key");
+  checknext(ls, ':');
+  RETURNS_1(expr(ls, &val));
+  add_field(ls,tbl,"type");
+}
+
+static void liststruct (LexState *ls) {
+  /* listfield -> exp */
+  expdesc val;
+  int tbl = new_table(ls,T_structentry);
+  RETURNS_1(expr(ls, &val));
+  add_field(ls,tbl,"type");
+}
+
+static void structfield (LexState *ls) {
+  /* field -> listfield | recfield */
+  switch(ls->t.token) {
+    case TK_NAME: {  /* may be 'listfield' or 'recfield' */
+      if (luaX_lookahead(ls) != ':')  /* expression? */
+        liststruct(ls);
+      else
+        recstruct(ls);
+      break;
+    }
+    default: {
+      liststruct(ls);
+      break;
+    }
+  }
+}
+
+static void structconstructor(LexState * ls) {
+    // already parsed 'struct' or 'struct' name.
+    //starting at '{'
+    int line = ls->linenumber;
+    int tbl = new_table(ls,T_struct);
+    int records = new_list(ls);
+    checknext(ls,'{');
+    do {
+       if (ls->t.token == '}') break;
+       RETURNS_1(structfield(ls));
+       add_entry(ls,records);
+    } while(testnext(ls, ',') || testnext(ls, ';'));
+    check_match(ls,'}','{',line);
+    add_field(ls,tbl,"records");
+}
+
+static void beginrecord(LexState *ls);
+static void endrecord(LexState * ls);
+static void print_names(LexState * ls);
+static void print_captured_locals(LexState * ls);
+
+static void terrastruct(LexState * ls, int islocal) {
+    check_no_terra(ls,"struct declarations");
+    Token begin = ls->t;
+    luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
+    
+    ls->in_terra++;
+    ls->in_terra_type = 1;
+        
+    TString * vname;
+    beginrecord(ls);
+    
+    expdesc v;
+    RETURNS_1(vname = singlevar(ls, &v));
+    if(!islocal) {
+        while (ls->t.token == '.')
+            RETURNS_0(fieldsel(ls, &v));
+    } else {
+        ls->fs->bl->local_variables.push_back(vname);
+    }
+    endrecord(ls);
+    lua_pop(ls->L, 1); //ignore the parsed tree
+
+    structconstructor(ls);
+    
+    int id = add_entry(ls,TA_FUNCTION_TABLE);
+    luaX_patchbegin(ls,&begin);
+    if(islocal) {
+        OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.namedstruct(_G.terra._trees[%d],\"",getstr(vname),getstr(vname),id);
+    } else {
+        print_names(ls);
+        OutputBuffer_printf(&ls->output_buffer," = terra.namedstruct(_G.terra._trees[%d],\"",id);
+    }
+    print_names(ls);
+    OutputBuffer_printf(&ls->output_buffer,"\",");
+    print_captured_locals(ls);
+    OutputBuffer_printf(&ls->output_buffer,")");
+    luaX_patchend(ls,&begin);
+    
+    ls->in_terra--;
+    ls->in_terra_type = 0;
+}
 /* }====================================================================== */
 
 static void parlist (LexState *ls) {
@@ -683,6 +780,7 @@ static void dump_stack(lua_State * L, int elem) {
 
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
+  
   switch (ls->t.token) {
     case '(': {
       int line = ls->linenumber;
@@ -847,6 +945,33 @@ static void simpleexp (LexState *ls, expdesc *v) {
     	ls->in_terra--;
     	return;
     }
+    case TK_STRUCT: {
+        if(!ls->in_terra_type)
+            check_no_terra(ls,"struct declarations");
+        Token begin = ls->t;
+        
+        luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
+        
+        if(ls->in_terra_type) { //just keep parsing AST, no need to patch
+            structconstructor(ls);
+        } else {
+            ls->in_terra++;
+            ls->in_terra_type = 1;
+        
+            structconstructor(ls);
+            int id = add_entry(ls,TA_FUNCTION_TABLE);
+        
+            luaX_patchbegin(ls,&begin);
+            OutputBuffer_printf(&ls->output_buffer,"terra.anonstruct(_G.terra._trees[%d],",id);
+            print_captured_locals(ls);
+            OutputBuffer_printf(&ls->output_buffer,")");
+            luaX_patchend(ls,&begin);
+            
+            ls->in_terra--;
+            ls->in_terra_type = 0;
+        }
+        return;
+    } break;
     default: {
       primaryexp(ls, v);
       return;
@@ -1528,6 +1653,7 @@ static void retstat (LexState *ls) {
 static void statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
   enterlevel(ls);
+  
   switch (ls->t.token) {
     case ';': {  /* stat -> ';' (empty statement) */
       luaX_next(ls);  /* skip ';' */
@@ -1564,6 +1690,9 @@ static void statement (LexState *ls) {
     case TK_TERRA: {
       RETURNS_1(terrastat(ls,line));
     } break;
+    case TK_STRUCT: {
+      RETURNS_1(terrastruct(ls,0));
+    } break;
     case TK_LOCAL: {  /* stat -> localstat */
       luaX_next(ls);  /* skip LOCAL */
       check_no_terra(ls,"local keywords");
@@ -1573,6 +1702,8 @@ static void statement (LexState *ls) {
       	localterra(ls);
       } else if(ls->t.token == TK_VAR) {
         terravar(ls,1);
+      } else if(ls->t.token == TK_STRUCT) {
+        terrastruct(ls,1);
       } else {
         localstat(ls);
       }
@@ -1625,6 +1756,7 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;
+  lexstate.in_terra_type = 0;
   lexstate.record_names = 0;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;

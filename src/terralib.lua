@@ -295,6 +295,15 @@ do  --constructor functions for terra functions and variables
 
     	return unpack(globals)
     end
+    
+    function terra.namedstruct(tree,name,env)
+        print("Named struct",name)
+        tree:printraw()
+    end
+    function terra.anonstruct(tree,env)
+        print("Anon struct")
+        tree:printraw()
+    end
 end
 
 
