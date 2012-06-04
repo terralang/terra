@@ -247,13 +247,17 @@ end
 
 do  --constructor functions for terra functions and variables
     local name_count = 0
+    local function manglename(nm)
+    	local fixed = nm:gsub("[^A-Za-z0-9]","_") .. name_count --todo if a user writes terra foo, pass in the string "foo"
+        name_count = name_count + 1
+        return fixed
+    end
     function terra.newfunction(olddef,newtree,name,env)
         if olddef then
             error("NYI - overloaded functions",2)
         end
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
-        local fname = rawname:gsub("[^A-Za-z0-9]","_") .. name_count --todo if a user writes terra foo, pass in the string "foo"
-        name_count = name_count + 1
+        local fname = manglename(rawname)
         local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
         return setmetatable(obj,terra.func)
     end
@@ -367,20 +371,16 @@ do --construct type table that holds the singleton value representing each uniqu
 		end
 	end
 	
+	function types.istype(t)
+		return getmetatable(t) == types.type
+	end
+	
 	--map from unique type identifier string to the metadata for the type
 	types.table = {}
 	
-	--map from object that holds the table of methods to the internal object that holds the information about the type
-	types.methodtabletotype = {}
-	
 	local function mktyp(v)
 		v.methods = {} --create new blank method table
-		types.methodtabletotype[v.methods] = v --associate this method table with this type
 		return setmetatable(v,types.type)
-	end
-	
-	function types.astype(v)
-		return types.methodtabletotype[v] --if v is not a type, then this returns nil
 	end
 	
 	--initialize integral types
@@ -418,17 +418,13 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.primitive(name)
 		return types.table[name] or types.error
 	end
-	function types.struct(fieldnames,fieldtypes,listtypes)
+	
+	function types.anonstruct(fieldnames,fieldtypes,listtypes)
 
 		--TODO
 		
 	end
-	function types.union(fieldnames,fieldtypes)
-		--TODO
-	end
-	function types.named(typ)
-		--TODO
-	end
+	
 	function types.functype(parameters,returns)
 		local function getname(t) return t.name end
 		local a = parameters:map(getname):mkstring("{",",","}")
@@ -444,10 +440,7 @@ do --construct type table that holds the singleton value representing each uniqu
 	for name,typ in pairs(types.table) do
 		--introduce primitive types into global namespace
 		-- outside of the typechecker and internal terra modules
-		-- types are represented by their unique method table
-		-- which is why we assign the name to typ.methods not typ
-		-- print("type ".. name)
-		_G[name] = typ.methods 
+		_G[name] = typ 
 	end
 	_G["int"] = int32
 	_G["long"] = int64
@@ -480,8 +473,11 @@ function terra.resolvetype(ctx,t)
 		return terra.reporterror(ctx,t,msg)
 	end
 	local function check(t)
-		local typ = terra.types.astype(t)
-		return typ or err "not a type: " 
+		if terra.types.istype(t) then
+			return t
+		else 
+			return err "not a type: "
+		end 
 	end
 	local function primary(t)
 		if t:is "select" then
@@ -636,7 +632,7 @@ function terra.func:typecheck(ctx)
 			elseif a:isfloat() and b:isintegral() then
 				return a
 			elseif a:isfloat() and b:isfloat() then
-				return terra.types.astype(double)
+				return double
 			end
 		else
 			err()
@@ -718,7 +714,7 @@ function terra.func:typecheck(ctx)
 	end
 	local function checkcomparision(e)
 		local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
-		return e:copy { type = terra.types.astype(bool), operands = terra.newlist {l,r} }
+		return e:copy { type = bool, operands = terra.newlist {l,r} }
 	end
 	local function checklogicalorintegral(e)
 		return checkbinary(e,"canbeord")
@@ -906,9 +902,9 @@ function terra.func:typecheck(ctx)
 		if terra.istree(e) then
 			return e
 		elseif type(e) == "number" then
-			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.astype(double) })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = double })
 		elseif type(e) == "boolean" then
-			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.astype(bool) })
+			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = bool })
 		else 
 			terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
 			return ee:copy { type = terra.types.error }
@@ -924,7 +920,7 @@ function terra.func:typecheck(ctx)
 		return e
 	end
 	local function checkcondbranch(s)
-		local e = checkexptyp(s.condition,terra.types.astype(bool))
+		local e = checkexptyp(s.condition,bool)
 		local b = checkstmt(s.body)
 		return s:copy {condition = e, body = b}
 	end
@@ -983,7 +979,7 @@ function terra.func:typecheck(ctx)
 			local breaktable = enterloop()
 			enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
 			local new_blk = s.body:copy { statements = s.body.statements:map(checkstmt) }
-			local e = checkexptyp(s.condition,terra.types.astype(bool))
+			local e = checkexptyp(s.condition,bool)
 			leaveblock()
 			leaveloop()
 			return s:copy { body = new_blk, condition = e, breaktable = breaktable }
