@@ -15,18 +15,20 @@ terra foo()
 	return c.a + a.a + d
 end
 
+
 terra baz(a : &B)
-	(@a).a = 1;
-	(@a).b = 2;
+	a.a = 1
+	a.b = 2
+	return a.a
 end
+
 
 terra foo2()
 	var a : B
-	baz(&a)
-	return a.a + a.b
+	var d = baz(&a)
+	return a.a + a.b + d
 end
 local test = require("test")
 
 test.eq(foo(),12)
-test.eq(foo2(),3)
-
+test.eq(foo2(),4)

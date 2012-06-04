@@ -800,9 +800,7 @@ function terra.func:typecheck(ctx)
 	local function checklvalue(ee)
 		local e = checkexp(ee)
 		if not e.lvalue then
-			print("SOUP",e.offset)
 			terra.reporterror(ctx,e,"argument to operator must be an lvalue")
-			error("DONE")
 			e.type = terra.types.error
 		end
 		return e
@@ -908,14 +906,16 @@ function terra.func:typecheck(ctx)
 			error("NYI - check call on non-literal function calls")
 		end
 	end
-	
-	function checkrvalue(e)
-		local ee = checkexp(e)
+	function asrvalue(ee)
 		if ee.lvalue then
-			return terra.newtree(e,{ kind = terra.kinds.ltor, type = ee.type, expression = ee })
+			return terra.newtree(ee,{ kind = terra.kinds.ltor, type = ee.type, expression = ee })
 		else
 			return ee
 		end
+	end
+	function checkrvalue(e)
+		local ee = checkexp(e)
+		return asrvalue(ee)
 	end
 	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
 		
@@ -944,13 +944,22 @@ function terra.func:typecheck(ctx)
 		elseif e:is "select" then
 			local v = checkexpraw(e.value)
 			if terra.istree(v) then
-				if v.type:isstruct() then
-					local offset = v.type.keytooffset[e.field]
+				local typ = v.type
+				local lvalue = v.lvalue
+				
+				if typ:ispointer() then --allow 1 implicit dereference
+					typ = typ.type 
+					lvalue = true
+					v = asrvalue(v)
+				end
+				
+				if typ:isstruct() then
+					local offset = typ.keytooffset[e.field]
 					if offset == nil then
 						terra.reporterror(ctx,v,"no field ",e.field," in object")
 						return e:copy { type = terra.types.error }
 					end
-					return e:copy { type = v.type.entries[offset+1].type, value = v, offset = offset, lvalue = v.lvalue }
+					return e:copy { type = typ.entries[offset+1].type, value = v, offset = offset, lvalue = lvalue }
 				else
 					terra.reporterror(ctx,v,"is not a structural type")
 					return e:copy { type = terra.types.error }
