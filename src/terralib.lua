@@ -157,8 +157,51 @@ function terra.func:makewrapper()
 	self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
 end
 
+terra.context = {}
+terra.context.__index = terra.context
+function terra.context:push(filename, env)
+	local tbl = { filename = filename, env = env } 
+	table.insert(self.stack,tbl)
+end
+function terra.context:pop()
+	local tbl = table.remove(self.stack)
+	if tbl.filehandle then
+		terra.closesourcefile(tbl.filehandle)
+		tbl.filehandle = nil
+	end
+end
+function terra.context:env()
+	return self.stack[#self.stack].env
+end
+--terra.printlocation
+--and terra.opensourcefile are inserted by C wrapper
+function terra.context:printsource(anchor)
+	local top = self.stack[#self.stack]
+	if not top.filehandle then
+		top.filehandle = terra.opensourcefile(top.filename)
+	end
+	terra.printlocation(top.filehandle,anchor.offset)
+end
+function terra.context:reporterror(anchor,...)
+	self.has_errors = true
+	local top = self.stack[#self.stack]
+	io.write(top.filename..":"..anchor.linenumber..": ")
+	for _,v in ipairs({...}) do
+		io.write(tostring(v))
+	end
+	io.write("\n")
+	self:printsource(anchor)
+end
+function terra.context:isempty()
+	return #self.stack == 0
+end
+
+function terra.newcontext()
+	return setmetatable({stack = {}},terra.context)
+end
+
 function terra.func:compile(ctx)
-	ctx = ctx or {} -- if this is a top level compile, create a new compilation context
+	ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
 	print("compiling function:")
     self.untypedtree:printraw()
 	print("with local environment:")
@@ -167,7 +210,7 @@ function terra.func:compile(ctx)
 	self.type = self.typedtree.type
     
 	if ctx.has_errors then 
-		if ctx.func == nil then --if this was not the top level compile we let type-checking of other functions continue, 
+		if ctx:isempty() then --if this was not the top level compile we let type-checking of other functions continue, 
 		                        --though we don't actually compile because of the errors
 			error("Errors reported during compilation.")
 		end
@@ -213,7 +256,7 @@ end
 
 function terra.globalvar:compile(ctx)
 
-	ctx = ctx or {}
+	ctx = ctx or terra.newcontext()
 	local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
 	
 	
@@ -301,8 +344,7 @@ do  --constructor functions for terra functions and variables
     end
     
     function terra.namedstruct(tree,name,env)
-        print("Named struct",name)
-        tree:printraw()
+    	return terra.types.newnamedstruct(manglename(name),tree,env)
     end
     function terra.anonstruct(tree,env)
         print("Anon struct")
@@ -370,6 +412,9 @@ do --construct type table that holds the singleton value representing each uniqu
 			error("NYI - cstring")
 		end
 	end
+	function types.type:getcanonical()
+		return self
+	end
 	
 	function types.istype(t)
 		return getmetatable(t) == types.type
@@ -425,6 +470,13 @@ do --construct type table that holds the singleton value representing each uniqu
 		
 	end
 	
+	function types.newnamedstruct(name,tree,env)
+		local typ = mktype { kind = terra.kinds["struct"], name = name }
+		function typ:getcanonical()
+			self.getcanonical = nil -- if we recursively try to evaluate this type then we are done
+		end
+	end
+	
 	function types.functype(parameters,returns)
 		local function getname(t) return t.name end
 		local a = parameters:map(getname):mkstring("{",",","}")
@@ -448,23 +500,9 @@ do --construct type table that holds the singleton value representing each uniqu
 	terra.types = types
 end
 
---terra.printlocation
---and terra.opensourcefile are inserted by C wrapper
-function terra.printsource(ctx,anchor)
-	if not ctx.func.filehandle then
-		ctx.func.filehandle = terra.opensourcefile(ctx.func.filename)
-	end
-	terra.printlocation(ctx.func.filehandle,anchor.offset)
-end
 
 function terra.reporterror(ctx,anchor,...)
-	ctx.has_errors = true
-	io.write(ctx.func.filename..":"..anchor.linenumber..": ")
-	for _,v in ipairs({...}) do
-		io.write(tostring(v))
-	end
-	io.write("\n")
-	terra.printsource(ctx,anchor)
+	ctx:reporterror(anchor,...)
 	return terra.types.error
 end
 
@@ -484,7 +522,7 @@ function terra.resolvetype(ctx,t)
 			local lhs = primary(t.value)
 			return lhs and lhs[t.field]
 		elseif t:is "var" then
-			return ctx.func:env()[t.name]
+			return ctx:env()[t.name]
 		elseif t:is "literal" then
 			return t
 		else
@@ -585,11 +623,11 @@ end
 
 function terra.func:typecheck(ctx)
 	
-	local oldfunc = ctx.func --save old function and set the current compiling function to this one
-	ctx.func = self
+	ctx:push(self.filename,self:env())
+	
 	self.iscompiling = true --to catch recursive compilation calls
 	
-	local ftree = ctx.func.untypedtree
+	local ftree = self.untypedtree
 	
 	local function resolvetype(t)
 		return terra.resolvetype(ctx,t)
@@ -1161,18 +1199,14 @@ function terra.func:typecheck(ctx)
 		insertcasts(return_types,stmt.expressions)
 	end
 	
-	if ctx.func.filehandle then
-		terra.closesourcefile(ctx.func.filehandle)
-		ctx.func.filehandle = nil
-	end
-	
 	
 	local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
 	
 	print("TypedTree")
 	typedtree:printraw()
 	
-	ctx.func = oldfunc
+	ctx:pop()
+	
 	self.iscompiling = nil
 	return typedtree
 	
