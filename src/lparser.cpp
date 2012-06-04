@@ -135,7 +135,7 @@ static int new_table(LexState * ls, T_Kind k) {
 		lua_settable(ls->L,t);
 		
 		lua_pushstring(ls->L,"offset");
-		lua_pushinteger(ls->L,ls->currentoffset - 2);
+		lua_pushinteger(ls->L,ls->currentoffset - 1);
 		lua_settable(ls->L,t);
 		
 		return t;
@@ -570,6 +570,8 @@ static void structconstructor(LexState * ls) {
     } while(testnext(ls, ',') || testnext(ls, ';'));
     check_match(ls,'}','{',line);
     add_field(ls,tbl,"records");
+    push_string(ls,getstr(ls->source));
+    add_field(ls,tbl,"filename");
 }
 
 static void beginrecord(LexState *ls);

@@ -253,6 +253,23 @@ struct TerraCompiler {
 						} break;
 					}
 				} break;
+                case T_struct: {
+                    const char * name = typ->string("name");
+                    Obj entries;
+                    typ->obj("entries", &entries);
+                    int N = entries.size();
+                    StructType * st = StructType::create(*C->ctx, name);
+                    t->type = st;
+                    std::vector<Type *> entry_types;
+                    for(int i = 0; i < N; i++) {
+                        Obj v;
+                        entries.objAt(i, &v);
+                        Obj vt;
+                        v.obj("type",&vt);
+                        entry_types.push_back(getType(&vt)->type);
+                    }
+                    st->setBody(entry_types);
+                } break;
 				case T_pointer: {
 					Obj base;
 					typ->obj("type",&base);
@@ -687,6 +704,15 @@ if(t->type->isIntegerTy()) { \
                 int64_t idxs[] = {0,idx};
                 Value * addr = emitCGEP(v,idxs,2);
                 return B->CreateLoad(addr);
+            } break;
+            case T_select: {
+                Obj obj;
+                exp->obj("value",&obj);
+                obj.dump();
+                Value * v = emitExp(&obj);
+                int offset = exp->number("offset");
+                int64_t idxs[] = {0, offset};
+                return emitCGEP(v,idxs,2);
             } break;
 			default: {
 				assert(!"NYI - exp");

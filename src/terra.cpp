@@ -60,8 +60,11 @@ static int printlocation(lua_State * L) {
 	while(end < si->len && si->mapped_file[end] != '\n')
 		end++;
 	
-	fwrite(&si->mapped_file[begin+1],end - begin,1,stdout);
-	
+	if(begin > 0)
+        begin++;
+        
+    fwrite(&si->mapped_file[begin],end - begin,1,stdout);
+	fputc('\n',stdout);
 	while(begin < token) {
 		if(si->mapped_file[begin] == '\t')
 			fputs("        ",stdout);

@@ -38,7 +38,7 @@ function terra.tree:printraw()
 	local function printElem(t,spacing)
 		if(type(t) == "table") then
 			if parents[t] then
-				print(#spacing,"<cyclic reference>")
+				print(string.rep(" ",#spacing).."<cyclic reference>")
 				return
 			elseif depth > 0 and terra.isfunction(t) then
 				return --don't print the entire nested function...
@@ -375,6 +375,7 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:__tostring()
 		return self.name
 	end
+	types.type.printraw = terra.tree.printraw
 	function types.type:isprimitive()
 		return self.kind == terra.kinds.primitive
 	end
@@ -399,6 +400,10 @@ do --construct type table that holds the singleton value representing each uniqu
 	function types.type:isfunction()
 		return self.kind == terra.kinds.functype
 	end
+	function types.type:isstruct()
+		return self.kind == terra.kinds["struct"]
+	end
+	
 	function types.type:cstring()
 		if self:isintegral() then
 			return tostring(self).."_t"
@@ -412,7 +417,7 @@ do --construct type table that holds the singleton value representing each uniqu
 			error("NYI - cstring")
 		end
 	end
-	function types.type:getcanonical()
+	function types.type:getcanonical(ctx)
 		return self
 	end
 	
@@ -471,10 +476,42 @@ do --construct type table that holds the singleton value representing each uniqu
 	end
 	
 	function types.newnamedstruct(name,tree,env)
-		local typ = mktype { kind = terra.kinds["struct"], name = name }
-		function typ:getcanonical()
-			self.getcanonical = nil -- if we recursively try to evaluate this type then we are done
+		local typ = mktyp { kind = terra.kinds["struct"], name = name, entries = terra.newlist(), keytooffset = {} }
+		tree:printraw()
+		function typ:getcanonical(ctx)
+			self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
+			ctx:push(tree.filename,env())
+			
+			for i,v in ipairs(tree.records) do
+				if not v.key then
+					terra.reporterror(ctx,v,"elements of a named struct must be named")
+				else
+					self.entries:insert({ key = v.key, type = terra.resolvetype(ctx,v.type) })
+					self.keytooffset[v.key] = #self.entries - 1
+				end
+			end
+			
+			ctx:pop()
+			
+			local function checkrecursion(t)
+				if t == self then
+					terra.reporterror(ctx,tree,"type recursively contains itself")
+				elseif t:isstruct() then
+					for i,v in ipairs(t.entries) do
+						checkrecursion(v.type)
+					end
+				end
+				--TODO: need to check for arrays when they are implemented
+			end
+			for i,v in ipairs(self.entries) do
+				checkrecursion(v.type)
+			end
+			
+			print("Resolved Named Struct To:")
+			self:printraw()
+			return self
 		end
+		return typ
 	end
 	
 	function types.functype(parameters,returns)
@@ -512,7 +549,7 @@ function terra.resolvetype(ctx,t)
 	end
 	local function check(t)
 		if terra.types.istype(t) then
-			return t
+			return t:getcanonical(ctx)
 		else 
 			return err "not a type: "
 		end 
@@ -903,7 +940,18 @@ function terra.func:typecheck(ctx)
 		elseif e:is "select" then
 			local v = checkexpraw(e.value)
 			if terra.istree(v) then
-				error("NYI - struct selection")
+				if v.type:isstruct() then
+					local offset = v.type.keytooffset[e.field]
+					if offset == nil then
+						terra.reporterror(ctx,v,"no field ",e.field," in object")
+						return e:copy { type = terra.types.error }
+					end
+					v.type:printraw()
+					return e:copy { type = v.type.entries[offset+1].type, value = v, offset = offset, lvalue = true }
+				else
+					terra.reporterror(ctx,v,"is not a structural type")
+					return e:copy { type = terra.types.error }
+				end
 			else
 				local v = type(v) == "table" and v[e.field]
 				if v ~= nil then
