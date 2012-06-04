@@ -344,7 +344,7 @@ do  --constructor functions for terra functions and variables
     end
     
     function terra.namedstruct(tree,name,env)
-    	return terra.types.newnamedstruct(manglename(name),tree,env)
+    	return terra.types.newnamedstruct(name,manglename(name),tree,env)
     end
     function terra.anonstruct(tree,env)
         print("Anon struct")
@@ -413,6 +413,8 @@ do --construct type table that holds the singleton value representing each uniqu
 			return self.type:cstring().."*"
 		elseif self:islogical() then
 			return "unsigned char"
+		elseif self:isstruct() then
+			return "void *" --TODO: this should actually declare the struct and make wrapper should handle the wrapping up of struct values
 		else
 			error("NYI - cstring")
 		end
@@ -475,8 +477,8 @@ do --construct type table that holds the singleton value representing each uniqu
 		
 	end
 	
-	function types.newnamedstruct(name,tree,env)
-		local typ = mktyp { kind = terra.kinds["struct"], name = name, entries = terra.newlist(), keytooffset = {} }
+	function types.newnamedstruct(rawname, name,tree,env)
+		local typ = mktyp { kind = terra.kinds["struct"], name = rawname, uniquename = name, entries = terra.newlist(), keytooffset = {} }
 		tree:printraw()
 		function typ:getcanonical(ctx)
 			self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
@@ -798,7 +800,9 @@ function terra.func:typecheck(ctx)
 	local function checklvalue(ee)
 		local e = checkexp(ee)
 		if not e.lvalue then
+			print("SOUP",e.offset)
 			terra.reporterror(ctx,e,"argument to operator must be an lvalue")
+			error("DONE")
 			e.type = terra.types.error
 		end
 		return e
@@ -946,8 +950,7 @@ function terra.func:typecheck(ctx)
 						terra.reporterror(ctx,v,"no field ",e.field," in object")
 						return e:copy { type = terra.types.error }
 					end
-					v.type:printraw()
-					return e:copy { type = v.type.entries[offset+1].type, value = v, offset = offset, lvalue = true }
+					return e:copy { type = v.type.entries[offset+1].type, value = v, offset = offset, lvalue = v.lvalue }
 				else
 					terra.reporterror(ctx,v,"is not a structural type")
 					return e:copy { type = terra.types.error }

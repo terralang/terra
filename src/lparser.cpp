@@ -195,7 +195,7 @@ static void check_terra(LexState * ls, const char * thing) {
 /*
 ** prototypes for recursive non-terminal functions
 */
-static void statement (LexState *ls);
+static int statement (LexState *ls);
 static void expr (LexState *ls, expdesc *v);
 
 
@@ -385,12 +385,14 @@ static void statlist (LexState *ls) {
   int tbl = new_list(ls);
   while (!block_follow(ls, 1)) {
     if (ls->t.token == TK_RETURN) {
-      statement(ls);
-      add_entry(ls,tbl);
+      int r = statement(ls);
+      if(r)
+        add_entry(ls,tbl);
       return;  /* 'return' must be last statement */
     }
-    statement(ls);
-    add_entry(ls,tbl);
+    int r = statement(ls);
+    if(r)
+        add_entry(ls,tbl);
   }
 }
 
@@ -1213,7 +1215,7 @@ static void labelstat (LexState *ls, TString *label, int line) {
   push_string(ls,getstr(label));
   add_field(ls,tbl,"value");
   while (ls->t.token == ';' || ls->t.token == TK_DBCOLON) {
-    RETURNS_1(statement(ls));
+    statement(ls);
     if(ls->in_terra)
     	lua_pop(ls->L,1); //discard the AST node
   }
@@ -1652,13 +1654,14 @@ static void retstat (LexState *ls) {
 }
 
 
-static void statement (LexState *ls) {
+static int statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
   enterlevel(ls);
   
   switch (ls->t.token) {
     case ';': {  /* stat -> ';' (empty statement) */
       luaX_next(ls);  /* skip ';' */
+      return 0;
       break;
     }
     case TK_IF: {  /* stat -> ifstat */
@@ -1742,6 +1745,7 @@ static void statement (LexState *ls) {
     }
   }
   leavelevel(ls);
+  return 1;
 }
 
 /* }====================================================================== */

@@ -210,6 +210,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
     bool issretfunc;
 	bool issigned;
 	bool islogical;
+    bool ispassedaspointer;
 };
 
 struct TerraCompiler {
@@ -254,12 +255,13 @@ struct TerraCompiler {
 					}
 				} break;
                 case T_struct: {
-                    const char * name = typ->string("name");
+                    const char * name = typ->string("uniquename");
                     Obj entries;
                     typ->obj("entries", &entries);
                     int N = entries.size();
                     StructType * st = StructType::create(*C->ctx, name);
                     t->type = st;
+                    t->ispassedaspointer = true;
                     std::vector<Type *> entry_types;
                     for(int i = 0; i < N; i++) {
                         Obj v;
@@ -284,30 +286,39 @@ struct TerraCompiler {
 					Type * rt; 
 					if(sz == 0) {
 						rt = Type::getVoidTy(*C->ctx);
-					} else if(sz == 1) {
-						Obj r0;
-						rets.objAt(0,&r0);
-						TType * r0t = getType(&r0);
-						rt = r0t->type;
 					} else {
-                        std::vector<Type *> types;
-                        for(int i = 0; i < sz; i++) {
-                            Obj r;
-                            rets.objAt(i,&r);
-                            TType * rt = getType(&r);
-                            types.push_back(rt->type);
+                        Obj r0;
+                        rets.objAt(0,&r0);
+                        TType * r0t = getType(&r0);
+                        if(sz == 1 && !r0t->ispassedaspointer) {
+                            rt = r0t->type;
+                        } else {
+                            std::vector<Type *> types;
+                            for(int i = 0; i < sz; i++) {
+                                Obj r;
+                                rets.objAt(i,&r);
+                                TType * rt = getType(&r);
+                                types.push_back(rt->type);
+                            }
+                            rt = Type::getVoidTy(*C->ctx);
+                            Type * st = StructType::get(*C->ctx,types);
+                            arguments.push_back(PointerType::getUnqual(st));
+                            t->issretfunc = true;
                         }
-                        rt = Type::getVoidTy(*C->ctx);
-                        Type * st = StructType::get(*C->ctx,types);
-                        arguments.push_back(PointerType::get(st,0));
-                        t->issretfunc = true;
-					}
+                    }
 					int psz = params.size();
 					for(int i = 0; i < psz; i++) {
 						Obj p;
 						params.objAt(i,&p);
 						TType * pt = getType(&p);
-						arguments.push_back(pt->type);
+                        Type * t = pt->type;
+                        //TODO: when we construct a function with this type, we need to mark the argument 'byval' so that llvm copies the argument
+                        //right now it still works because we make a copy of these arguments anyway
+                        //but it may be more efficient to let llvm handle the copy
+                        if(pt->ispassedaspointer) {
+                            t = PointerType::getUnqual(pt->type);
+                        }
+                        arguments.push_back(t);
 					}
 					t->type = FunctionType::get(rt,arguments,false); 
 				} break;
@@ -390,8 +401,15 @@ struct TerraCompiler {
 		for(int i = 0; i < nP; i++) {
 			Obj p;
 			parameters.objAt(i,&p);
-			AllocaInst * a = allocVar(&p);
-			B->CreateStore(ai,a);
+			TType * t = typeOfValue(&p);
+            if(t->ispassedaspointer) { //this is already a copy, so we can assign the variable directly to its memory
+                Value * v = ai;
+                lua_pushlightuserdata(L,v);
+                p.setfield("value");
+            } else {
+                AllocaInst * a = allocVar(&p);
+                B->CreateStore(ai,a);
+            }
 			++ai;
 		}
 		
@@ -708,11 +726,14 @@ if(t->type->isIntegerTy()) { \
             case T_select: {
                 Obj obj;
                 exp->obj("value",&obj);
-                obj.dump();
                 Value * v = emitExp(&obj);
                 int offset = exp->number("offset");
-                int64_t idxs[] = {0, offset};
-                return emitCGEP(v,idxs,2);
+                if(exp->boolean("lvalue")) {
+                    int64_t idxs[] = {0, offset};
+                    return emitCGEP(v,idxs,2);
+                } else {
+                    return B->CreateExtractValue(v, offset);
+                }
             } break;
 			default: {
 				assert(!"NYI - exp");
@@ -796,24 +817,36 @@ if(t->type->isIntegerTy()) { \
         TType * ftyp;
         getOrCreateFunction(&func,&fn,&ftyp);
         
+        
         std::vector<Value *> params;
+        std::vector<TType *> types;
         int returnsN = returns.size();
         
         Value * sret = NULL;
-        if(returnsN > 1) {
+        if(ftyp->issretfunc) {
             //create struct to hold the list
             PointerType * pt = cast<PointerType>(fn->arg_begin()->getType());
             sret = B->CreateAlloca(pt->getElementType());
             params.push_back(sret);
+            types.push_back(NULL);
         }
         
-        emitParameterList(&paramlist,&params);
+        int first_arg = params.size();
+        emitParameterList(&paramlist,&params,&types);
+        for(int i = first_arg; i < params.size(); i++) {
+            if(types[i]->ispassedaspointer) {
+                Value * p = B->CreateAlloca(types[i]->type);
+                B->CreateStore(params[i],p);
+                params[i] = p;
+            }
+        }
+        
         
         Value * result = B->CreateCall(fn, params);
         
         if(returnsN == 0) {
             return NULL;
-        } else if(returnsN == 1) {
+        } else if(returnsN == 1 && !ftyp->issretfunc) {
             assert(truncateto1arg); //single return functions should not appear as multi-return calls
             return result;
         } else {
@@ -834,7 +867,7 @@ if(t->type->isIntegerTy()) { \
             B->CreateRet(UndefValue::get(rt));
         }
     }
-    void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
+    void emitParameterList(Obj * paramlist, std::vector<Value*> * results, std::vector<TType*> * types) {
         
         Obj params;
         
@@ -848,6 +881,8 @@ if(t->type->isIntegerTy()) { \
                 Obj v;
                 params.objAt(i,&v);
                 results->push_back(emitExp(&v));
+                if(types)
+                    types->push_back(typeOfValue(&v));
             }
             Obj call;
             //if there is a function call, emit it now
@@ -863,6 +898,8 @@ if(t->type->isIntegerTy()) { \
                 Obj v;
                 params.objAt(i,&v);
                 results->push_back(emitExp(&v));
+                if(types)
+                    types->push_back(typeOfValue(&v));
             }
         }
         
@@ -893,11 +930,11 @@ if(t->type->isIntegerTy()) { \
 				stmt->obj("expressions",&exps);
                 
                 std::vector<Value *> results;
-                emitParameterList(&exps, &results);
+                emitParameterList(&exps, &results,NULL);
                 
 				if(results.size() == 0) {
 					B->CreateRetVoid();
-				} else if (results.size() == 1) {
+				} else if (results.size() == 1 && !this->func_type->issretfunc) {
 					B->CreateRet(results[0]);
 				} else {
                     //multiple return values, look up the sret pointer
@@ -1007,7 +1044,7 @@ if(t->type->isIntegerTy()) { \
                 Obj inits;
                 bool has_inits = stmt->obj("initializers",&inits);
                 if(has_inits)
-                	emitParameterList(&inits, &rhs);
+                	emitParameterList(&inits, &rhs,NULL);
 				
 				Obj vars;
 				stmt->obj("variables",&vars);
@@ -1031,7 +1068,7 @@ if(t->type->isIntegerTy()) { \
                 std::vector<Value *> rhsexps;
 				Obj rhss;
 				stmt->obj("rhs",&rhss);
-				emitParameterList(&rhss,&rhsexps);
+				emitParameterList(&rhss,&rhsexps,NULL);
 				Obj lhss;
 				stmt->obj("lhs",&lhss);
 				int N = lhss.size();
