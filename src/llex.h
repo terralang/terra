@@ -83,12 +83,13 @@ static inline void OutputBuffer_rewind(OutputBuffer * buf, int size) {
 	buf->N -= std::min(buf->N,size);
 }
 static inline void OutputBuffer_printf(OutputBuffer * buf,const char * fmt,...) {
-	va_list ap;
-	va_start(ap,fmt);
-	if(buf->N == buf->space)
-		OutputBuffer_resize(buf,buf->space * 2);
+	if(buf->N == buf->space) {
+        OutputBuffer_resize(buf,buf->space * 2);
+    }
 	while(1) {
-		int most_written = buf->space - buf->N;
+		va_list ap;
+        va_start(ap,fmt);
+        int most_written = buf->space - buf->N;
 		int n = vsnprintf(buf->data + buf->N, most_written, fmt, ap);
 		if(n > -1 && n < most_written) {
 			buf->N += n;

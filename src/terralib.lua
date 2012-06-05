@@ -347,8 +347,7 @@ do  --constructor functions for terra functions and variables
     	return terra.types.newnamedstruct(name,manglename(name),tree,env)
     end
     function terra.anonstruct(tree,env)
-        print("Anon struct")
-        tree:printraw()
+       return terra.types.newanonstruct(tree,env)
     end
 end
 
@@ -373,7 +372,7 @@ do --construct type table that holds the singleton value representing each uniqu
 	types.type.__index = types.type
 	
 	function types.type:__tostring()
-		return self.name
+		return self.displayname or self.name
 	end
 	types.type.printraw = terra.tree.printraw
 	function types.type:isprimitive()
@@ -471,30 +470,74 @@ do --construct type table that holds the singleton value representing each uniqu
 		return types.table[name] or types.error
 	end
 	
-	function types.anonstruct(fieldnames,fieldtypes,listtypes)
-
-		--TODO
+    local function mkstruct(typ)
+        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {} }
+        for k,v in pairs(typ) do
+            tbl[k] = v 
+        end
+        return tbl
+    end
+    
+	function types.anonstruct(prototype)
+        local name = "struct { "
+        for i,v in pairs(prototype.entries) do
+            name = name .. v.key .. " : " .. v.type.name .. "; "
+        end
+        name = name .. "}"
 		
+        if types.table[name] then
+            return types.table[name]
+        else
+            prototype.name = name
+            types.table[name] = prototype
+            return prototype
+        end
 	end
 	
-	function types.newnamedstruct(rawname, name,tree,env)
-		local typ = mktyp { kind = terra.kinds["struct"], name = rawname, uniquename = name, entries = terra.newlist(), keytooffset = {} }
-		tree:printraw()
+    local function buildstruct(ctx,typ,tree,env)
+        ctx:push(tree.filename,env())
+        local unnamed = 0
+        for i,v in ipairs(tree.records) do
+            local key = v.key
+            if not key then
+                if typ.isnamed then
+                    terra.reporterror(ctx,v,"elements of a named struct must be named")
+                end
+                key = "_"..tostring(unnamed)
+                unnamed = unnamed + 1 
+            end
+            typ.entries:insert({ key = key, type = terra.resolvetype(ctx,v.type) })
+            typ.keytoindex[key] = #typ.entries - 1
+        end
+        ctx:pop()
+    end
+    
+    function types.newanonstruct(tree,env)
+        local typ = mkstruct {}
+        function typ:getcanonical(ctx)
+            if self.canonicalizing then
+                terra.reporterror(ctx,tree,"anonymous structs cannot be recursive.")
+                return terra.types.error
+            elseif self.type then
+                return self.type
+            else --get the actual unique type for this unamed struct
+                self.canonicalizing = true
+                buildstruct(ctx,typ,tree,env)
+                self.canonicalizing = nil
+                self.type = types.anonstruct(self)
+                return self.type
+            end
+        end
+        return typ
+    end
+    
+	function types.newnamedstruct(displayname, name,tree,env)
+		local typ = mkstruct { name = name, displayname = displayname, isnamed = true }
 		function typ:getcanonical(ctx)
 			self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
-			ctx:push(tree.filename,env())
 			
-			for i,v in ipairs(tree.records) do
-				if not v.key then
-					terra.reporterror(ctx,v,"elements of a named struct must be named")
-				else
-					self.entries:insert({ key = v.key, type = terra.resolvetype(ctx,v.type) })
-					self.keytooffset[v.key] = #self.entries - 1
-				end
-			end
-			
-			ctx:pop()
-			
+            buildstruct(ctx,typ,tree,env)
+            
 			local function checkrecursion(t)
 				if t == self then
 					terra.reporterror(ctx,tree,"type recursively contains itself")
@@ -954,12 +997,12 @@ function terra.func:typecheck(ctx)
 				end
 				
 				if typ:isstruct() then
-					local offset = typ.keytooffset[e.field]
-					if offset == nil then
+					local index = typ.keytoindex[e.field]
+					if index == nil then
 						terra.reporterror(ctx,v,"no field ",e.field," in object")
 						return e:copy { type = terra.types.error }
 					end
-					return e:copy { type = typ.entries[offset+1].type, value = v, offset = offset, lvalue = lvalue }
+					return e:copy { type = typ.entries[index+1].type, value = v, index = index, lvalue = lvalue }
 				else
 					terra.reporterror(ctx,v,"is not a structural type")
 					return e:copy { type = terra.types.error }

@@ -867,19 +867,23 @@ static void print_captured_locals(LexState * ls) {
 	std::set<TString *> variables;
 	FuncState * fs = ls->fs;
 	for(BlockCnt * bl = fs->bl; bl != NULL; bl = bl->previous) {
-		//printf("local variable size = %d\n",(int)bl->local_variables.size());
 		for(unsigned int i = 0; i < bl->local_variables.size(); i++) {
-			variables.insert(bl->local_variables[i]);
+            variables.insert(bl->local_variables[i]);
 		}
 	}
-	//setmetatable(tbl,{ _index = getfenv() })
 	OutputBuffer_printf(&ls->output_buffer,"function() return setmetatable({ ");
 	for(std::set<TString *>::iterator i = variables.begin(), end = variables.end();
 	    i != end;
 	    i++) {
-		OutputBuffer_printf(&ls->output_buffer,"%s = %s;",getstr(*i),getstr(*i));
+        TString * iv = *i;
+        const char * str = getstr(iv);
+        /*OutputBuffer_puts(&ls->output_buffer, strlen(str), str);
+        OutputBuffer_puts(&ls->output_buffer, 3, " = ");
+        OutputBuffer_puts(&ls->output_buffer, strlen(str), str);
+        OutputBuffer_puts(&ls->output_buffer, 2, "; ");*/
+        OutputBuffer_printf(&ls->output_buffer,"%s = %s;",str,str);
 	}
-	OutputBuffer_printf(&ls->output_buffer," }, { __index = getfenv() }) end");
+    OutputBuffer_printf(&ls->output_buffer," }, { __index = getfenv() }) end");
 }
 
 static void simpleexp (LexState *ls, expdesc *v) {

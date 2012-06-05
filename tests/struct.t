@@ -1,6 +1,6 @@
 --the zero line
 struct A { b : B }
-struct B {a : int, b : int }
+struct B {a : int, b : int}
 
 terra bar(a : B)
 	a.a = a.a + 1
@@ -32,3 +32,18 @@ local test = require("test")
 
 test.eq(foo(),12)
 test.eq(foo2(),4)
+
+
+local C = struct { int, int }
+
+local D = struct { int, int }
+
+terra anon()
+	var c : C
+	c._0 = 3
+	c._1 = 4
+	var d : D = c
+	return d._0 + d._1
+end
+
+test.eq(anon(),7)

@@ -255,7 +255,7 @@ struct TerraCompiler {
 					}
 				} break;
                 case T_struct: {
-                    const char * name = typ->string("uniquename");
+                    const char * name = typ->string("name");
                     Obj entries;
                     typ->obj("entries", &entries);
                     int N = entries.size();
@@ -727,7 +727,7 @@ if(t->type->isIntegerTy()) { \
                 Obj obj;
                 exp->obj("value",&obj);
                 Value * v = emitExp(&obj);
-                int offset = exp->number("offset");
+                int offset = exp->number("index");
                 if(exp->boolean("lvalue")) {
                     int64_t idxs[] = {0, offset};
                     return emitCGEP(v,idxs,2);
