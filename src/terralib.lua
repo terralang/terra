@@ -470,17 +470,30 @@ do --construct type table that holds the singleton value representing each uniqu
 		return types.table[name] or types.error
 	end
 	
-    local function mkstruct(typ)
-        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {} }
+    function types.newemptystruct(typ)
+        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {}, nextunnamed = 0 }
         for k,v in pairs(typ) do
             tbl[k] = v 
         end
+        function tbl:addentry(k,t)
+        	local entry = { type = t, key = k, hasname = true }
+        	if not k then
+        		entry.hasname = false
+        		entry.key = "_"..tostring(self.nextunnamed)
+    			self.nextunnamed = self.nextunnamed + 1
+        	end
+        	local notduplicate = self.keytoindex[entry.key] == nil        	
+			self.keytoindex[entry.key] = #self.entries
+			self.entries:insert(entry)
+			return notduplicate
+        end
+        
         return tbl
     end
     
 	function types.anonstruct(prototype)
         local name = "struct { "
-        for i,v in pairs(prototype.entries) do
+        for i,v in ipairs(prototype.entries) do
             name = name .. v.key .. " : " .. v.type.name .. "; "
         end
         name = name .. "}"
@@ -496,30 +509,20 @@ do --construct type table that holds the singleton value representing each uniqu
 	
     local function buildstruct(ctx,typ,tree,env)
         ctx:push(tree.filename,env())
-        local unnamed = 0
         for i,v in ipairs(tree.records) do
-            local key = v.key
-            local entry = { type = terra.resolvetype(ctx,v.type), key = v.key, hasname = true }
-            if not entry.key then
-                if typ.isnamed then
-                    terra.reporterror(ctx,v,"elements of a named struct must be named")
-                end
-                entry.key = "_"..tostring(unnamed)
-                unnamed = unnamed + 1 
-                entry.hasname = false
+            local resolvedtype = terra.resolvetype(ctx,v.type)
+            if not v.key and typ.isnamed then
+            	terra.reporterror(ctx,v,"elements of a named struct must be named")
             end
-            typ.entries:insert(entry)
-            
-            if typ.keytoindex[entry.key] then
-            	terra.reporterror(ctx,v,"duplicate definition of field ",entry.key)
+            if not typ:addentry(v.key,resolvedtype) then
+            	terra.reporterror(ctx,v,"duplicate definition of field ",v.key)
             end
-            typ.keytoindex[entry.key] = #typ.entries - 1
         end
         ctx:pop()
     end
     
     function types.newanonstruct(tree,env)
-        local typ = mkstruct {}
+        local typ = types.newemptystruct {}
         function typ:getcanonical(ctx)
             if self.canonicalizing then
                 terra.reporterror(ctx,tree,"anonymous structs cannot be recursive.")
@@ -538,7 +541,7 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
 	function types.newnamedstruct(displayname, name,tree,env)
-		local typ = mkstruct { name = name, displayname = displayname, isnamed = true }
+		local typ = types.newemptystruct { name = name, displayname = displayname, isnamed = true }
 		function typ:getcanonical(ctx)
 			self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
 			
@@ -1055,7 +1058,11 @@ function terra.func:typecheck(ctx)
 			end
 		end
 		if e:is "literal" then
-			return e:copy { type = terra.types.primitive(e.type) }
+			if e.type == "string" then --TODO: support string literals as terra type, rather than just return the string as a lua object
+				return e.value
+			else
+				return e:copy { type = terra.types.primitive(e.type) }
+			end
 		elseif e:is "var" then
 			local v = env[e.name]
 			if v ~= nil then
@@ -1104,6 +1111,26 @@ function terra.func:typecheck(ctx)
 			end
 		elseif e:is "apply" then
 			return checkcall(e,true)
+		elseif e:is "constructor" then
+            local typ = terra.types.newemptystruct {}
+            local entries = terra.newlist()
+            for i,f in ipairs(e.records) do
+            	local k = nil
+            	if f.key then
+            		k = checkexpraw(f.key)
+            		if type(k) ~= "string" then
+            			terra.reporterror(ctx,e,"expected string but found ",type(k))
+            			k = "<error>"
+            		end
+            	end
+            	local v = checkrvalue(f.value)
+            	if not typ:addentry(k,v.type) then
+            		terra.reporterror(ctx,e," duplicate key ",k," in struct constructor")
+            	end
+            	
+            	entries:insert( f:copy { key = k, value = v } )
+            end
+            return e:copy { records = entries, type = terra.types.anonstruct(typ) }
 		end
 		error("NYI - expression "..terra.kinds[e.kind],2)
 	end

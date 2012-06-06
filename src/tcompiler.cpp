@@ -771,6 +771,23 @@ if(t->type->isIntegerTy()) { \
                     return B->CreateExtractValue(v, offset);
                 }
             } break;
+            case T_constructor: {
+                Obj records;
+                exp->obj("records",&records);
+                Value * result = B->CreateAlloca(typeOfValue(exp)->type);
+                int N = records.size();
+                for(int i = 0; i < N; i++) {
+                    Obj field;
+                    records.objAt(i,&field);
+                    Obj v;
+                    field.obj("value",&v);
+                    Value * entry = emitExp(&v);
+                    int64_t idxs[] = { 0, i };
+                    Value * addr = emitCGEP(result,idxs,2);
+                    B->CreateStore(entry,addr);
+                }
+                return B->CreateLoad(result);
+            } break;
 			default: {
 				assert(!"NYI - exp");
 			} break;
