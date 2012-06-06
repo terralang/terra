@@ -459,6 +459,7 @@ do --construct type table that holds the singleton value representing each uniqu
 		local value = types.table[name]
 		if value == nil then
 			value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
+			setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
 			types.table[name] = value
 		end
 		return value
@@ -996,24 +997,67 @@ function terra.func:typecheck(ctx)
         paramlist.size = #typelist
 	end
 	function checkcall(exp, mustreturnatleast1)
-		local raw = checkexpraw(exp.value)
-		if terra.isfunction(raw) then
-			local fntyp = raw:gettype(ctx)
-			local paramlist = checkparameterlist(exp,exp.arguments)
-			insertcasts(fntyp.parameters,paramlist)
+		local function resolvefn(fn)
+			if terra.isfunction(fn) then
+				return fn:gettype(ctx)
+			elseif fn == nil then
+				terra.reporterror(ctx,exp,"call to undefined function")
+				return terra.types.error
+			else
+				error("NYI - check call on non-literal function calls")
+			end
+		end
+		
+		local fn,fntyp, paramlist
+		if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
+		                        --then extract a's type from the parameter list and look in the method table for "b" 
 			
-			local typ
+			local reciever = checkexp(exp.value)
+			fn = reciever.type.methods[exp.name]
+			fntyp = resolvefn(fn)
+			
+			if fntyp ~= terra.types.error then
+			
+				local rtyp = fntyp.parameters[1]
+				local rexp = exp.value
+				--TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
+				local function mkunary(op) 
+					return terra.newtree(rexp, { kind = terra.kinds.operator, operator = terra.kinds[op], operands = terra.newlist{rexp} } )
+				end
+				if rtyp:ispointer() and rtyp.type == reciever.type then
+					--implicit address of
+					rexp = mkunary("&")
+				elseif reciever.type:ispointer() and reciever.type.type == rtyp then
+					--implicit dereference
+					rexp = mkunary("@")
+				end		
+								
+				local arguments = terra.newlist()
+				arguments:insert(rexp)
+				for _,v in ipairs(exp.arguments) do
+					arguments:insert(v)
+				end
+				
+				paramlist = checkparameterlist(exp,arguments)
+			end
+			
+		else
+			fn = checkexpraw(exp.value)
+			fntyp = resolvefn(fn)
+			paramlist = checkparameterlist(exp,exp.arguments)
+		end
+	
+		local typ = terra.types.error
+		if fntyp ~= terra.types.error then
+			insertcasts(fntyp.parameters,paramlist)
 			if #fntyp.returns >= 1 then
 				typ = fntyp.returns[1]
 			elseif mustreturnatleast1 then
 				terra.reporterror(ctx,exp,"expected call to return at least 1 value")
-				typ = terra.types.error
 			end --otherwise this is used in statement context and does not require a type
-			
-			return exp:copy { arguments = paramlist,  value = raw, type = typ, types = fntyp.returns }
-		else
-			error("NYI - check call on non-literal function calls")
 		end
+		return exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = fn, type = typ, types = fntyp.returns or terra.newlist() }
+		
 	end
 	function asrvalue(ee)
 		if ee.lvalue then
@@ -1109,7 +1153,7 @@ function terra.func:typecheck(ctx)
 			else
 				return e
 			end
-		elseif e:is "apply" then
+		elseif e:is "apply" or e:is "method" then
 			return checkcall(e,true)
 		elseif e:is "constructor" then
             local typ = terra.types.newemptystruct {}
@@ -1335,10 +1379,8 @@ function terra.func:typecheck(ctx)
             local desugared = terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist {dv,wh} } )
             desugared:printraw()
             return checkstmt(desugared)
-		elseif s:is "apply" then
+		elseif s:is "apply" or s:is "method" then
 			return checkcall(s,false) --allowed to be void
-		elseif s:is "method" then
-			error ("NYI - methods")
 		else 
 			return checkrvalue(s)
 		end
