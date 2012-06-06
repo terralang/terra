@@ -499,15 +499,21 @@ do --construct type table that holds the singleton value representing each uniqu
         local unnamed = 0
         for i,v in ipairs(tree.records) do
             local key = v.key
-            if not key then
+            local entry = { type = terra.resolvetype(ctx,v.type), key = v.key, hasname = true }
+            if not entry.key then
                 if typ.isnamed then
                     terra.reporterror(ctx,v,"elements of a named struct must be named")
                 end
-                key = "_"..tostring(unnamed)
+                entry.key = "_"..tostring(unnamed)
                 unnamed = unnamed + 1 
+                entry.hasname = false
             end
-            typ.entries:insert({ key = key, type = terra.resolvetype(ctx,v.type) })
-            typ.keytoindex[key] = #typ.entries - 1
+            typ.entries:insert(entry)
+            
+            if typ.keytoindex[entry.key] then
+            	terra.reporterror(ctx,v,"duplicate definition of field ",entry.key)
+            end
+            typ.keytoindex[entry.key] = #typ.entries - 1
         end
         ctx:pop()
     end
@@ -715,16 +721,66 @@ function terra.func:typecheck(ctx)
 		return terra.resolvetype(ctx,t)
 	end
 	
-	local function insertcast(exp,typ)
+	
+	
+	
+	local insertcast,structcast, insertvar, insertselect,asrvalue
+	
+	function structcast(cast,exp,typ)
+		local from = exp.type
+		local to = typ
+		
+		cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = from })
+		local var_ref = insertvar(exp,from,cast.structvariable.name,cast.structvariable)
+		
+		local indextoinit = {}
+		for i,entry in ipairs(from.entries) do
+			local selected = asrvalue(insertselect(var_ref,entry.key))
+			if entry.hasname then
+				local offset = to.keytoindex[entry.key]
+				if not offset then
+					terra.reporterror(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
+				else
+					if indextoinit[offset] then
+						terra.reporterror(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
+					end
+					indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
+				end
+			else
+				--find the first non initialized entry
+				local offset = 0
+				while offset < #to.entries and indextoinit[offset] do
+					offset = offset + 1
+				end
+				if offset == #to.entries then
+					terra.reporterror(ctx,exp,"structural cast invalid, too many unnamed fields")
+				else
+					indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
+				end
+			end
+		end
+        
+		cast.entries = terra.newlist()
+        for i,v in pairs(indextoinit) do
+            cast.entries:insert( { index = i, value = v } )
+        end
+		
+        return cast
+	end
+	
+	function insertcast(exp,typ)
 		if typ == exp.type or typ == terra.types.error or exp.type == terra.types.error then
 			return exp
 		else
-			--TODO: check that the cast is valid and insert the specific kind of cast 
-			--so that codegen in llvm is easy
-			if not typ:isprimitive() or not exp.type:isprimitive() or typ:islogical() or exp.type:islogical() then
+			local cast_exp = terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
+			if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
+				return cast_exp
+			elseif typ:isstruct() and exp.type:isstruct() and not exp.type.isnamed then 
+				return structcast(cast_exp,exp,typ)
+			else
 				terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
-            end
-			return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
+				return cast_exp
+			end
 		end
 	end
 	
@@ -853,9 +909,10 @@ function terra.func:typecheck(ctx)
 		local ty = terra.types.pointer(e.type)
 		return ee:copy { type = ty, operands = terra.newlist{e} }
 	end
-	local function checkdereference(ee)
-		local e = checkrvalue(ee.operands[1])
-		local ret = ee:copy { operands = terra.newlist{e}, lvalue = true }
+	
+	local function insertdereference(ee)
+		local e = asrvalue(ee)
+		local ret = terra.newtree(e,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{e}, lvalue = true })
 		if not e.type:ispointer() then
 			terra.reporterror(ctx,e,"argument of dereference is not a pointer type but ",e.type)
 			ret.type = terra.types.error 
@@ -864,6 +921,12 @@ function terra.func:typecheck(ctx)
 		end
 		return ret
 	end
+	
+	local function checkdereference(ee)
+		local e = checkrvalue(ee.operands[1])
+		return insertdereference(e)
+	end
+	
 	local operator_table = {
 		["-"] = checkbinaryarith;
 		["+"] = checkbinaryarith;
@@ -960,12 +1023,33 @@ function terra.func:typecheck(ctx)
 		local ee = checkexp(e)
 		return asrvalue(ee)
 	end
+	
+	function insertselect(v,field)
+		local tree = terra.newtree(v, { type = terra.types.error, kind = terra.kinds.select, field = field, value = v, lvalue = v.lvalue })
+		if v.type:isstruct() then
+			local index = v.type.keytoindex[field]
+			if index == nil then
+				terra.reporterror(ctx,v,"no field ",field," in object")
+			else
+				tree.index = index
+				tree.type = v.type.entries[index+1].type
+			end
+		else
+			terra.reporterror(ctx,v,"expected a structural type")
+		end
+		return tree
+	end
+	
+	function insertvar(anchor, typ, name, definition)
+		return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ, name = name, definition = definition, lvalue = true }) 
+	end
+	
 	function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
 		
 		local function resolveglobal(v) --attempt to treat the value as a terra global variable and return it as one if it is. Otherwise just pass the lua object through
 			if terra.isglobalvar(v) then
 				local typ = v:gettype(ctx) -- this will initialize the variable if it is not already
-				return terra.newtree(e, { kind = terra.kinds["var"], type = typ, name = v.tree.name, definition = v.tree, lvalue = true }) 
+				return insertvar(e,typ,v.tree.name,v.tree)
 			else
 				return v
 			end
@@ -987,26 +1071,11 @@ function terra.func:typecheck(ctx)
 		elseif e:is "select" then
 			local v = checkexpraw(e.value)
 			if terra.istree(v) then
-				local typ = v.type
-				local lvalue = v.lvalue
 				
-				if typ:ispointer() then --allow 1 implicit dereference
-					typ = typ.type 
-					lvalue = true
-					v = asrvalue(v)
+				if v.type:ispointer() then --allow 1 implicit dereference
+					v = insertdereference(v)
 				end
-				
-				if typ:isstruct() then
-					local index = typ.keytoindex[e.field]
-					if index == nil then
-						terra.reporterror(ctx,v,"no field ",e.field," in object")
-						return e:copy { type = terra.types.error }
-					end
-					return e:copy { type = typ.entries[index+1].type, value = v, index = index, lvalue = lvalue }
-				else
-					terra.reporterror(ctx,v,"is not a structural type")
-					return e:copy { type = terra.types.error }
-				end
+				return insertselect(v,e.field)
 			else
 				local v = type(v) == "table" and v[e.field]
 				if v ~= nil then

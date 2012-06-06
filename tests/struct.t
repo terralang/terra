@@ -43,6 +43,7 @@ terra anon()
 	c._0 = 3
 	c._1 = 4
 	var d : D = c
+	--var b : B = d
 	return d._0 + d._1
 end
 

@@ -56,6 +56,8 @@ void terra_compilerinit(struct terra_State * T) {
 	T->C->fpm->add(createBasicAliasAnalysisPass());
 	// Promote allocas to registers.
 	T->C->fpm->add(createPromoteMemoryToRegisterPass());
+    // Also promote aggregates like structs....
+    T->C->fpm->add(createScalarReplAggregatesPass());
 	// Do simple "peephole" optimizations and bit-twiddling optzns.
 	T->C->fpm->add(createInstructionCombiningPass());
 	// Reassociate expressions.
@@ -590,6 +592,33 @@ if(t->type->isIntegerTy()) { \
 #undef RETURN_OP
 #undef RETURN_SOP
     }
+    Value * emitStructCast(Obj * exp, TType * from, TType * to, Value * input) {
+        //allocate memory to hold input variable
+        Obj structvariable;
+        exp->obj("structvariable", &structvariable);
+        Value * sv = allocVar(&structvariable);
+        B->CreateStore(input,sv);
+        
+        //allocate temporary to hold output variable
+        Value * output = B->CreateAlloca(to->type);
+        
+        Obj entries;
+        exp->obj("entries",&entries);
+        int N = entries.size();
+        
+        for(int i = 0; i < N; i++) {
+            Obj entry;
+            entries.objAt(i,&entry);
+            Obj value;
+            entry.obj("value", &value);
+            int idx = entry.number("index");
+            int64_t idxs[] = {0, idx };
+            Value * oe = emitCGEP(output,idxs,2);
+            Value * in = emitExp(&value); //these expressions will select from the structvariable and perform any casts necessary
+            B->CreateStore(in,oe);
+        }
+        return B->CreateLoad(output);
+    }
     Value * emitCast(TType * from, TType * to, Value * exp) {
         int fsize = from->type->getPrimitiveSizeInBits();
         int tsize = to->type->getPrimitiveSizeInBits(); 
@@ -706,7 +735,14 @@ if(t->type->isIntegerTy()) { \
                 exp->obj("expression",&a);
                 exp->obj("to",&to);
                 exp->obj("from",&from);
-                return emitCast(getType(&from),getType(&to),emitExp(&a));
+                TType * fromT = getType(&from);
+                TType * toT = getType(&to);
+                Value * v = emitExp(&a);
+                if(toT->type->isStructTy()) {
+                    return emitStructCast(exp,fromT,toT,v);
+                } else {
+                    return emitCast(fromT,toT,v);
+                }
             } break;
             case T_apply: {
                 Value * v = emitCall(exp,true);
