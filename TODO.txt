@@ -1,0 +1,22 @@
+Language Implementation:
+
+--array types
+--pointer arithmetic
+--resolvetype needs to allow the declaration of anonymous structural types
+--function pointers
+-- -> and & syntax need to work in normal lua code (not just type resolution)
+--vector types
+--sane numeric casting rules for constants
+--methods on types (declaration syntax )
+--macros in terra
+--calling lua functions from terra
+
+Runtime Implementation:
+
+-- how to save results for later (both Lua state and Terra JIT state)
+-- how to use clang to read C header files
+
+DONE:
+--anonymous structural type cast to other structural types
+
+--methods on types (call syntax/resolution) 
