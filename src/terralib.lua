@@ -302,7 +302,17 @@ do  --constructor functions for terra functions and variables
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
         local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
-        return setmetatable(obj,terra.func)
+        local fn = setmetatable(obj,terra.func)
+    	
+    	--handle desugaring of methods defintions by adding an implicit self argument
+    	if newtree.reciever ~= nil then
+    		local addressof = terra.newtree(newtree.reciever, { kind = terra.kinds.operator, operator = terra.kinds["&"], operands = terra.newlist{newtree.reciever} })
+    		newtree.reciever = nil
+    		local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = "self", type = addressof })
+    		table.insert(newtree.parameters,1,implicitparam) --add the implicit parameter to the parameter list
+    	end
+    	
+    	return fn
     end
     
     function terra.newvariables(tree,env)
@@ -1016,7 +1026,7 @@ function terra.func:typecheck(ctx)
 			fn = reciever.type.methods[exp.name]
 			fntyp = resolvefn(fn)
 			
-			if fntyp ~= terra.types.error then
+			if fntyp ~= terra.types.error and fntyp.parameters[1] ~= nil then
 			
 				local rtyp = fntyp.parameters[1]
 				local rexp = exp.value
@@ -1048,7 +1058,7 @@ function terra.func:typecheck(ctx)
 		end
 	
 		local typ = terra.types.error
-		if fntyp ~= terra.types.error then
+		if fntyp ~= terra.types.error and paramlist ~= nil then
 			insertcasts(fntyp.parameters,paramlist)
 			if #fntyp.returns >= 1 then
 				typ = fntyp.returns[1]

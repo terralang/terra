@@ -7,7 +7,6 @@ Language Implementation:
 -- -> and & syntax need to work in normal lua code (not just type resolution)
 --vector types
 --sane numeric casting rules for constants
---methods on types (declaration syntax )
 --macros in terra
 --calling lua functions from terra
 
@@ -18,5 +17,5 @@ Runtime Implementation:
 
 DONE:
 --anonymous structural type cast to other structural types
-
+--methods on types (declaration syntax )
 --methods on types (call syntax/resolution) 

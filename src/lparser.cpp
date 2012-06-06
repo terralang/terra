@@ -1585,11 +1585,27 @@ static int funcname (LexState *ls, expdesc *v) {
     RETURNS_0(fieldsel(ls, v));
   if (ls->t.token == ':') {
     ismethod = 1;
-    check_no_terra(ls,"method definitions");
+    if(ls->in_terra)
+        ls->variable_names.push_back(luaS_new(ls->LP,"methods"));
+    //check_no_terra(ls,"method definitions");
     fieldsel(ls, v);
   }
   return ismethod;
 }
+
+static void dump(LexState * ls) {
+    lua_State * L = ls->L;
+    printf("object is:\n");
+    int tree = lua_gettop(L);
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"tree");
+    lua_getfield(L,-1,"printraw");
+    lua_pushvalue(L, tree);
+    lua_call(L, 1, 0);
+    
+    lua_pop(L,2);
+}
+
 
 static void funcstat (LexState *ls, int line) {
   /* funcstat -> FUNCTION funcname body */
@@ -1600,26 +1616,44 @@ static void funcstat (LexState *ls, int line) {
   beginrecord(ls);
   RETURNS_1(ismethod = funcname(ls, &v));
   if(ls->in_terra) {
-  	lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
+    if(ismethod) {
+        //currently have a.b.c.methodname
+        //extract the AST for the type
+        lua_getfield(ls->L, -1, "value"); //extract the type: a.b.c
+        lua_remove(ls->L,-2); //remove the methodname select
+    } else {
+        lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
+    }
   }
   endrecord(ls);
   body(ls, &b, ismethod, line);
+  
+  if(ls->in_terra && ismethod) {
+    int tbl = lua_gettop(ls->L);
+    lua_pushvalue(ls->L, -2); //the type a.b.c
+    add_field(ls, tbl, "reciever");
+    //cleanup: stack looks like <a.b.c> <function AST>
+    lua_remove(ls->L,-2);
+  }
+  
 }
 
 
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
 	Token begin = ls->t;
-	RETURNS_1(funcstat(ls,line));
+    RETURNS_1(funcstat(ls,line));
 	int n = add_entry(ls,TA_FUNCTION_TABLE);
 	luaX_patchbegin(ls,&begin);
 	print_names(ls); //a.b.c.d
-	OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
+    
+    OutputBuffer_printf(&ls->output_buffer," = terra.newfunction(");
 	print_names(ls);
 	OutputBuffer_printf(&ls->output_buffer,", _G.terra._trees[%d],\"",n);
     print_names(ls);
     OutputBuffer_printf(&ls->output_buffer,"\",");
 	print_captured_locals(ls);
+    
 	OutputBuffer_printf(&ls->output_buffer,")");
 	luaX_patchend(ls,&begin);
 	ls->in_terra--;
