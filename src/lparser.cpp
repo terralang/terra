@@ -1040,8 +1040,8 @@ static BinOpr getbinopr (int op) {
 static void check_lua_operator(LexState * ls, int op) {
 	if(!ls->in_terra) {
 		switch(op) {
-			case '&': case '@': case TK_FUNC_PTR:
-				luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@, &, and -> operators not supported in Lua code."));
+			case '@':
+				luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@ operator not supported in Lua code."));
 				break;
 			default:
 				break;
@@ -1074,20 +1074,38 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   enterlevel(ls);
   uop = getunopr(ls->t.token);
   check_lua_operator(ls,ls->t.token);
+  Token begintoken = ls->t;
+  
   if (uop != OPR_NOUNOPR) {
+    
     int line = ls->linenumber;
     int tbl = new_table(ls,T_operator);
     push_kind(ls,luaX_token2rawstr(ls,ls->t.token));
     add_field(ls,tbl,"operator");
     luaX_next(ls);
+    Token beginexp = ls->t;
     int exps = new_list(ls);
     RETURNS_1(subexpr(ls, v, UNARY_PRIORITY));
     add_entry(ls,exps);
     add_field(ls,tbl,"operands");
+    
+    if(!ls->in_terra && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
+        char * expstring = luaX_saveoutput(ls, &beginexp);
+        luaX_patchbegin(ls, &begintoken);
+        OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
+        free(expstring);
+        luaX_patchend(ls, &begintoken);
+    }
+    
   }
   else RETURNS_1(simpleexp(ls, v));
   /* expand while operators have priorities higher than `limit' */
+  
   op = getbinopr(ls->t.token);
+  char * lhs_string = NULL;
+  if(!ls->in_terra && op == OPR_FUNC_PTR) {
+    lhs_string = luaX_saveoutput(ls,&begintoken);
+  }
   check_lua_operator(ls,ls->t.token);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     expdesc v2;
@@ -1099,8 +1117,19 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     exps++; //we just put a table before it, so it is one higher on the stack
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
+    Token beginrhs = ls->t;
     /* read sub-expression with higher priority */
     RETURNS_1(nextop = subexpr(ls, &v2, priority[op].right));
+    
+    if(lhs_string) { //desugar a -> b to terra.types.functype(a,b)
+        char * rhs_string = luaX_saveoutput(ls,&beginrhs);
+        luaX_patchbegin(ls, &begintoken);
+        OutputBuffer_printf(&ls->output_buffer,"terra.types.funcpointer(%s,%s)",lhs_string,rhs_string);
+        luaX_patchend(ls,&begintoken);
+        free(lhs_string);
+        free(rhs_string);
+        lhs_string = NULL;
+    }
     add_entry(ls,exps);
     
    

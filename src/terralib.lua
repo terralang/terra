@@ -579,10 +579,20 @@ do --construct type table that holds the singleton value representing each uniqu
 		return typ
 	end
 	
+	function types.funcpointer(parameters,returns)
+		if types.istype(parameters) then
+			parameters = {parameters}
+		end
+		if types.istype(returns) then
+			returns = {returns}
+		end
+		return types.pointer(types.functype(parameters,returns))
+	end
+    
 	function types.functype(parameters,returns)
 		local function getname(t) return t.name end
-		local a = parameters:map(getname):mkstring("{",",","}")
-		local r = returns:map(getname):mkstring("{",",","}")
+		local a = terra.list.map(parameters,getname):mkstring("{",",","}")
+		local r = terra.list.map(returns,getname):mkstring("{",",","}")
 		local name = a.."->"..r
 		local value = types.table[name]
 		if value == nil then

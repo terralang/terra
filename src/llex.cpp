@@ -203,7 +203,8 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 			begin_token->seminfo.linebegin++;
 			/*fallthrough*/
 		case ' ': case '\f': case '\t': case '\v':
-			ob->N++;
+			begin_token->seminfo.buffer_begin++;
+            ob->N++;
 			break;
 		default:
 			goto loop_exit;
@@ -212,11 +213,30 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 	return;
 	//code can now safely write to this buffer
 }
+char * luaX_saveoutput(LexState * ls, Token * begin_token) {
+    OutputBuffer * ob = &ls->output_buffer;
+	if(ls->t.token == TK_EOS) {
+		ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
+		                              //we need to not include the last character in the patch, so we updated the pointer here
+	}
+    int n_bytes = ls->t.seminfo.buffer_begin - begin_token->seminfo.buffer_begin;
+    char * buf = (char*) malloc(n_bytes + 1);
+    memcpy(buf, ob->data + begin_token->seminfo.buffer_begin, n_bytes);
+    buf[n_bytes] = '\0';
+    return buf;
+}
+
 void luaX_patchend(LexState *ls, Token * begin_token) {
 	//first we need to pad with newlines, until we reach the original line count
 	OutputBuffer * ob = &ls->output_buffer;
-
-	for(int line = begin_token->seminfo.linebegin;
+    //count the number of newlines in the patched in data
+    int nlines = 0;
+    for(int i = begin_token->seminfo.buffer_begin; i < ob->N; i++) {
+        if(ob->data[i] == '\n')
+            nlines++;
+    }
+    
+	for(int line = begin_token->seminfo.linebegin + nlines;
 		line < ls->t.seminfo.linebegin;
 		line++) {
 		OutputBuffer_putc(ob,'\n');
