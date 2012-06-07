@@ -1016,13 +1016,27 @@ function terra.func:typecheck(ctx)
 		end
         paramlist.size = #typelist
 	end
+	local function insertfunctionliteral(anchor,e)
+		local fntyp = e:gettype(ctx)
+		local typ = fntyp and terra.types.pointer(fntyp)
+		return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ })
+	end
+	
 	function checkcall(exp, mustreturnatleast1)
 		local function resolvefn(fn)
 			if terra.isfunction(fn) then
-				return fn:gettype(ctx)
+				local tree = insertfunctionliteral(exp,fn)
+				return tree,tree.type.type
+			elseif terra.istree(fn) then
+				if fn.type:ispointer() and fn.type.type:isfunction() then
+					return asrvalue(fn),fn.type.type
+				else
+					terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
+					return asrvalue(fn),terra.types.error
+				end
 			elseif fn == nil then
 				terra.reporterror(ctx,exp,"call to undefined function")
-				return terra.types.error
+				return nil,terra.types.error
 			else
 				error("NYI - check call on non-literal function calls")
 			end
@@ -1033,8 +1047,8 @@ function terra.func:typecheck(ctx)
 		                        --then extract a's type from the parameter list and look in the method table for "b" 
 			
 			local reciever = checkexp(exp.value)
-			fn = reciever.type.methods[exp.name]
-			fntyp = resolvefn(fn)
+			local rawfn = reciever.type.methods[exp.name]
+			fn,fntyp = resolvefn(rawfn)
 			
 			if fntyp ~= terra.types.error and fntyp.parameters[1] ~= nil then
 			
@@ -1062,8 +1076,7 @@ function terra.func:typecheck(ctx)
 			end
 			
 		else
-			fn = checkexpraw(exp.value)
-			fntyp = resolvefn(fn)
+			fn,fntyp = resolvefn(checkexpraw(exp.value))
 			paramlist = checkparameterlist(exp,exp.arguments)
 		end
 	
@@ -1206,7 +1219,9 @@ function terra.func:typecheck(ctx)
 			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = double })
 		elseif type(e) == "boolean" then
 			return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = bool })
-		else 
+		elseif terra.isfunction(e) then
+			return insertfunctionliteral(ee,e)
+		else
 			terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
 			return ee:copy { type = terra.types.error }
 		end

@@ -724,9 +724,24 @@ if(t->type->isIntegerTy()) { \
                 } else if(t->type->isIntegerTy()) {
                     uint64_t integer = exp->integer("value");
                     return ConstantInt::get(t->type, integer);
-                } else {
+                } else if(t->type->isFloatingPointTy()) {
                     double dbl = exp->number("value");
                     return ConstantFP::get(t->type, dbl);
+                } else if(t->type->isPointerTy()) {
+                    PointerType * pt = (PointerType*) t->type;
+                    if(pt->getElementType()->isFunctionTy()) {
+                        Obj func;
+                        exp->obj("value",&func);
+                        TType * ftyp;
+                        Function * fn;
+                        getOrCreateFunction(&func,&fn,&ftyp);
+                        return fn;
+                    } else {
+                        assert(!"NYI - pointer literal");
+                    }
+                } else {
+                    exp->dump();
+                    assert(!"NYI - literal");
                 }
             } break;
             case T_cast: {
@@ -866,9 +881,13 @@ if(t->type->isIntegerTy()) { \
         call->obj("types",&returns);
         call->obj("value",&func);
         
-        Function * fn;
-        TType * ftyp;
-        getOrCreateFunction(&func,&fn,&ftyp);
+        Value * fn = emitExp(&func);
+        
+        Obj fnptrtyp;
+        func.obj("type",&fnptrtyp);
+        Obj fntypobj;
+        fnptrtyp.obj("type",&fntypobj);
+        TType * ftyp = getType(&fntypobj);
         
         
         std::vector<Value *> params;
@@ -878,7 +897,8 @@ if(t->type->isIntegerTy()) { \
         Value * sret = NULL;
         if(ftyp->issretfunc) {
             //create struct to hold the list
-            PointerType * pt = cast<PointerType>(fn->arg_begin()->getType());
+            FunctionType * castft = (FunctionType*) ftyp->type;
+            PointerType * pt = cast<PointerType>(castft->getParamType(0));
             sret = B->CreateAlloca(pt->getElementType());
             params.push_back(sret);
             types.push_back(NULL);
@@ -893,7 +913,6 @@ if(t->type->isIntegerTy()) { \
                 params[i] = p;
             }
         }
-        
         
         Value * result = B->CreateCall(fn, params);
         
