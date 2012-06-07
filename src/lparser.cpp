@@ -197,7 +197,7 @@ static void check_terra(LexState * ls, const char * thing) {
 */
 static int statement (LexState *ls);
 static void expr (LexState *ls, expdesc *v);
-
+static void terratype(LexState * ls);
 
 /* semantic error */
 static l_noret semerror (LexState *ls, const char *msg) {
@@ -525,19 +525,18 @@ static void constructor (LexState *ls, expdesc *t) {
 
 static void recstruct (LexState *ls) {
   int tbl = new_table(ls,T_structentry);
-  expdesc key,val;
+  expdesc key;
   RETURNS_1(checkname(ls, &key));
   add_field(ls,tbl,"key");
   checknext(ls, ':');
-  RETURNS_1(expr(ls, &val));
+  RETURNS_1(terratype(ls));
   add_field(ls,tbl,"type");
 }
 
 static void liststruct (LexState *ls) {
   /* listfield -> exp */
-  expdesc val;
   int tbl = new_table(ls,T_structentry);
-  RETURNS_1(expr(ls, &val));
+  RETURNS_1(terratype(ls));
   add_field(ls,tbl,"type");
 }
 
@@ -587,7 +586,6 @@ static void terrastruct(LexState * ls, int islocal) {
     luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
     
     ls->in_terra++;
-    ls->in_terra_type = 1;
         
     TString * vname;
     beginrecord(ls);
@@ -620,7 +618,6 @@ static void terrastruct(LexState * ls, int islocal) {
     luaX_patchend(ls,&begin);
     
     ls->in_terra--;
-    ls->in_terra_type = 0;
 }
 /* }====================================================================== */
 
@@ -646,7 +643,7 @@ static void parlist (LexState *ls) {
             add_field(ls,entry,"name");
           
           	checknext(ls,':');
-          	RETURNS_1(expr(ls,&e));
+          	RETURNS_1(terratype(ls));
           	add_field(ls,entry,"type");
           	add_entry(ls,tbl);
           }
@@ -665,7 +662,16 @@ static void parlist (LexState *ls) {
   }
 }
 
-static int explist (LexState *ls, expdesc *v);
+static void typelist (LexState *ls) {
+  /* typelist -> type { `,' type } */
+  int lst = new_list(ls);
+  terratype(ls);
+  add_entry(ls,lst);
+  while (testnext(ls, ',')) {
+    terratype(ls);
+    add_entry(ls,lst);
+  }
+}
 static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
@@ -682,17 +688,16 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
-    expdesc v;
       if(testnext(ls,'(')) {
           if(testnext(ls,')')) { //zero args
               new_list(ls);
           } else { //(arg0,args1,...)
-              RETURNS_1(explist(ls,&v));
+              RETURNS_1(typelist(ls));
               checknext(ls,')');
           }
       } else { //single arg: arg0 
           int lst = new_list(ls);
-          RETURNS_1(expr(ls,&v));
+          RETURNS_1(terratype(ls));
           add_entry(ls,lst);
       }
   	add_field(ls,tbl,"return_types");
@@ -954,30 +959,23 @@ static void simpleexp (LexState *ls, expdesc *v) {
     	return;
     }
     case TK_STRUCT: {
-        if(!ls->in_terra_type)
-            check_no_terra(ls,"struct declarations");
+        check_no_terra(ls,"struct declarations");
         Token begin = ls->t;
         
         luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
         
-        if(ls->in_terra_type) { //just keep parsing AST, no need to patch
-            structconstructor(ls);
-        } else {
-            ls->in_terra++;
-            ls->in_terra_type = 1;
+        ls->in_terra++;
+    
+        structconstructor(ls);
+        int id = add_entry(ls,TA_FUNCTION_TABLE);
+    
+        luaX_patchbegin(ls,&begin);
+        OutputBuffer_printf(&ls->output_buffer,"terra.anonstruct(_G.terra._trees[%d],",id);
+        print_captured_locals(ls);
+        OutputBuffer_printf(&ls->output_buffer,")");
+        luaX_patchend(ls,&begin);
         
-            structconstructor(ls);
-            int id = add_entry(ls,TA_FUNCTION_TABLE);
-        
-            luaX_patchbegin(ls,&begin);
-            OutputBuffer_printf(&ls->output_buffer,"terra.anonstruct(_G.terra._trees[%d],",id);
-            print_captured_locals(ls);
-            OutputBuffer_printf(&ls->output_buffer,")");
-            luaX_patchend(ls,&begin);
-            
-            ls->in_terra--;
-            ls->in_terra_type = 0;
-        }
+        ls->in_terra--;
         return;
     } break;
     default: {
@@ -1145,6 +1143,66 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
 
 static void expr (LexState *ls, expdesc *v) {
   RETURNS_1(subexpr(ls, v, 0));
+}
+
+
+struct TypeReaderData {
+    int step;
+    const char * data;
+    int N;
+};
+const char * type_reader(lua_State * L, void * data, size_t * size) {
+    TypeReaderData * d = (TypeReaderData *) data;
+    if(d->step == 0) {
+        const char * ret = "return ";
+        *size = strlen(ret);
+        d->step++;
+        return ret;
+    } else if(d->step == 1) {
+        d->step++;
+        *size = d->N;
+        return d->data;
+    } else {
+        *size = 0;
+        return NULL;
+    }
+}
+
+static void terratype(LexState * ls) {
+    assert(ls->in_terra);
+    expdesc v;
+    
+    //terra types are lua expressions.
+    //to resolve them we stop processing terra code and start processing lua code
+    //we capture the string of lua code and then evaluate it later to get the actual type
+    int tbl = new_table(ls, T_type);
+    Token begintoken = ls->t;
+    int in_terra = ls->in_terra;
+    ls->in_terra = 0;
+    RETURNS_1(expr(ls,&v));
+    ls->in_terra = in_terra;
+    const char * output;
+    int N;
+    
+    TypeReaderData data;
+    data.step = 0;
+    luaX_getoutput(ls, &begintoken, &data.data, &data.N);
+    
+    
+    if(lua_load(ls->L, type_reader, &data, "type") != 0) {
+        //we already parsed this buffer, so this should rarely cause an error
+        //we need to find the line number in the error string, add it to where we began this line,
+        //and then report the error with the correct line number
+        const char * error = luaL_checkstring(ls->L, -1);
+        while(*error != ':')
+            error++;
+        char * aftererror;
+        int lineoffset = strtol(error+1,&aftererror,10);
+        terra_reporterror(ls->LP,"%s:%d: %s\n",getstr(ls->source),begintoken.seminfo.linebegin + lineoffset - 1,aftererror+1);
+    }
+    
+    add_field(ls, tbl, "expression");
+    
 }
 
 /* }==================================================================== */
@@ -1530,7 +1588,7 @@ static void varname (LexState *ls, expdesc *v, int islocal) {
   pauserecord(ls); //done record names that appear in the type, we just want to record global names
   if(testnext(ls, ':')) {
     expdesc e;
-    RETURNS_1(expr(ls,&e));
+    RETURNS_1(terratype(ls));
     add_field(ls,tbl,"type");
   }
   resumerecord(ls);
@@ -1589,8 +1647,7 @@ static void localstat (LexState *ls) {
 	push_string(ls,name);
 	add_field(ls,entry,"name");
 	if(ls->in_terra && testnext(ls,':')) {
-		expdesc e;
-		RETURNS_1(expr(ls,&e));
+		RETURNS_1(terratype(ls));
 		add_field(ls,entry,"type");
 	}
 	add_entry(ls,vars);
@@ -1636,7 +1693,7 @@ static void dump(LexState * ls) {
 }
 
 
-static void funcstat (LexState *ls, int line) {
+static int funcstat (LexState *ls, int line) {
   /* funcstat -> FUNCTION funcname body */
   int ismethod;
   expdesc v, b;
@@ -1645,33 +1702,20 @@ static void funcstat (LexState *ls, int line) {
   beginrecord(ls);
   RETURNS_1(ismethod = funcname(ls, &v));
   if(ls->in_terra) {
-    if(ismethod) {
-        //currently have a.b.c.methodname
-        //extract the AST for the type
-        lua_getfield(ls->L, -1, "value"); //extract the type: a.b.c
-        lua_remove(ls->L,-2); //remove the methodname select
-    } else {
-        lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
-    }
+    lua_pop(ls->L,1); //we ignore the ast version of the name, since we need to generate lua code for it.
   }
   endrecord(ls);
   body(ls, &b, ismethod, line);
   
-  if(ls->in_terra && ismethod) {
-    int tbl = lua_gettop(ls->L);
-    lua_pushvalue(ls->L, -2); //the type a.b.c
-    add_field(ls, tbl, "reciever");
-    //cleanup: stack looks like <a.b.c> <function AST>
-    lua_remove(ls->L,-2);
-  }
-  
+  return ismethod;
 }
 
 
 static void terrastat(LexState * ls, int line) {
 	ls->in_terra++;
 	Token begin = ls->t;
-    RETURNS_1(funcstat(ls,line));
+    int ismethod;
+    RETURNS_1(ismethod = funcstat(ls,line));
 	int n = add_entry(ls,TA_FUNCTION_TABLE);
 	luaX_patchbegin(ls,&begin);
 	print_names(ls); //a.b.c.d
@@ -1682,7 +1726,12 @@ static void terrastat(LexState * ls, int line) {
     print_names(ls);
     OutputBuffer_printf(&ls->output_buffer,"\",");
 	print_captured_locals(ls);
-    
+    if(ismethod) {
+        OutputBuffer_printf(&ls->output_buffer,",");
+        ls->variable_names.pop_back();  //remove .methodname
+        ls->variable_names.pop_back();  //remove .methods
+        print_names(ls); //just the type object: a.b.c.d (no .methods, this is used to calculate the self argument type)
+    }
 	OutputBuffer_printf(&ls->output_buffer,")");
 	luaX_patchend(ls,&begin);
 	ls->in_terra--;
@@ -1829,7 +1878,6 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;
-  lexstate.in_terra_type = 0;
   lexstate.record_names = 0;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;

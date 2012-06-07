@@ -173,6 +173,9 @@ end
 function terra.context:env()
 	return self.stack[#self.stack].env
 end
+function terra.context:setenv(env)
+	self.stack[#self.stack].env = env
+end
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
 function terra.context:printsource(anchor)
@@ -295,7 +298,7 @@ do  --constructor functions for terra functions and variables
         name_count = name_count + 1
         return fixed
     end
-    function terra.newfunction(olddef,newtree,name,env)
+    function terra.newfunction(olddef,newtree,name,env,reciever)
         if olddef then
             error("NYI - overloaded functions",2)
         end
@@ -305,9 +308,9 @@ do  --constructor functions for terra functions and variables
         local fn = setmetatable(obj,terra.func)
     	
     	--handle desugaring of methods defintions by adding an implicit self argument
-    	if newtree.reciever ~= nil then
-    		local addressof = terra.newtree(newtree.reciever, { kind = terra.kinds.operator, operator = terra.kinds["&"], operands = terra.newlist{newtree.reciever} })
-    		newtree.reciever = nil
+    	if reciever ~= nil then
+    		local pointerto = terra.types.pointer
+    		local addressof = terra.newtree(newtree, { kind = terra.kinds["type"], expression = function() return pointerto(reciever) end })
     		local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = "self", type = addressof })
     		table.insert(newtree.parameters,1,implicitparam) --add the implicit parameter to the parameter list
     	end
@@ -619,36 +622,30 @@ function terra.reporterror(ctx,anchor,...)
 end
 
 function terra.resolvetype(ctx,t)
-	local function err(msg)
-		return terra.reporterror(ctx,t,msg)
+	if not t:is "type" then
+		print(debug.traceback())
+		t:printraw()
+		error("not a type?")
 	end
-	local function check(t)
-		if terra.types.istype(t) then
-			return t:getcanonical(ctx)
-		else 
-			return err "not a type: "
-		end 
+	
+	local env = ctx:env()
+	local fn = t.expression
+	setfenv(fn,env)
+	
+	local success,typ = pcall(fn)
+	
+	if not success then --typ contains the error message
+		local line,err = typ:match(":([0-9]+):(.*)")
+		t.linenumber = t.linenumber + tonumber(line) - 1
+		terra.reporterror(ctx,t,err)
+		return terra.types.error
 	end
-	local function primary(t)
-		if t:is "select" then
-			local lhs = primary(t.value)
-			return lhs and lhs[t.field]
-		elseif t:is "var" then
-			return ctx:env()[t.name]
-		elseif t:is "literal" then
-			return t
-		else
-			return err "unsupported expression in type"
-		end
-	end
-	if t:is "index" then
-		return err "array types not implemented"
-	elseif t:is "operator" then
-		if terra.kinds[t.operator] ~= "&" then return err "unsupported operator on type" end
-		local value = terra.resolvetype(ctx,t.operands[1])
-		return terra.types.pointer(value)
+	
+	if terra.types.istype(typ) then
+		return typ:getcanonical(ctx)
 	else
-		return check(primary(t))
+		terra.reporterror(ctx,t,"expected a type but found ", type(typ))
+		return terra.types.error
 	end
 end
 local function map(lst,fn)
@@ -865,6 +862,13 @@ function terra.func:typecheck(ctx)
 	local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
 	
 	local env = parameters_to_type
+	
+	local typingenv = { __index = function(_,idx) 
+		return env[idx] or self:env()[idx] 
+	end }
+	setmetatable(typingenv,typingenv)
+	ctx:setenv(typingenv)
+	
 	local function enterblock()
 		env = setmetatable({},{ __index = env })
 	end

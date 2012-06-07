@@ -4,11 +4,17 @@ Language Implementation:
 --pointer arithmetic
 --resolvetype needs to allow the declaration of anonymous structural types
 --function pointers
--- -> and & syntax need to work in normal lua code (not just type resolution)
 --vector types
 --sane numeric casting rules for constants
 --macros in terra
 --calling lua functions from terra
+
+
+--eval types:
+   change types to have either canonical versions or exist as proxy objects
+   type constructors (e.g. pointer to) should ask if a type is canonical and create a proxy if not)
+   types should be presented in the AST as the string of lua code to run to get the type rather than an AST needed to be interpreted
+
 
 Runtime Implementation:
 
@@ -19,3 +25,4 @@ DONE:
 --anonymous structural type cast to other structural types
 --methods on types (declaration syntax )
 --methods on types (call syntax/resolution) 
+-- -> and & syntax need to work in normal lua code (not just type resolution)

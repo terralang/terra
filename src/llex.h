@@ -125,7 +125,6 @@ typedef struct LexState {
   char decpoint;  /* locale decimal point */
 
   int in_terra;
-  int in_terra_type;
   int record_names;
   std::vector<TString *> variable_names; //for patching the [local] terra a.b.c.d, and [local] var a.b.c.d sugar
   std::vector<int> variable_seperators;  //in name lists with multiple names, points to beginnings of new names
@@ -150,6 +149,7 @@ LUAI_FUNC const char * luaX_token2str (LexState *ls, int token);
 LUAI_FUNC void luaX_patchbegin(LexState *ls, Token * begin_token);
 LUAI_FUNC void luaX_patchend(LexState *ls, Token * begin_token);
 char * luaX_saveoutput(LexState * ls, Token * begin_token);
+void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N);
 const char * luaX_token2rawstr(LexState * ls, int token);
 
 #endif

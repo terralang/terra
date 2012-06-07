@@ -213,15 +213,23 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 	return;
 	//code can now safely write to this buffer
 }
-char * luaX_saveoutput(LexState * ls, Token * begin_token) {
+void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N) {
     OutputBuffer * ob = &ls->output_buffer;
 	if(ls->t.token == TK_EOS) {
 		ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
 		                              //we need to not include the last character in the patch, so we updated the pointer here
 	}
     int n_bytes = ls->t.seminfo.buffer_begin - begin_token->seminfo.buffer_begin;
+    *output = ob->data + begin_token->seminfo.buffer_begin;
+    *N = n_bytes;
+}
+
+char * luaX_saveoutput(LexState * ls, Token * begin_token) {
+    int n_bytes;
+    const char * output;
+    luaX_getoutput(ls,begin_token,&output,&n_bytes);
     char * buf = (char*) malloc(n_bytes + 1);
-    memcpy(buf, ob->data + begin_token->seminfo.buffer_begin, n_bytes);
+    memcpy(buf, output, n_bytes);
     buf[n_bytes] = '\0';
     return buf;
 }
