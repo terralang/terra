@@ -416,6 +416,10 @@ do --construct type table that holds the singleton value representing each uniqu
 		return self.kind == terra.kinds["struct"]
 	end
 	
+    function types.type:iscanonical()
+        return self.kind ~= terra.kinds.proxy
+    end
+    
 	function types.type:cstring()
 		if self:isintegral() then
 			return tostring(self).."_t"
@@ -431,7 +435,8 @@ do --construct type table that holds the singleton value representing each uniqu
 			error("NYI - cstring")
 		end
 	end
-	function types.type:getcanonical(ctx)
+    
+	function types.type:getcanonical(ctx) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
 		return self
 	end
 	
@@ -466,17 +471,40 @@ do --construct type table that holds the singleton value representing each uniqu
 	
 	types.error = mktyp { kind = terra.kinds.error , name = "error" } --object representing where the typechecker failed
 	
+    local function checkistype(typ)
+        if not types.istype(typ) then 
+            error("expected a type but found "..type(typ))
+        end
+    end
+    
 	function types.pointer(typ)
+        checkistype(typ)
+    
 		if typ == types.error then return types.error end
-		local name = "&"..typ.name 
-		local value = types.table[name]
-		if value == nil then
-			value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
-			setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
-			types.table[name] = value
-		end
-		return value
+        
+        local function create(typ)
+            local name = "&"..typ.name 
+            local value = types.table[name]
+            if value == nil then
+                value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
+                setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
+                types.table[name] = value
+            end
+            return value
+        end
+        if typ:iscanonical() then
+            return create(typ)
+        else
+            local proxy = mktyp { kind = terra.kinds.proxy }
+            function proxy:getcanonical(ctx) 
+                if self.type then return self.type end
+                self.type = create(typ:getcanonical(ctx)) 
+                return self.type
+            end
+            return proxy
+        end
 	end
+    
 	function types.array(typ,sz)
 		--TODO
 	end
@@ -505,7 +533,7 @@ do --construct type table that holds the singleton value representing each uniqu
         return tbl
     end
     
-	function types.anonstruct(prototype)
+	function types.canonicalanonstruct(prototype)
         local name = "struct { "
         for i,v in ipairs(prototype.entries) do
             name = name .. v.key .. " : " .. v.type.name .. "; "
@@ -536,8 +564,10 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.newanonstruct(tree,env)
-        local typ = types.newemptystruct {}
-        function typ:getcanonical(ctx)
+        local proxy = mktyp { kind = terra.kinds.proxy }
+        
+        function proxy:getcanonical(ctx)
+            local typ = types.newemptystruct {}
             if self.canonicalizing then
                 terra.reporterror(ctx,tree,"anonymous structs cannot be recursive.")
                 return terra.types.error
@@ -547,11 +577,12 @@ do --construct type table that holds the singleton value representing each uniqu
                 self.canonicalizing = true
                 buildstruct(ctx,typ,tree,env)
                 self.canonicalizing = nil
-                self.type = types.anonstruct(self)
+                self.type = types.canonicalanonstruct(typ)
                 return self.type
             end
         end
-        return typ
+        
+        return proxy
     end
     
 	function types.newnamedstruct(displayname, name,tree,env)
@@ -593,15 +624,56 @@ do --construct type table that holds the singleton value representing each uniqu
 	end
     
 	function types.functype(parameters,returns)
-		local function getname(t) return t.name end
-		local a = terra.list.map(parameters,getname):mkstring("{",",","}")
-		local r = terra.list.map(returns,getname):mkstring("{",",","}")
-		local name = a.."->"..r
-		local value = types.table[name]
-		if value == nil then
-			value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name }
-		end
-		return value
+		
+        local function create(parameters,returns)
+            local function getname(t) return t.name end
+            local a = terra.list.map(parameters,getname):mkstring("{",",","}")
+            local r = terra.list.map(returns,getname):mkstring("{",",","}")
+            local name = a.."->"..r
+            local value = types.table[name]
+            if value == nil then
+                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name }
+            end
+            return value
+        end
+        
+        function checkalltypes(l)
+            for i,v in ipairs(l) do
+                checkistype(v)
+            end
+        end
+        checkalltypes(parameters)
+        checkalltypes(returns)
+        
+        local function makeproxy()
+            local proxy = mktyp { kind = terra.kinds.proxy, parameters = parameters, returns = returns }
+            function proxy:getcanonical(ctx)
+                if self.type then return self.type end
+                
+                local function mapcanon(l)
+                    local nl = terra.newlist()
+                    for i,v in ipairs(l) do
+                        nl:insert(v:getcanonical(ctx))
+                    end
+                    return nl
+                end
+                self.type = create(mapcanon(parameters),mapcanon(returns))
+                return self.type
+            end
+            return proxy
+        end
+        
+        local function checkcanon(l)
+            for i,v in ipairs(l) do
+                if not v:iscanonical() then
+                    return makeproxy()
+                end
+            end
+            return nil
+        end
+        
+        return checkcanon(parameters) or checkcanon(returns) or create(parameters,returns)
+        
 	end
 	
 	for name,typ in pairs(types.table) do
@@ -1211,7 +1283,7 @@ function terra.func:typecheck(ctx)
             	
             	entries:insert( f:copy { key = k, value = v } )
             end
-            return e:copy { records = entries, type = terra.types.anonstruct(typ) }
+            return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
 		end
 		error("NYI - expression "..terra.kinds[e.kind],2)
 	end

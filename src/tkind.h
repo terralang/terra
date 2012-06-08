@@ -66,7 +66,8 @@ _(parameterlist,"parameterlist") \
 _(globalvar, "globalvar") \
 _(struct, "struct") \
 _(structentry, "structentry") \
-_(type, "type")
+_(type, "type") \
+_(proxy, "proxy")
 
 enum T_Kind {
 	#define T_KIND_ENUM(a,str) T_##a,

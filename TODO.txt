@@ -9,11 +9,9 @@ Language Implementation:
 --macros in terra
 --calling lua functions from terra
 
-
 --eval types:
    change types to have either canonical versions or exist as proxy objects
    type constructors (e.g. pointer to) should ask if a type is canonical and create a proxy if not)
-   types should be presented in the AST as the string of lua code to run to get the type rather than an AST needed to be interpreted
 
 
 Runtime Implementation:
@@ -26,3 +24,4 @@ DONE:
 --methods on types (declaration syntax )
 --methods on types (call syntax/resolution) 
 -- -> and & syntax need to work in normal lua code (not just type resolution)
+-- types should be presented in the AST as the string of lua code to run to get the type rather than an AST needed to be interpreted
