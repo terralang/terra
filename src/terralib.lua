@@ -1072,7 +1072,8 @@ function terra.func:typecheck(ctx)
 					end
 				end
 			else
-				exps:insert(checkrvalue(last))
+                local rv = checkrvalue(last)
+                exps:insert(rv)
 			end
 		end
 		
@@ -1256,11 +1257,11 @@ function terra.func:typecheck(ctx)
 				return op(e)
 			end
 		elseif e:is "identity" then --simply a passthrough
-			local e = checkexpraw(e.value)
-			if terra.istree(e) then
-				return e:copy { type = e.type, value = e }
+			local ee = checkexpraw(e.value)
+			if terra.istree(ee) then
+				return e:copy { type = ee.type, value = ee }
 			else
-				return e
+				return ee
 			end
 		elseif e:is "apply" or e:is "method" then
 			return checkcall(e,true)

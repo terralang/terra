@@ -786,6 +786,11 @@ if(t->type->isIntegerTy()) { \
                     return B->CreateExtractValue(v, offset);
                 }
             } break;
+            case T_identity: {
+                Obj value;
+                exp->obj("value",&value);
+                return emitExp(&value);
+            } break;
             case T_constructor: {
                 Obj records;
                 exp->obj("records",&records);
