@@ -683,7 +683,9 @@ do --construct type table that holds the singleton value representing each uniqu
 	end
 	_G["int"] = int32
 	_G["long"] = int64
-	
+	_G["intptr"] = uint64
+	_G["ptrdiff"] = int64
+
 	terra.types = types
 end
 
@@ -985,6 +987,31 @@ function terra.func:typecheck(ctx)
 		return checkbinary(e,"isarithmetic")
 	end
 
+	local function checkbinaryarithpointer(e)
+ 	        local l = checkrvalue(e.operands[1])
+		local r = checkrvalue(e.operands[2])
+
+		-- adding or subtracting 2 pointers
+	        if(l.type:ispointer() and l.type==r.type) then
+		  return e:copy { type = ptrdiff, operands = terra.newlist {l,r} }
+		end
+
+		local function intPtrCheck(a,b)
+
+		end
+
+		-- adding or subtracting a int to a pointer
+	        if( (l.type:ispointer() and r.type:isintegral()) ) then
+		  return e:copy { type = l.type, operands = terra.newlist {l,r} }
+		end
+
+	        if( (l.type:isintegral() and r.type:ispointer()) ) then
+		  return e:copy { type = r.type, operands = terra.newlist {l,r} }
+		end
+
+		return checkbinary(e,"isarithmetic")
+	end
+
 	local function checkintegralarith(e)
 		return checkbinary(e,"isintegral")
 	end
@@ -1028,8 +1055,8 @@ function terra.func:typecheck(ctx)
 	end
 	
 	local operator_table = {
-		["-"] = checkbinaryarith;
-		["+"] = checkbinaryarith;
+		["-"] = checkbinaryarithpointer;
+		["+"] = checkbinaryarithpointer;
 		["*"] = checkbinaryarith;
 		["/"] = checkbinaryarith;
 		["%"] = checkbinaryarith;

@@ -536,11 +536,25 @@ if(t->type->isIntegerTy()) { \
         setInsertBlock(mergeB);
         return B->CreateLoad(result, "logicalop");
     }
+    Value * emitPointerArith(Obj * exp, Value * pointer, Value * number){
+        T_Kind kind = exp->kind("operator");
+
+	if(kind == T_add){
+	  return B->CreateGEP(pointer,number);
+	}else if(kind == T_sub){
+	  Value * numNeg = B->CreateNeg(number);
+	  return B->CreateGEP(pointer,numNeg);
+	}
+
+	printf("Internal error: only +/- supported on pointers\n");
+	terra_reporterror(T,"internal error");
+	return pointer; // just return some garbage
+    }
+
     Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
         TType * t = typeOfValue(exp);
-        
         T_Kind kind = exp->kind("operator");
-        
+
         //check for lazy operators before evaluateing arguments
         if(t->islogical) {
             switch(kind) {
@@ -556,6 +570,35 @@ if(t->type->isIntegerTy()) { \
         //ok, we have eager operators, lets evalute the arguments then emit
         Value * a = emitExp(ao);
         Value * b = emitExp(bo);
+
+        TType * at = typeOfValue(ao);
+        TType * bt = typeOfValue(bo);
+        
+	if(at->type->isPointerTy() && bt->type->isIntegerTy()){
+	  return emitPointerArith(exp, a, b);
+	}
+
+	if(at->type->isIntegerTy() && bt->type->isPointerTy()){
+	  return emitPointerArith(exp, b, a);
+	}
+
+	if(at->type->isPointerTy() && bt->type->isPointerTy() ){
+
+	  if(kind != T_add && kind != T_sub){
+	    printf("Internal error: only +/- supported on pointers\n");
+	    terra_reporterror(T,"internal error");
+	  }
+
+	  Value * ai = B->CreatePtrToInt(a,IntegerType::get(*(C->ctx),64));
+	  Value * bi = B->CreatePtrToInt(b,IntegerType::get(*(C->ctx),64));
+	  Value * res = B->CreateSub(ai, bi);
+	  const TargetData * td = C->ee->getTargetData();
+	  PointerType * pt = cast<PointerType>(at->type);
+	  Value * divBy = ConstantInt::get(IntegerType::get(*(C->ctx),64), td->getTypeAllocSize(pt->getElementType()) );
+	  Value * divRes = B->CreateSDiv(res,divBy);
+	  return B->CreateTrunc(divRes,t->type);
+	}
+
 #define RETURN_OP(op) \
 if(t->type->isIntegerTy()) { \
     return B->Create##op(a,b); \
