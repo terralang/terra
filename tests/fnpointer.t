@@ -1,18 +1,18 @@
 
 terra foo()
-	return 4
+    return 4
 end
 
 terra bar()
-	return 5
+    return 5
 end
 
 terra baz(a : int64)
-	var afn = foo
-	if a > 2 then
-	   afn = bar
-	end
-	return afn()
+    var afn = foo
+    if a > 2 then
+       afn = bar
+    end
+    return afn()
 end
 
 local test = require("test")

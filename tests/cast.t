@@ -1,9 +1,9 @@
 terra bar(a : int) : int
-	return a + 1
+    return a + 1
 end
 terra foo(a : int) : int
-	
-	return a
+    
+    return a
 end
 
 local test = require("test")

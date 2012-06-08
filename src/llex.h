@@ -12,7 +12,7 @@
 #include "lutil.h"
 #include <vector>
 
-#define FIRST_RESERVED	257
+#define FIRST_RESERVED  257
 
 /*
 * WARNING: if you change the order of this enumeration,
@@ -30,13 +30,13 @@ enum RESERVED {
 };
 
 /* number of reserved words */
-#define NUM_RESERVED	(cast(int, TK_STRUCT-FIRST_RESERVED+1))
+#define NUM_RESERVED    (cast(int, TK_STRUCT-FIRST_RESERVED+1))
 
 
 typedef struct {
   union {
-	  luaP_Number r;
-	  TString * ts;
+      luaP_Number r;
+      TString * ts;
   };
   int is_integer;
   uint64_t i; //integer value, for terra
@@ -52,58 +52,58 @@ typedef struct Token {
 
 
 struct OutputBuffer {
-	int N;
-	int space;
-	char * data;
+    int N;
+    int space;
+    char * data;
 };
 
 static inline void OutputBuffer_init(OutputBuffer * buf) {
-	buf->N = 0;
-	buf->space = 1024;
-	buf->data = (char*) malloc(buf->space);
+    buf->N = 0;
+    buf->space = 1024;
+    buf->data = (char*) malloc(buf->space);
 }
 static inline void OutputBuffer_free(OutputBuffer * buf) {
-	buf->N = 0;
-	buf->space = 0;
-	free(buf->data);
-	buf->data = NULL;
+    buf->N = 0;
+    buf->space = 0;
+    free(buf->data);
+    buf->data = NULL;
 }
 static inline void OutputBuffer_resize(OutputBuffer * buf, int newsize) {
-	buf->N = std::min(newsize,buf->N);
-	buf->space = newsize;
-	buf->data = (char*) realloc(buf->data,newsize);
+    buf->N = std::min(newsize,buf->N);
+    buf->space = newsize;
+    buf->data = (char*) realloc(buf->data,newsize);
 }
 static inline void OutputBuffer_putc(OutputBuffer * buf, char c) {
-	if(buf->N == buf->space)
-		OutputBuffer_resize(buf,buf->space * 2);
-	buf->data[buf->N] = c;
-	buf->N++;
+    if(buf->N == buf->space)
+        OutputBuffer_resize(buf,buf->space * 2);
+    buf->data[buf->N] = c;
+    buf->N++;
 }
 static inline void OutputBuffer_rewind(OutputBuffer * buf, int size) {
-	buf->N -= std::min(buf->N,size);
+    buf->N -= std::min(buf->N,size);
 }
 static inline void OutputBuffer_printf(OutputBuffer * buf,const char * fmt,...) {
-	if(buf->N == buf->space) {
+    if(buf->N == buf->space) {
         OutputBuffer_resize(buf,buf->space * 2);
     }
-	while(1) {
-		va_list ap;
+    while(1) {
+        va_list ap;
         va_start(ap,fmt);
         int most_written = buf->space - buf->N;
-		int n = vsnprintf(buf->data + buf->N, most_written, fmt, ap);
-		if(n > -1 && n < most_written) {
-			buf->N += n;
-			return;
-		}
-		OutputBuffer_resize(buf, buf->space * 2);
-	}
+        int n = vsnprintf(buf->data + buf->N, most_written, fmt, ap);
+        if(n > -1 && n < most_written) {
+            buf->N += n;
+            return;
+        }
+        OutputBuffer_resize(buf, buf->space * 2);
+    }
 }
 static inline void OutputBuffer_puts(OutputBuffer * buf, int N, const char * str) {
-	if(buf->N + N > buf->space) {
-		OutputBuffer_resize(buf,std::max(buf->space * 2,buf->N + N));
-	}
-	memcpy(buf->data + buf->N,str,N);
-	buf->N += N;
+    if(buf->N + N > buf->space) {
+        OutputBuffer_resize(buf,std::max(buf->space * 2,buf->N + N));
+    }
+    memcpy(buf->data + buf->N,str,N);
+    buf->N += N;
 }
 /* state of the lexer plus state of the parser when shared by all
    functions */
@@ -131,9 +131,9 @@ typedef struct LexState {
   OutputBuffer output_buffer;
 
   struct {
-	  char * buffer;
-	  int N;
-	  int space;
+      char * buffer;
+      int N;
+      int space;
   } patchinfo; //data to fix up output stream when we insert terra information
 } LexState;
 

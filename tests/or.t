@@ -1,7 +1,7 @@
 local test = require("test")
 
 terra foo(a : double, b : double, c : double) : bool
-	return a < b or b < c
+    return a < b or b < c
 end
 
 test.eq(foo(1,2,1),1)

@@ -24,93 +24,93 @@ extern "C" {
 using namespace llvm;
 
 struct terra_CompilerState {
-	Module * m;
-	LLVMContext * ctx;
-	ExecutionEngine * ee;
-	FunctionPassManager * fpm;
+    Module * m;
+    LLVMContext * ctx;
+    ExecutionEngine * ee;
+    FunctionPassManager * fpm;
 };
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
 
 void terra_compilerinit(struct terra_State * T) {
-	lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-	lua_pushlightuserdata(T->L,(void*)T);
-	lua_pushcclosure(T->L,terra_compile,1);
-	lua_setfield(T->L,-2,"compile");
-	lua_pop(T->L,1); //remove terra from stack
-	T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
-	InitializeNativeTarget();
-	
-	T->C->ctx = &getGlobalContext();
-	T->C->m = new Module("terra",*T->C->ctx);
-	std::string err;
-	T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
-	if (!T->C->ee) {
-		terra_reporterror(T,"llvm: %s\n",err.c_str());
-	}
-	T->C->fpm = new FunctionPassManager(T->C->m);
-	
-	//TODO: add optimization passes here, these are just from llvm tutorial and are probably not good
-	T->C->fpm->add(new TargetData(*T->C->ee->getTargetData()));
-	// Provide basic AliasAnalysis support for GVN.
-	T->C->fpm->add(createBasicAliasAnalysisPass());
-	// Promote allocas to registers.
-	T->C->fpm->add(createPromoteMemoryToRegisterPass());
+    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_compile,1);
+    lua_setfield(T->L,-2,"compile");
+    lua_pop(T->L,1); //remove terra from stack
+    T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
+    InitializeNativeTarget();
+    
+    T->C->ctx = &getGlobalContext();
+    T->C->m = new Module("terra",*T->C->ctx);
+    std::string err;
+    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
+    if (!T->C->ee) {
+        terra_reporterror(T,"llvm: %s\n",err.c_str());
+    }
+    T->C->fpm = new FunctionPassManager(T->C->m);
+    
+    //TODO: add optimization passes here, these are just from llvm tutorial and are probably not good
+    T->C->fpm->add(new TargetData(*T->C->ee->getTargetData()));
+    // Provide basic AliasAnalysis support for GVN.
+    T->C->fpm->add(createBasicAliasAnalysisPass());
+    // Promote allocas to registers.
+    T->C->fpm->add(createPromoteMemoryToRegisterPass());
     // Also promote aggregates like structs....
     T->C->fpm->add(createScalarReplAggregatesPass());
-	// Do simple "peephole" optimizations and bit-twiddling optzns.
-	T->C->fpm->add(createInstructionCombiningPass());
-	// Reassociate expressions.
-	T->C->fpm->add(createReassociatePass());
-	// Eliminate Common SubExpressions.
-	T->C->fpm->add(createGVNPass());
-	// Simplify the control flow graph (deleting unreachable blocks, etc).
-	T->C->fpm->add(createCFGSimplificationPass());
-	
-	T->C->fpm->doInitialization();
+    // Do simple "peephole" optimizations and bit-twiddling optzns.
+    T->C->fpm->add(createInstructionCombiningPass());
+    // Reassociate expressions.
+    T->C->fpm->add(createReassociatePass());
+    // Eliminate Common SubExpressions.
+    T->C->fpm->add(createGVNPass());
+    // Simplify the control flow graph (deleting unreachable blocks, etc).
+    T->C->fpm->add(createCFGSimplificationPass());
+    
+    T->C->fpm->doInitialization();
 }
 //object to hold reference to lua object and help extract information
 struct Obj {
-	Obj() {
-		ref = LUA_NOREF; L = NULL;
-	}
-	void initFromStack(lua_State * L, int ref_table) {
-		freeref();
-		this->L = L;
-		this->ref_table = ref_table;
-		assert(!lua_isnil(this->L,-1));
-		this->ref = luaL_ref(this->L,this->ref_table);
-	}
-	~Obj() {
-		freeref();
-	}
-	int size() {
-		push();
-		int i = lua_objlen(L,-1);
-		pop();
-		return i;
-	}
-	void objAt(int i, Obj * r) {
-		push();
-		lua_rawgeti(L,-1,i+1); //stick to 0-based indexing in C code...
-		r->initFromStack(L,ref_table);
-		pop();
-	}
-	double number(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		double r = lua_tonumber(L,-1);
-		pop(2);
-		return r;
-	}
-	uint64_t integer(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		const void * ud = lua_touserdata(L,-1);
-		pop(2);
-		uint64_t i = *(const uint64_t*)ud;
-		return i;
-	}
+    Obj() {
+        ref = LUA_NOREF; L = NULL;
+    }
+    void initFromStack(lua_State * L, int ref_table) {
+        freeref();
+        this->L = L;
+        this->ref_table = ref_table;
+        assert(!lua_isnil(this->L,-1));
+        this->ref = luaL_ref(this->L,this->ref_table);
+    }
+    ~Obj() {
+        freeref();
+    }
+    int size() {
+        push();
+        int i = lua_objlen(L,-1);
+        pop();
+        return i;
+    }
+    void objAt(int i, Obj * r) {
+        push();
+        lua_rawgeti(L,-1,i+1); //stick to 0-based indexing in C code...
+        r->initFromStack(L,ref_table);
+        pop();
+    }
+    double number(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        double r = lua_tonumber(L,-1);
+        pop(2);
+        return r;
+    }
+    uint64_t integer(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        const void * ud = lua_touserdata(L,-1);
+        pop(2);
+        uint64_t i = *(const uint64_t*)ud;
+        return i;
+    }
     bool boolean(const char * field) {
         push();
         lua_getfield(L,-1,field);
@@ -118,57 +118,57 @@ struct Obj {
         pop(2);
         return v;
     }
-	const char * string(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		const char * r = luaL_checkstring(L,-1);
-		pop(2);
-		return r;
-	}
-	bool obj(const char * field, Obj * r) {
-		push();
-		lua_getfield(L,-1,field);
-		if(lua_isnil(L,-1)) {
-			pop(2);
-			return false;
-		} else {
-			r->initFromStack(L,ref_table);
-			pop();
-			return true;
-		}
-	}
-	void * ud(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		void * u = lua_touserdata(L,-1);
-		pop(2);
-		return u;
-	}
-	void pushfield(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		lua_remove(L,-2);
-	}
-	void push() {
-		//fprintf(stderr,"getting %d %d\n",ref_table,ref);
-		assert(lua_gettop(L) >= ref_table);
-		lua_rawgeti(L,ref_table,ref);
-	}
-	T_Kind kind(const char * field) {
-		push();
-		lua_getfield(L,-1,field);
-		int k = luaL_checkint(L,-1);
-		pop(2);
-		return (T_Kind) k;
-	}
-	void setfield(const char * key) { //sets field to value on top of the stack and pops it off
-		assert(!lua_isnil(L,-1));
+    const char * string(const char * field) {
         push();
-		lua_pushvalue(L,-2);
-		lua_setfield(L,-2,key);
-		pop(2);
-	}
-	void dump() {
+        lua_getfield(L,-1,field);
+        const char * r = luaL_checkstring(L,-1);
+        pop(2);
+        return r;
+    }
+    bool obj(const char * field, Obj * r) {
+        push();
+        lua_getfield(L,-1,field);
+        if(lua_isnil(L,-1)) {
+            pop(2);
+            return false;
+        } else {
+            r->initFromStack(L,ref_table);
+            pop();
+            return true;
+        }
+    }
+    void * ud(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        void * u = lua_touserdata(L,-1);
+        pop(2);
+        return u;
+    }
+    void pushfield(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        lua_remove(L,-2);
+    }
+    void push() {
+        //fprintf(stderr,"getting %d %d\n",ref_table,ref);
+        assert(lua_gettop(L) >= ref_table);
+        lua_rawgeti(L,ref_table,ref);
+    }
+    T_Kind kind(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        int k = luaL_checkint(L,-1);
+        pop(2);
+        return (T_Kind) k;
+    }
+    void setfield(const char * key) { //sets field to value on top of the stack and pops it off
+        assert(!lua_isnil(L,-1));
+        push();
+        lua_pushvalue(L,-2);
+        lua_setfield(L,-2,key);
+        pop(2);
+    }
+    void dump() {
         printf("object is:\n");
         
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");
@@ -181,81 +181,81 @@ struct Obj {
         lua_pop(L,2);
         
         printf("stack is:\n");
-		int n = lua_gettop(L);
-		for (int i = 1; i <= n; i++) {
-			printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
-		}
-	}
+        int n = lua_gettop(L);
+        for (int i = 1; i <= n; i++) {
+            printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
+        }
+    }
 private:
-	void freeref() {
-		if(ref != LUA_NOREF) {
-			luaL_unref(L,ref_table,ref);
-			L = NULL;
-			ref = LUA_NOREF;
-		}
-	}
-	void pop(int n = 1) {
-		lua_pop(L,n);
-	}
-	int ref;
-	int ref_table;
-	lua_State * L; 
+    void freeref() {
+        if(ref != LUA_NOREF) {
+            luaL_unref(L,ref_table,ref);
+            L = NULL;
+            ref = LUA_NOREF;
+        }
+    }
+    void pop(int n = 1) {
+        lua_pop(L,n);
+    }
+    int ref;
+    int ref_table;
+    lua_State * L; 
 };
 
 static void terra_compile_llvm(terra_State * T) {
-	Obj func;
+    Obj func;
 
 }
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
-	Type * type;
+    Type * type;
     bool issretfunc;
-	bool issigned;
-	bool islogical;
+    bool issigned;
+    bool islogical;
     bool ispassedaspointer;
 };
 
 struct TerraCompiler {
-	lua_State * L;
-	terra_State * T;
-	terra_CompilerState * C;
-	IRBuilder<> * B;
-	BasicBlock * BB; //current basic block
-	Obj funcobj;
-	Function * func;
+    lua_State * L;
+    terra_State * T;
+    terra_CompilerState * C;
+    IRBuilder<> * B;
+    BasicBlock * BB; //current basic block
+    Obj funcobj;
+    Function * func;
     TType * func_type;
-	TType * getType(Obj * typ) {
-		TType * t = (TType*) typ->ud("llvm_type");
-		if(t == NULL) {
-			t = (TType*) lua_newuserdata(T->L,sizeof(TType));
-			memset(t,0,sizeof(TType));
-			typ->setfield("llvm_type");
-			switch(typ->kind("kind")) {
-				case T_primitive: {
-					int bytes = typ->number("bytes");
-					switch(typ->kind("type")) {
-						case T_float: {
-							if(bytes == 4) {
-								t->type = Type::getFloatTy(*C->ctx);
-							} else {
-								assert(bytes == 8);
-								t->type = Type::getDoubleTy(*C->ctx);
-							}
-						} break;
-						case T_integer: {
-							t->issigned = typ->boolean("signed");
-							t->type = Type::getIntNTy(*C->ctx,bytes * 8);
-						} break;
-						case T_logical: {
-							t->type = Type::getInt8Ty(*C->ctx);
-							t->islogical = true;
-						} break;
-						default: {
-							printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
-							terra_reporterror(T,"type not understood");
-						} break;
-					}
-				} break;
+    TType * getType(Obj * typ) {
+        TType * t = (TType*) typ->ud("llvm_type");
+        if(t == NULL) {
+            t = (TType*) lua_newuserdata(T->L,sizeof(TType));
+            memset(t,0,sizeof(TType));
+            typ->setfield("llvm_type");
+            switch(typ->kind("kind")) {
+                case T_primitive: {
+                    int bytes = typ->number("bytes");
+                    switch(typ->kind("type")) {
+                        case T_float: {
+                            if(bytes == 4) {
+                                t->type = Type::getFloatTy(*C->ctx);
+                            } else {
+                                assert(bytes == 8);
+                                t->type = Type::getDoubleTy(*C->ctx);
+                            }
+                        } break;
+                        case T_integer: {
+                            t->issigned = typ->boolean("signed");
+                            t->type = Type::getIntNTy(*C->ctx,bytes * 8);
+                        } break;
+                        case T_logical: {
+                            t->type = Type::getInt8Ty(*C->ctx);
+                            t->islogical = true;
+                        } break;
+                        default: {
+                            printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
+                            terra_reporterror(T,"type not understood");
+                        } break;
+                    }
+                } break;
                 case T_struct: {
                     const char * name = typ->string("name");
                     Obj entries;
@@ -274,21 +274,21 @@ struct TerraCompiler {
                     }
                     st->setBody(entry_types);
                 } break;
-				case T_pointer: {
-					Obj base;
-					typ->obj("type",&base);
-					t->type = PointerType::getUnqual(getType(&base)->type);
-				} break;
-				case T_functype: {
-					std::vector<Type*> arguments;
-					Obj params,rets;
-					typ->obj("parameters",&params);
-					typ->obj("returns",&rets);
-					int sz = rets.size();
-					Type * rt; 
-					if(sz == 0) {
-						rt = Type::getVoidTy(*C->ctx);
-					} else {
+                case T_pointer: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    t->type = PointerType::getUnqual(getType(&base)->type);
+                } break;
+                case T_functype: {
+                    std::vector<Type*> arguments;
+                    Obj params,rets;
+                    typ->obj("parameters",&params);
+                    typ->obj("returns",&rets);
+                    int sz = rets.size();
+                    Type * rt; 
+                    if(sz == 0) {
+                        rt = Type::getVoidTy(*C->ctx);
+                    } else {
                         Obj r0;
                         rets.objAt(0,&r0);
                         TType * r0t = getType(&r0);
@@ -308,11 +308,11 @@ struct TerraCompiler {
                             t->issretfunc = true;
                         }
                     }
-					int psz = params.size();
-					for(int i = 0; i < psz; i++) {
-						Obj p;
-						params.objAt(i,&p);
-						TType * pt = getType(&p);
+                    int psz = params.size();
+                    for(int i = 0; i < psz; i++) {
+                        Obj p;
+                        params.objAt(i,&p);
+                        TType * pt = getType(&p);
                         Type * t = pt->type;
                         //TODO: when we construct a function with this type, we need to mark the argument 'byval' so that llvm copies the argument
                         //right now it still works because we make a copy of these arguments anyway
@@ -321,23 +321,23 @@ struct TerraCompiler {
                             t = PointerType::getUnqual(pt->type);
                         }
                         arguments.push_back(t);
-					}
-					t->type = FunctionType::get(rt,arguments,false); 
-				} break;
-				default: {
-					printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
-					terra_reporterror(T,"type not understood\n");
-				} break;
-			}
-			assert(t && t->type);
-		}
-		return t;
-	}
-	TType * typeOfValue(Obj * v) {
-		Obj t;
-		v->obj("type",&t);
-		return getType(&t);
-	}
+                    }
+                    t->type = FunctionType::get(rt,arguments,false); 
+                } break;
+                default: {
+                    printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
+                    terra_reporterror(T,"type not understood\n");
+                } break;
+            }
+            assert(t && t->type);
+        }
+        return t;
+    }
+    TType * typeOfValue(Obj * v) {
+        Obj t;
+        v->obj("type",&t);
+        return getType(&t);
+    }
     GlobalVariable * allocGlobal(Obj * v) {
         const char * name = v->string("name");
         Type * typ = typeOfValue(v)->type;
@@ -346,18 +346,18 @@ struct TerraCompiler {
         v->setfield("value");
         return gv;
     }
-	AllocaInst * allocVar(Obj * v) {
-		IRBuilder<> TmpB(&func->getEntryBlock(),
+    AllocaInst * allocVar(Obj * v) {
+        IRBuilder<> TmpB(&func->getEntryBlock(),
                           func->getEntryBlock().begin()); //make sure alloca are at the beginning of the function
                                                           //TODO: is this really needed? this is what llvm example code does...
-		AllocaInst * a = TmpB.CreateAlloca(typeOfValue(v)->type,0,v->string("name"));
-		lua_pushlightuserdata(L,a);
-		v->setfield("value");
-		return a;
-	}
+        AllocaInst * a = TmpB.CreateAlloca(typeOfValue(v)->type,0,v->string("name"));
+        lua_pushlightuserdata(L,a);
+        v->setfield("value");
+        return a;
+    }
 
     void getOrCreateFunction(Obj * funcobj, Function ** rfn, TType ** rtyp) {
-		Function * fn = (Function *) funcobj->ud("llvm_function");
+        Function * fn = (Function *) funcobj->ud("llvm_function");
         Obj ftype;
         funcobj->obj("type",&ftype);
         *rtyp = getType(&ftype);
@@ -372,38 +372,38 @@ struct TerraCompiler {
         }
         *rfn = fn;
     }
-	void run(terra_State * _T) {
-		T = _T;
-		L = T->L;
-		C = T->C;
-		B = new IRBuilder<>(*C->ctx);
-		
+    void run(terra_State * _T) {
+        T = _T;
+        L = T->L;
+        C = T->C;
+        B = new IRBuilder<>(*C->ctx);
+        
         //create lua table to hold object references anchored on stack
-		lua_newtable(T->L);
-		int ref_table = lua_gettop(T->L);
-		lua_pushvalue(T->L,-2); //the original argument
-		funcobj.initFromStack(T->L, ref_table);
-		
+        lua_newtable(T->L);
+        int ref_table = lua_gettop(T->L);
+        lua_pushvalue(T->L,-2); //the original argument
+        funcobj.initFromStack(T->L, ref_table);
+        
         
         getOrCreateFunction(&funcobj,&func,&func_type);
-		
+        
         BB = BasicBlock::Create(*C->ctx,"entry",func);
-		
+        
         B->SetInsertPoint(BB);
-		
+        
         Obj typedtree;
         Obj parameters;
         
-		funcobj.obj("typedtree",&typedtree);
-		typedtree.obj("parameters",&parameters);
-		int nP = parameters.size();
-		Function::arg_iterator ai = func->arg_begin();
+        funcobj.obj("typedtree",&typedtree);
+        typedtree.obj("parameters",&parameters);
+        int nP = parameters.size();
+        Function::arg_iterator ai = func->arg_begin();
         if(func_type->issretfunc)
             ++ai; //first argument is the return structure, skip it when loading arguments
-		for(int i = 0; i < nP; i++) {
-			Obj p;
-			parameters.objAt(i,&p);
-			TType * t = typeOfValue(&p);
+        for(int i = 0; i < nP; i++) {
+            Obj p;
+            parameters.objAt(i,&p);
+            TType * t = typeOfValue(&p);
             if(t->ispassedaspointer) { //this is already a copy, so we can assign the variable directly to its memory
                 Value * v = ai;
                 lua_pushlightuserdata(L,v);
@@ -412,32 +412,32 @@ struct TerraCompiler {
                 AllocaInst * a = allocVar(&p);
                 B->CreateStore(ai,a);
             }
-			++ai;
-		}
-		
-		Obj body;
-		typedtree.obj("body",&body);
-		emitStmt(&body);
+            ++ai;
+        }
+        
+        Obj body;
+        typedtree.obj("body",&body);
+        emitStmt(&body);
         if(BB) { //no terminating return statment, we need to insert one
             emitReturnUndef();
         }
-		
-		C->m->dump();
-		verifyFunction(*func);
-		C->fpm->run(*func);
-		C->m->dump();
-		
-		void * ptr = C->ee->getPointerToFunction(func);
         
-		void ** data = (void**) lua_newuserdata(L,sizeof(void*));
-		assert(ptr);
-		*data = ptr;
-		funcobj.setfield("fptr");
-		
-		//cleanup -- ensure we left the stack the way we started
-		assert(lua_gettop(T->L) == ref_table);
-		delete B;
-	}
+        C->m->dump();
+        verifyFunction(*func);
+        C->fpm->run(*func);
+        C->m->dump();
+        
+        void * ptr = C->ee->getPointerToFunction(func);
+        
+        void ** data = (void**) lua_newuserdata(L,sizeof(void*));
+        assert(ptr);
+        *data = ptr;
+        funcobj.setfield("fptr");
+        
+        //cleanup -- ensure we left the stack the way we started
+        assert(lua_gettop(T->L) == ref_table);
+        delete B;
+    }
     
     Value * emitUnary(Obj * exp, Obj * ao) {
         TType * t = typeOfValue(exp);
@@ -697,23 +697,23 @@ if(t->type->isIntegerTy()) { \
         return NULL;
         
     }
-	Value * emitExp(Obj * exp) {
-		switch(exp->kind("kind")) {
-			case T_var:  {
-				Obj def;
-				exp->obj("definition",&def);
-				Value * v = (Value*) def.ud("value");
-				assert(v);
-				return v;
-			} break;
-			case T_ltor: {
-				Obj e;
-				exp->obj("expression",&e);
-				Value * v = emitExp(&e);
-				return B->CreateLoad(v);
-			} break;
-			case T_operator: {
-				
+    Value * emitExp(Obj * exp) {
+        switch(exp->kind("kind")) {
+            case T_var:  {
+                Obj def;
+                exp->obj("definition",&def);
+                Value * v = (Value*) def.ud("value");
+                assert(v);
+                return v;
+            } break;
+            case T_ltor: {
+                Obj e;
+                exp->obj("expression",&e);
+                Value * v = emitExp(&e);
+                return B->CreateLoad(v);
+            } break;
+            case T_operator: {
+                
                 Obj exps;
                 exp->obj("operands",&exps);
                 int N = exps.size();
@@ -730,26 +730,26 @@ if(t->type->isIntegerTy()) { \
                     assert(!"NYI - greater than 2 operands?");
                     return NULL;
                 }
-				switch(exp->kind("operator")) {
-					case T_add: {
-						TType * t = typeOfValue(exp);
-						Obj exps;
-						
-						if(t->type->isFPOrFPVectorTy()) {
-							Obj a,b;
-							exps.objAt(0,&a);
-							exps.objAt(1,&b);
-							return B->CreateFAdd(emitExp(&a),emitExp(&b));
-						} else {
-							assert(!"NYI - integer +");
-						}
-					} break;
-					default: {
-						assert(!"NYI - op");
-					} break;
-				}
-				
-			} break;
+                switch(exp->kind("operator")) {
+                    case T_add: {
+                        TType * t = typeOfValue(exp);
+                        Obj exps;
+                        
+                        if(t->type->isFPOrFPVectorTy()) {
+                            Obj a,b;
+                            exps.objAt(0,&a);
+                            exps.objAt(1,&b);
+                            return B->CreateFAdd(emitExp(&a),emitExp(&b));
+                        } else {
+                            assert(!"NYI - integer +");
+                        }
+                    } break;
+                    default: {
+                        assert(!"NYI - op");
+                    } break;
+                }
+                
+            } break;
             case T_literal: {
                 TType * t = typeOfValue(exp);
                 
@@ -843,11 +843,11 @@ if(t->type->isIntegerTy()) { \
                 }
                 return B->CreateLoad(result);
             } break;
-			default: {
-				assert(!"NYI - exp");
-			} break;
-		}
-	}
+            default: {
+                assert(!"NYI - exp");
+            } break;
+        }
+    }
     BasicBlock * createBB(const char * name) {
         BasicBlock * bb = BasicBlock::Create(*C->ctx, name);
         return bb;
@@ -1016,8 +1016,8 @@ if(t->type->isIntegerTy()) { \
         }
         
     }
-	void emitStmt(Obj * stmt) {		
-		T_Kind kind = stmt->kind("kind");
+    void emitStmt(Obj * stmt) {     
+        T_Kind kind = stmt->kind("kind");
         if(!BB) { //dead code, no emitting
             if(kind == T_label) { //unless there is a label, then someone can jump here
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt);
@@ -1027,28 +1027,28 @@ if(t->type->isIntegerTy()) { \
             return;
         }
         switch(kind) {
-			case T_block: {
-				Obj stmts;
-				stmt->obj("statements",&stmts);
-				int N = stmts.size();
-				for(int i = 0; i < N; i++) {
-					Obj s;
-					stmts.objAt(i,&s);
-					emitStmt(&s);
-				}
-			} break;
+            case T_block: {
+                Obj stmts;
+                stmt->obj("statements",&stmts);
+                int N = stmts.size();
+                for(int i = 0; i < N; i++) {
+                    Obj s;
+                    stmts.objAt(i,&s);
+                    emitStmt(&s);
+                }
+            } break;
             case T_return: {
-				Obj exps;
-				stmt->obj("expressions",&exps);
+                Obj exps;
+                stmt->obj("expressions",&exps);
                 
                 std::vector<Value *> results;
                 emitParameterList(&exps, &results,NULL);
                 
-				if(results.size() == 0) {
-					B->CreateRetVoid();
-				} else if (results.size() == 1 && !this->func_type->issretfunc) {
-					B->CreateRet(results[0]);
-				} else {
+                if(results.size() == 0) {
+                    B->CreateRetVoid();
+                } else if (results.size() == 1 && !this->func_type->issretfunc) {
+                    B->CreateRet(results[0]);
+                } else {
                     //multiple return values, look up the sret pointer
                     Value * st = func->arg_begin();
                     
@@ -1060,7 +1060,7 @@ if(t->type->isIntegerTy()) { \
                     B->CreateRetVoid();
                 }
                 BB = NULL;
-			} break;
+            } break;
             case T_label: {
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt);
                 B->CreateBr(bb);
@@ -1150,63 +1150,63 @@ if(t->type->isIntegerTy()) { \
                 setInsertBlock(merge);
                 
             } break;
-			case T_defvar: {
-				std::vector<Value *> rhs;
+            case T_defvar: {
+                std::vector<Value *> rhs;
                 
                 Obj inits;
                 bool has_inits = stmt->obj("initializers",&inits);
                 if(has_inits)
-                	emitParameterList(&inits, &rhs,NULL);
-				
-				Obj vars;
-				stmt->obj("variables",&vars);
-				int N = vars.size();
-				bool isglobal = stmt->boolean("isglobal");
+                    emitParameterList(&inits, &rhs,NULL);
+                
+                Obj vars;
+                stmt->obj("variables",&vars);
+                int N = vars.size();
+                bool isglobal = stmt->boolean("isglobal");
                 for(int i = 0; i < N; i++) {
-					Obj v;
-					vars.objAt(i,&v);
-					Value * addr;
+                    Obj v;
+                    vars.objAt(i,&v);
+                    Value * addr;
                     
                     if(isglobal) {
                         addr = allocGlobal(&v);
-					} else {
+                    } else {
                         addr = allocVar(&v);
                     }
                     if(has_inits)
-						B->CreateStore(rhs[i],addr);
-				}
-			} break;
+                        B->CreateStore(rhs[i],addr);
+                }
+            } break;
             case T_assignment: {
                 std::vector<Value *> rhsexps;
-				Obj rhss;
-				stmt->obj("rhs",&rhss);
-				emitParameterList(&rhss,&rhsexps,NULL);
-				Obj lhss;
-				stmt->obj("lhs",&lhss);
-				int N = lhss.size();
-				for(int i = 0; i < N; i++) {
-					Obj lhs;
-					lhss.objAt(i,&lhs);
+                Obj rhss;
+                stmt->obj("rhs",&rhss);
+                emitParameterList(&rhss,&rhsexps,NULL);
+                Obj lhss;
+                stmt->obj("lhs",&lhss);
+                int N = lhss.size();
+                for(int i = 0; i < N; i++) {
+                    Obj lhs;
+                    lhss.objAt(i,&lhs);
                     Value * lhsexp = emitExp(&lhs);
-					B->CreateStore(rhsexps[i],lhsexp);
-				}
+                    B->CreateStore(rhsexps[i],lhsexp);
+                }
             } break;
-			default: {
+            default: {
                 emitExp(stmt);
-			} break;
-		}
-	}
+            } break;
+        }
+    }
 };
 
 static int terra_compile(lua_State * L) { //entry point into compiler from lua code
-	terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-	assert(T->L == L);
-	
-	{
-		TerraCompiler c;
-		c.run(T);
-	} //scope to ensure that c.func is destroyed before we pop the reference table off the stack
-	
-	lua_pop(T->L,1); //remove the reference table from stack
-	return 0;
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    
+    {
+        TerraCompiler c;
+        c.run(T);
+    } //scope to ensure that c.func is destroyed before we pop the reference table off the stack
+    
+    lua_pop(T->L,1); //remove the reference table from stack
+    return 0;
 }

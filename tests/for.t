@@ -1,18 +1,18 @@
 
 terra foo(a : int, s : int)
-	var r = 0
-	for i = 0,a,s do
-		r = r + i
-	end
-	return r
+    var r = 0
+    for i = 0,a,s do
+        r = r + i
+    end
+    return r
 end
 
 terra foo2(a : int)
-	var r = 0
-	for i = 0,a do
-		r = r + i
-	end
-	return r
+    var r = 0
+    for i = 0,a do
+        r = r + i
+    end
+    return r
 end
 
 local test = require("test")

@@ -7,17 +7,17 @@
 struct terra_CompilerState;
 
 typedef struct stringtable {
-	struct TString **hash;
-	uint32_t nuse;  /* number of elements */
-	int size;
+    struct TString **hash;
+    uint32_t nuse;  /* number of elements */
+    int size;
 } stringtable;
 
 typedef struct terra_State {
-	struct lua_State * L;
-	struct terra_CompilerState * C;
+    struct lua_State * L;
+    struct terra_CompilerState * C;
 //for parser
-	stringtable strt;
-	int nCcalls;
+    stringtable strt;
+    int nCcalls;
 } terra_State;
 void terra_reporterror(terra_State * T, const char * fmt, ...);
 

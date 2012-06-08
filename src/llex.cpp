@@ -28,14 +28,14 @@
 
 
 int next(LexState * ls) {
-	ls->current = zgetc(ls->z);
-	if(ls->current != EOZ) {
-		ls->currentoffset++;
-		OutputBuffer_putc(&ls->output_buffer,ls->current == EOZ ? '\0' : ls->current);
-	}
-	return ls->current;
+    ls->current = zgetc(ls->z);
+    if(ls->current != EOZ) {
+        ls->currentoffset++;
+        OutputBuffer_putc(&ls->output_buffer,ls->current == EOZ ? '\0' : ls->current);
+    }
+    return ls->current;
 }
-#define currIsNewline(ls)	(ls->current == '\n' || ls->current == '\r')
+#define currIsNewline(ls)   (ls->current == '\n' || ls->current == '\r')
 
 
 /* ORDER RESERVED */
@@ -77,25 +77,25 @@ void luaX_init (terra_State *L) {
 }
 
 const char * luaX_token2rawstr(LexState * ls, int token) {
-	if(token < FIRST_RESERVED) {
-		assert(token == cast(unsigned char, token));
-		return luaS_cstringf(ls->LP,"%c",token);
-	} else {
-		return luaX_tokens[token - FIRST_RESERVED];
-	}
+    if(token < FIRST_RESERVED) {
+        assert(token == cast(unsigned char, token));
+        return luaS_cstringf(ls->LP,"%c",token);
+    } else {
+        return luaX_tokens[token - FIRST_RESERVED];
+    }
 }
 const char * luaX_token2str (LexState *ls, int token) {
   if (token < FIRST_RESERVED) {
-	assert(token == cast(unsigned char, token));
+    assert(token == cast(unsigned char, token));
     return (lisprint(token)) ? luaS_cstringf(ls->LP,"'%c'", token) :
-    		                   luaS_cstringf(ls->LP,"char(%d)");
+                               luaS_cstringf(ls->LP,"char(%d)");
   }
   else {
-	const char *s = luaX_tokens[token - FIRST_RESERVED];
-	if (token < TK_EOS) //TODO: why is this check here?
-	  return getstr(luaS_new(ls->LP, s));
-	else
-	  return s;
+    const char *s = luaX_tokens[token - FIRST_RESERVED];
+    if (token < TK_EOS) //TODO: why is this check here?
+      return getstr(luaS_new(ls->LP, s));
+    else
+      return s;
   }
 }
 
@@ -114,8 +114,8 @@ static const char *txtToken (LexState *ls, int token) {
 
 //TODO:s stub for better error reporting
 static l_noret report_error(const char * err) {
-	printf("%s\n",err);
-	exit(1);
+    printf("%s\n",err);
+    exit(1);
 }
 
 static l_noret lexerror (LexState *ls, const char * msg, int token) {
@@ -172,53 +172,53 @@ void luaX_setinput (terra_State *LP, LexState *ls, ZIO *z, TString * source,
   ls->patchinfo.space = 32;
   ls->patchinfo.buffer = (char*)malloc(32);
   if(firstchar != EOZ)
-	  OutputBuffer_putc(&ls->output_buffer,firstchar);
+      OutputBuffer_putc(&ls->output_buffer,firstchar);
   luaZ_resizebuffer(ls->L, ls->buff, LUA_MINBUFFER);  /* initialize buffer */
 }
 
 void luaX_patchbegin(LexState *ls, Token * begin_token) {
-	//save everything from the current token to the end of the output buffer in the patch buffer
-	OutputBuffer * ob = &ls->output_buffer;
-	if(ls->t.token == TK_EOS) {
-		ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
-		                              //we need to not include the last character in the patch, so we updated the pointer here
-	}
-	int n_bytes = ob->N - ls->t.seminfo.buffer_begin;
-	if(n_bytes > ls->patchinfo.space) {
-		int newsize = std::max(n_bytes, ls->patchinfo.space * 2);
-		ls->patchinfo.buffer = (char*) realloc(ls->patchinfo.buffer, newsize);
-		ls->patchinfo.space = newsize;
-	}
-	memcpy(ls->patchinfo.buffer,ob->data + ls->t.seminfo.buffer_begin, n_bytes);
-	ls->patchinfo.N = n_bytes;
-	//ls->patchinfo.buffer[ls->patchinfo.N] = '\0';
-	//printf("buffer is %s\n",ls->patchinfo.buffer);
+    //save everything from the current token to the end of the output buffer in the patch buffer
+    OutputBuffer * ob = &ls->output_buffer;
+    if(ls->t.token == TK_EOS) {
+        ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
+                                      //we need to not include the last character in the patch, so we updated the pointer here
+    }
+    int n_bytes = ob->N - ls->t.seminfo.buffer_begin;
+    if(n_bytes > ls->patchinfo.space) {
+        int newsize = std::max(n_bytes, ls->patchinfo.space * 2);
+        ls->patchinfo.buffer = (char*) realloc(ls->patchinfo.buffer, newsize);
+        ls->patchinfo.space = newsize;
+    }
+    memcpy(ls->patchinfo.buffer,ob->data + ls->t.seminfo.buffer_begin, n_bytes);
+    ls->patchinfo.N = n_bytes;
+    //ls->patchinfo.buffer[ls->patchinfo.N] = '\0';
+    //printf("buffer is %s\n",ls->patchinfo.buffer);
 
-	//reset the output buffer to the beginning of the begin_token
-	ob->N = begin_token->seminfo.buffer_begin;
-	//retain the tokens leading whitespace for sanity...
-	while(1) {
-		switch(ob->data[ob->N]) {
-		case '\n': case '\r':
-			begin_token->seminfo.linebegin++;
-			/*fallthrough*/
-		case ' ': case '\f': case '\t': case '\v':
-			begin_token->seminfo.buffer_begin++;
+    //reset the output buffer to the beginning of the begin_token
+    ob->N = begin_token->seminfo.buffer_begin;
+    //retain the tokens leading whitespace for sanity...
+    while(1) {
+        switch(ob->data[ob->N]) {
+        case '\n': case '\r':
+            begin_token->seminfo.linebegin++;
+            /*fallthrough*/
+        case ' ': case '\f': case '\t': case '\v':
+            begin_token->seminfo.buffer_begin++;
             ob->N++;
-			break;
-		default:
-			goto loop_exit;
-		}
-	} loop_exit:
-	return;
-	//code can now safely write to this buffer
+            break;
+        default:
+            goto loop_exit;
+        }
+    } loop_exit:
+    return;
+    //code can now safely write to this buffer
 }
 void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N) {
     OutputBuffer * ob = &ls->output_buffer;
-	if(ls->t.token == TK_EOS) {
-		ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
-		                              //we need to not include the last character in the patch, so we updated the pointer here
-	}
+    if(ls->t.token == TK_EOS) {
+        ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
+                                      //we need to not include the last character in the patch, so we updated the pointer here
+    }
     int n_bytes = ls->t.seminfo.buffer_begin - begin_token->seminfo.buffer_begin;
     *output = ob->data + begin_token->seminfo.buffer_begin;
     *N = n_bytes;
@@ -235,8 +235,8 @@ char * luaX_saveoutput(LexState * ls, Token * begin_token) {
 }
 
 void luaX_patchend(LexState *ls, Token * begin_token) {
-	//first we need to pad with newlines, until we reach the original line count
-	OutputBuffer * ob = &ls->output_buffer;
+    //first we need to pad with newlines, until we reach the original line count
+    OutputBuffer * ob = &ls->output_buffer;
     //count the number of newlines in the patched in data
     int nlines = 0;
     for(int i = begin_token->seminfo.buffer_begin; i < ob->N; i++) {
@@ -244,17 +244,17 @@ void luaX_patchend(LexState *ls, Token * begin_token) {
             nlines++;
     }
     
-	for(int line = begin_token->seminfo.linebegin + nlines;
-		line < ls->t.seminfo.linebegin;
-		line++) {
-		OutputBuffer_putc(ob,'\n');
-	}
-	int offset = ob->N - ls->t.seminfo.buffer_begin;
-	//restore patch data
-	OutputBuffer_puts(ob,ls->patchinfo.N,ls->patchinfo.buffer);
-	//adjust to current tokens to have correct information
-	ls->t.seminfo.buffer_begin += offset;
-	ls->lookahead.seminfo.buffer_begin += offset;
+    for(int line = begin_token->seminfo.linebegin + nlines;
+        line < ls->t.seminfo.linebegin;
+        line++) {
+        OutputBuffer_putc(ob,'\n');
+    }
+    int offset = ob->N - ls->t.seminfo.buffer_begin;
+    //restore patch data
+    OutputBuffer_puts(ob,ls->patchinfo.N,ls->patchinfo.buffer);
+    //adjust to current tokens to have correct information
+    ls->t.seminfo.buffer_begin += offset;
+    ls->lookahead.seminfo.buffer_begin += offset;
 }
 
 /*
@@ -285,18 +285,18 @@ static void buffreplace (LexState *ls, char from, char to) {
 
 
 #if !defined(getlocaledecpoint)
-#define getlocaledecpoint()	(localeconv()->decimal_point[0])
+#define getlocaledecpoint() (localeconv()->decimal_point[0])
 #endif
 
 
-//#define buff2d(b,e)	luaO_str2d(luaZ_buffer(b), luaZ_bufflen(b) - 1, e)
+//#define buff2d(b,e)   luaO_str2d(luaZ_buffer(b), luaZ_bufflen(b) - 1, e)
 
 int buff2d(Mbuffer * b, SemInfo * seminfo) {
-	int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
-	char * end;
-	seminfo->i = strtoull(luaZ_buffer(b),&end,0);
-	seminfo->is_integer = *end == '\0';
-	return r;
+    int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
+    char * end;
+    seminfo->i = strtoull(luaZ_buffer(b),&end,0);
+    seminfo->is_integer = *end == '\0';
+    return r;
 }
 
 /*
@@ -495,8 +495,8 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case '-': {  /* '-' or '--' (comment) */
         next(ls);
         if (ls->current == '>') {
-        	next(ls);
-        	return TK_FUNC_PTR;
+            next(ls);
+            return TK_FUNC_PTR;
         }
         if (ls->current != '-') return '-';
         /* else is a comment */

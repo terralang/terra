@@ -12,13 +12,13 @@
 
 #include <stdarg.h>
 
-#define sizestring(s)	(sizeof(union TString)+((s)->len+1)*sizeof(char))
+#define sizestring(s)   (sizeof(union TString)+((s)->len+1)*sizeof(char))
 
 /* get the actual string (array of bytes) from a TString */
-#define getstr(ts)	cast(const char *, (ts) + 1)
+#define getstr(ts)  cast(const char *, (ts) + 1)
 
 
-#define luaS_newliteral(L, s)	(luaS_newlstr(L, "" s, \
+#define luaS_newliteral(L, s)   (luaS_newlstr(L, "" s, \
                                  (sizeof(s)/sizeof(char))-1))
 
 
@@ -26,7 +26,7 @@
 ** as all string are internalized, string equality becomes
 ** pointer equality
 */
-#define eqstr(a,b)	((a) == (b))
+#define eqstr(a,b)  ((a) == (b))
 
 LUAI_FUNC void luaS_resize (terra_State *L, int newsize);
 LUAI_FUNC TString *luaS_newlstr (terra_State *L, const char *str, size_t l);

@@ -28,10 +28,10 @@ typedef struct expdesc {
 struct BlockCnt;  /* defined in lparser.c */
 
 typedef struct Proto {
-	int linedefined;
-	int lastlinedefined;
-	int is_vararg;
-	TString * source;
+    int linedefined;
+    int lastlinedefined;
+    int is_vararg;
+    TString * source;
 } Proto;
 
 /* state needed to generate code for a given function */

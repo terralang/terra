@@ -13,7 +13,7 @@
 ** systems, you can leave 'luaP_strx2number' undefined and Lua will
 ** provide its own implementation.
 */
-#define luaP_str2number(s,p)	strtod((s), (p))
+#define luaP_str2number(s,p)    strtod((s), (p))
 int luaO_str2d (const char *s, size_t len, luaP_Number *result);
 int luaO_hexavalue (int c);
 
@@ -21,17 +21,17 @@ int luaO_hexavalue (int c);
 ** `module' operation for hashing (size is always a power of 2)
 */
 #define lmod(s,size) \
-	(check_exp((size&(size-1))==0, (cast(int, (s) & ((size)-1)))))
+    (check_exp((size&(size-1))==0, (cast(int, (s) & ((size)-1)))))
 
 /* internal assertions for in-house debugging */
 #if defined(luaP_assert)
-#define check_exp(c,e)		(luaP_assert(c), (e))
+#define check_exp(c,e)      (luaP_assert(c), (e))
 /* to avoid problems with conditions too long */
-#define luaP_longassert(c)	{ if (!(c)) luaP_assert(0); }
+#define luaP_longassert(c)  { if (!(c)) luaP_assert(0); }
 #else
-#define luaP_assert(c)		((void)0)
-#define check_exp(c,e)		(e)
-#define luaP_longassert(c)	((void)0)
+#define luaP_assert(c)      ((void)0)
+#define check_exp(c,e)      (e)
+#define luaP_longassert(c)  ((void)0)
 #endif
 
 #endif

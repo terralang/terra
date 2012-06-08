@@ -2,15 +2,15 @@
 local test = require("test")
 
 function mkspecial(N)
-	local terra pow(a : double)
-		var i,r = 0,1.0
-		while i < N do
-			r = r * a
-			i = i + 1
-		end
-		return r
-	end
-	return pow
+    local terra pow(a : double)
+        var i,r = 0,1.0
+        while i < N do
+            r = r * a
+            i = i + 1
+        end
+        return r
+    end
+    return pow
 end
 
 
@@ -22,10 +22,10 @@ test.eq(pow3(2),8)
 
 
 function mkor(T)
-	local terra fn(a : T, b : T) : T
-		return a or b
-	end
-	return fn
+    local terra fn(a : T, b : T) : T
+        return a or b
+    end
+    return fn
 end
 
 local lor = mkor(bool)
@@ -37,13 +37,13 @@ test.eq(aor(1,2),3)
 
 --[[
 function my_lua_fun()
-	
-	val my_list = new_list()
-	defer delete(my_list)
-	
-	
+    
+    val my_list = new_list()
+    defer delete(my_list)
+    
+    
 
-	return { ["a"] = 1, ["b"] = 2 }
+    return { ["a"] = 1, ["b"] = 2 }
 end
 --wess weimer PhD on controlling actions
 a:my_method(b)

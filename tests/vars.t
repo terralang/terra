@@ -8,12 +8,12 @@ local var d = 5
 --a.b:gettype(nil)
 
 terra bar()
-	a.b = a.b + 1
-	a.c = a.c + 1
-	d = d + 1
+    a.b = a.b + 1
+    a.c = a.c + 1
+    d = d + 1
 end
 terra foo()
-	return a.b,a.c,d
+    return a.b,a.c,d
 end
 
 

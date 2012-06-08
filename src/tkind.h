@@ -70,9 +70,9 @@ _(type, "type") \
 _(proxy, "proxy")
 
 enum T_Kind {
-	#define T_KIND_ENUM(a,str) T_##a,
-	T_KIND_LIST(T_KIND_ENUM)
-	T_NUM_KINDS
+    #define T_KIND_ENUM(a,str) T_##a,
+    T_KIND_LIST(T_KIND_ENUM)
+    T_NUM_KINDS
 };
 
 const char * tkindtostr(T_Kind k);
