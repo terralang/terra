@@ -970,11 +970,10 @@ function terra.func:typecheck(ctx)
 		end
 		return ee:copy { type = e.type, operands = terra.newlist{e} }
 	end	
-	local function checkbinary(e,property)
-		if #e.operands == 1 then
-			return checkunary(e,property)
-		end
-		local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
+	
+	
+	local function meetbinary(e,property,lhs,rhs)
+		local t,l,r = typematch(e,lhs,rhs)
 		if t ~= terra.types.error and not t[property](t) then
 			terra.reporterror(ctx,e,"arguments of binary operators are not valid type but ",t)
 			return e:copy { type = terra.types.error }
@@ -982,34 +981,35 @@ function terra.func:typecheck(ctx)
 		return e:copy { type = t, operands = terra.newlist {l,r} }
 	end
 	
+	local function checkbinary(e,property)
+		if #e.operands == 1 then
+			return checkunary(e,property)
+		end
+		return meetbinary(e,property,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
+	end
 	
 	local function checkbinaryarith(e)
 		return checkbinary(e,"isarithmetic")
 	end
 
 	local function checkbinaryarithpointer(e)
- 	        local l = checkrvalue(e.operands[1])
+		if #e.operands == 1 then
+			return checkunary(e,"isarithmetic")
+		end
+		
+ 	    local l = checkrvalue(e.operands[1])
 		local r = checkrvalue(e.operands[2])
 
-		-- adding or subtracting 2 pointers
-	        if(l.type:ispointer() and l.type==r.type) then
-		  return e:copy { type = ptrdiff, operands = terra.newlist {l,r} }
+		-- subtracting 2 pointers
+	    if l.type:ispointer() and l.type == r.type and e.operator == terra.kinds["-"] then
+			return e:copy { type = ptrdiff, operands = terra.newlist {l,r} }
+		elseif l.type:ispointer() and r.type:isintegral() then -- adding or subtracting a int to a pointer 
+			return e:copy { type = l.type, operands = terra.newlist {l,r} }
+        elseif l.type:isintegral() and r.type:ispointer() then
+			return e:copy { type = r.type, operands = terra.newlist {r,l} }
+		else
+			return meetbinary(e,"isarithmetic",l,r)
 		end
-
-		local function intPtrCheck(a,b)
-
-		end
-
-		-- adding or subtracting a int to a pointer
-	        if( (l.type:ispointer() and r.type:isintegral()) ) then
-		  return e:copy { type = l.type, operands = terra.newlist {l,r} }
-		end
-
-	        if( (l.type:isintegral() and r.type:ispointer()) ) then
-		  return e:copy { type = r.type, operands = terra.newlist {l,r} }
-		end
-
-		return checkbinary(e,"isarithmetic")
 	end
 
 	local function checkintegralarith(e)
@@ -1277,7 +1277,6 @@ function terra.func:typecheck(ctx)
 			local op_string = terra.kinds[e.operator]
 			local op = operator_table[op_string]
 			if op == nil then
-				print(e.operator)
 				terra.reporterror(ctx,e,"operator ",op_string," not defined in terra code.")
 				return e:copy { type = terra.types.error }
 			else

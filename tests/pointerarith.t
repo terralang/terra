@@ -9,15 +9,15 @@ terra bar()
 end
 
 terra foo2(a : &int) : &int
---  a = a + 6
---  a = (-3) + a
+  a = a + 6 
+  a = 3 + a
   a = a + 10
   return a
 end
 
 terra foo3(a : &int) : &int
---  a = a - 5
---  a = 2 + a
+  a = a - 11
+  a = 2 + a
   a = a - 10
   return a
 end
