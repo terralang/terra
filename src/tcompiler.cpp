@@ -797,7 +797,7 @@ if(t->type->isIntegerTy()) { \
             case T_apply: {
                 Value * v = emitCall(exp,true);
                 return v;
-            } break;
+            } break;   
             case T_extractreturn: {
                 Obj index,resulttable,value;
                 int idx = exp->number("index");

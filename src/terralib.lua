@@ -981,18 +981,18 @@ function terra.func:typecheck(ctx)
         return e:copy { type = t, operands = terra.newlist {l,r} }
     end
     
-    local function checkbinary(e,property)
+    local function checkbinaryorunary(e,property)
         if #e.operands == 1 then
             return checkunary(e,property)
         end
         return meetbinary(e,property,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
     end
     
-    local function checkbinaryarith(e)
-        return checkbinary(e,"isarithmetic")
+    local function checkarith(e)
+        return checkbinaryorunary(e,"isarithmetic")
     end
 
-    local function checkbinaryarithpointer(e)
+    local function checkarithpointer(e)
         if #e.operands == 1 then
             return checkunary(e,"isarithmetic")
         end
@@ -1013,14 +1013,14 @@ function terra.func:typecheck(ctx)
     end
 
     local function checkintegralarith(e)
-        return checkbinary(e,"isintegral")
+        return checkbinaryorunary(e,"isintegral")
     end
     local function checkcomparision(e)
         local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
         return e:copy { type = bool, operands = terra.newlist {l,r} }
     end
     local function checklogicalorintegral(e)
-        return checkbinary(e,"canbeord")
+        return checkbinaryorunary(e,"canbeord")
     end
     
     local function checklvalue(ee)
@@ -1055,11 +1055,11 @@ function terra.func:typecheck(ctx)
     end
     
     local operator_table = {
-        ["-"] = checkbinaryarithpointer;
-        ["+"] = checkbinaryarithpointer;
-        ["*"] = checkbinaryarith;
-        ["/"] = checkbinaryarith;
-        ["%"] = checkbinaryarith;
+        ["-"] = checkarithpointer;
+        ["+"] = checkarithpointer;
+        ["*"] = checkarith;
+        ["/"] = checkarith;
+        ["%"] = checkarith;
         ["<"] = checkcomparision;
         ["<="] = checkcomparision;
         [">"] = checkcomparision;
