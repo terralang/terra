@@ -1,15 +1,8 @@
 io.write("loading terra lib...")
 
---[[
-some experiments with ffi to call function given a function pointer
-local ffi = require("ffi")
-print("push function is: "..type(functest))
-ffi.cdef("typedef struct { void (*fn)(double,double); } my_struct;") 
-func = ffi.cast("my_struct*",functest)
-func.fn(1,2)
-]]
 local ffi = require("ffi")
 
+-- TREE
 terra.tree = {} --metatype for trees
 terra.tree.__index = terra.tree
 function terra.tree:__tostring()
@@ -87,6 +80,101 @@ function terra.istree(v)
     return terra.tree == getmetatable(v)
 end
 
+-- END TREE
+
+
+-- LIST
+terra.list = {} --used for all ast lists
+setmetatable(terra.list,{ __index = table })
+terra.list.__index = terra.list
+function terra.newlist(lst)
+    if lst == nil then
+        lst = {}
+    end
+    return setmetatable(lst,terra.list)
+end
+
+function terra.list:map(fn)
+    local l = terra.newlist()
+    for i,v in ipairs(self) do
+        l[i] = fn(v)
+    end 
+    return l
+end
+function terra.list:printraw()
+    for i,v in ipairs(self) do
+        if v.printraw then
+            print(i,v:printraw())
+        else
+            print(i,v)
+        end
+    end
+end
+function terra.list:mkstring(begin,sep,finish)
+    if sep == nil then
+        begin,sep,finish = "",begin,""
+    end
+    local len = #self
+    if len == 0 then return begin..finish end
+    local str = begin .. tostring(self[1])
+    for i = 2,len do
+        str = str .. sep .. tostring(self[i])
+    end
+    return str..finish
+end
+
+-- END LIST
+
+-- CONTEXT
+terra.context = {}
+terra.context.__index = terra.context
+function terra.context:push(filename, env)
+    local tbl = { filename = filename, env = env } 
+    table.insert(self.stack,tbl)
+end
+function terra.context:pop()
+    local tbl = table.remove(self.stack)
+    if tbl.filehandle then
+        terra.closesourcefile(tbl.filehandle)
+        tbl.filehandle = nil
+    end
+end
+function terra.context:env()
+    return self.stack[#self.stack].env
+end
+function terra.context:setenv(env)
+    self.stack[#self.stack].env = env
+end
+--terra.printlocation
+--and terra.opensourcefile are inserted by C wrapper
+function terra.context:printsource(anchor)
+    local top = self.stack[#self.stack]
+    if not top.filehandle then
+        top.filehandle = terra.opensourcefile(top.filename)
+    end
+    terra.printlocation(top.filehandle,anchor.offset)
+end
+function terra.context:reporterror(anchor,...)
+    self.has_errors = true
+    local top = self.stack[#self.stack]
+    io.write(top.filename..":"..anchor.linenumber..": ")
+    for _,v in ipairs({...}) do
+        io.write(tostring(v))
+    end
+    io.write("\n")
+    self:printsource(anchor)
+end
+function terra.context:isempty()
+    return #self.stack == 0
+end
+
+function terra.newcontext()
+    return setmetatable({stack = {}},terra.context)
+end
+
+-- END CONTEXT
+
+-- FUNC
 terra.func = {} --metatable for all function types
 terra.func.__index = terra.func
 function terra.func:env()
@@ -157,52 +245,6 @@ function terra.func:makewrapper()
     self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
 end
 
-terra.context = {}
-terra.context.__index = terra.context
-function terra.context:push(filename, env)
-    local tbl = { filename = filename, env = env } 
-    table.insert(self.stack,tbl)
-end
-function terra.context:pop()
-    local tbl = table.remove(self.stack)
-    if tbl.filehandle then
-        terra.closesourcefile(tbl.filehandle)
-        tbl.filehandle = nil
-    end
-end
-function terra.context:env()
-    return self.stack[#self.stack].env
-end
-function terra.context:setenv(env)
-    self.stack[#self.stack].env = env
-end
---terra.printlocation
---and terra.opensourcefile are inserted by C wrapper
-function terra.context:printsource(anchor)
-    local top = self.stack[#self.stack]
-    if not top.filehandle then
-        top.filehandle = terra.opensourcefile(top.filename)
-    end
-    terra.printlocation(top.filehandle,anchor.offset)
-end
-function terra.context:reporterror(anchor,...)
-    self.has_errors = true
-    local top = self.stack[#self.stack]
-    io.write(top.filename..":"..anchor.linenumber..": ")
-    for _,v in ipairs({...}) do
-        io.write(tostring(v))
-    end
-    io.write("\n")
-    self:printsource(anchor)
-end
-function terra.context:isempty()
-    return #self.stack == 0
-end
-
-function terra.newcontext()
-    return setmetatable({stack = {}},terra.context)
-end
-
 function terra.func:compile(ctx)
     ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
     print("compiling function:")
@@ -250,6 +292,10 @@ function terra.isfunction(obj)
     return getmetatable(obj) == terra.func
 end
 
+--END FUNC
+
+-- GLOBALVAR
+
 terra.globalvar = {} --metatable for all global variables
 terra.globalvar.__index = terra.globalvar
 
@@ -291,6 +337,9 @@ function terra.globalvar:gettype(ctx)
     end
 end
 
+-- END GLOBALVAR
+
+-- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
     local name_count = 0
     local function manglename(nm)
@@ -364,17 +413,10 @@ do  --constructor functions for terra functions and variables
     end
 end
 
+-- END CONSTRUCTORS
 
---[[
-types take the form
-primitive(name)
-pointer(typ)
-array(typ,N)
-struct(types)
-union(types)
-named(name,typ), where typ is the unnamed structural type and name is the internally generated unique name for the type
-functype(arguments,results) 
-]]
+-- TYPE
+
 do --construct type table that holds the singleton value representing each unique type
    --eventually this will be linked to the LLVM object representing the type
    --and any information about the operators defined on the type
@@ -689,7 +731,10 @@ do --construct type table that holds the singleton value representing each uniqu
     terra.types = types
 end
 
+-- END TYPE
 
+
+-- TYPECHECKER
 function terra.reporterror(ctx,anchor,...)
     ctx:reporterror(anchor,...)
     return terra.types.error
@@ -763,45 +808,6 @@ other:
 "ifbranch" (done)
 
 ]]
-
-terra.list = {} --used for all ast lists
-setmetatable(terra.list,{ __index = table })
-terra.list.__index = terra.list
-function terra.newlist(lst)
-    if lst == nil then
-        lst = {}
-    end
-    return setmetatable(lst,terra.list)
-end
-
-function terra.list:map(fn)
-    local l = terra.newlist()
-    for i,v in ipairs(self) do
-        l[i] = fn(v)
-    end 
-    return l
-end
-function terra.list:printraw()
-    for i,v in ipairs(self) do
-        if v.printraw then
-            print(i,v:printraw())
-        else
-            print(i,v)
-        end
-    end
-end
-function terra.list:mkstring(begin,sep,finish)
-    if sep == nil then
-        begin,sep,finish = "",begin,""
-    end
-    local len = #self
-    if len == 0 then return begin..finish end
-    local str = begin .. tostring(self[1])
-    for i = 2,len do
-        str = str .. sep .. tostring(self[i])
-    end
-    return str..finish
-end
 
 
 function terra.func:typecheck(ctx)
@@ -1588,43 +1594,7 @@ function terra.func:typecheck(ctx)
     
     self.iscompiling = nil
     return typedtree
-    
-    --[[
-    
-    2. register the parameter list as a variant of this function (ensure it is unique) and create table to hold the result of type checking
-    5. typecheck statement list, start with (done)
-       -- arithmetic and logical operators on simple number types (no casting)
-       -- if and while statements
-       -- var statements (multiple cases)
-       -- assignment statements  (multiple cases)
-       -- return statements
-       -- literals
-       -- lua partial evaluation + lua numeric literals
-       next:
-       -- function calls (and recursive function compilation)
-       -- correct multiple return value in assignments
-       -- implicit arithmetic conversions
-       -- pointer types 
-       -- structured types
-       -- macros (no hygiene)
-       -- numeric for loop
-       -- iterator loop
-       make sure to track lvalues for all typed expressions
-       
-handling multi-returns:
-checkparameterlist function:
-         checks a list of expressions where the last one may be a function call with multiple returns
-         generates an object that has the list of typed (single value) expressions, and
-         an optional multi-valued (2+ values) return function (single value returns can go in expression list)
-         the return values from the multi-function are placed in a (seperate?) list with a type, a reference to the
-         function call that generated them and then their index into the argument list
-         
-         function calls found during a checkexp will just return their first (if any) value, or a special void type that cannot
-         be cast/operated on by anything else
-         
-         codegen will need to handle two cases:
-         1. function truncated to 0 or 1 and return value (NULL if 0)
-         2. multi-return function (2+ arguments) return pointer to structure holding the return values
-    ]]
 end
+
+-- END TYPECHECKER
 io.write("done\n")
