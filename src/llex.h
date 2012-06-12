@@ -152,4 +152,7 @@ char * luaX_saveoutput(LexState * ls, Token * begin_token);
 void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N);
 const char * luaX_token2rawstr(LexState * ls, int token);
 
+void luaX_pushtstringtable(terra_State * L);
+void luaX_poptstringtable(terra_State * L);
+
 #endif

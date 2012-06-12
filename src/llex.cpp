@@ -26,6 +26,10 @@
 //#include "ltable.h"
 #include "lzio.h"
 
+extern "C" {
+    #include "lua.h"
+}
+
 
 int next(LexState * ls) {
     ls->current = zgetc(ls->z);
@@ -69,11 +73,58 @@ static void save (LexState *ls, int c) {
 
 
 void luaX_init (terra_State *L) {
+  //initialize the base tstring_table that will hold reserved keywords
+  int stk = lua_gettop(L->L);
+  lua_newtable(L->L);
+  lua_pushlightuserdata(L->L, &L->tstring_table);
+  lua_pushvalue(L->L, -2);
+  lua_rawset(L->L, LUA_REGISTRYINDEX);
+  
+  //stack is: <tstring_table>
+  
   int i;
   for (i=0; i<NUM_RESERVED; i++) {
     TString *ts = luaS_new(L, luaX_tokens[i]);
     ts->reserved = cast_byte(i+1);  /* reserved word */
   }
+  
+  lua_pop(L->L,1); //<tstring_table>
+  assert(stk == lua_gettop(L->L));
+}
+
+void luaX_pushtstringtable(terra_State * L) {
+    int stk = lua_gettop(L->L);
+    lua_pushlightuserdata(L->L, &L->tstring_table);
+    lua_pushvalue(L->L,-1);
+    lua_rawget(L->L, LUA_REGISTRYINDEX);
+    assert(!lua_isnil(L->L, -1));
+    
+    lua_newtable(L->L); //new tstring table
+    lua_newtable(L->L); //metatable to link to old table
+    lua_pushvalue(L->L, -3);
+    lua_setfield(L->L, -2, "__index");
+    lua_setmetatable(L->L, -2);
+    
+    lua_remove(L->L,-2); //stack is: <userdata> <originaltable(need to remove)> <newtable>
+    lua_rawset(L->L,LUA_REGISTRYINDEX);
+    
+    assert(stk == lua_gettop(L->L));
+}
+
+void luaX_poptstringtable(terra_State * L) {
+    int stk = lua_gettop(L->L);
+    lua_pushlightuserdata(L->L, &L->tstring_table);
+    lua_pushvalue(L->L,-1);
+    
+    lua_rawget(L->L, LUA_REGISTRYINDEX);
+    lua_getmetatable(L->L, -1);
+    lua_getfield(L->L, -1, "__index");
+    lua_remove(L->L,-2); //<metatable>
+    lua_remove(L->L,-2); //<oldtable>
+    
+    lua_rawset(L->L,LUA_REGISTRYINDEX);
+    assert(stk == lua_gettop(L->L));
+
 }
 
 const char * luaX_token2rawstr(LexState * ls, int token) {

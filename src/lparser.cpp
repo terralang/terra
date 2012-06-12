@@ -1873,6 +1873,8 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   //memset(&lexstate,0,sizeof(LexState));
   //memset(&funcstate,0,sizeof(FuncState));
   
+  luaX_pushtstringtable(T);
+  
   BlockCnt bl;
   bl.previous = NULL;
   lua_State * L = T->L;
@@ -1914,6 +1916,9 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lua_pop(L,TA_LAST_GLOBAL - 1);
 
   assert(lua_gettop(L) == 0);
+  
+  luaX_poptstringtable(T); //we can forget all the non-reserved strings
+  
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
   printf("********* passing to lua ************\n%s\n*************************************\n",lexstate.output_buffer.data);

@@ -6,19 +6,14 @@
 
 struct terra_CompilerState;
 
-typedef struct stringtable {
-    struct TString **hash;
-    uint32_t nuse;  /* number of elements */
-    int size;
-} stringtable;
-
 typedef struct terra_State {
     struct lua_State * L;
     struct terra_CompilerState * C;
 //for parser
-    stringtable strt;
     int nCcalls;
+    char tstring_table; //&tstring_table is used as the key into the lua registry that maps strings in Lua to TString objects for the parser
 } terra_State;
+
 void terra_reporterror(terra_State * T, const char * fmt, ...);
 
 terra_State * terra_newstate();

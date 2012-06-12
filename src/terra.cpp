@@ -119,7 +119,6 @@ terra_State * terra_newstate() {
     lua_setfield(T->L,-2,"printlocation");
     lua_pop(T->L,1);
     
-    luaS_resize(T,32);
     luaX_init(T);
     
     terra_compilerinit(T);

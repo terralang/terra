@@ -27,10 +27,8 @@ typedef uint32_t lu_int32;
 
 
 typedef struct TString {
-  struct TString * next;
-  unsigned int hash;
+  const char * string;
   lu_byte reserved;
-  size_t len;  /* number of characters in string */
 } TString;
 
 
