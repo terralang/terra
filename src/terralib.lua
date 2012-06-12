@@ -898,8 +898,8 @@ function terra.func:typecheck(ctx)
                 if a.bytes < b.bytes then
                     return b
                 elseif b.bytes > a.bytes then
-				    return a
-            	elseif a.signed then
+                    return a
+                elseif a.signed then
                     return b
                 else --a is unsigned but b is signed
                     return a
