@@ -44,6 +44,11 @@ terra foo6()
     return bar2(bar())
 end
 
+
+terra foo7()
+    var a : int[4] = {1,2,3,4}
+    return a[1]+a[2]
+end
 local test = require("test")
 
 test.eq(6,foo())
@@ -52,3 +57,4 @@ test.eq(1,foo3())
 test.eq(15,foo4())
 test.eq(100,foo5())
 test.eq(1,foo6())
+test.eq(5,foo7())

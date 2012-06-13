@@ -874,25 +874,39 @@ function terra.func:typecheck(ctx)
         for i,entry in ipairs(from.entries) do
             local selected = asrvalue(insertselect(var_ref,entry.key))
             if entry.hasname then
-                local offset = to.keytoindex[entry.key]
-                if not offset then
-                    terra.reporterror(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
-                else
-                    if indextoinit[offset] then
-                        terra.reporterror(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
+                if to:isarray() then
+                    terra.reporterror(ctx,exp, "structural cast invalid, assigning a named field to an array")
+                else 
+                    local offset = to.keytoindex[entry.key]
+                    if not offset then
+                        terra.reporterror(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
+                    else
+                        if indextoinit[offset] then
+                            terra.reporterror(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
+                        end
+                        indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
                     end
-                    indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
                 end
             else
-                --find the first non initialized entry
                 local offset = 0
-                while offset < #to.entries and indextoinit[offset] do
-                    offset = offset + 1
+                local totyp, maxsz
+                if to:isarray() then
+                    offset = i - 1
+                    totyp = to.type
+                    maxsz = to.N
+                else
+                    --find the first non initialized entry
+                    while offset < #to.entries and indextoinit[offset] do
+                        offset = offset + 1
+                    end
+                    totyp = to.entries[offset+1].type
+                    maxsz = #to.entries
                 end
-                if offset == #to.entries then
+                
+                if offset == maxsz then
                     terra.reporterror(ctx,exp,"structural cast invalid, too many unnamed fields")
                 else
-                    indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
+                    indextoinit[offset] = insertcast(selected,totyp)
                 end
             end
         end
@@ -912,7 +926,7 @@ function terra.func:typecheck(ctx)
             local cast_exp = terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
             if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
                 return cast_exp
-            elseif typ:isstruct() and exp.type:isstruct() and not exp.type.isnamed then 
+            elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 cast_exp.expression = aslvalue(cast_exp.expression)

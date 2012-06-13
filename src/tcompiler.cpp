@@ -840,7 +840,7 @@ if(t->type->isIntegerTy()) { \
                 TType * fromT = getType(&from);
                 TType * toT = getType(&to);
                 Value * v = emitExp(&a);
-                if(toT->type->isStructTy()) {
+                if(fromT->type->isStructTy()) {
                     return emitStructCast(exp,fromT,toT,v);
                 } else if(fromT->type->isArrayTy()) {
                     return emitArrayToPointer(fromT,toT,v);
