@@ -861,7 +861,7 @@ function terra.func:typecheck(ctx)
     
     
     
-    local insertcast,structcast, insertvar, insertselect,asrvalue
+    local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue
     
     function structcast(cast,exp,typ)
         local from = exp.type
@@ -1074,7 +1074,12 @@ function terra.func:typecheck(ctx)
         return e
     end
     local function checkaddressof(ee)
-        local e = checklvalue(ee.operands[1])
+        local e
+        if ee.allowltor then
+            e = aslvalue(checkexp(ee.operands[1]))
+        else
+            e = checklvalue(ee.operands[1])
+        end
         local ty = terra.types.pointer(e.type)
         return ee:copy { type = ty, operands = terra.newlist{e} }
     end
@@ -1207,6 +1212,7 @@ function terra.func:typecheck(ctx)
                 if rtyp:ispointer() and rtyp.type == reciever.type then
                     --implicit address of
                     rexp = mkunary("&")
+                    rexp.allowltor = true --allow address of even if we have an rvalue, this allows methods taking pointers to be called on rvalues
                 elseif reciever.type:ispointer() and reciever.type.type == rtyp then
                     --implicit dereference
                     rexp = mkunary("@")
@@ -1245,6 +1251,16 @@ function terra.func:typecheck(ctx)
             return ee
         end
     end
+    
+    function aslvalue(ee) --this is used in a few cases where we allow rvalues to become lvalues
+                          -- int[4] -> int * conversion, and invoking a method that requires a pointer on an rvalue
+        if not ee.lvalue then
+            return terra.newtree(ee,{ kind = terra.kinds.rtol, type = ee.type, expression = ee })
+        else
+            return ee
+        end
+    end
+    
     function checkrvalue(e)
         local ee = checkexp(e)
         return asrvalue(ee)

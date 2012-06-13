@@ -719,6 +719,14 @@ if(t->type->isIntegerTy()) { \
                 Value * v = emitExp(&e);
                 return B->CreateLoad(v);
             } break;
+            case T_rtol: {
+                Obj e;
+                exp->obj("expression",&e);
+                Value * v = emitExp(&e);
+                Value * r = B->CreateAlloca(v->getType());
+                B->CreateStore(v, r);
+                return r;
+            } break;
             case T_operator: {
                 
                 Obj exps;
