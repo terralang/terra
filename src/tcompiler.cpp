@@ -324,6 +324,13 @@ struct TerraCompiler {
                     }
                     t->type = FunctionType::get(rt,arguments,false); 
                 } break;
+                case T_array: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    t->type = ArrayType::get(getType(&base)->type, N);
+                    t->ispassedaspointer = true;
+                } break;
                 default: {
                     printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
                     terra_reporterror(T,"type not understood\n");
@@ -749,6 +756,47 @@ if(t->type->isIntegerTy()) { \
                     } break;
                 }
                 
+            } break;
+            case T_index: {
+                Obj value;
+                Obj idx;
+                exp->obj("value",&value);
+                exp->obj("index",&idx);
+                
+                Value * valueExp = emitExp(&value);
+                Value * idxExp = emitExp(&idx);
+                bool pa = exp->boolean("lvalue");
+                
+                //if the array is an rvalue type, we need to store it, then index it, and then reload it
+                //otherwise, if we have an  lvalue, we just calculate the offset
+                if(!pa) {
+                   Value * mem = B->CreateAlloca(valueExp->getType());
+                    B->CreateStore(valueExp, mem);
+                    valueExp = mem;
+                }
+                
+                std::vector<Value*> idxs;
+                
+                if(!typeOfValue(&value)->type->isPointerTy()) {
+                    idxs.push_back(ConstantInt::get(Type::getInt32Ty(*C->ctx),0));
+                } //raw pointer types use the first GEP index, while arrays first do {0,idx}
+                idxs.push_back(idxExp);
+                
+                printf("\n");
+                valueExp->dump();
+                printf("\n---\n");
+                valueExp->getType()->dump();
+                printf("\n---\n");
+                idxExp->dump();
+                printf("\n");
+                
+                Value * result = B->CreateGEP(valueExp, idxs);
+                
+                if(!pa) {
+                    result = B->CreateLoad(result);
+                }
+                
+                return result;
             } break;
             case T_literal: {
                 TType * t = typeOfValue(exp);

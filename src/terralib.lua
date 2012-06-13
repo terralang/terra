@@ -424,7 +424,14 @@ do --construct type table that holds the singleton value representing each uniqu
     
     
     types.type = {} --all types have this as their metatable
-    types.type.__index = types.type
+    types.type.__index = function(self,key)
+        local N = tonumber(key)
+        if N then
+            return types.array(self,N) -- int[3] should create an array
+        else
+            return types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
+        end
+    end
     
     function types.type:__tostring()
         return self.displayname or self.name
@@ -451,6 +458,9 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.type:ispointer()
         return self.kind == terra.kinds.pointer
     end
+    function types.type:isarray()
+        return self.kind == terra.kinds.array
+    end
     function types.type:isfunction()
         return self.kind == terra.kinds.functype
     end
@@ -473,6 +483,8 @@ do --construct type table that holds the singleton value representing each uniqu
             return "unsigned char"
         elseif self:isstruct() then
             return "void *" --TODO: this should actually declare the struct and make wrapper should handle the wrapping up of struct values
+        elseif self:isarray() then
+            return self.type:cstring().."*" --arrays are passed as pointers
         else
             error("NYI - cstring")
         end
@@ -519,21 +531,10 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
-    function types.pointer(typ)
-        checkistype(typ)
-    
-        if typ == types.error then return types.error end
-        
-        local function create(typ)
-            local name = "&"..typ.name 
-            local value = types.table[name]
-            if value == nil then
-                value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
-                setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
-                types.table[name] = value
-            end
-            return value
-        end
+    --attempts to create a type with a single type argument
+    --but will create a proxy to delay type construction if the argument is not canonical
+    --used for pointers and arrays that may point to non-canonicalized types
+    local function makewrapper(typ, create)
         if typ:iscanonical() then
             return create(typ)
         else
@@ -547,9 +548,44 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
-    function types.array(typ,sz)
-        --TODO
+    function types.pointer(typ)
+        checkistype(typ)
+        if typ == types.error then return types.error end
+        
+        local function create(typ)
+            local name = "&"..typ.name 
+            local value = types.table[name]
+            if value == nil then
+                value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
+                setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
+                types.table[name] = value
+            end
+            return value
+        end
+        return makewrapper(typ,create)
     end
+    
+    function types.array(typ, N_)
+        local N = tonumber(N_)
+        checkistype(typ)
+        if typ == types.error then return types.error end
+        if not N then
+            error("expected a number but found "..type(N_))
+        end
+        
+        local function create(typ)
+            local name = typ.name .. "[" .. N .. "]"
+            local value = types.table[name]
+            if value == nil then
+                value = mktyp { kind = terra.kinds.array, type = typ, name = name, N = N }
+                types.table[name] = value
+            end
+            return value
+        end
+        
+        return makewrapper(typ,create)
+    end
+    
     function types.primitive(name)
         return types.table[name] or types.error
     end
@@ -1288,6 +1324,28 @@ function terra.func:typecheck(ctx)
             else
                 return op(e)
             end
+        elseif e:is "index" then
+            local v = checkexp(e.value)
+            local idx = checkrvalue(e.index)
+            local typ,lvalue
+            if v.type:ispointer() or v.type:isarray() then
+                typ = v.type.type
+                if not idx.type:isintegral() and idx.type ~= terra.types.error then
+                    terra.reporterror(ctx,e,"expected integral index but found ",idx.type)
+                end
+                if v.type:ispointer() then
+                    v = asrvalue(v)
+                    lvalue = true
+                else
+                    lvalue = v.lvalue
+                end
+            else
+                typ = terra.types.error
+                if v.type ~= terra.types.error then
+                    terra.reporterror(ctx,e,"expected an array or pointer but found ",v.type)
+                end
+            end
+            return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
         elseif e:is "identity" then --simply a passthrough
             local ee = checkexpraw(e.value)
             if terra.istree(ee) then
@@ -1309,6 +1367,7 @@ function terra.func:typecheck(ctx)
                         k = "<error>"
                     end
                 end
+                --TODO: we need to handle the case where the last element is a function that returns multiple values
                 local v = checkrvalue(f.value)
                 if not typ:addentry(k,v.type) then
                     terra.reporterror(ctx,e," duplicate key ",k," in struct constructor")
@@ -1597,4 +1656,5 @@ function terra.func:typecheck(ctx)
 end
 
 -- END TYPECHECKER
+_G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")
