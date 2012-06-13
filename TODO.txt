@@ -1,18 +1,10 @@
 Language Implementation:
 
---array types
---pointer arithmetic
---resolvetype needs to allow the declaration of anonymous structural types
---function pointers
 --vector types
 --sane numeric casting rules for constants
 --macros in terra
 --calling lua functions from terra
-
---eval types:
-   change types to have either canonical versions or exist as proxy objects
-   type constructors (e.g. pointer to) should ask if a type is canonical and create a proxy if not)
-
+-- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function
 
 Runtime Implementation:
 
@@ -20,8 +12,14 @@ Runtime Implementation:
 -- how to use clang to read C header files
 
 DONE:
+--function pointers
 --anonymous structural type cast to other structural types
 --methods on types (declaration syntax )
 --methods on types (call syntax/resolution) 
 -- -> and & syntax need to work in normal lua code (not just type resolution)
--- types should be presented in the AST as the string of lua code to run to get the type rather than an AST needed to be interpreted
+-- types should be presented in the AST as the string of lua code to run to get the type rather than an AST needed to be interpreted--eval types:
+   change types to have either canonical versions or exist as proxy objects
+   type constructors (e.g. pointer to) should ask if a type is canonical and create a proxy if not)
+--pointer arithmetic
+--array types
+--resolvetype needs to allow the declaration of anonymous structural types
