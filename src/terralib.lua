@@ -41,11 +41,16 @@ function terra.tree:printraw()
             for k,v in pairs(t) do
                 if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
                     local prefix = spacing..k..": "
-                    print(prefix..header(k,v))
-                    if isList(v) then
-                        printElem(v,string.rep(" ",2+#spacing))
+                    if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
+                        print(terra.kinds[v.kind])
+                        print(prefix..tostring(v))
                     else
-                        printElem(v,string.rep(" ",2+#prefix))
+                        print(prefix..header(k,v))
+                        if isList(v) then
+                            printElem(v,string.rep(" ",2+#spacing))
+                        else
+                            printElem(v,string.rep(" ",2+#prefix))
+                        end
                     end
                 end
             end
@@ -434,7 +439,7 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.type:__tostring()
-        return self.displayname or self.name
+        return self.displayname or self.name or "<proxy>"
     end
     types.type.printraw = terra.tree.printraw
     function types.type:isprimitive()
@@ -1140,6 +1145,11 @@ function terra.func:typecheck(ctx)
     
     
     local checkparameterlist, checkcall
+    
+    local function createextractreturn(fncall, index, t)
+        fncall.result = fncall.result or {} --create a new result table (if there is not already one), to link this extract with the function call
+        return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, result = fncall.result, type = t})
+    end
     function checkparameterlist(anchor,params)
         local exps = terra.newlist()
         for i = 1,#params - 1 do
@@ -1157,9 +1167,8 @@ function terra.func:typecheck(ctx)
                     exps:insert(multifunc) --just insert it as a normal single-return function
                 else --remember the multireturn function and insert extract nodes into the expsresion list
                     multiret = multifunc
-                    multiret.result = {} --table to link this result with extractors
                     for i,t in ipairs(multifunc.types) do
-                        exps:insert(terra.newtree(multiret,{ kind = terra.kinds.extractreturn, index = (i-1), result = multiret.result, type = t}))
+                        exps:insert(createextractreturn(multiret, i - 1, t))
                     end
                 end
             else
@@ -1395,6 +1404,8 @@ function terra.func:typecheck(ctx)
         elseif e:is "constructor" then
             local typ = terra.types.newemptystruct {}
             local entries = terra.newlist()
+            local call = nil
+            local firstmultireturn = nil
             for i,f in ipairs(e.records) do
                 local k = nil
                 if f.key then
@@ -1404,15 +1415,33 @@ function terra.func:typecheck(ctx)
                         k = "<error>"
                     end
                 end
-                --TODO: we need to handle the case where the last element is a function that returns multiple values
-                local v = checkrvalue(f.value)
-                if not typ:addentry(k,v.type) then
-                    terra.reporterror(ctx,e," duplicate key ",k," in struct constructor")
+                
+                
+                local function insertentry(f,k,v)
+                    if not typ:addentry(k,v.type) then
+                        terra.reporterror(ctx,v," duplicate key ",k," in struct constructor")
+                    end                    
+                    entries:insert( f:copy { key = k, value = v } )
                 end
                 
-                entries:insert( f:copy { key = k, value = v } )
+                if i == #e.records and not k and (f.value:is "apply" or f.value:is "method") then
+                    local multifunc = checkcall(f.value,true)
+                    if #multifunc.types == 1 then
+                        insertentry(f,k,multifunc)
+                    else
+                        --we have a multireturn function in last position, insert each entry into the constructor
+                        call = multifunc
+                        firstmultireturn = (i - 1)
+                        for j,t in ipairs(call.types) do
+                            insertentry(f,nil,createextractreturn(call, j - 1, t))
+                        end
+                    end
+                else
+                    local v = checkrvalue(f.value)
+                    insertentry(f,k,v)
+                end
             end
-            return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
+            return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ), call = call, firstmultireturn = firstmultireturn }
         end
         error("NYI - expression "..terra.kinds[e.kind],2)
     end

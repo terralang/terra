@@ -885,7 +885,13 @@ if(t->type->isIntegerTy()) { \
                 exp->obj("records",&records);
                 Value * result = B->CreateAlloca(typeOfValue(exp)->type);
                 int N = records.size();
+                int firstMultiret = exp->number("firstmultireturn");
+                Obj multicall;
+                bool hascall = exp->obj("call", &multicall);
                 for(int i = 0; i < N; i++) {
+                    if(hascall && i == firstMultiret) {
+                        emitMultiReturnCall(&multicall);
+                    }
                     Obj field;
                     records.objAt(i,&field);
                     Obj v;
@@ -1033,6 +1039,13 @@ if(t->type->isIntegerTy()) { \
             B->CreateRet(UndefValue::get(rt));
         }
     }
+    void emitMultiReturnCall(Obj * call) {
+        Value * rvalues = emitCall(call,false);
+        Obj result;
+        call->obj("result",&result);
+        lua_pushlightuserdata(L, rvalues);
+        result.setfield("struct");
+    }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results, std::vector<TType*> * types) {
         
         Obj params;
@@ -1053,11 +1066,7 @@ if(t->type->isIntegerTy()) { \
             Obj call;
             //if there is a function call, emit it now
             if(paramlist->obj("call",&call)) {
-                Value * rvalues = emitCall(&call,false);
-                Obj result;
-                call.obj("result",&result);
-                lua_pushlightuserdata(L, rvalues);
-                result.setfield("struct");
+                emitMultiReturnCall(&call);
             }
             //emit last argument, or (if there was a call) the list of extractors from the function call
             for(int i = minN - 1; i < sizeN; i++) {

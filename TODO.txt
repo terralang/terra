@@ -5,6 +5,8 @@ Language Implementation:
 --macros in terra
 --calling lua functions from terra
 -- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function
+-- explicit casts (pointer to pointer, requires macros to somewhat work)
+-- unique annontations in struct types
 
 Runtime Implementation:
 
