@@ -661,6 +661,10 @@ if(t->type->isIntegerTy()) { \
         }
         return B->CreateLoad(output);
     }
+    Value * emitArrayToPointer(TType * from, TType * to, Value * exp) {
+        int64_t idxs[] = {0,0};
+        return emitCGEP(exp,idxs,2);
+    }
     Value * emitCast(TType * from, TType * to, Value * exp) {
         int fsize = from->type->getPrimitiveSizeInBits();
         int tsize = to->type->getPrimitiveSizeInBits(); 
@@ -790,14 +794,6 @@ if(t->type->isIntegerTy()) { \
                 } //raw pointer types use the first GEP index, while arrays first do {0,idx}
                 idxs.push_back(idxExp);
                 
-                printf("\n");
-                valueExp->dump();
-                printf("\n---\n");
-                valueExp->getType()->dump();
-                printf("\n---\n");
-                idxExp->dump();
-                printf("\n");
-                
                 Value * result = B->CreateGEP(valueExp, idxs);
                 
                 if(!pa) {
@@ -846,6 +842,8 @@ if(t->type->isIntegerTy()) { \
                 Value * v = emitExp(&a);
                 if(toT->type->isStructTy()) {
                     return emitStructCast(exp,fromT,toT,v);
+                } else if(fromT->type->isArrayTy()) {
+                    return emitArrayToPointer(fromT,toT,v);
                 } else {
                     return emitCast(fromT,toT,v);
                 }

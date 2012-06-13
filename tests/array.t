@@ -29,9 +29,26 @@ terra foo4()
 	return b[2] + b[3]
 end
 
+terra bar2(a : &int)
+    a[1] = 100
+    return a[0]
+end
+
+terra foo5()
+    var a : int[4]
+    bar2(a)
+    return a[1]
+end
+
+terra foo6()
+    return bar2(bar())
+end
+
 local test = require("test")
 
 test.eq(6,foo())
 test.eq(3,foo2())
 test.eq(1,foo3())
 test.eq(15,foo4())
+test.eq(100,foo5())
+test.eq(1,foo6())

@@ -914,6 +914,9 @@ function terra.func:typecheck(ctx)
                 return cast_exp
             elseif typ:isstruct() and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ)
+            elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
+                cast_exp.expression = aslvalue(cast_exp.expression)
+                return cast_exp
             else
                 terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
                 return cast_exp
@@ -1255,7 +1258,11 @@ function terra.func:typecheck(ctx)
     function aslvalue(ee) --this is used in a few cases where we allow rvalues to become lvalues
                           -- int[4] -> int * conversion, and invoking a method that requires a pointer on an rvalue
         if not ee.lvalue then
-            return terra.newtree(ee,{ kind = terra.kinds.rtol, type = ee.type, expression = ee })
+            if ee.kind == terra.kinds.ltor then --sometimes we might as for an rvalue and then convert to an lvalue (e.g. on casts), we just undo that here
+                return ee.expression
+            else
+                return terra.newtree(ee,{ kind = terra.kinds.rtol, type = ee.type, expression = ee })
+            end
         else
             return ee
         end
