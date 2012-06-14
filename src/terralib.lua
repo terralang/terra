@@ -964,7 +964,7 @@ function terra.func:typecheck(ctx)
                     while offset < #to.entries and indextoinit[offset] do
                         offset = offset + 1
                     end
-                    totyp = to.entries[offset+1].type
+                    totyp = to.entries[offset+1] and to.entries[offset+1].type
                     maxsz = #to.entries
                 end
                 
@@ -1500,45 +1500,33 @@ function terra.func:typecheck(ctx)
             return checkcall(e,true)
         elseif e:is "constructor" then
             local typ = terra.types.newemptystruct {}
-            local entries = terra.newlist()
-            local call = nil
-            local firstmultireturn = nil
+            local paramlist = terra.newlist{}
+            
             for i,f in ipairs(e.records) do
+                if i == #e.records and iscall(f.value) and f.key then --if there is a key assigned to a multireturn then it gets truncated to 1 value
+                    paramlist:insert(terra.newtree(f.value,{ kind = terra.kinds.identity, value = f.value }))
+                else
+                    paramlist:insert(f.value)
+                end
+            end
+            
+            local entries = checkparameterlist(e,paramlist)
+            entries.size = entries.maxsize
+            
+            for i,v in ipairs(entries.parameters) do
+                local rawkey = e.records[i] and e.records[i].key
                 local k = nil
-                if f.key then
-                    k = checkexpraw(f.key)
+                if rawkey then
+                    k = checkexpraw(rawkey)
                     if type(k) ~= "string" then
                         terra.reporterror(ctx,e,"expected string but found ",type(k))
                         k = "<error>"
                     end
                 end
-                
-                
-                local function insertentry(f,k,v)
-                    if not typ:addentry(k,v.type) then
-                        terra.reporterror(ctx,v," duplicate key ",k," in struct constructor")
-                    end                    
-                    entries:insert( f:copy { key = k, value = v } )
-                end
-                
-                if i == #e.records and not k and iscall(f.value) then
-                    local multifunc = checkcall(f.value,true)
-                    if not iscall(multifunc) or #multifunc.types == 1 then
-                        insertentry(f,k,multifunc)
-                    else
-                        --we have a multireturn function in last position, insert each entry into the constructor
-                        call = multifunc
-                        firstmultireturn = (i - 1)
-                        for j,t in ipairs(call.types) do
-                            insertentry(f,nil,createextractreturn(call, j - 1, t))
-                        end
-                    end
-                else
-                    local v = checkrvalue(f.value)
-                    insertentry(f,k,v)
-                end
+                typ:addentry(k,v.type)
             end
-            return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ), call = call, firstmultireturn = firstmultireturn }
+            
+            return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
         end
         error("NYI - expression "..terra.kinds[e.kind],2)
     end

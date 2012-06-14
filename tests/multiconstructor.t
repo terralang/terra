@@ -7,8 +7,10 @@ struct A {c : int, a : int, b : double }
 
 terra bar()
 	var a : A = {1,foo()}
-	return a.c + a.a + a.b
+	var b : A = {1,2,(foo())}
+	var c : A = {1,2,b = foo()}
+	return a.c + a.a + a.b + b.c + c.c
 end
 
 local test = require("test")
-test.eq(5,bar())
+test.eq(7,bar())

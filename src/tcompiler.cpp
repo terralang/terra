@@ -884,22 +884,12 @@ if(t->type->isIntegerTy()) { \
                 Obj records;
                 exp->obj("records",&records);
                 Value * result = B->CreateAlloca(typeOfValue(exp)->type);
-                int N = records.size();
-                int firstMultiret = exp->number("firstmultireturn");
-                Obj multicall;
-                bool hascall = exp->obj("call", &multicall);
-                for(int i = 0; i < N; i++) {
-                    if(hascall && i == firstMultiret) {
-                        emitMultiReturnCall(&multicall);
-                    }
-                    Obj field;
-                    records.objAt(i,&field);
-                    Obj v;
-                    field.obj("value",&v);
-                    Value * entry = emitExp(&v);
+                std::vector<Value *> values;
+                emitParameterList(&records,&values,NULL);
+                for(size_t i = 0; i < values.size(); i++) {
                     int64_t idxs[] = { 0, i };
                     Value * addr = emitCGEP(result,idxs,2);
-                    B->CreateStore(entry,addr);
+                    B->CreateStore(values[i],addr);
                 }
                 return B->CreateLoad(result);
             } break;
