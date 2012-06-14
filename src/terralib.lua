@@ -122,6 +122,22 @@ function terra.list:map(fn)
     end 
     return l
 end
+function terra.list:flatmap(fn)
+    local l = terra.newlist()
+    for i,v in ipairs(self) do
+        local tmp = fn(v)
+        if #tmp ~= 0 then
+            for _,v2 in ipairs(tmp) do
+                l:insert(v2)
+            end
+        else
+            l:insert(tmp)
+        end
+    end 
+    return l
+end
+
+
 function terra.list:printraw()
     for i,v in ipairs(self) do
         if v.printraw then
@@ -1276,11 +1292,15 @@ function terra.func:typecheck(ctx)
                 if #result ~= 0 then
                     error("NYI - multi-expr return macro")
                 else
-                    return checkrvalue(result)
+                    return checkexp(result)
                 end
             else
                 if #result ~= 0 then --list of statements to drop in
-                    error("NYI - multi-statement return macro")
+                    local stmts = terra.newlist{}
+                    for i,s in ipairs(result) do
+                        stmts:insert(checkstmt(s))
+                    end
+                    return stmts
                 else
                     return checkstmt(result)
                 end
@@ -1556,7 +1576,7 @@ function terra.func:typecheck(ctx)
     function checkstmt(s)
         if s:is "block" then
             enterblock()
-            local r = s.statements:map(checkstmt)
+            local r = s.statements:flatmap(checkstmt)
             leaveblock()
             return s:copy {statements = r}
         elseif s:is "return" then
