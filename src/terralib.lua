@@ -42,7 +42,6 @@ function terra.tree:printraw()
                 if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
                     local prefix = spacing..k..": "
                     if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
-                        print(terra.kinds[v.kind])
                         print(prefix..tostring(v))
                     else
                         print(prefix..header(k,v))
@@ -72,6 +71,23 @@ function terra.tree:copy(new_tree)
     end
     return setmetatable(new_tree,getmetatable(self))
 end
+function terra.tree:astype(ctx)
+    if not self.expressionstring then
+        error("tree was not an argument to a macro, I don't know what to do")
+    else
+        fn, err = loadstring("return " .. self.expressionstring)
+        if err then
+            local ln,err = terra.parseerror(self.linenumber,err)
+            self.linenumber = ln
+            terra.reporterror(ctx,self,err)
+            return terra.types.error
+        else
+            local typtree = terra.newtree(self, { kind = terra.kinds.type, expression = fn })
+            return terra.resolvetype(ctx,typtree)
+        end
+    end
+end
+
 function terra.newtree(ref,body)
     if not ref or not terra.istree(ref) then
         error("not a tree?",2)
@@ -343,6 +359,25 @@ function terra.globalvar:gettype(ctx)
 end
 
 -- END GLOBALVAR
+
+-- MACRO
+
+terra.macro = {}
+terra.macro.__index = terra.macro
+terra.macro.__call = function(self,...)
+    return self.fn(...)
+end
+
+function terra.ismacro(t)
+    return getmetatable(t) == terra.macro
+end
+
+function terra.createmacro(fn)
+    return setmetatable({fn = fn}, terra.macro)
+end
+_G["macro"] = terra.createmacro --introduce macro intrinsic into global namespace
+
+-- END MACRO
 
 -- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
@@ -781,8 +816,17 @@ function terra.reporterror(ctx,anchor,...)
     return terra.types.error
 end
 
+function terra.parseerror(startline, errmsg)
+    local line,err = errmsg:match(":([0-9]+):(.*)")
+    return startline + tonumber(line) - 1, err
+end
+
 function terra.resolvetype(ctx,t)
-    if not t:is "type" then
+    if terra.types.istype(t) then --if the AST contains a direct reference to a type, then accept that, otherwise try to evaluate the type
+        return t:getcanonical(ctx)
+    end
+    
+    if not terra.istree(t) or not t:is "type" then
         print(debug.traceback())
         t:printraw()
         error("not a type?")
@@ -795,8 +839,8 @@ function terra.resolvetype(ctx,t)
     local success,typ = pcall(fn)
     
     if not success then --typ contains the error message
-        local line,err = typ:match(":([0-9]+):(.*)")
-        t.linenumber = t.linenumber + tonumber(line) - 1
+        local ln,err = terra.parseerror(t.linenumber,typ)
+        t.linenumber = ln
         terra.reporterror(ctx,t,err)
         return terra.types.error
     end
@@ -1150,6 +1194,9 @@ function terra.func:typecheck(ctx)
         fncall.result = fncall.result or {} --create a new result table (if there is not already one), to link this extract with the function call
         return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, result = fncall.result, type = t})
     end
+    local function iscall(t)
+        return t.kind == terra.kinds.apply or t.kind == terra.kinds.method
+    end
     function checkparameterlist(anchor,params)
         local exps = terra.newlist()
         for i = 1,#params - 1 do
@@ -1161,14 +1208,18 @@ function terra.func:typecheck(ctx)
         if #params ~= 0 then --handle the case where the last value returns multiple things
             minsize = minsize + 1
             local last = params[#params]
-            if last.kind == terra.kinds.apply or last.kind == terra.kinds.method then
+            if iscall(last) then
                 local multifunc = checkcall(last,true) --must return at least one value
-                if #multifunc.types == 1 then
-                    exps:insert(multifunc) --just insert it as a normal single-return function
-                else --remember the multireturn function and insert extract nodes into the expsresion list
-                    multiret = multifunc
-                    for i,t in ipairs(multifunc.types) do
-                        exps:insert(createextractreturn(multiret, i - 1, t))
+                if not iscall(multifunc) then --call was a macro, handle the result as if it were in the list
+                    exps:insert(checkrvalue(multifunc))
+                else
+                    if #multifunc.types == 1 then
+                        exps:insert(multifunc) --just insert it as a normal single-return function
+                    else --remember the multireturn function and insert extract nodes into the expsresion list
+                        multiret = multifunc
+                        for i,t in ipairs(multifunc.types) do
+                            exps:insert(createextractreturn(multiret, i - 1, t))
+                        end
                     end
                 end
             else
@@ -1199,7 +1250,7 @@ function terra.func:typecheck(ctx)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ })
     end
     
-    function checkcall(exp, mustreturnatleast1)
+    function checkcall(exp, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
         local function resolvefn(fn)
             if terra.isfunction(fn) then
                 local tree = insertfunctionliteral(exp,fn)
@@ -1219,12 +1270,34 @@ function terra.func:typecheck(ctx)
             end
         end
         
+        local function resolvemacro(macrocall,...)
+            local result = macrocall(ctx,...)
+            if mustreturnatleast1 then --expect an expression
+                if #result ~= 0 then
+                    error("NYI - multi-expr return macro")
+                else
+                    return checkrvalue(result)
+                end
+            else
+                if #result ~= 0 then --list of statements to drop in
+                    error("NYI - multi-statement return macro")
+                else
+                    return checkstmt(result)
+                end
+            end
+        end
+        
         local fn,fntyp, paramlist
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
                                 --then extract a's type from the parameter list and look in the method table for "b" 
             
             local reciever = checkexp(exp.value)
             local rawfn = reciever.type.methods[exp.name]
+            
+            if terra.ismacro(rawfn) then
+                return resolvemacro(rawfn,exp.value,unpack(exp.arguments))
+            end
+            
             fn,fntyp = resolvefn(rawfn)
             
             if fntyp ~= terra.types.error and fntyp.parameters[1] ~= nil then
@@ -1254,7 +1327,11 @@ function terra.func:typecheck(ctx)
             end
             
         else
-            fn,fntyp = resolvefn(checkexpraw(exp.value))
+            local rawfn = checkexpraw(exp.value)
+            if terra.ismacro(rawfn) then
+                return resolvemacro(rawfn,unpack(exp.arguments))
+            end
+            fn,fntyp = resolvefn(rawfn)
             paramlist = checkparameterlist(exp,exp.arguments)
         end
     
@@ -1330,7 +1407,7 @@ function terra.func:typecheck(ctx)
             if e.type == "string" then --TODO: support string literals as terra type, rather than just return the string as a lua object
                 return e.value
             else
-                return e:copy { type = terra.types.primitive(e.type) }
+                return e:copy {}
             end
         elseif e:is "var" then
             local v = env[e.name]
@@ -1424,9 +1501,9 @@ function terra.func:typecheck(ctx)
                     entries:insert( f:copy { key = k, value = v } )
                 end
                 
-                if i == #e.records and not k and (f.value:is "apply" or f.value:is "method") then
+                if i == #e.records and not k and iscall(f.value) then
                     local multifunc = checkcall(f.value,true)
-                    if #multifunc.types == 1 then
+                    if not iscall(multifunc) or #multifunc.types == 1 then
                         insertentry(f,k,multifunc)
                     else
                         --we have a multireturn function in last position, insert each entry into the constructor

@@ -101,6 +101,7 @@ static void add_field(LexState * ls, int table, TA_Token t) {
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
     if(ls->in_terra) {
+        table = (table < 0) ? (table + lua_gettop(ls->L) + 1) : table; //otherwise table is wrong once we modify the stack 
         //printf("consume field\n");
         lua_pushstring(ls->L,field);
         lua_pushvalue(ls->L,-2);
@@ -357,6 +358,16 @@ static void open_mainfunc (LexState *ls, FuncState *fs, BlockCnt *bl) {
   fs->f.is_vararg = 1;  /* main function is always vararg */
 }
 
+static void dump_stack(lua_State * L, int elem) {
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"tree");
+        
+    lua_getfield(L,-1,"printraw");
+    lua_pushvalue(L, -3 + elem);
+    lua_call(L, 1, 0);
+        
+    lua_pop(L,2);
+}
 
 
 /*============================================================*/
@@ -411,10 +422,16 @@ static void fieldsel (LexState *ls, expdesc *v) {
 }
 
 static void push_literal(LexState * ls, const char * typ) {
-    int lit = new_table_before(ls,T_literal);
-    add_field(ls,lit,"value");
-    push_string(ls,typ);
-    add_field(ls,lit,"type");
+    if(ls->in_terra) {
+        int lit = new_table_before(ls,T_literal);
+        add_field(ls,lit,"value");
+        if(strcmp(typ, "string") == 0) { //literal strings are not types but are passed directly, set the type field to the literal "string"
+            lua_pushstring(ls->L, typ);
+        } else {
+            lua_getglobal(ls->L,typ);
+        }
+        add_field(ls,lit,"type");
+    }
 }
 static void push_double(LexState * ls, double d) {
     if(ls->in_terra) {
@@ -716,16 +733,38 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   close_func(ls);
 }
 
+//arguments to function calls may either be terra expressions
+//or if it is a macro, they may also be type expressions (which need to be evaluated as lua code)
+//we have two options:
+//1. parse the AST to terra, and then if we discover it is actualy a lua type, interpret the AST as lua code to resolve the type
+//2. parse the AST to terra and save the string for the argument, if we discover that we have a type then compile and run the string to evalute the type
+//for now we use (2). This store more information in the AST but allows us to avoid having to write a lua interpreter for the terra AST
+//"expressionstring" will hold the string from arguments to function calls
+void exprwithstring(LexState * ls, expdesc *v) {
+    Token begintoken = ls->t;
+    if(ls->in_terra)
+        ls->in_terra_arglist = 1;
+    expr(ls,v);
+    if(ls->in_terra) {
+        const char * data;
+        int N;
+        ls->in_terra_arglist = 0;
+        luaX_getoutput(ls, &begintoken, &data, &N);
+        lua_pushlstring(ls->L, data, N);
+        add_field(ls, -2, "expressionstring");
+        
+    }
+}
 
-static int explist (LexState *ls, expdesc *v) {
+static int explist (LexState *ls, expdesc *v, int isarglist) {
   /* explist -> expr { `,' expr } */
   int n = 1;  /* at least one expression */
   int lst = new_list(ls);
-  expr(ls, v);
+  if(isarglist) exprwithstring(ls,v); else expr(ls, v);
   add_entry(ls,lst);
   while (testnext(ls, ',')) {
     //luaK_exp2nextreg(ls->fs, v);
-    expr(ls, v);
+    if(isarglist) exprwithstring(ls,v); else expr(ls, v);
     add_entry(ls,lst);
     n++;
   }
@@ -743,7 +782,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       if (ls->t.token == ')') {  /* arg list is empty? */
         new_list(ls); //empty return list
       } else {
-        RETURNS_1(explist(ls, &args));
+        RETURNS_1(explist(ls, &args,1));
       }
       check_match(ls, ')', '(', line);
       break;
@@ -775,17 +814,6 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 ** Expression parsing
 ** =======================================================================
 */
-
-static void dump_stack(lua_State * L, int elem) {
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-    lua_getfield(L,-1,"tree");
-        
-    lua_getfield(L,-1,"printraw");
-    lua_pushvalue(L, -3 + elem);
-    lua_call(L, 1, 0);
-        
-    lua_pop(L,2);
-}
 
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
@@ -1087,7 +1115,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     add_entry(ls,exps);
     add_field(ls,tbl,"operands");
     
-    if(!ls->in_terra && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
+    if( (!ls->in_terra || ls->in_terra_arglist) && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
         char * expstring = luaX_saveoutput(ls, &beginexp);
         luaX_patchbegin(ls, &begintoken);
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
@@ -1101,7 +1129,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   
   op = getbinopr(ls->t.token);
   char * lhs_string = NULL;
-  if(!ls->in_terra && op == OPR_FUNC_PTR) {
+  if( (!ls->in_terra || ls->in_terra_arglist) && op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
   }
   check_lua_operator(ls,ls->t.token);
@@ -1265,7 +1293,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs)
     checknext(ls, '=');
     int tbl = new_table_before(ls,T_assignment);
     add_field(ls,tbl,"lhs");
-    RETURNS_1(nexps = explist(ls, &e));
+    RETURNS_1(nexps = explist(ls, &e,0));
     add_field(ls,tbl,"rhs");
   }
   //init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
@@ -1422,7 +1450,7 @@ static void forlist (LexState *ls, TString *indexname) {
   add_field(ls,tbl,"variables");
   checknext(ls, TK_IN);
   line = ls->linenumber;
-  RETURNS_1(explist(ls, &e));
+  RETURNS_1(explist(ls, &e,0));
   add_field(ls,tbl,"iterators");
   RETURNS_1(forbody(ls, line, nvars - 3, 0, &bl));
   add_field(ls,tbl,"body");
@@ -1615,7 +1643,7 @@ static void terravar(LexState * ls, int islocal) {
     endrecord(ls);
     add_field(ls,varexp,"variables");
     if(testnext(ls,'=')) {
-        RETURNS_1(explist(ls,&v));
+        RETURNS_1(explist(ls,&v,0));
         add_field(ls,varexp,"initializers");
     }
     push_string(ls,getstr(ls->source));
@@ -1654,7 +1682,7 @@ static void localstat (LexState *ls) {
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
-    RETURNS_1(nexps = explist(ls, &e));
+    RETURNS_1(nexps = explist(ls, &e,0));
     add_field(ls,tbl,"initializers");
   } else {
     //blank initializers
@@ -1762,7 +1790,7 @@ static void retstat (LexState *ls) {
   if (block_follow(ls, 1) || ls->t.token == ';')
     first = nret = 0;  /* return no values */
   else {
-    RETURNS_1(nret = explist(ls, &e));  /* optional return values */
+    RETURNS_1(nret = explist(ls, &e,0));  /* optional return values */
     add_field(ls,tbl,"expressions");
   }
   
@@ -1880,6 +1908,7 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;
+  lexstate.in_terra_arglist = 0;
   lexstate.record_names = 0;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
