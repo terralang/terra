@@ -556,13 +556,7 @@ if(t->type->isIntegerTy()) { \
         }
     }
     Value * emitPointerSub(TType * t, Value * a, Value * b) {
-        Value * ai = B->CreatePtrToInt(a,t->type);
-        Value * bi = B->CreatePtrToInt(b,t->type);
-        Value * res = B->CreateSub(ai, bi);
-        const TargetData * td = C->ee->getTargetData();
-        PointerType * pt = cast<PointerType>(a->getType());
-        Value * divBy = ConstantInt::get(t->type, td->getTypeAllocSize(pt->getElementType()));
-        return B->CreateSDiv(res,divBy);
+        return B->CreatePtrDiff(a, b);
     }
     Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
         TType * t = typeOfValue(exp);
@@ -665,7 +659,7 @@ if(t->type->isIntegerTy()) { \
         int64_t idxs[] = {0,0};
         return emitCGEP(exp,idxs,2);
     }
-    Value * emitCast(TType * from, TType * to, Value * exp) {
+    Value * emitPrimitiveCast(TType * from, TType * to, Value * exp) {
         int fsize = from->type->getPrimitiveSizeInBits();
         int tsize = to->type->getPrimitiveSizeInBits(); 
         if(from->type->isIntegerTy()) {
@@ -844,8 +838,18 @@ if(t->type->isIntegerTy()) { \
                     return emitStructCast(exp,fromT,toT,v);
                 } else if(fromT->type->isArrayTy()) {
                     return emitArrayToPointer(fromT,toT,v);
+                } else if(fromT->type->isPointerTy()) {
+                    if(toT->type->isPointerTy()) {
+                        return B->CreateBitCast(v, toT->type);
+                    } else {
+                        assert(toT->type->isIntegerTy());
+                        return B->CreatePtrToInt(v, toT->type);
+                    }
+                } else if(toT->type->isPointerTy()) {
+                    assert(fromT->type->isIntegerTy());
+                    return B->CreateIntToPtr(v, toT->type);
                 } else {
-                    return emitCast(fromT,toT,v);
+                    return emitPrimitiveCast(fromT,toT,v);
                 }
             } break;
             case T_apply: {

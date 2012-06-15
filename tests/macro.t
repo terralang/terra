@@ -17,12 +17,34 @@ end)
 terra up(v : &int)
     @v = @v + 1
 end
+
+local bar4 = macro(function()
+    terra myfn()
+        return 42
+    end
+    return { a_fn = myfn }
+end)
+
+var moo : int = 3
+
+local bar4 = macro(function()
+    terra myfn()
+        return 42
+    end
+    return { a_fn = myfn }
+end)
+
+local bar5 = macro(function()
+    return moo
+end)
+
 terra foo() : int
 	var a : int = bar(int,int16,int32)
 	bar2(int) = bar2(int) + 5
 	bar3(up(&a),up(&a))
-	return a
+	bar5() = bar5() + 1
+	return a + bar4().a_fn() + moo
 end
 
 local test = require("test")
-test.eq(11,foo())
+test.eq(57,foo())

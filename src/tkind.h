@@ -69,7 +69,8 @@ _(structentry, "structentry") \
 _(type, "type") \
 _(proxy, "proxy") \
 _(array, "array") \
-_(rtol, "rtol")
+_(rtol, "rtol") \
+_(explicitcast, "explicitcast")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

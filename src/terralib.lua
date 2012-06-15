@@ -530,6 +530,7 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
+    
     function types.type:__tostring()
         return self.displayname or self.name or "<proxy>"
     end
@@ -591,6 +592,10 @@ do --construct type table that holds the singleton value representing each uniqu
         return self
     end
     
+    types.type.methods = {} --metatable of all types
+    types.type.methods.as = macro(function(ctx,exp,typ)
+        return terra.newtree(exp,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp })
+    end)    
     function types.istype(t)
         return getmetatable(t) == types.type
     end
@@ -598,8 +603,9 @@ do --construct type table that holds the singleton value representing each uniqu
     --map from unique type identifier string to the metadata for the type
     types.table = {}
     
+    
     local function mktyp(v)
-        v.methods = {} --create new blank method table
+        v.methods = setmetatable({},{ __index = types.type.methods }) --create new blank method table
         return setmetatable(v,types.type)
     end
     
@@ -1018,11 +1024,17 @@ function terra.func:typecheck(ctx)
         return cast
     end
     
+    local function createcast(exp,typ)
+        return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
+    end
     function insertcast(exp,typ)
+        if typ == nil then
+            print(debug.traceback())
+        end
         if typ == exp.type or typ == terra.types.error or exp.type == terra.types.error then
             return exp
         else
-            local cast_exp = terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
+            local cast_exp = createcast(exp,typ)
             if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
                 return cast_exp
             elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
@@ -1034,6 +1046,24 @@ function terra.func:typecheck(ctx)
                 terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
                 return cast_exp
             end
+        end
+    end
+    local function insertexplicitcast(exp,typ) --all implicit casts are allowed plus some additional casts like from int to pointer, pointer to int, and int to int
+        if typ == exp.type then
+            return exp
+        elseif typ:ispointer() and exp.type:ispointer() then
+            return createcast(exp,typ)
+        elseif typ:ispointer() and exp.type:isintegral() then --int to pointer
+            return createcast(exp,typ)
+        elseif typ:isintegral() and exp.type:ispointer() then
+            if typ.bytes < intptr.bytes then
+                terra.reporterror(ctx,exp,"pointer to ",typ," conversion loses precision")
+            end
+            return createcast(exp,typ)
+        elseif typ:isprimitive() and exp.type:isprimitive() then --explicit conversions from logicals to other primitives are allowed
+            return createcast(exp,typ)
+        else
+            return insertcast(exp,typ) --otherwise, allow any implicit casts
         end
     end
     
@@ -1062,6 +1092,9 @@ function terra.func:typecheck(ctx)
                 return a
             elseif a:isfloat() and b:isfloat() then
                 return double
+            else
+                err()
+                return terra.types.error
             end
         else
             err()
@@ -1259,19 +1292,15 @@ function terra.func:typecheck(ctx)
             minsize = minsize + 1
             local function addlastelement(last)
                 if iscall(last) then
-                    local multifunc = checkcall(last,true) --must return at least one value
-                    if not iscall(multifunc) then --call was a macro, handle the result as if it were in the list
-                        if #multifunc ~= 0 then
-                            for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional so we don't update minsize
-                                if i == #multifunc then
-                                    addlastelement(e)
-                                else
-                                    exps:insert(checkrvalue(e)) 
-                                end
+                    local ismacro, multifunc = checkcall(last,true) --must return at least one value
+                    if ismacro then --call was a macro, handle the results as if they were in the list
+                       for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional so we don't update minsize
+                            if i == #multifunc then
+                                addlastelement(e)
+                            else
+                                exps:insert(checkrvalue(e)) 
                             end
-                        else
-                            addlastelement(multifunc)
-                        end
+                        end                        
                     else
                         if #multifunc.types == 1 then
                             exps:insert(multifunc) --just insert it as a normal single-return function
@@ -1313,6 +1342,8 @@ function terra.func:typecheck(ctx)
     end
     
     function checkcall(exp, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
+    --returns true, <macro exp> if call was a macro
+    --returns false, <typed tree> otherwise
         local function resolvefn(fn)
             if terra.isfunction(fn) then
                 local tree = insertfunctionliteral(exp,fn)
@@ -1334,27 +1365,16 @@ function terra.func:typecheck(ctx)
         
         local function resolvemacro(macrocall,...)
             local result = macrocall(ctx,...)
-            if mustreturnatleast1 then --expect an expression
-                if #result ~= 0 then
-                    local exps = terra.newlist{}
-                    for i,e in ipairs(result) do
-                        exps:insert(checkexp(e))
-                    end
-                    return exps
-                else
-                    return checkexp(result)
+            local exps = terra.newlist{}
+            if #result ~= 0 then
+                for i,e in ipairs(result) do
+                    e:printraw()
+                    exps:insert(e)
                 end
             else
-                if #result ~= 0 then --list of statements to drop in
-                    local stmts = terra.newlist{}
-                    for i,s in ipairs(result) do
-                        stmts:insert(checkstmt(s))
-                    end
-                    return stmts
-                else
-                    return checkstmt(result)
-                end
+                exps:insert(result)
             end
+            return exps
         end
         
         local fn,fntyp, paramlist
@@ -1365,7 +1385,7 @@ function terra.func:typecheck(ctx)
             local rawfn = reciever.type.methods[exp.name]
             
             if terra.ismacro(rawfn) then
-                return resolvemacro(rawfn,exp.value,unpack(exp.arguments))
+                return true, resolvemacro(rawfn,exp.value,unpack(exp.arguments))
             end
             
             fn,fntyp = resolvefn(rawfn)
@@ -1399,7 +1419,7 @@ function terra.func:typecheck(ctx)
         else
             local rawfn = checkexpraw(exp.value)
             if terra.ismacro(rawfn) then
-                return resolvemacro(rawfn,unpack(exp.arguments))
+                return true,resolvemacro(rawfn,unpack(exp.arguments))
             end
             fn,fntyp = resolvefn(rawfn)
             paramlist = checkparameterlist(exp,exp.arguments)
@@ -1414,7 +1434,7 @@ function terra.func:typecheck(ctx)
                 terra.reporterror(ctx,exp,"expected call to return at least 1 value")
             end --otherwise this is used in statement context and does not require a type
         end
-        return exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = fn, type = typ, types = fntyp.returns or terra.newlist() }
+        return false, exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = fn, type = typ, types = fntyp.returns or terra.newlist() }
         
     end
     function asrvalue(ee)
@@ -1462,6 +1482,7 @@ function terra.func:typecheck(ctx)
     function insertvar(anchor, typ, name, definition)
         return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ, name = name, definition = definition, lvalue = true }) 
     end
+    
     
     function checkexpraw(e) --can return raw lua objects, call checkexp to evaluate the expression and convert to terra literals
         
@@ -1546,16 +1567,16 @@ function terra.func:typecheck(ctx)
             else
                 return ee
             end
+        elseif e:is "explicitcast" then
+            return insertexplicitcast(checkrvalue(e.value),e.type)
         elseif iscall(e) then
-            local c = checkcall(e,true)
-            if iscall(c) then
+            local ismacro, c = checkcall(e,true)
+            if not ismacro then
                 return c
-            else --it was a macro, 
-                if #c ~= 0 then --multiple returns from macro, but it is used as an expression, truncate
-                    return c[1]
-                else
-                    return c
-                end
+            elseif terra.istree(c[1]) then
+                return checkexpraw(c[1])
+            else
+                return resolveglobal(c[1])
             end
         elseif e:is "constructor" then
             local typ = terra.types.newemptystruct {}
@@ -1587,6 +1608,8 @@ function terra.func:typecheck(ctx)
             
             return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
         end
+        e:printraw()
+        print(debug.traceback())
         error("NYI - expression "..terra.kinds[e.kind],2)
     end
     function checkexp(ee)
@@ -1793,7 +1816,12 @@ function terra.func:typecheck(ctx)
             desugared:printraw()
             return checkstmt(desugared)
         elseif iscall(s) then
-            return checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
+            local ismacro, c = checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
+            if ismacro then
+                return c:map(checkstmt)
+            else
+                return c
+            end
         else 
             return checkrvalue(s)
         end
@@ -1866,5 +1894,6 @@ function terra.func:typecheck(ctx)
 end
 
 -- END TYPECHECKER
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")
