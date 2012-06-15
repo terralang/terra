@@ -71,7 +71,8 @@ function terra.tree:copy(new_tree)
     end
     return setmetatable(new_tree,getmetatable(self))
 end
-function terra.tree:astype(ctx)
+
+function terra.treeload(ctx,self)
     if not self.expressionstring then
         error("tree was not an argument to a macro, I don't know what to do")
     else
@@ -80,10 +81,50 @@ function terra.tree:astype(ctx)
             local ln,err = terra.parseerror(self.linenumber,err)
             self.linenumber = ln
             terra.reporterror(ctx,self,err)
-            return terra.types.error
+            return false
         else
-            local typtree = terra.newtree(self, { kind = terra.kinds.type, expression = fn })
-            return terra.resolvetype(ctx,typtree)
+            return true,fn
+        end
+    end
+end
+
+function terra.treeeval(ctx,t,fn)
+    local env = ctx:env()
+    setfenv(fn,env)
+    local success,v = pcall(fn)
+    if not success then --v contains the error message
+        local ln,err = terra.parseerror(t.linenumber,v)
+        local oldln = t.linenumber
+        t.linenumber = ln
+        terra.reporterror(ctx,t,err)
+        t.linenumber = oldln
+        return false
+    end
+    return true,v
+end
+
+function terra.tree:astype(ctx)
+    local success,fn = terra.treeload(ctx,self)
+    
+    if not success then
+        return terra.types.error
+    else
+        local typtree = terra.newtree(self, { kind = terra.kinds.type, expression = fn })
+        return terra.resolvetype(ctx,typtree)
+    end
+end
+
+function terra.tree:asvalue(ctx)
+    self:printraw()
+    local success,fn = terra.treeload(ctx,self)
+    if not success then
+        return nil
+    else
+        local success,v = terra.treeeval(ctx,self,fn)
+        if not success then
+            return nil
+        else
+            return v
         end
     end
 end
@@ -848,16 +889,9 @@ function terra.resolvetype(ctx,t)
         error("not a type?")
     end
     
-    local env = ctx:env()
-    local fn = t.expression
-    setfenv(fn,env)
+    local success,typ = terra.treeeval(ctx,t,t.expression)
     
-    local success,typ = pcall(fn)
-    
-    if not success then --typ contains the error message
-        local ln,err = terra.parseerror(t.linenumber,typ)
-        t.linenumber = ln
-        terra.reporterror(ctx,t,err)
+    if not success then
         return terra.types.error
     end
     
@@ -1223,25 +1257,37 @@ function terra.func:typecheck(ctx)
         
         if #params ~= 0 then --handle the case where the last value returns multiple things
             minsize = minsize + 1
-            local last = params[#params]
-            if iscall(last) then
-                local multifunc = checkcall(last,true) --must return at least one value
-                if not iscall(multifunc) then --call was a macro, handle the result as if it were in the list
-                    exps:insert(checkrvalue(multifunc))
-                else
-                    if #multifunc.types == 1 then
-                        exps:insert(multifunc) --just insert it as a normal single-return function
-                    else --remember the multireturn function and insert extract nodes into the expsresion list
-                        multiret = multifunc
-                        for i,t in ipairs(multifunc.types) do
-                            exps:insert(createextractreturn(multiret, i - 1, t))
+            local function addlastelement(last)
+                if iscall(last) then
+                    local multifunc = checkcall(last,true) --must return at least one value
+                    if not iscall(multifunc) then --call was a macro, handle the result as if it were in the list
+                        if #multifunc ~= 0 then
+                            for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional so we don't update minsize
+                                if i == #multifunc then
+                                    addlastelement(e)
+                                else
+                                    exps:insert(checkrvalue(e)) 
+                                end
+                            end
+                        else
+                            addlastelement(multifunc)
+                        end
+                    else
+                        if #multifunc.types == 1 then
+                            exps:insert(multifunc) --just insert it as a normal single-return function
+                        else --remember the multireturn function and insert extract nodes into the expsresion list
+                            multiret = multifunc
+                            for i,t in ipairs(multifunc.types) do
+                                exps:insert(createextractreturn(multiret, i - 1, t))
+                            end
                         end
                     end
+                else
+                    local rv = checkrvalue(last)
+                    exps:insert(rv)
                 end
-            else
-                local rv = checkrvalue(last)
-                exps:insert(rv)
             end
+            addlastelement(params[#params])
         end
         
         local maxsize = #exps
@@ -1290,7 +1336,11 @@ function terra.func:typecheck(ctx)
             local result = macrocall(ctx,...)
             if mustreturnatleast1 then --expect an expression
                 if #result ~= 0 then
-                    error("NYI - multi-expr return macro")
+                    local exps = terra.newlist{}
+                    for i,e in ipairs(result) do
+                        exps:insert(checkexp(e))
+                    end
+                    return exps
                 else
                     return checkexp(result)
                 end
@@ -1496,8 +1546,17 @@ function terra.func:typecheck(ctx)
             else
                 return ee
             end
-        elseif e:is "apply" or e:is "method" then
-            return checkcall(e,true)
+        elseif iscall(e) then
+            local c = checkcall(e,true)
+            if iscall(c) then
+                return c
+            else --it was a macro, 
+                if #c ~= 0 then --multiple returns from macro, but it is used as an expression, truncate
+                    return c[1]
+                else
+                    return c
+                end
+            end
         elseif e:is "constructor" then
             local typ = terra.types.newemptystruct {}
             local paramlist = terra.newlist{}
@@ -1733,8 +1792,8 @@ function terra.func:typecheck(ctx)
             local desugared = terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist {dv,wh} } )
             desugared:printraw()
             return checkstmt(desugared)
-        elseif s:is "apply" or s:is "method" then
-            return checkcall(s,false) --allowed to be void
+        elseif iscall(s) then
+            return checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
         else 
             return checkrvalue(s)
         end
