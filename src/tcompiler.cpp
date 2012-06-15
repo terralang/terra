@@ -202,11 +202,6 @@ private:
     lua_State * L; 
 };
 
-static void terra_compile_llvm(terra_State * T) {
-    Obj func;
-
-}
-
 struct TType { //contains llvm raw type pointer and any metadata about it we need
     Type * type;
     bool issretfunc;
@@ -379,15 +374,12 @@ struct TerraCompiler {
         }
         *rfn = fn;
     }
-    void run(terra_State * _T) {
+    void run(terra_State * _T, int ref_table) {
         T = _T;
         L = T->L;
         C = T->C;
         B = new IRBuilder<>(*C->ctx);
         
-        //create lua table to hold object references anchored on stack
-        lua_newtable(T->L);
-        int ref_table = lua_gettop(T->L);
         lua_pushvalue(T->L,-2); //the original argument
         funcobj.initFromStack(T->L, ref_table);
         
@@ -1258,11 +1250,14 @@ if(t->type->isIntegerTy()) { \
 static int terra_compile(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
+    //create lua table to hold object references anchored on stack
+    lua_newtable(T->L);
+    int ref_table = lua_gettop(T->L);
     
     {
         TerraCompiler c;
-        c.run(T);
-    } //scope to ensure that c.func is destroyed before we pop the reference table off the stack
+        c.run(T,ref_table);
+    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lua_pop(T->L,1); //remove the reference table from stack
     return 0;

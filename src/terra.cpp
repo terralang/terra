@@ -5,6 +5,7 @@
 #include "lparser.h"
 #include "tcompiler.h"
 #include "tkind.h"
+#include "tcwrapper.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -104,11 +105,12 @@ terra_State * terra_newstate() {
     
     if(luaL_loadbuffer(T->L, luaJIT_BC_terralib, luaJIT_BC_terralib_SIZE, "terralib.lua") 
        || lua_pcall(T->L,0,LUA_MULTRET,0)) {
-    //if(luaL_dofile(T->L, "src/terralib.lua")) {
         terra_reporterror(T,"%s\n",luaL_checkstring(T->L,-1));
         free(T);
         return NULL;
     }
+    
+    terra_cwrapperinit(T);
     
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     lua_pushcfunction(T->L,opensourcefile);
