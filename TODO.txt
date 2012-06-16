@@ -2,11 +2,11 @@ Language Implementation:
 
 --vector types
 --sane numeric casting rules for constants
---macros in terra
+
 --calling lua functions from terra
--- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function
--- explicit casts (pointer to pointer, requires macros to somewhat work)
--- unique annontations in struct types
+-- union annontations in struct types
+-- code quotations of statements and expressions
+-- good error message for when there is a circular dependency on global variable initialization
 
 Runtime Implementation:
 
@@ -25,3 +25,6 @@ DONE:
 --pointer arithmetic
 --array types
 --resolvetype needs to allow the declaration of anonymous structural types
+--macros in terra
+-- explicit casts (pointer to pointer, requires macros to somewhat work)
+-- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function

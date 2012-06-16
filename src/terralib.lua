@@ -286,7 +286,7 @@ function terra.func:gettype(ctx)
     
 end
 function terra.func:makewrapper()
-    local fntyp = self.typedtree.type
+    local fntyp = self.type
     
     local rt
     local rname
@@ -324,6 +324,9 @@ function terra.func:makewrapper()
 end
 
 function terra.func:compile(ctx)
+    if self.fptr then
+        return --already compiled
+    end
     ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
     print("compiling function:")
     self.untypedtree:printraw()
@@ -345,12 +348,10 @@ function terra.func:compile(ctx)
 end
 
 function terra.func:__call(...)
-    if not self.typedtree then
-        self:compile()
-    end
+    self:compile()
     
     --TODO: generate code to do this for each function rather than interpret it on every call
-    local nr = #self.typedtree.type.returns
+    local nr = #self.type.returns
     if nr > 1 then
         local result = ffi.new(self.ffireturnname)
         self.ffiwrapper.fn(result,...)
@@ -411,7 +412,7 @@ function terra.globalvar:gettype(ctx)
         if self.type == nil then
             error("nil type?")
         end
-        return self.tree.type
+        return self.type
     end
 end
 
@@ -1894,6 +1895,33 @@ function terra.func:typecheck(ctx)
 end
 
 -- END TYPECHECKER
+
+-- INCLUDEC
+
+function terra.includec(fname)
+    local searchpath = { "/usr/include/", "/usr/local/include/" }
+    
+    local fpath = fname
+    local f,err = io.open(fname)
+    
+    if f == nil then
+        for i,p in ipairs(searchpath) do
+            fpath = p..fname
+            f,err = io.open(fpath)
+            if f then
+                break
+            end
+        end
+    end
+    
+    if f then
+        io.close(f)
+        return terra.registercfile(fpath)
+    else
+        error("could not open file "..fname,2)
+    end
+    
+end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")

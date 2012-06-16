@@ -1,5 +1,5 @@
 
-local c = terralib.includec("afile")
+local c = terralib.includec("mytest.h")
 print(type(c))
 terra foo()
 
