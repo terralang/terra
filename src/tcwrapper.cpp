@@ -31,60 +31,61 @@ extern "C" {
 #include "llvm/Module.h"
 #include "clang/CodeGen/CodeGenAction.h"
 #include "clang/CodeGen/ModuleBuilder.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/Linker.h"
+
+#include "tcompilerstate.h"
 
 using namespace clang;
 
+
+// part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
+
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
 // we're interested in by overriding relevant methods.
-class MyASTVisitor : public RecursiveASTVisitor<MyASTVisitor>
+class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    MyASTVisitor(Rewriter &R, std::stringstream & o)
+    IncludeCVisitor(Rewriter &R, std::stringstream & o)
         : TheRewriter(R),
           output(o)
     {}
 
     bool VisitFunctionDecl(FunctionDecl *f) {
-        // Only function definitions (with bodies), not declarations.
-        //if (f->hasBody()) {
-            //Stmt *FuncBody = f->getBody();
+        // Type name as string
+        
+        QualType QT = f->getResultType();
+        std::string TypeStr = QT.getAsString();
 
-            // Type name as string
-            
-            QualType QT = f->getResultType();
-            std::string TypeStr = QT.getAsString();
-
-            // Function name
-            DeclarationName DeclName = f->getNameInfo().getName();
-            std::string FuncName = DeclName.getAsString();
-
-            printf("FUNCNAME: %s\n",FuncName.c_str());
-            
-            // Add comment before
-            output << "void myfn_" << FuncName << "() {}\n";
-            
-        //}
-
+        // Function name
+        DeclarationName DeclName = f->getNameInfo().getName();
+        std::string FuncName = DeclName.getAsString();
+        printf("FuncName: %s\n", FuncName.c_str());
+        for(size_t i = 0; i < f->getNumParams(); i++) {
+            const ParmVarDecl * p = f->getParamDecl(i);
+            QualType pt = p->getType();
+            printf("param: %s\n",pt.getCanonicalType().getAsString().c_str());
+           
+        }
+        
+        output << "    (void)" << FuncName << ";\n";
         return true;
     }
 
 private:
-    void AddBraces(Stmt *s);
     std::stringstream & output;
     Rewriter &TheRewriter;
 };
 
-// Implementation of the ASTConsumer interface for reading an AST produced
-// by the Clang parser.
-class MyASTConsumer : public ASTConsumer
+class IncludeCConsumer : public ASTConsumer
 {
 public:
-    MyASTConsumer(Rewriter &R,std::stringstream & o)
+    IncludeCConsumer(Rewriter &R,std::stringstream & o)
         : Visitor(R,o)
     {}
 
     virtual void Initialize(ASTContext &Context) {
-        printf("INIT\n");
     }
 
     virtual bool HandleTopLevelDecl(DeclGroupRef DR) {
@@ -96,10 +97,10 @@ public:
     }
 
 private:
-    MyASTVisitor Visitor;
+    IncludeCVisitor Visitor;
 };
 
-static void dorewrite(const char * filename, std::string * output) {
+static void dorewrite(terra_State * T, const char * filename, std::string * output) {
     	
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
@@ -130,7 +131,7 @@ static void dorewrite(const char * filename, std::string * output) {
     // ParseAST.
   
     std::stringstream dummy;
-    MyASTConsumer TheConsumer(TheRewriter,dummy);
+    IncludeCConsumer TheConsumer(TheRewriter,dummy);
 
     // Parse the file to AST, registering our consumer as the AST consumer.
     ParseAST(TheCompInst.getPreprocessor(), &TheConsumer,
@@ -143,7 +144,9 @@ static void dorewrite(const char * filename, std::string * output) {
     
     llvm::MemoryBuffer * mb = FileMgr.getBufferForFile(FileIn);
     std::ostringstream out;
-    out << std::string(mb->getBufferStart(),mb->getBufferEnd()) << "\n" << dummy.str() << "\n";
+    out << std::string(mb->getBufferStart(),mb->getBufferEnd()) << "\n" 
+    << "void __makeeverythinginclanglive_" << T->C->next_unused_id++ << "() {\n"
+    << dummy.str() << "\n}\n";
     *output = out.str();
     printf("output is %s\n",(*output).c_str());
 }
@@ -151,7 +154,7 @@ static void dorewrite(const char * filename, std::string * output) {
 static int dofile(terra_State * T, const char * filename) {
 	
     std::string buffer;
-    dorewrite(filename,&buffer);
+    dorewrite(T,filename,&buffer);
     
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
@@ -187,8 +190,22 @@ static int dofile(terra_State * T, const char * filename) {
 			TheCompInst.getASTContext());
 
     llvm::Module * mod = codegen->ReleaseModule();
+    std::string err;
+    if(llvm::Linker::LinkModules(T->C->m, mod, 0, &err)) {
+        terra_reporterror(T,"llvm: %s\n",err.c_str());
+    }
+    
+     llvm::Function * p = T->C->m->getFunction("myfoobarthing");
+    void * fn = T->C->ee->getPointerToFunction(p);
+    assert(fn);
+    
+    int (*foobar)() = (int(*)())fn;
+    
     if(mod)
         mod->dump();
+        
+        
+    foobar();
     
     delete codegen;
     

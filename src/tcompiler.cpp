@@ -9,26 +9,10 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 
-#include "llvm/DerivedTypes.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JIT.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/Module.h"
-#include "llvm/PassManager.h"
-#include "llvm/Analysis/Verifier.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Target/TargetData.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Support/IRBuilder.h"
-#include "llvm/Support/TargetSelect.h"
-using namespace llvm;
+#include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
+#include "tobj.h"
 
-struct terra_CompilerState {
-    Module * m;
-    LLVMContext * ctx;
-    ExecutionEngine * ee;
-    FunctionPassManager * fpm;
-};
+using namespace llvm;
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
 
@@ -39,6 +23,7 @@ void terra_compilerinit(struct terra_State * T) {
     lua_setfield(T->L,-2,"compile");
     lua_pop(T->L,1); //remove terra from stack
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
+    memset(T->C, 0, sizeof(terra_CompilerState));
     InitializeNativeTarget();
     
     T->C->ctx = &getGlobalContext();
@@ -69,138 +54,6 @@ void terra_compilerinit(struct terra_State * T) {
     
     T->C->fpm->doInitialization();
 }
-//object to hold reference to lua object and help extract information
-struct Obj {
-    Obj() {
-        ref = LUA_NOREF; L = NULL;
-    }
-    void initFromStack(lua_State * L, int ref_table) {
-        freeref();
-        this->L = L;
-        this->ref_table = ref_table;
-        assert(!lua_isnil(this->L,-1));
-        this->ref = luaL_ref(this->L,this->ref_table);
-    }
-    ~Obj() {
-        freeref();
-    }
-    int size() {
-        push();
-        int i = lua_objlen(L,-1);
-        pop();
-        return i;
-    }
-    void objAt(int i, Obj * r) {
-        push();
-        lua_rawgeti(L,-1,i+1); //stick to 0-based indexing in C code...
-        r->initFromStack(L,ref_table);
-        pop();
-    }
-    double number(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        double r = lua_tonumber(L,-1);
-        pop(2);
-        return r;
-    }
-    uint64_t integer(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        const void * ud = lua_touserdata(L,-1);
-        pop(2);
-        uint64_t i = *(const uint64_t*)ud;
-        return i;
-    }
-    bool boolean(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        bool v = lua_toboolean(L,-1);
-        pop(2);
-        return v;
-    }
-    const char * string(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        const char * r = luaL_checkstring(L,-1);
-        pop(2);
-        return r;
-    }
-    bool obj(const char * field, Obj * r) {
-        push();
-        lua_getfield(L,-1,field);
-        if(lua_isnil(L,-1)) {
-            pop(2);
-            return false;
-        } else {
-            r->initFromStack(L,ref_table);
-            pop();
-            return true;
-        }
-    }
-    void * ud(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        void * u = lua_touserdata(L,-1);
-        pop(2);
-        return u;
-    }
-    void pushfield(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        lua_remove(L,-2);
-    }
-    void push() {
-        //fprintf(stderr,"getting %d %d\n",ref_table,ref);
-        assert(lua_gettop(L) >= ref_table);
-        lua_rawgeti(L,ref_table,ref);
-    }
-    T_Kind kind(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        int k = luaL_checkint(L,-1);
-        pop(2);
-        return (T_Kind) k;
-    }
-    void setfield(const char * key) { //sets field to value on top of the stack and pops it off
-        assert(!lua_isnil(L,-1));
-        push();
-        lua_pushvalue(L,-2);
-        lua_setfield(L,-2,key);
-        pop(2);
-    }
-    void dump() {
-        printf("object is:\n");
-        
-        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-        lua_getfield(L,-1,"tree");
-        
-        lua_getfield(L,-1,"printraw");
-        push();
-        lua_call(L, 1, 0);
-        
-        lua_pop(L,2);
-        
-        printf("stack is:\n");
-        int n = lua_gettop(L);
-        for (int i = 1; i <= n; i++) {
-            printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
-        }
-    }
-private:
-    void freeref() {
-        if(ref != LUA_NOREF) {
-            luaL_unref(L,ref_table,ref);
-            L = NULL;
-            ref = LUA_NOREF;
-        }
-    }
-    void pop(int n = 1) {
-        lua_pop(L,n);
-    }
-    int ref;
-    int ref_table;
-    lua_State * L; 
-};
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
     Type * type;
@@ -648,6 +501,7 @@ if(t->type->isIntegerTy()) { \
         return B->CreateLoad(output);
     }
     Value * emitArrayToPointer(TType * from, TType * to, Value * exp) {
+        //typechecker ensures that input to array to pointer is an lvalue
         int64_t idxs[] = {0,0};
         return emitCGEP(exp,idxs,2);
     }
@@ -1250,15 +1104,16 @@ if(t->type->isIntegerTy()) { \
 static int terra_compile(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
+    
     //create lua table to hold object references anchored on stack
-    lua_newtable(T->L);
-    int ref_table = lua_gettop(T->L);
+    int ref_table = lobj_newreftable(T->L);
     
     {
         TerraCompiler c;
         c.run(T,ref_table);
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
-    lua_pop(T->L,1); //remove the reference table from stack
+    lobj_removereftable(T->L,ref_table);
+    
     return 0;
 }
