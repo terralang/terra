@@ -8,7 +8,7 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
-
+#include <sstream>
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 
@@ -662,7 +662,15 @@ if(t->type->isIntegerTy()) { \
                         TType * ftyp;
                         Function * fn;
                         getOrCreateFunction(&func,&fn,&ftyp);
-                        return fn;
+                        return fn; 
+                    } else if(pt->getElementType()->isIntegerTy(8)) { //string literal
+                        Constant * init = ConstantDataArray::getString(*C->ctx, exp->string("value"));
+                        std::stringstream ss;
+                        ss << ".str" << C->next_unused_id++;
+                        //TODO: we should de-duplicate strings that are the same
+                        GlobalVariable * gv = new GlobalVariable(*C->m,init->getType(), true, GlobalValue::InternalLinkage, init,ss.str());
+                        int64_t idxs[] = { 0, 0};
+                        return emitCGEP(gv,idxs,2);
                     } else {
                         assert(!"NYI - pointer literal");
                     }

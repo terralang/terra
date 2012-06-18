@@ -1633,6 +1633,8 @@ function terra.func:typecheck(ctx)
             return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = double })
         elseif type(e) == "boolean" then
             return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = bool })
+        elseif type(e) == "string" then
+            return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.pointer(int8) })
         elseif terra.isfunction(e) then
             return insertfunctionliteral(ee,e)
         else
