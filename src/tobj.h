@@ -6,6 +6,7 @@ extern "C" {
 #include "lualib.h"
 #include "lauxlib.h"
 }
+#include "tkind.h"
 
 //object to hold reference to lua object and help extract information
 struct Obj {
@@ -106,6 +107,13 @@ struct Obj {
         lua_setfield(L,-2,key);
         pop(2);
     }
+    void addentry() {
+        int s = size();
+        push();
+        lua_pushvalue(L, -2);
+        lua_rawseti(L, -2, s+1);
+        pop(2);
+    }
     void dump() {
         printf("object is:\n");
         
@@ -123,6 +131,22 @@ struct Obj {
         for (int i = 1; i <= n; i++) {
             printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
         }
+    }
+    void newlist(Obj * lst) {
+        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getfield(L,-1,"newlist");
+        lua_remove(L,-2);
+        lua_call(L, 0, 1);
+        lst->initFromStack(L, ref_table);
+    }
+    void fromStack(Obj * o) {
+        o->initFromStack(L, ref_table);
+    }
+    lua_State * getState() {
+        return L;
+    }
+    int getRefTable() {
+        return ref_table;
     }
 private:
     void freeref() {
