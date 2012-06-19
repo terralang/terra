@@ -16,7 +16,7 @@ terra baz(a : int64)
     if a > 2 then
        afn = bar
     end
-    return bar3(afn)
+    return bar3(@afn)
 end
 
 local test = require("test")

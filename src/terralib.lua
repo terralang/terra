@@ -15,7 +15,7 @@ end
 
 function terra.tree:printraw()
     local function header(key,t)
-        if type(t) == "table" then
+        if type(t) == "table" and (getmetatable(t) == nil or type(getmetatable(t).__index) ~= "function") then
             return terra.kinds[t["kind"]] or ""
         elseif (key == "type" or key == "operator") and type(t) == "number" then
             return terra.kinds[t] .. " (enum " .. tostring(t) .. ")"
@@ -337,7 +337,10 @@ function terra.func:compile(ctx)
     print("compiling function:")
     self.untypedtree:printraw()
     print("with local environment:")
-    terra.tree.printraw(self:env())
+    for k,v in pairs(self:env()) do
+        print("  ",k)
+    end
+    
     self.typedtree = self:typecheck(ctx)
     self.type = self.typedtree.type
     
@@ -1264,6 +1267,9 @@ function terra.func:typecheck(ctx)
         if not e.type:ispointer() then
             terra.reporterror(ctx,e,"argument of dereference is not a pointer type but ",e.type)
             ret.type = terra.types.error 
+        elseif e.type.type:isfunction() then
+            --function pointer dereference does nothing, return the input
+            return e
         else
             ret.type = e.type.type
         end
@@ -1964,6 +1970,16 @@ function terra.includec(fname)
         error("could not open file "..fname,2)
     end
     
+end
+
+function terra.includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry
+    local v = getmetatable(tbl).errors[name]  --it is used to report why a function or type couldn't be included
+    if v then
+        error("includec: error importing symbol '"..name.."': "..v, 2)
+    else
+        error("includec: imported symbol '"..name.."' not found.",2)
+    end
+    return nil
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword

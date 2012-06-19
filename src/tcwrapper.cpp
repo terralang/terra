@@ -32,10 +32,34 @@ public:
           output(o),
           result(res),
           L(res->getState()),
-          ref_table(res->getRefTable()),
-          next_id(0)
-    {}
+          ref_table(res->getRefTable()) {
+        
+        //create a table to hold the error messages for this import
+        lua_newtable(L);
+        error_table.initFromStack(L,ref_table);
+        
+        
+        
+    }
 
+    void SetMetatable() {
+        result->push(); //to set metatable later
+        
+        //set the metatable for result to fire includetableindex when a thing wasn't found
+        lua_newtable(L); //metatable
+        lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+        lua_getfield(L, -1, "includetableindex");
+        lua_remove(L,-2);
+        lua_setfield(L, -2, "__index");
+        error_table.push();
+        lua_setfield(L,-2,"errors");
+        
+        
+        lua_setmetatable(L, -2);
+        
+        lua_pop(L,1); //remove result table
+    }
+    
     void InitType(const char * name, Obj * tt) {
         lua_getfield(L, LUA_GLOBALSINDEX, name);
         tt->initFromStack(L,ref_table);
@@ -48,8 +72,12 @@ public:
         lua_remove(L,-2);
         lua_remove(L,-2);
     }
+    
+    bool ImportError(const std::string & msg) {
+        error_message = msg;
+        return false;
+    }
     bool GetType(QualType T, Obj * tt) {
-        
         
         T = Context->getCanonicalType(T);
         const Type *Ty = T.getTypePtr();
@@ -75,14 +103,14 @@ public:
                     for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
                         
                         if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
-                            goto invalidstruct;
+                            return ImportError("structs with bitfields, anonymous structs/declarations are not supported");
                         }
                         DeclarationName declname = it->getDeclName();
                         std::string declstr = declname.getAsString();
                         QualType FT = it->getType();
                         Obj fobj;
                         if(!GetType(FT,&fobj)) {
-                            goto invalidstruct;
+                            return false;
                         }
                         addentry.push();
                         tt->push();
@@ -101,8 +129,9 @@ public:
                 } else {
                     return tt->boolean("valid");
                 }
+            } else {
+                return ImportError("non-struct record types are not supported");
             }
-            invalidstruct: ;
           }  break; //TODO
           case Type::Builtin:
             switch (cast<BuiltinType>(Ty)->getKind()) {
@@ -183,6 +212,8 @@ public:
                 lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
                 return true;
+            } else {
+                return false;
             }
           } break;
           case Type::ExtVector:
@@ -194,25 +225,27 @@ public:
                 //call functype... getNumArgs();
                 if(FT && GetFuncType(FT,tt))
                     return true;
+                else
+                    return false;
                 break;
           }
           case Type::ObjCObject:
           case Type::ObjCInterface:
           case Type::ObjCObjectPointer:
-            break;
           case Type::Enum:
-            printf("NYI - enum\n");
-            break;
-
-
           case Type::BlockPointer:
           case Type::MemberPointer:
           case Type::Atomic:
           default:
             break;
         }
-        printf("not understood: %s\n", T.getAsString().c_str());
-        return false;
+        std::stringstream ss;
+        ss << "type not understood: " << T.getAsString().c_str();
+        return ImportError(ss.str().c_str());
+    }
+    void SetErrorReport(const char * field) {
+        lua_pushstring(L,error_message.c_str());
+        error_table.setfield(field);
     }
     bool VisitTypedefDecl(TypedefDecl * TD) {
         if(TD == TD->getCanonicalDecl()) {
@@ -224,6 +257,8 @@ public:
                 result->setfield(name.str().c_str());
                 //make sure it stays live
                 output << "(void)(" << name.str() << "*) (void*) 0;\n";
+            } else {
+                SetErrorReport(name.str().c_str());
             }
         }
         return true;
@@ -271,8 +306,7 @@ public:
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
-        printf("FuncName: %s\n", FuncName.c_str());        
-
+        
         const FunctionProtoType * fntyp = f->getType()->getAs<FunctionProtoType>();
         
         if(!fntyp)
@@ -280,6 +314,7 @@ public:
         
         Obj typ;
         if(!GetFuncType(fntyp,&typ)) {
+            SetErrorReport(FuncName.c_str());
             return true;
         }
         //make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
@@ -300,6 +335,7 @@ public:
     void SetContext(ASTContext * ctx) {
         Context = ctx;
     }
+    ~IncludeCVisitor() { SetMetatable(); } //setting the metatable must be done after type resolution, or attempts to find if types have been initialized will cause name not found errors
 private:
     std::stringstream & output;
     Rewriter &TheRewriter;
@@ -307,7 +343,8 @@ private:
     lua_State * L;
     int ref_table;
     ASTContext * Context;
-    int next_id;
+    Obj error_table;
+    std::string error_message;
 };
 
 class IncludeCConsumer : public ASTConsumer
