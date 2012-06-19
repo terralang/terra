@@ -1952,29 +1952,11 @@ end
 
 -- INCLUDEC
 
+function terra.includecstring(code)
+    return terra.registercfile(code,{"-I","."})
+end
 function terra.includec(fname)
-    local searchpath = { "/usr/include/", "/usr/local/include/" }
-    
-    local fpath = fname
-    local f,err = io.open(fname)
-    
-    if f == nil then
-        for i,p in ipairs(searchpath) do
-            fpath = p..fname
-            f,err = io.open(fpath)
-            if f then
-                break
-            end
-        end
-    end
-    
-    if f then
-        io.close(f)
-        return terra.registercfile(fpath)
-    else
-        error("could not open file "..fname,2)
-    end
-    
+    return terra.includecstring("#include \""..fname.."\"\n")
 end
 
 function terra.includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry

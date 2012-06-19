@@ -390,13 +390,13 @@ private:
     IncludeCVisitor Visitor;
 };
 
-static void dorewrite(terra_State * T, const char * filename, std::string * output, Obj * result) {
+static void dorewrite(terra_State * T, const char * code, const char ** argbegin, const char ** argend, std::string * output, Obj * result) {
     	
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
     TheCompInst.createDiagnostics(0, 0);
-    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), NULL, NULL, TheCompInst.getDiagnostics());
+    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
     TheCompInst.setTarget(TI);
@@ -413,8 +413,8 @@ static void dorewrite(terra_State * T, const char * filename, std::string * outp
     TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
 
     // Set the main file handled by the source manager to the input file.
-    const FileEntry *FileIn = FileMgr.getFile(filename);
-    SourceMgr.createMainFileID(FileIn);
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(code, "<buffer>");
+    SourceMgr.createMainFileIDForMemBuffer(membuffer);
     TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
 
     // Create an AST consumer instance which is going to get called by
@@ -432,25 +432,25 @@ static void dorewrite(terra_State * T, const char * filename, std::string * outp
     const RewriteBuffer *RewriteBuf =
         TheRewriter.getRewriteBufferFor(SourceMgr.getMainFileID());
     
-    llvm::MemoryBuffer * mb = FileMgr.getBufferForFile(FileIn);
     std::ostringstream out;
-    out << std::string(mb->getBufferStart(),mb->getBufferEnd()) << "\n" 
+    out << std::string(membuffer->getBufferStart(),membuffer->getBufferEnd()) << "\n" 
     << "void __makeeverythinginclanglive_" << T->C->next_unused_id++ << "() {\n"
     << dummy.str() << "\n}\n";
     *output = out.str();
+    //delete membuffer;
     //printf("output is %s\n",(*output).c_str());
 }
 
-static int dofile(terra_State * T, const char * filename, Obj * result) {
+static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
 	
     std::string buffer;
-    dorewrite(T,filename,&buffer,result);
+    dorewrite(T,code,argbegin,argend,&buffer,result);
     
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
     TheCompInst.createDiagnostics(0, 0);
-    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), NULL, NULL, TheCompInst.getDiagnostics());
+    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
     TheCompInst.setTarget(TI);
@@ -467,8 +467,7 @@ static int dofile(terra_State * T, const char * filename, Obj * result) {
     TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
 
     // Set the main file handled by the source manager to the input file.
-    const FileEntry *FileIn = FileMgr.getFile(filename);
-    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, filename);
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, "<buffer>");
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
     TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
 
@@ -492,6 +491,7 @@ static int dofile(terra_State * T, const char * filename, Obj * result) {
     }
     
     delete codegen;
+    //delete membuffer;
     
     return 0;
 }
@@ -499,17 +499,23 @@ static int dofile(terra_State * T, const char * filename, Obj * result) {
 int include_c(lua_State * L) {
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
-    const char * fname = luaL_checkstring(L, -1);
-    //printf("loading %s\n",fname);
-    
+    const char * code = luaL_checkstring(L, -2);
+    int N = lua_objlen(L, -1);
+    std::vector<const char *> args;
+    for(int i = 0; i < N; i++) {
+        lua_rawgeti(L, -1, i+1);
+        args.push_back(luaL_checkstring(L,-1));
+        lua_pop(L,1);
+    }
+
     lua_newtable(L); //return a table of loaded functions
     int ref_table = lobj_newreftable(L);
     {
         Obj result;
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
-        dofile(T,fname,&result);
-        //result.dump();
+        
+        dofile(T,code,&args[0],&args[N],&result);
     }
     
     lobj_removereftable(L, ref_table);
