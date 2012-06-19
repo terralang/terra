@@ -10,3 +10,4 @@ int myotherthing(int a, int b) { return a + b; }
 int myfnptr(int (*foobar)(void)) { return foobar(); }
 
 typedef struct MyStruct { int a; double b; } MyStruct;
+typedef struct MyStruct2 { int a; union { int b; int c; }; } MyStruct2;

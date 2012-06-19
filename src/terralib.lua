@@ -39,6 +39,11 @@ function terra.tree:printraw()
             parents[t] = true
             depth = depth + 1
             for k,v in pairs(t) do
+                if type(k) == "table" then
+                    print("this table:")
+                    terra.tree.printraw(k)
+                    error("table is key?")
+                end
                 if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
                     local prefix = spacing..k..": "
                     if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
