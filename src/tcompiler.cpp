@@ -73,11 +73,13 @@ struct TerraCompiler {
     Function * func;
     TType * func_type;
     TType * getType(Obj * typ) {
-        TType * t = (TType*) typ->ud("llvm_type");
-        if(t == NULL) {
+        TType * t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
+        
+        if(t == NULL) { //the type wasn't initialized previously, generated its LLVM type now
             t = (TType*) lua_newuserdata(T->L,sizeof(TType));
             memset(t,0,sizeof(TType));
-            typ->setfield("llvm_type");
+            typ->setfield("llvm_type"); //llvm_type is set to avoid recursive traversals
+            
             switch(typ->kind("kind")) {
                 case T_primitive: {
                     int bytes = typ->number("bytes");
@@ -105,22 +107,30 @@ struct TerraCompiler {
                     }
                 } break;
                 case T_struct: {
-                    const char * name = typ->string("name");
-                    Obj entries;
-                    typ->obj("entries", &entries);
-                    int N = entries.size();
-                    StructType * st = StructType::create(*C->ctx, name);
-                    t->type = st;
                     t->ispassedaspointer = true;
-                    std::vector<Type *> entry_types;
-                    for(int i = 0; i < N; i++) {
-                        Obj v;
-                        entries.objAt(i, &v);
-                        Obj vt;
-                        v.obj("type",&vt);
-                        entry_types.push_back(getType(&vt)->type);
+                    //check to see if it was initialized externally first
+                    if(typ->hasfield("llvm_name")) {
+                        const char * llvmname = typ->string("llvm_name");
+                        StructType * st = C->m->getTypeByName(llvmname);
+                        assert(st);
+                        t->type = st;
+                    } else {
+                        const char * name = typ->string("name");
+                        Obj entries;
+                        typ->obj("entries", &entries);
+                        int N = entries.size();
+                        StructType * st = StructType::create(*C->ctx, name);
+                        t->type = st;
+                        std::vector<Type *> entry_types;
+                        for(int i = 0; i < N; i++) {
+                            Obj v;
+                            entries.objAt(i, &v);
+                            Obj vt;
+                            v.obj("type",&vt);
+                            entry_types.push_back(getType(&vt)->type);
+                        }
+                        st->setBody(entry_types);
                     }
-                    st->setBody(entry_types);
                 } break;
                 case T_pointer: {
                     Obj base;

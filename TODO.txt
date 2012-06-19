@@ -7,13 +7,12 @@ Language Implementation:
 -- union annontations in struct types
 -- code quotations of statements and expressions
 -- good error message for when there is a circular dependency on global variable initialization
--- string literals translated to uint8* types
--- an opaque type (equivalent to void* in C)
+-- an opaque type (equivalent to void* in C) (? another alternative is to just use int8* for allocation like old C for now)
 
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
--- how to use clang to read C header files
+-- support typedefs and record types in C header files
 
 DONE:
 --function pointers
@@ -30,3 +29,5 @@ DONE:
 --macros in terra
 -- explicit casts (pointer to pointer, requires macros to somewhat work)
 -- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function
+-- string literals translated to int8* types
+-- how to use clang to read C header files

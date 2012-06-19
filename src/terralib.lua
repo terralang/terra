@@ -470,8 +470,7 @@ do  --constructor functions for terra functions and variables
         
         return fn
     end
-    function terra.newcfunction(name,parameters,returns)
-        local typ = terra.types.functype(parameters,returns)
+    function terra.newcfunction(name,typ)
         local obj = { name = name, ctype =  typ}
         setmetatable(obj,terra.func)
         return obj
@@ -596,6 +595,9 @@ do --construct type table that holds the singleton value representing each uniqu
             return "void *" --TODO: this should actually declare the struct and make wrapper should handle the wrapping up of struct values
         elseif self:isarray() then
             return self.type:cstring().."*" --arrays are passed as pointers
+        elseif self:isfunction() then
+            print("WARNING: wrapper for function pointers not implemented")
+            return "void" 
         else
             error("NYI - cstring")
         end
@@ -779,8 +781,13 @@ do --construct type table that holds the singleton value representing each uniqu
         return proxy
     end
     
-    function types.newnamedstruct(displayname, name,tree,env)
+    function types.newemptynamedstruct(displayname, name)
         local typ = types.newemptystruct { name = name, displayname = displayname, isnamed = true }
+        return typ
+    end
+    
+    function types.newnamedstruct(displayname, name,tree,env)
+        local typ = types.newemptynamedstruct(displayname,name)
         function typ:getcanonical(ctx)
             self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
             

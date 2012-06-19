@@ -88,6 +88,13 @@ struct Obj {
         lua_getfield(L,-1,field);
         lua_remove(L,-2);
     }
+    bool hasfield(const char * field) {
+        push();
+        lua_getfield(L,-1,field);
+        bool isNil = lua_isnil(L,-1);
+        pop(2);
+        return !isNil;
+    }
     void push() {
         //fprintf(stderr,"getting %d %d\n",ref_table,ref);
         assert(lua_gettop(L) >= ref_table);

@@ -53,21 +53,78 @@ public:
           output(o),
           result(res),
           L(res->getState()),
-          ref_table(res->getRefTable())
+          ref_table(res->getRefTable()),
+          next_id(0)
     {}
 
     void InitType(const char * name, Obj * tt) {
         lua_getfield(L, LUA_GLOBALSINDEX, name);
         tt->initFromStack(L,ref_table);
     }
+    
+    void PushTypeFunction(const char * name) {
+        lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+        lua_getfield(L, -1, "types");
+        lua_getfield(L, -1, name);
+        lua_remove(L,-2);
+        lua_remove(L,-2);
+    }
     bool GetType(QualType T, Obj * tt) {
+        
+        
         T = Context->getCanonicalType(T);
         const Type *Ty = T.getTypePtr();
         
         switch (Ty->getTypeClass()) {
-          case Type::Record:
-            printf("NYI - structs\n");
-            return false; //TODO
+          case Type::Record: {
+            const RecordType *RT = dyn_cast<RecordType>(Ty);
+            RecordDecl * rd = RT->getDecl();
+            if(rd->isStruct()) {
+                std::string name = rd->getName();
+                if(!result->obj(name.c_str(),tt)) {
+                    //create new blank struct, fill in with members
+                    PushTypeFunction("newemptynamedstruct");
+                    lua_pushstring(L, name.c_str());
+                    lua_pushvalue(L,-1);
+                    lua_call(L,2,1);
+                    tt->initFromStack(L,ref_table);
+                    tt->push();
+                    result->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                    Obj addentry;
+                    tt->obj("addentry",&addentry);
+                    
+                    for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
+                        
+                        if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
+                            goto invalidstruct;
+                        }
+                        DeclarationName declname = it->getDeclName();
+                        std::string declstr = declname.getAsString();
+                        QualType FT = it->getType();
+                        Obj fobj;
+                        if(!GetType(FT,&fobj)) {
+                            goto invalidstruct;
+                        }
+                        addentry.push();
+                        tt->push();
+                        lua_pushstring(L,declstr.c_str());
+                        fobj.push();
+                        lua_call(L,3,0);
+                    }
+                    
+                    std::stringstream ss;
+                    ss << "struct." << name.c_str();
+                    lua_pushstring(L,ss.str().c_str());
+                    tt->setfield("llvm_name");
+                    lua_pushboolean(L, true);
+                    tt->setfield("valid");
+                    return true;
+                } else {
+                    return tt->boolean("valid");
+                }
+            }
+            invalidstruct: ;
+          }  break; //TODO
           case Type::Builtin:
             switch (cast<BuiltinType>(Ty)->getKind()) {
             case BuiltinType::Void:
@@ -75,7 +132,7 @@ public:
                 return true;
             case BuiltinType::Bool:
                 assert(!"bool?");
-                return false;
+                break;
             case BuiltinType::Char_S:
             case BuiltinType::Char_U:
             case BuiltinType::SChar:
@@ -94,7 +151,7 @@ public:
             case BuiltinType::Char32: {
                 std::stringstream ss;
                 if (Ty->isUnsignedIntegerType())
-                ss << "u";
+                    ss << "u";
                 ss << "int";
                 int sz = Context->getTypeSize(T);
                 ss << sz;
@@ -102,7 +159,7 @@ public:
                 return true;
             }
             case BuiltinType::Half:
-                return false;
+                break;
             case BuiltinType::Float:
                 InitType("float",tt);
                 return true;
@@ -113,12 +170,12 @@ public:
             case BuiltinType::NullPtr:
             case BuiltinType::UInt128:
             default:
-                return false;
+                break;
             }
           case Type::Complex:
           case Type::LValueReference:
           case Type::RValueReference:
-            return false;
+            break;
           case Type::Pointer: {
             const PointerType *PTy = cast<PointerType>(Ty);
             QualType ETy = PTy->getPointeeType();
@@ -126,90 +183,143 @@ public:
             if(!GetType(ETy,&t2)) {
                 return false;
             }
-            lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-            lua_getfield(L, -1, "types");
-            lua_getfield(L, -1, "pointer");
-            lua_remove(L,-2);
-            lua_remove(L,-2);
+            PushTypeFunction("pointer");
             t2.push();
             lua_call(L,1,1);
             tt->initFromStack(L, ref_table);
             return true;
           }
-
+          
           case Type::VariableArray:
           case Type::IncompleteArray:
-          case Type::ConstantArray:
+            break;
+          case Type::ConstantArray: {
+            Obj at;
+            const ConstantArrayType *ATy = cast<ConstantArrayType>(Ty);
+            int sz = ATy->getSize().getZExtValue();
+            if(GetType(ATy->getElementType(),&at)) {
+                PushTypeFunction("array");
+                at.push();
+                lua_pushinteger(L, sz);
+                lua_call(L,2,1);
+                tt->initFromStack(L,ref_table);
+                return true;
+            }
+          } break;
           case Type::ExtVector:
           case Type::Vector:
           case Type::FunctionNoProto:
-          case Type::FunctionProto:
+                break;
+          case Type::FunctionProto: {
+                const FunctionProtoType *FT = cast<FunctionProtoType>(Ty);
+                //call functype... getNumArgs();
+                if(FT && GetFuncType(FT,tt))
+                    return true;
+                break;
+          }
           case Type::ObjCObject:
           case Type::ObjCInterface:
           case Type::ObjCObjectPointer:
-            return false;
+            break;
           case Type::Enum:
             printf("NYI - enum\n");
-            return false;
+            break;
 
 
           case Type::BlockPointer:
           case Type::MemberPointer:
           case Type::Atomic:
           default:
-            return false;
+            break;
         }
+        printf("not understood: %s\n", T.getAsString().c_str());
+        return false;
+    }
+    bool VisitTypedefDecl(TypedefDecl * TD) {
+        if(TD == TD->getCanonicalDecl()) {
+            llvm::StringRef name = TD->getName();
+            QualType QT = Context->getCanonicalType(TD->getUnderlyingType());
+            Obj typ;
+            if(GetType(QT,&typ)) {
+                typ.push();
+                result->setfield(name.str().c_str());
+                //make sure it stays live
+                output << name.str() << " * var_" << next_id << "; (void) var_" << next_id << ";\n";
+                next_id++;
+            }
+        }
+        return true;
+    }
+    
+    bool GetFuncType(const FunctionProtoType * f, Obj * typ) {
+        Obj returns,parameters;
+        result->newlist(&returns);
+        result->newlist(&parameters);
+        
+        bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
+        QualType RT = f->getResultType();
+        if(!RT->isVoidType()) {
+            Obj rt;
+            if(!GetType(RT,&rt)) {
+                valid = false;
+            } else {
+                rt.push();
+                returns.addentry();
+            }
+        }
+        for(size_t i = 0; i < f->getNumArgs(); i++) {
+            QualType PT = f->getArgType(i);
+            Obj pt;
+            if(!GetType(PT,&pt)) {
+                valid = false; //keep going with attempting to parse type to make sure we see all the reasons why we cannot support this function
+            } else if(valid) {
+                pt.push();
+                parameters.addentry();
+            }
+        }
+        if(f->isVariadic()) {
+            printf("NYI - variadic\n");
+            valid = false;
+        }
+        
+        if(valid) {
+            PushTypeFunction("functype");
+            parameters.push();
+            returns.push();
+            lua_call(L, 2, 1);
+            typ->initFromStack(L,ref_table);
+        }
+        
+        return valid;
     }
     bool VisitFunctionDecl(FunctionDecl *f) {
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
-        //printf("FuncName: %s\n", FuncName.c_str());
+        printf("FuncName: %s\n", FuncName.c_str());        
 
-        if(f->isVariadic()) {
-            printf("NYI - variadic\n");
+        const FunctionProtoType * fntyp = f->getType()->getAs<FunctionProtoType>();
+        
+        if(!fntyp)
+            return true;
+        
+        Obj typ;
+        if(!GetFuncType(fntyp,&typ)) {
             return true;
         }
-        Obj returns,parameters;
-        result->newlist(&returns);
-        result->newlist(&parameters);
-        
-        QualType RT = f->getResultType();
-        if(!RT->isVoidType()) {
-            Obj typ;
-            if(!GetType(RT,&typ)) {
-                return true;
-            }
-            typ.push();
-            returns.addentry();
-        }
-        
-        for(size_t i = 0; i < f->getNumParams(); i++) {
-            const ParmVarDecl * p = f->getParamDecl(i);
-            QualType PT = p->getType();
-            //printf("param: %s\n",PT.getCanonicalType().getAsString().c_str());
-            Obj typ;
-            if(!GetType(PT,&typ)) {
-                return true;
-            }
-            typ.push();
-            parameters.addentry();
-        }
-        
         //make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
         output << "    (void)" << FuncName << ";\n";         
-        CreateFunction(FuncName,&parameters,&returns);
+        CreateFunction(FuncName,&typ);
         
         return true;
     }
-    void CreateFunction(const std::string & name, Obj * parameters, Obj * returns) {
+    void CreateFunction(const std::string & name, Obj * typ) {
         lua_getfield(L, LUA_GLOBALSINDEX, "terra");
         lua_getfield(L, -1, "newcfunction");
         lua_remove(L,-2); //terra table
         lua_pushstring(L, name.c_str());
-        parameters->push();
-        returns->push();
-        lua_call(L, 3, 1);
+        typ->push();
+        lua_call(L, 2, 1);
         result->setfield(name.c_str());
     }
     void SetContext(ASTContext * ctx) {
@@ -222,6 +332,7 @@ private:
     lua_State * L;
     int ref_table;
     ASTContext * Context;
+    int next_id;
 };
 
 class IncludeCConsumer : public ASTConsumer
@@ -384,6 +495,11 @@ int register_c_function(lua_State * L) {
         fn.initFromStack(L,ref_table);
         const char * name = fn.string("name");
         llvm::Function * llvmfn = T->C->m->getFunction(name);
+        if(!llvmfn) {
+            std::stringstream ss;
+            ss << "\x01_" << name;
+            llvmfn = T->C->m->getFunction(ss.str());
+        }
         assert(llvmfn);
         lua_pushlightuserdata(L, llvmfn);
         fn.setfield("llvm_function");

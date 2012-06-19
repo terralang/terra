@@ -22,16 +22,23 @@ INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 #LLVM_CONFIG=$(shell which llvm-config)
 
 LLVM_CONFIG=/usr/local/bin/llvm-config
-LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
 FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
-LFLAGS  += -lclangFrontendTool -lclangFrontend -lclangDriver \
-           -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
-           -lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
-           -lclangStaticAnalyzerCore \
-           -lclangAnalysis -lclangARCMigrate -lclangRewrite \
-           -lclangEdit -lclangAST -lclangLex -lclangBasic
 
+# LLVM LIBS (STATIC, slow to link against but built by default)
+#LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
+# CLANG LIBS
+LFLAGS  += -lclangFrontend -lclangDriver \
+           -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
+           -lclangAnalysis -lclangRewrite \
+           -lclangEdit -lclangAST -lclangLex -lclangBasic
+           #-lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
+           #-lclangStaticAnalyzerCore \
+           #-lclangFrontendTool \
+           #-lclangARCMigrate
+
+# LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
+LFLAGS += -lLLVM-3.1
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
@@ -78,7 +85,7 @@ build/terralib.h:	src/terralib.lua
 	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 	
 clean:
-	rm -rf build/*.o build/*.d built/terralib.h
+	rm -rf build/*.o build/*.d build/terralib.h
 	rm -rf $(EXECUTABLE)
 
 purge:	clean
