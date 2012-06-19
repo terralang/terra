@@ -26,6 +26,7 @@ terra bar4()
 end
 
 terra writefile()
+	c.printf("%f %f %f\n",3.0,4.0,5.0)
 	var f = c.fopen("afile.txt","w")
 	c.fputs("a string\n",f)
 	c.fclose(f)

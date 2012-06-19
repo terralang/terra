@@ -59,8 +59,11 @@ all:	$(EXECUTABLE)
 test:	$(EXECUTABLE)
 	(cd tests; ./run)
 
-build/%.o:	src/%.cpp $(PACKAGE_DEPS)
-	$(CXX) $(FLAGS) $< -c -o $@
+build/%.o:	src/%.cpp $(PACKAGE_DEPS) build/llvmheaders.h.pch
+	$(CXX) $(FLAGS) -include-pch build/llvmheaders.h.pch $< -c -o $@
+
+build/llvmheaders.h.pch:	src/llvmheaders.h
+	$(CXX) $(FLAGS) -x c++-header $< -o $@ 
 
 build/$(LUAJIT_TAR):
 ifeq ($(UNAME), Darwin)
@@ -85,7 +88,7 @@ build/terralib.h:	src/terralib.lua
 	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 	
 clean:
-	rm -rf build/*.o build/*.d build/terralib.h
+	rm -rf build/*.o build/*.d build/terralib.h build/llvmheaders.h.pch
 	rm -rf $(EXECUTABLE)
 
 purge:	clean

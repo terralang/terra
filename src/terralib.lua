@@ -814,26 +814,31 @@ do --construct type table that holds the singleton value representing each uniqu
         return typ
     end
     
-    function types.funcpointer(parameters,returns)
+    function types.funcpointer(parameters,returns,isvararg)
         if types.istype(parameters) then
             parameters = {parameters}
         end
         if types.istype(returns) then
             returns = {returns}
         end
-        return types.pointer(types.functype(parameters,returns))
+        return types.pointer(types.functype(parameters,returns,isvararg))
     end
     
-    function types.functype(parameters,returns)
+    function types.functype(parameters,returns,isvararg)
         
         local function create(parameters,returns)
             local function getname(t) return t.name end
-            local a = terra.list.map(parameters,getname):mkstring("{",",","}")
+            local a = terra.list.map(parameters,getname):mkstring("{",",","")
+            if isvararg then
+                a = a .. ",...}"
+            else
+                a = a .. "}"
+            end
             local r = terra.list.map(returns,getname):mkstring("{",",","}")
             local name = a.."->"..r
             local value = types.table[name]
             if value == nil then
-                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name }
+                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name, isvararg = isvararg }
             end
             return value
         end
@@ -1445,9 +1450,26 @@ function terra.func:typecheck(ctx)
             paramlist = checkparameterlist(exp,exp.arguments)
         end
     
+        local function getparametertypes(fntyp, paramlist) --get the expected types for parameters to the call (this extends the function type to the length of the parameters if the function is vararg)
+            if not fntyp.isvararg then
+                return fntyp.parameters
+            end
+            
+            local vatypes = terra.newlist()
+            
+            for i,v in ipairs(paramlist.parameters) do
+                if i <= #fntyp.parameters then
+                    vatypes[i] = fntyp.parameters[i]
+                else
+                    vatypes[i] = v.type
+                end
+            end
+            return vatypes
+        end
+        
         local typ = terra.types.error
         if fntyp ~= terra.types.error and paramlist ~= nil then
-            insertcasts(fntyp.parameters,paramlist)
+            insertcasts(getparametertypes(fntyp,paramlist),paramlist)
             if #fntyp.returns >= 1 then
                 typ = fntyp.returns[1]
             elseif mustreturnatleast1 then

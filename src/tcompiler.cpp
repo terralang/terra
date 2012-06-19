@@ -9,6 +9,7 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 #include <sstream>
+#include "llvmheaders.h"
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 
@@ -180,7 +181,8 @@ struct TerraCompiler {
                         }
                         arguments.push_back(t);
                     }
-                    t->type = FunctionType::get(rt,arguments,false); 
+                    bool isvararg = typ->boolean("isvararg");
+                    t->type = FunctionType::get(rt,arguments,isvararg); 
                 } break;
                 case T_array: {
                     Obj base;
@@ -284,10 +286,10 @@ struct TerraCompiler {
             emitReturnUndef();
         }
         
-        C->m->dump();
+        func->dump();
         verifyFunction(*func);
         C->fpm->run(*func);
-        C->m->dump();
+        func->dump();
         
         void * ptr = C->ee->getPointerToFunction(func);
         

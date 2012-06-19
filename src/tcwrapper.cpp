@@ -14,28 +14,7 @@ extern "C" {
 #include <string>
 #include <sstream>
 
-#include "clang/AST/ASTConsumer.h"
-#include "clang/AST/RecursiveASTVisitor.h"
-#include "clang/Basic/Diagnostic.h"
-#include "clang/Basic/FileManager.h"
-#include "clang/Basic/SourceManager.h"
-#include "clang/Basic/TargetOptions.h"
-#include "clang/Basic/TargetInfo.h"
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/Lex/Preprocessor.h"
-#include "clang/Parse/ParseAST.h"
-#include "clang/Rewrite/Rewriter.h"
-#include "clang/Rewrite/Rewriters.h"
-#include "llvm/Support/Host.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Module.h"
-#include "clang/CodeGen/CodeGenAction.h"
-#include "clang/CodeGen/ModuleBuilder.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JIT.h"
-#include "llvm/Linker.h"
-
+#include "llvmheaders.h"
 #include "tcompilerstate.h"
 
 using namespace clang;
@@ -244,8 +223,7 @@ public:
                 typ.push();
                 result->setfield(name.str().c_str());
                 //make sure it stays live
-                output << name.str() << " * var_" << next_id << "; (void) var_" << next_id << ";\n";
-                next_id++;
+                output << "(void)(" << name.str() << "*) (void*) 0;\n";
             }
         }
         return true;
@@ -277,16 +255,13 @@ public:
                 parameters.addentry();
             }
         }
-        if(f->isVariadic()) {
-            printf("NYI - variadic\n");
-            valid = false;
-        }
         
         if(valid) {
             PushTypeFunction("functype");
             parameters.push();
             returns.push();
-            lua_call(L, 2, 1);
+            lua_pushboolean(L, f->isVariadic());
+            lua_call(L, 3, 1);
             typ->initFromStack(L,ref_table);
         }
         
