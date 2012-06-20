@@ -5,7 +5,8 @@ local c = terralib.includecstring [[
 
 local N = 10
 terra foo()
-	var list = c.malloc(4*N):as(&int)
+	c.printf("size = %d\n",sizeof(int):as(int))
+	var list = c.malloc(sizeof(int)*N):as(&int)
 	for i = 0,N do
 		list[i] = i + 1
 	end

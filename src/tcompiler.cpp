@@ -718,6 +718,13 @@ if(t->type->isIntegerTy()) { \
                     return emitPrimitiveCast(fromT,toT,v);
                 }
             } break;
+            case T_sizeof: {
+                Obj typ;
+                exp->obj("oftype",&typ);
+                TType * tt = getType(&typ);
+                const TargetData * td = C->ee->getTargetData();
+                return ConstantInt::get(Type::getInt64Ty(*C->ctx),td->getTypeAllocSize(tt->type));
+            } break;
             case T_apply: {
                 Value * v = emitCall(exp,true);
                 return v;

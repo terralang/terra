@@ -1622,6 +1622,8 @@ function terra.func:typecheck(ctx)
             end
         elseif e:is "explicitcast" then
             return insertexplicitcast(checkrvalue(e.value),e.type)
+        elseif e:is "sizeof" then
+            return e:copy { type = uint64 }
         elseif iscall(e) then
             local ismacro, c = checkcall(e,true)
             if not ismacro then
@@ -1968,6 +1970,13 @@ function terra.includetableindex(tbl,name)    --this is called when a table retu
     end
     return nil
 end
+
+-- GLOBAL MACROS
+_G["sizeof"] = macro(function(ctx,typ)
+    return terra.newtree(typ,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+end)    
+    
+-- END GLOBAL MACROS
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")

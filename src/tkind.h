@@ -70,7 +70,8 @@ _(type, "type") \
 _(proxy, "proxy") \
 _(array, "array") \
 _(rtol, "rtol") \
-_(explicitcast, "explicitcast")
+_(explicitcast, "explicitcast") \
+_(sizeof, "sizeof")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
