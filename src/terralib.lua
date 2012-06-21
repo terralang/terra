@@ -1077,6 +1077,8 @@ function terra.func:typecheck(ctx)
             local cast_exp = createcast(exp,typ)
             if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
                 return cast_exp
+            elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
+                return cast_exp
             elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then

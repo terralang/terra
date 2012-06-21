@@ -25,7 +25,7 @@ terra foo()
 		sum = sum + cur.v
 		var old = cur
 		cur = cur.next
-		c.free(old:as(&uint8))
+		c.free(old)
 	end
 	return sum
 end
