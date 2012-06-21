@@ -340,13 +340,13 @@ struct TerraCompiler {
     Value * emitCompare(Obj * exp, Obj * ao, Value * a, Value * b) {
         TType * t = typeOfValue(ao);
 #define RETURN_OP(op) \
-if(t->type->isIntegerTy()) { \
+if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
     return B->CreateICmp(CmpInst::ICMP_##op,a,b); \
 } else { \
     return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
 }
 #define RETURN_SOP(op) \
-if(t->type->isIntegerTy()) { \
+if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
     if(t->issigned) { \
         return B->CreateICmp(CmpInst::ICMP_S##op,a,b); \
     } else { \
@@ -447,8 +447,7 @@ if(t->type->isIntegerTy()) { \
         TType * bt = typeOfValue(bo);
         
         //check for pointer arithmetic first pointer arithmetic first
-        if(at->type->isPointerTy()) {
-            assert(kind == T_add || kind == T_sub);
+        if(at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
             if(bt->type->isPointerTy()) {
                 return emitPointerSub(t,a,b);
             } else {

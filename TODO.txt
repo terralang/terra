@@ -6,13 +6,14 @@ Language Implementation:
 --calling lua functions from terra
 -- union annontations in struct types
 -- code quotations of statements and expressions
--- good error message for when there is a circular dependency on global variable initialization
--- an opaque type (equivalent to void* in C) (? another alternative is to just use int8* for allocation like old C for now)
+-- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
+-- nil should translate to any pointer type's NULL value, this will require adding an implicit conversion for <nulltype> to any pointer type,
+   and allowing nulltype to exist
+-- automatic conversion from any pointer to &uint8
 
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
--- support typedefs and record types in C header files
 
 DONE:
 --function pointers
@@ -31,3 +32,5 @@ DONE:
 -- constructor syntax with a function in last position should create 1 anonymous entry per return value of the function
 -- string literals translated to int8* types
 -- how to use clang to read C header files
+-- an opaque type (equivalent to void* in C) (? another alternative is to just use int8* for  now) (went with: no unsized opaque types, but some imported c types do now expose internals)
+-- support typedefs and record types in C header files
