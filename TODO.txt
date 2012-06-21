@@ -2,9 +2,7 @@ Language Implementation:
 
 --vector types
 --sane numeric casting rules for constants
-
 --calling lua functions from terra
--- union annontations in struct types
 -- code quotations of statements and expressions
 -- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
 
@@ -34,3 +32,4 @@ DONE:
 -- automatic conversion from any pointer to &uint8
 -- nil should translate to any pointer type's NULL value, this will require adding an implicit conversion for <nulltype> to any pointer type,
    and allowing nulltype to exist
+-- union annontations in struct types

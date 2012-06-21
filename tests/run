@@ -2,14 +2,16 @@
 local results = {}
 for line in io.popen("ls"):lines() do
 	if string.sub(line,-2) == ".t" then
+		local e = { k = line }
+		table.insert(results,e)
 		if os.execute("../terra "..line) ~= 0 then
-			results[line] = "FAIL"
+			e.v = "FAIL"
 		else
-			results[line] = "pass"
+			e.v = "pass"
 		end
 	end
 end
 
-for k,v in pairs(results) do
-	print(k,v)
+for i,e in ipairs(results) do
+	print(i,e.v,e.k)
 end
