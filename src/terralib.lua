@@ -587,7 +587,7 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.type:iscanonical()
-        return self.kind ~= terra.kinds.proxy
+        return not (self.kind == terra.kinds.proxy or (self:isstruct() and self.incomplete))
     end
     
     function types.type:cstring()
@@ -607,6 +607,8 @@ do --construct type table that holds the singleton value representing each uniqu
             print("WARNING: wrapper for function pointers not implemented")
             return "void" 
         else
+            print(debug.traceback())
+            self:printraw()
             error("NYI - cstring")
         end
     end
@@ -796,10 +798,15 @@ do --construct type table that holds the singleton value representing each uniqu
     
     function types.newnamedstruct(displayname, name,tree,env)
         local typ = types.newemptynamedstruct(displayname,name)
+        typ.incomplete = true --this causes derived types to create proxies
+                              --an alternative would be to return a proxy type here
+                              --however, that would make it difficult to set methods on this named struct
+                              --and complicate type equality
         function typ:getcanonical(ctx)
             self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
             
             buildstruct(ctx,typ,tree,env)
+            self.incomplete = nil
             
             local function checkrecursion(t)
                 if t == self then

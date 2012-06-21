@@ -80,7 +80,11 @@ struct TerraCompiler {
             t = (TType*) lua_newuserdata(T->L,sizeof(TType));
             memset(t,0,sizeof(TType));
             typ->setfield("llvm_type"); //llvm_type is set to avoid recursive traversals
-            
+        }
+        if(t->type == NULL) { //recursive type lookup might cause us to reach a type that is being initialized before initialization finishes: 
+                             //for instance a pointer to a struct that has a pointer to itself as a member
+                             //in this case, we simply initialize the pointer at the leaf node
+                             //when the recursion unwinds we will harmlessly reinitialize it again to the same value
             switch(typ->kind("kind")) {
                 case T_primitive: {
                     int bytes = typ->number("bytes");
@@ -117,6 +121,7 @@ struct TerraCompiler {
                         t->type = st;
                     } else {
                         const char * name = typ->string("name");
+                        
                         Obj entries;
                         typ->obj("entries", &entries);
                         int N = entries.size();
@@ -128,15 +133,18 @@ struct TerraCompiler {
                             entries.objAt(i, &v);
                             Obj vt;
                             v.obj("type",&vt);
-                            entry_types.push_back(getType(&vt)->type);
+                            Type * fieldtyp = getType(&vt)->type;
+                            entry_types.push_back(fieldtyp);
                         }
                         st->setBody(entry_types);
+                        st->dump();
                     }
                 } break;
                 case T_pointer: {
                     Obj base;
                     typ->obj("type",&base);
-                    t->type = PointerType::getUnqual(getType(&base)->type);
+                    Type * baset = getType(&base)->type;
+                    t->type = PointerType::getUnqual(baset);
                 } break;
                 case T_functype: {
                     std::vector<Type*> arguments;
@@ -196,8 +204,8 @@ struct TerraCompiler {
                     terra_reporterror(T,"type not understood\n");
                 } break;
             }
-            assert(t && t->type);
         }
+        assert(t && t->type);
         return t;
     }
     TType * typeOfValue(Obj * v) {
