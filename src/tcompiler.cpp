@@ -73,6 +73,64 @@ struct TerraCompiler {
     Obj funcobj;
     Function * func;
     TType * func_type;
+    
+    
+    void layoutStruct(StructType * st, Obj * typ) {
+        Obj entries;
+        typ->obj("entries", &entries);
+        int N = entries.size();
+        std::vector<Type *> entry_types;
+        
+        unsigned unionAlign = 0; //minimum union alignment
+        Type * unionType = NULL; //type with the largest alignment constraint
+        size_t unionSz   = 0;    //allocation size of the largest member
+                                 
+        for(int i = 0; i < N; i++) {
+            Obj v;
+            entries.objAt(i, &v);
+            Obj vt;
+            v.obj("type",&vt);
+            
+            Type * fieldtype = getType(&vt)->type;
+            bool inunion = v.boolean("inunion");
+            if(inunion) {
+                const TargetData * td = C->ee->getTargetData();
+                unsigned align = td->getABITypeAlignment(fieldtype);
+                if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
+                    unionAlign = align;
+                    unionType = fieldtype;
+                }
+                size_t allocSize = td->getTypeAllocSize(fieldtype);
+                if(allocSize > unionSz)
+                    unionSz = allocSize;
+                
+                //check if this is the last member of the union, and if it is, add it to our struct
+                Obj nextObj;
+                if(i + 1 < N)
+                    entries.objAt(i+1,&nextObj);
+                if(i + 1 == N || nextObj.number("allocation") != v.number("allocation")) {
+                    std::vector<Type *> union_types;
+                    assert(unionType);
+                    union_types.push_back(unionType);
+                    size_t sz = td->getTypeAllocSize(unionType);
+                    if(sz < unionSz) { // the type with the largest alignment requirement is not the type with the largest size, pad this struct so that it will fit the largest type
+                        size_t diff = unionSz - sz;
+                        union_types.push_back(ArrayType::get(Type::getInt8Ty(*C->ctx),diff));
+                    }
+                    entry_types.push_back(StructType::get(*C->ctx,union_types));
+                    unionAlign = 0;
+                    unionType = NULL;
+                    unionSz = 0;
+                }
+            } else {
+                entry_types.push_back(fieldtype);
+            }
+        }
+        st->setBody(entry_types);
+        printf("Struct Layout Is:\n");
+        st->dump();
+        printf("\nEnd Layout\n");
+    }
     TType * getType(Obj * typ) {
         TType * t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
         
@@ -121,23 +179,9 @@ struct TerraCompiler {
                         t->type = st;
                     } else {
                         const char * name = typ->string("name");
-                        
-                        Obj entries;
-                        typ->obj("entries", &entries);
-                        int N = entries.size();
                         StructType * st = StructType::create(*C->ctx, name);
-                        t->type = st;
-                        std::vector<Type *> entry_types;
-                        for(int i = 0; i < N; i++) {
-                            Obj v;
-                            entries.objAt(i, &v);
-                            Obj vt;
-                            v.obj("type",&vt);
-                            Type * fieldtyp = getType(&vt)->type;
-                            entry_types.push_back(fieldtyp);
-                        }
-                        st->setBody(entry_types);
-                        st->dump();
+                        t->type = st; //it is important that this is before layoutStruct so that recursive uses of this struct's type will return the correct llvm Type object
+                        layoutStruct(st,typ);
                     }
                 } break;
                 case T_pointer: {
@@ -495,7 +539,7 @@ if(t->type->isIntegerTy()) { \
 #undef RETURN_OP
 #undef RETURN_SOP
     }
-    Value * emitStructCast(Obj * exp, TType * from, TType * to, Value * input) {
+    Value * emitStructCast(Obj * exp, TType * from, Obj * toObj, TType * to, Value * input) {
         //allocate memory to hold input variable
         Obj structvariable;
         exp->obj("structvariable", &structvariable);
@@ -515,8 +559,7 @@ if(t->type->isIntegerTy()) { \
             Obj value;
             entry.obj("value", &value);
             int idx = entry.number("index");
-            int64_t idxs[] = {0, idx };
-            Value * oe = emitCGEP(output,idxs,2);
+            Value * oe = emitStructOrArraySelect(toObj,output,idx);
             Value * in = emitExp(&value); //these expressions will select from the structvariable and perform any casts necessary
             B->CreateStore(in,oe);
         }
@@ -569,6 +612,35 @@ if(t->type->isIntegerTy()) { \
         assert(!"NYI - casts");
         return NULL;
         
+    }
+    Value * emitStructOrArraySelect(Obj * structType, Value * structPtr, int index) {
+        assert(structPtr->getType()->isPointerTy());
+        PointerType * objTy = cast<PointerType>(structPtr->getType());
+        
+        if(objTy->getElementType()->isArrayTy()) {
+            int64_t idxs[] = {0 , index};
+            return emitCGEP(structPtr,idxs,2);
+        }
+        
+        assert(objTy->getElementType()->isStructTy());
+        Obj entries;
+        structType->obj("entries",&entries);
+        Obj entry;
+        entries.objAt(index,&entry);
+        
+        int allocindex = entry.number("allocation");
+        
+        int64_t idxs[] = {0 , allocindex};
+        Value * addr = emitCGEP(structPtr,idxs,2);
+        
+        if (entry.boolean("inunion")) {
+            Obj entryType;
+            entry.obj("type",&entryType);
+            Type * resultType = PointerType::getUnqual(getType(&entryType)->type);
+            addr = B->CreateBitCast(addr, resultType);
+        }
+        
+        return addr;
     }
     Value * emitExp(Obj * exp) {
         switch(exp->kind("kind")) {
@@ -715,7 +787,7 @@ if(t->type->isIntegerTy()) { \
                 TType * toT = getType(&to);
                 Value * v = emitExp(&a);
                 if(fromT->type->isStructTy()) {
-                    return emitStructCast(exp,fromT,toT,v);
+                    return emitStructCast(exp,fromT,&to,toT,v);
                 } else if(fromT->type->isArrayTy()) {
                     return emitArrayToPointer(fromT,toT,v);
                 } else if(fromT->type->isPointerTy()) {
@@ -755,15 +827,20 @@ if(t->type->isIntegerTy()) { \
                 return B->CreateLoad(addr);
             } break;
             case T_select: {
-                Obj obj;
+                Obj obj,typ;
                 exp->obj("value",&obj);
                 Value * v = emitExp(&obj);
+                
+                obj.obj("type",&typ);
                 int offset = exp->number("index");
+                
                 if(exp->boolean("lvalue")) {
-                    int64_t idxs[] = {0, offset};
-                    return emitCGEP(v,idxs,2);
+                    return emitStructOrArraySelect(&typ,v,offset);
                 } else {
-                    return B->CreateExtractValue(v, offset);
+                    Value * mem = B->CreateAlloca(v->getType());
+                    B->CreateStore(v,mem);
+                    Value * addr = emitStructOrArraySelect(&typ,mem,offset);
+                    return B->CreateLoad(addr);
                 }
             } break;
             case T_identity: {

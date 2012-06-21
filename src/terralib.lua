@@ -720,21 +720,45 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.newemptystruct(typ)
-        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {}, nextunnamed = 0 }
+        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {}, nextunnamed = 0, nextallocation = 0 }
         for k,v in pairs(typ) do
             tbl[k] = v 
         end
         function tbl:addentry(k,t)
-            local entry = { type = t, key = k, hasname = true }
+            local entry = { type = t, key = k, hasname = true, allocation = self.nextallocation, inunion = self.inunion ~= nil }
             if not k then
                 entry.hasname = false
                 entry.key = "_"..tostring(self.nextunnamed)
                 self.nextunnamed = self.nextunnamed + 1
             end
+            
             local notduplicate = self.keytoindex[entry.key] == nil          
             self.keytoindex[entry.key] = #self.entries
             self.entries:insert(entry)
+            
+            if self.inunion then
+                self.unionisnonempty = true
+            else
+                self.nextallocation = self.nextallocation + 1
+            end
+            
             return notduplicate
+        end
+        function tbl:beginunion()
+            if not self.inunion then
+                self.inunion = 0
+            end
+            self.inunion = self.inunion + 1
+        end
+        function tbl:endunion()
+            self.inunion = self.inunion - 1
+            if self.inunion == 0 then
+                self.inunion = nil
+                if self.unionisnonempty then
+                    self.nextallocation = self.nextallocation + 1
+                end
+                self.unionisnonempty = nil
+            end
         end
         
         return tbl
@@ -743,7 +767,17 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.canonicalanonstruct(prototype)
         local name = "struct { "
         for i,v in ipairs(prototype.entries) do
+            local preventry,nextentry = prototype.entries[i-1],prototype.entries[i+1]
+            local prevalloc = preventry and preventry.allocation
+            local nextalloc = nextentry and nextentry.allocation
+            
+            if v.inunion and prevalloc ~= v.allocation then
+                name = name .. "union {"
+            end
             name = name .. v.key .. " : " .. v.type.name .. "; "
+            if v.inunion and nextalloc ~= v.allocation then
+                name = name .. "}; "
+            end
         end
         name = name .. "}"
         
@@ -758,7 +792,9 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local function buildstruct(ctx,typ,tree,env)
         ctx:push(tree.filename,env())
-        for i,v in ipairs(tree.records) do
+        
+        
+        local function addstructentry(v)
             local resolvedtype = terra.resolvetype(ctx,v.type)
             if not v.key and typ.isnamed then
                 terra.reporterror(ctx,v,"elements of a named struct must be named")
@@ -767,6 +803,18 @@ do --construct type table that holds the singleton value representing each uniqu
                 terra.reporterror(ctx,v,"duplicate definition of field ",v.key)
             end
         end
+        local function addrecords(records)
+            for i,v in ipairs(records) do
+                if v.kind == terra.kinds["union"] then
+                    typ:beginunion()
+                    addrecords(v.records)
+                    typ:endunion()
+                else
+                    addstructentry(v)
+                end
+            end
+        end
+        addrecords(tree.records)
         ctx:pop()
     end
     
@@ -816,8 +864,9 @@ do --construct type table that holds the singleton value representing each uniqu
                     for i,v in ipairs(t.entries) do
                         checkrecursion(v.type)
                     end
+                elseif t:isarray() then
+                    checkrecursion(t.type)
                 end
-                --TODO: need to check for arrays when they are implemented
             end
             for i,v in ipairs(self.entries) do
                 checkrecursion(v.type)

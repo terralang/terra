@@ -23,14 +23,14 @@ enum RESERVED {
   TK_AND = FIRST_RESERVED, TK_BREAK,
   TK_DO, TK_ELSE, TK_ELSEIF, TK_END, TK_FALSE, TK_FOR, TK_FUNCTION,
   TK_GOTO, TK_IF, TK_IN, TK_LOCAL, TK_NIL, TK_NOT, TK_OR, TK_REPEAT,
-  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA, TK_VAR, TK_STRUCT,
+  TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA, TK_VAR, TK_STRUCT, TK_UNION, /* WARNING: if you add a new last terminal, make sure to update NUM_RESERVED below to be the last terminal */
   /* other terminal symbols */
   TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE, TK_DBCOLON, TK_FUNC_PTR, TK_EOS,
   TK_NUMBER, TK_NAME, TK_STRING
 };
 
 /* number of reserved words */
-#define NUM_RESERVED    (cast(int, TK_STRUCT-FIRST_RESERVED+1))
+#define NUM_RESERVED    (cast(int, TK_UNION-FIRST_RESERVED+1))
 
 
 typedef struct {

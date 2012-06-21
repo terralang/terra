@@ -540,6 +540,10 @@ static void constructor (LexState *ls, expdesc *t) {
   add_field(ls,tbl,"records");
 }
 
+
+static void structconstructor(LexState * ls, T_Kind kind);
+
+
 static void recstruct (LexState *ls) {
   int tbl = new_table(ls,T_structentry);
   expdesc key;
@@ -552,9 +556,14 @@ static void recstruct (LexState *ls) {
 
 static void liststruct (LexState *ls) {
   /* listfield -> exp */
-  int tbl = new_table(ls,T_structentry);
-  RETURNS_1(terratype(ls));
-  add_field(ls,tbl,"type");
+  
+  if(testnext(ls,TK_UNION)) {
+    RETURNS_1(structconstructor(ls,T_union));
+  } else {
+    int tbl = new_table(ls,T_structentry);
+    RETURNS_1(terratype(ls));
+    add_field(ls,tbl,"type");
+  }
 }
 
 static void structfield (LexState *ls) {
@@ -574,11 +583,11 @@ static void structfield (LexState *ls) {
   }
 }
 
-static void structconstructor(LexState * ls) {
+static void structconstructor(LexState * ls, T_Kind kind) {
     // already parsed 'struct' or 'struct' name.
     //starting at '{'
     int line = ls->linenumber;
-    int tbl = new_table(ls,T_struct);
+    int tbl = new_table(ls,kind);
     int records = new_list(ls);
     checknext(ls,'{');
     do {
@@ -618,7 +627,7 @@ static void terrastruct(LexState * ls, int islocal) {
     endrecord(ls);
     lua_pop(ls->L, 1); //ignore the parsed tree
 
-    structconstructor(ls);
+    structconstructor(ls,T_struct);
     
     int id = add_entry(ls,TA_FUNCTION_TABLE);
     luaX_patchbegin(ls,&begin);
@@ -994,7 +1003,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
         
         ls->in_terra++;
     
-        structconstructor(ls);
+        structconstructor(ls,T_struct);
         int id = add_entry(ls,TA_FUNCTION_TABLE);
     
         luaX_patchbegin(ls,&begin);

@@ -72,7 +72,8 @@ _(array, "array") \
 _(rtol, "rtol") \
 _(explicitcast, "explicitcast") \
 _(sizeof, "sizeof") \
-_(niltype, "niltype")
+_(niltype, "niltype") \
+_(union, "union")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
