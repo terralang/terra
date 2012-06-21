@@ -7,9 +7,6 @@ Language Implementation:
 -- union annontations in struct types
 -- code quotations of statements and expressions
 -- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
--- nil should translate to any pointer type's NULL value, this will require adding an implicit conversion for <nulltype> to any pointer type,
-   and allowing nulltype to exist
--- automatic conversion from any pointer to &uint8
 
 Runtime Implementation:
 
@@ -34,3 +31,6 @@ DONE:
 -- how to use clang to read C header files
 -- an opaque type (equivalent to void* in C) (? another alternative is to just use int8* for  now) (went with: no unsized opaque types, but some imported c types do now expose internals)
 -- support typedefs and record types in C header files
+-- automatic conversion from any pointer to &uint8
+-- nil should translate to any pointer type's NULL value, this will require adding an implicit conversion for <nulltype> to any pointer type,
+   and allowing nulltype to exist

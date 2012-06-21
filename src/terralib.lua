@@ -652,6 +652,7 @@ do --construct type table that holds the singleton value representing each uniqu
     types.table["bool"] = mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical, name = "bool" }
     
     types.error = mktyp { kind = terra.kinds.error , name = "error" } --object representing where the typechecker failed
+    types.niltype = mktyp { kind = terra.kinds.niltype, name = "niltype" } -- the type of the singleton nil (implicitly convertable to any pointer type)
     
     local function checkistype(typ)
         if not types.istype(typ) then 
@@ -906,7 +907,7 @@ do --construct type table that holds the singleton value representing each uniqu
     _G["long"] = int64
     _G["intptr"] = uint64
     _G["ptrdiff"] = int64
-
+    _G["niltype"] = types.niltype
     terra.types = types
 end
 
@@ -1079,6 +1080,8 @@ function terra.func:typecheck(ctx)
                 return cast_exp
             elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
                 return cast_exp
+            elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
+                return cast_exp
             elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
@@ -1138,7 +1141,11 @@ function terra.func:typecheck(ctx)
                 err()
                 return terra.types.error
             end
-        else
+        elseif a:ispointer() and b == terra.types.niltype then
+            return a
+        elseif a == terra.types.niltype and b:ispointer() then
+            return b
+        else    
             err()
             return terra.types.error
         end
@@ -1557,7 +1564,7 @@ function terra.func:typecheck(ctx)
             end
         end
         if e:is "literal" then
-            if e.type == "string" then --TODO: support string literals as terra type, rather than just return the string as a lua object
+            if e.type == "string" then
                 return e.value
             else
                 return e:copy {}

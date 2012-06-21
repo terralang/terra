@@ -199,6 +199,9 @@ struct TerraCompiler {
                     t->type = ArrayType::get(getType(&base)->type, N);
                     t->ispassedaspointer = true;
                 } break;
+                case T_niltype: {
+                    t->type = Type::getInt8PtrTy(*C->ctx);
+                } break;
                 default: {
                     printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
                     terra_reporterror(T,"type not understood\n");
@@ -682,14 +685,18 @@ if(t->type->isIntegerTy()) { \
                         Function * fn;
                         getOrCreateFunction(&func,&fn,&ftyp);
                         return fn; 
-                    } else if(pt->getElementType()->isIntegerTy(8)) { //string literal
-                        Constant * init = ConstantDataArray::getString(*C->ctx, exp->string("value"));
-                        std::stringstream ss;
-                        ss << ".str" << C->next_unused_id++;
-                        //TODO: we should de-duplicate strings that are the same
-                        GlobalVariable * gv = new GlobalVariable(*C->m,init->getType(), true, GlobalValue::InternalLinkage, init,ss.str());
-                        int64_t idxs[] = { 0, 0};
-                        return emitCGEP(gv,idxs,2);
+                    } else if(pt->getElementType()->isIntegerTy(8)) {
+                        if(exp->boolean("value")) { //string literal
+                            Constant * init = ConstantDataArray::getString(*C->ctx, exp->string("value"));
+                            std::stringstream ss;
+                            ss << ".str" << C->next_unused_id++;
+                            //TODO: we should de-duplicate strings that are the same
+                            GlobalVariable * gv = new GlobalVariable(*C->m,init->getType(), true, GlobalValue::InternalLinkage, init,ss.str());
+                            int64_t idxs[] = { 0, 0};
+                            return emitCGEP(gv,idxs,2);
+                        } else { //null pointer
+                            return ConstantPointerNull::get(pt);
+                        }
                     } else {
                         assert(!"NYI - pointer literal");
                     }

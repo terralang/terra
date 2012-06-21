@@ -940,8 +940,8 @@ static void simpleexp (LexState *ls, expdesc *v) {
       break;
     }
     case TK_NIL: {
-      push_double(ls,0);
-      push_literal(ls,"nil");
+      push_boolean(ls,false);
+      push_literal(ls,"niltype");
       break;
     }
     case TK_TRUE: {

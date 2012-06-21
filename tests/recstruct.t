@@ -11,8 +11,7 @@ struct Node {
 
 local N = 10
 terra foo()
-	var NULL : &Node = (0):as(&Node)
-	var cur : &Node = NULL
+	var cur : &Node = nil
 	for i = 0, N do
 		var n = c.malloc(sizeof(Node)):as(&Node)
 		n.v = i
@@ -20,7 +19,7 @@ terra foo()
 		cur = n
 	end
 	var sum = 0
-	while cur ~= NULL do
+	while cur ~= nil do
 		c.printf("%d\n",cur.v)
 		sum = sum + cur.v
 		var old = cur
