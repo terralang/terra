@@ -275,14 +275,12 @@ void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, in
     *N = n_bytes;
 }
 
-char * luaX_saveoutput(LexState * ls, Token * begin_token) {
+const char * luaX_saveoutput(LexState * ls, Token * begin_token) {
     int n_bytes;
     const char * output;
     luaX_getoutput(ls,begin_token,&output,&n_bytes);
-    char * buf = (char*) malloc(n_bytes + 1);
-    memcpy(buf, output, n_bytes);
-    buf[n_bytes] = '\0';
-    return buf;
+    TString * tstring = luaS_newlstr(ls->LP, output, n_bytes); //save this to the string table, which gets collected when this function exits
+    return getstr(tstring);
 }
 
 void luaX_patchend(LexState *ls, Token * begin_token) {

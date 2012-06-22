@@ -1129,10 +1129,9 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     add_field(ls,tbl,"operands");
     
     if( (!ls->in_terra || ls->in_terra_arglist) && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
-        char * expstring = luaX_saveoutput(ls, &beginexp);
+        const char * expstring = luaX_saveoutput(ls, &beginexp);
         luaX_patchbegin(ls, &begintoken);
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
-        free(expstring);
         luaX_patchend(ls, &begintoken);
     }
     
@@ -1141,7 +1140,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   /* expand while operators have priorities higher than `limit' */
   
   op = getbinopr(ls->t.token);
-  char * lhs_string = NULL;
+  const char * lhs_string = NULL;
   if( (!ls->in_terra || ls->in_terra_arglist) && op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
   }
@@ -1161,12 +1160,10 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     RETURNS_1(nextop = subexpr(ls, &v2, priority[op].right));
     
     if(lhs_string) { //desugar a -> b to terra.types.functype(a,b)
-        char * rhs_string = luaX_saveoutput(ls,&beginrhs);
+        const char * rhs_string = luaX_saveoutput(ls,&beginrhs);
         luaX_patchbegin(ls, &begintoken);
         OutputBuffer_printf(&ls->output_buffer,"terra.types.funcpointer(%s,%s)",lhs_string,rhs_string);
         luaX_patchend(ls,&begintoken);
-        free(lhs_string);
-        free(rhs_string);
         lhs_string = NULL;
     }
     add_entry(ls,exps);
