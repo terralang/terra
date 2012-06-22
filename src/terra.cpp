@@ -145,11 +145,9 @@ int terra_dofile(terra_State * T, const char * file) {
         terra_reporterror(T,"failed to open file %s\n",file);
     }
     Zio zio;
-    Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
-    memset(buff,0,sizeof(Mbuffer));
+    
     luaZ_init(T,&zio,file_reader,&fileinfo);
-    luaY_parser(T,&zio,buff,file,zgetc(&zio));
+    luaY_parser(T,&zio,file,zgetc(&zio));
     fclose(fileinfo.file);
-    free(buff);
     return 0;
 }

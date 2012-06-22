@@ -43,7 +43,7 @@ typedef struct FuncState {
 } FuncState;
 
 
-LUAI_FUNC void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff, const char *name, int firstchar);
+LUAI_FUNC void luaY_parser (terra_State *T, ZIO *z, const char *name, int firstchar);
 
 
 #endif

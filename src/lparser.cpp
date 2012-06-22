@@ -1907,13 +1907,16 @@ static int statement (LexState *ls) {
 
 /* }====================================================================== */
 
-void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
+void luaY_parser (terra_State *T, ZIO *z,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;
   //memset(&lexstate,0,sizeof(LexState));
   //memset(&funcstate,0,sizeof(FuncState));
   
+  Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
+  memset(buff,0,sizeof(Mbuffer));
+    
   luaX_pushtstringtable(T);
   
   BlockCnt bl;
@@ -1971,9 +1974,9 @@ void luaY_parser (terra_State *T, ZIO *z, Mbuffer *buff,
   }
   if(luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name)
      || lua_pcall(L, 0, LUA_MULTRET, 0)) {
-  //if(luaL_dostring(L,lexstate.output_buffer.data)) {
      terra_reporterror(T,"%s\n",luaL_checkstring(L,-1));
   }
   OutputBuffer_free(&lexstate.output_buffer);
+  free(buff);
 }
 
