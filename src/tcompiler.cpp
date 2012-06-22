@@ -361,11 +361,12 @@ struct TerraCompiler {
     Value * emitUnary(Obj * exp, Obj * ao) {
         TType * t = typeOfValue(exp);
         Value * a = emitExp(ao);
-        switch(exp->kind("operator")) {
+        T_Kind kind = exp->kind("operator");
+        switch(kind) {
             case T_not:
                 return B->CreateNot(a);
                 break;
-            case T_minus:
+            case T_sub:
                 if(t->type->isIntegerTy()) {
                     return B->CreateNeg(a);
                 } else {
@@ -380,7 +381,8 @@ struct TerraCompiler {
                 return a;
                 break;
             default:
-                assert(!"NYI - unary");
+                printf("NYI - unary %s\n",tkindtostr(kind));
+                abort();
                 break;
         }
     }
@@ -532,6 +534,15 @@ if(t->type->isIntegerTy()) { \
                 Value * v = emitCompare(exp,ao,a,b);
                 return B->CreateZExt(v, t->type);
             } break;
+            case T_lshift:
+                return B->CreateShl(a, b);
+                break;
+            case T_rshift:
+                if(at->issigned)
+                    return B->CreateAShr(a, b);
+                else
+                    return B->CreateLShr(a, b);
+                break;
             default:
                 assert(!"NYI - binary");
                 break;

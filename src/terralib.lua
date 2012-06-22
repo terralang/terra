@@ -1351,6 +1351,22 @@ function terra.func:typecheck(ctx)
         return insertdereference(e)
     end
     
+    local function checkshift(ee)
+        local a = checkrvalue(ee.operands[1])
+        local b = checkrvalue(ee.operands[2])
+        local typ = terra.types.error
+        if a.type ~= terra.types.error and b.type ~= terra.types.error then
+            if a.type:isintegral() and b.type:isintegral() then
+                b = insertcast(b,a.type)
+                typ = a.type
+            else
+                terra.reporterror(ctx,ee,"arguments to shift must be integers but found ",a.type," and ", b.type)
+            end
+        end
+        
+        return ee:copy { type = typ, operands = terra.newlist{a,b} }
+    end
+    
     local operator_table = {
         ["-"] = checkarithpointer;
         ["+"] = checkarithpointer;
@@ -1369,6 +1385,8 @@ function terra.func:typecheck(ctx)
         ["&"] = checkaddressof;
         ["@"] = checkdereference;
         ["^"] = checkintegralarith;
+        ["<<"] = checkshift;
+        [">>"] = checkshift;
     }
     
     

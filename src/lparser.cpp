@@ -1027,8 +1027,9 @@ static void simpleexp (LexState *ls, expdesc *v) {
 ** grep "ORDER OPR" if you change these enums  (ORDER OP)
 */
 typedef enum BinOpr {
-  OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, OPR_POW,
-  OPR_CONCAT,
+  OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, 
+  OPR_POW, OPR_CONCAT,
+  OPR_LSHIFT, OPR_RSHIFT,
   OPR_EQ, OPR_LT, OPR_LE,
   OPR_NE, OPR_GT, OPR_GE,
   OPR_AND, OPR_OR,
@@ -1069,14 +1070,16 @@ static BinOpr getbinopr (int op) {
     case TK_AND: return OPR_AND;
     case TK_OR: return OPR_OR;
     case TK_FUNC_PTR: return OPR_FUNC_PTR;
+    case TK_LSHIFT: return OPR_LSHIFT;
+    case TK_RSHIFT: return OPR_RSHIFT;
     default: return OPR_NOBINOPR;
   }
 }
 static void check_lua_operator(LexState * ls, int op) {
     if(!ls->in_terra) {
         switch(op) {
-            case '@':
-                luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@ operator not supported in Lua code."));
+            case '@': case TK_LSHIFT: case TK_RSHIFT:
+                luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@, <<, and >> operators not supported in Lua code."));
                 break;
             default:
                 break;
@@ -1088,15 +1091,16 @@ static const struct {
   lu_byte left;  /* left priority for each binary operator */
   lu_byte right; /* right priority */
 } priority[] = {  /* ORDER OPR */
-   {6, 6}, {6, 6}, {7, 7}, {7, 7}, {7, 7},  /* `+' `-' `*' `/' `%' */
-   {10, 9}, {5, 4},                 /* ^, .. (right associative) */
+   {7, 7}, {7, 7}, {8, 8}, {8, 8}, {8, 8},  /* `+' `-' `*' `/' `%' */
+   {11, 10}, {6, 5},                 /* ^, .. (right associative) */
+   {4, 4}, {4, 4},                   /* << >> */
    {3, 3}, {3, 3}, {3, 3},          /* ==, <, <= */
    {3, 3}, {3, 3}, {3, 3},          /* ~=, >, >= */
    {2, 2}, {1, 1},                  /* and, or */
-   {10,9}                           /* function pointer*/
+   {11,10}                           /* function pointer*/
 };
 
-#define UNARY_PRIORITY  8  /* priority for unary operators */
+#define UNARY_PRIORITY  9  /* priority for unary operators */
 
 
 /*

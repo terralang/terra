@@ -26,7 +26,7 @@ FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FO
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-#LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
+LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
@@ -38,7 +38,7 @@ LFLAGS  += -lclangFrontend -lclangDriver \
            #-lclangARCMigrate
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
-LFLAGS += -lLLVM-3.1
+# LFLAGS += -lLLVM-3.1
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 

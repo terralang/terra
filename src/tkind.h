@@ -36,7 +36,6 @@ _(listfield,"listfield") \
 _(literal,"literal") \
 _(lt,"<") \
 _(method,"method") \
-_(minus,"-") \
 _(mod, "%") \
 _(mul, "*") \
 _(ne,"~=") \
@@ -73,7 +72,9 @@ _(rtol, "rtol") \
 _(explicitcast, "explicitcast") \
 _(sizeof, "sizeof") \
 _(niltype, "niltype") \
-_(union, "union")
+_(union, "union") \
+_(lshift, "<<") \
+_(rshift, ">>") 
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
