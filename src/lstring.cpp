@@ -51,9 +51,10 @@ TString * luaS_vstringf(terra_State * L, const char * fmt, va_list ap) {
     while(1) {
         int n = vsnprintf(buf, N, fmt, ap);
         if(n > -1 && n < N) {
+            TString * r = luaS_newlstr(L,buf,n);
             if(buf != stack_buf)
                 free(buf);
-            return luaS_newlstr(L,buf,n);
+            return r;
         }
         if(n > -1)
             N = n + 1;
@@ -64,6 +65,7 @@ TString * luaS_vstringf(terra_State * L, const char * fmt, va_list ap) {
         buf = (char*) malloc(N);
     }
 }
+
 TString * luaS_stringf(terra_State * L, const char * fmt, ...) {
     va_list ap;
     va_start(ap, fmt);

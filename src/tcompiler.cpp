@@ -1,6 +1,6 @@
 #include "tcompiler.h"
 #include "tkind.h"
-#include "terra.h"
+#include "terrastate.h"
 extern "C" {
 #include "lua.h"
 #include "lauxlib.h"
@@ -17,7 +17,7 @@ using namespace llvm;
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
 
-void terra_compilerinit(struct terra_State * T) {
+int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_compile,1);
@@ -32,7 +32,8 @@ void terra_compilerinit(struct terra_State * T) {
     std::string err;
     T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
     if (!T->C->ee) {
-        terra_reporterror(T,"llvm: %s\n",err.c_str());
+        terra_pusherror(T,"llvm: %s\n",err.c_str());
+        return LUA_ERRRUN;
     }
     T->C->fpm = new FunctionPassManager(T->C->m);
     
@@ -54,6 +55,7 @@ void terra_compilerinit(struct terra_State * T) {
     T->C->fpm->add(createCFGSimplificationPass());
     
     T->C->fpm->doInitialization();
+    return 0;
 }
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need

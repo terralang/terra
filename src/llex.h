@@ -10,6 +10,7 @@
 //#include "lobject.h"
 #include "lzio.h"
 #include "lutil.h"
+#include <setjmp.h>
 #include <vector>
 
 #define FIRST_RESERVED  257
@@ -136,6 +137,8 @@ typedef struct LexState {
       int N;
       int space;
   } patchinfo; //data to fix up output stream when we insert terra information
+  
+  sigjmp_buf error_dest; /* where to jump when a parse error occurs */
 } LexState;
 
 
@@ -155,5 +158,5 @@ const char * luaX_token2rawstr(LexState * ls, int token);
 
 void luaX_pushtstringtable(terra_State * L);
 void luaX_poptstringtable(terra_State * L);
-
+l_noret luaX_reporterror(LexState * ls, const char * err);
 #endif

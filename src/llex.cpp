@@ -163,17 +163,17 @@ static const char *txtToken (LexState *ls, int token) {
   }
 }
 
-//TODO:s stub for better error reporting
-static l_noret report_error(const char * err) {
-    printf("%s\n",err);
-    exit(1);
+l_noret luaX_reporterror(LexState * ls, const char * err) {
+    lua_pushstring(ls->L, err);
+    siglongjmp(ls->error_dest, LUA_ERRSYNTAX);
+    abort(); //quiet warnings about noret
 }
 
 static l_noret lexerror (LexState *ls, const char * msg, int token) {
   msg = luaS_cstringf(ls->LP,"%s:%d: %s", getstr(ls->source), ls->linenumber, msg);
   if (token)
     msg = luaS_cstringf(ls->LP,"%s near %s", msg, txtToken(ls, token));
-  report_error(msg);
+  luaX_reporterror(ls,msg);
 }
 
 

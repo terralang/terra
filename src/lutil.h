@@ -1,7 +1,7 @@
 #ifndef lutil_h
 #define lutil_h
 
-#include "terra.h"
+#include "terrastate.h"
 
 #include <stdio.h>
 #include <stdint.h>
@@ -34,7 +34,7 @@ typedef struct TString {
 
 
 
-typedef const char * (*luaP_Reader) (terra_State *L, void *ud, size_t *sz);
+typedef const char * (*luaP_Reader) (lua_State *L, void *ud, size_t *sz);
 
 /*
 @@ LUAI_FUNC is a mark for all extern functions that are not to be

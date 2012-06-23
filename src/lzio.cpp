@@ -15,9 +15,9 @@
 
 int luaZ_fill (ZIO *z) {
   size_t size;
-  terra_State *L = z->L;
+  terra_State *T = z->L;
   const char *buff;
-  buff = z->reader(L, z->data, &size);
+  buff = z->reader(T->L, z->data, &size);
   if (buff == NULL || size == 0)
     return EOZ;
   z->n = size - 1;  /* discount char being returned */

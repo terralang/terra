@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <assert.h>
+#include <setjmp.h>
 
 #define lparser_c
 #define LUA_CORE
@@ -1236,7 +1237,8 @@ static void terratype(LexState * ls) {
             error++;
         char * aftererror;
         int lineoffset = strtol(error+1,&aftererror,10);
-        terra_reporterror(ls->LP,"%s:%d: %s\n",getstr(ls->source),begintoken.seminfo.linebegin + lineoffset - 1,aftererror+1);
+        
+        luaX_reporterror(ls, luaS_cstringf(ls->LP,"%s:%d: %s\n",getstr(ls->source),begintoken.seminfo.linebegin + lineoffset - 1,aftererror+1));
     }
     
     add_field(ls, tbl, "expression");
@@ -1904,7 +1906,24 @@ static int statement (LexState *ls) {
 
 /* }====================================================================== */
 
-void luaY_parser (terra_State *T, ZIO *z,
+static void cleanup(LexState * ls) {
+    luaX_poptstringtable(ls->LP); //we can forget all the non-reserved strings
+    OutputBuffer_free(&ls->output_buffer);
+    if(ls->buff->buffer) {
+        free(ls->buff->buffer);
+        ls->buff->buffer = NULL;
+    }
+    free(ls->buff);
+    ls->buff = NULL;
+    if(ls->patchinfo.buffer) {
+        free(ls->patchinfo.buffer);
+        ls->patchinfo.buffer = NULL;
+        ls->patchinfo.N = 0;
+        ls->patchinfo.space = 0;
+    }
+}
+
+int luaY_parser (terra_State *T, ZIO *z,
                     const char *name, int firstchar) {
   LexState lexstate;
   FuncState funcstate;
@@ -1947,19 +1966,23 @@ void luaY_parser (terra_State *T, ZIO *z,
   lua_getfield(L,TA_TERRA_OBJECT,"kinds");
   assert(lua_gettop(L) == TA_KINDS_TABLE);
   
-  luaX_setinput(T, &lexstate, z, tname, firstchar);
-  open_mainfunc(&lexstate, &funcstate, &bl);
-  luaX_next(&lexstate);  /* read first token */
-  statlist(&lexstate);  /* main body */
-  check(&lexstate, TK_EOS);
-  close_func(&lexstate);
-  assert(!funcstate.prev && !lexstate.fs);
+  int err = sigsetjmp(lexstate.error_dest,0);
+  if(!err) {
+    luaX_setinput(T, &lexstate, z, tname, firstchar);
+    open_mainfunc(&lexstate, &funcstate, &bl);
+    luaX_next(&lexstate);  /* read first token */
+    statlist(&lexstate);  /* main body */
+    check(&lexstate, TK_EOS);
+    close_func(&lexstate);
+    assert(!funcstate.prev && !lexstate.fs);
+  } else {
+    cleanup(&lexstate);
+    return err;
+  }
   
   lua_pop(L,TA_LAST_GLOBAL - 1);
 
   assert(lua_gettop(L) == 0);
-  
-  luaX_poptstringtable(T); //we can forget all the non-reserved strings
   
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
@@ -1969,11 +1992,8 @@ void luaY_parser (terra_State *T, ZIO *z,
   while(lexstate.output_buffer.data[lexstate.output_buffer.N-1] == '\0' && lexstate.output_buffer.N > 0) {
     lexstate.output_buffer.N--;
   }
-  if(luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name)
-     || lua_pcall(L, 0, LUA_MULTRET, 0)) {
-     terra_reporterror(T,"%s\n",luaL_checkstring(L,-1));
-  }
-  OutputBuffer_free(&lexstate.output_buffer);
-  free(buff);
+  err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);  
+  cleanup(&lexstate);
+  return err;
 }
 
