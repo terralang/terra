@@ -297,7 +297,7 @@ function terra.func:makewrapper()
     local rname
     if #fntyp.returns == 0 then
         rt = "void"
-    elseif #fntyp.returns == 1 then
+    elseif not fntyp.issret then
         rt = fntyp.returns[1]:cstring()
     else
         local rtype = "typedef struct { "
@@ -365,8 +365,9 @@ function terra.func:__call(...)
     self:compile()
     
     --TODO: generate code to do this for each function rather than interpret it on every call
-    local nr = #self.type.returns
-    if nr > 1 then
+    
+    if self.type.issret then
+        local nr = #self.type.returns
         local result = ffi.new(self.ffireturnname)
         self.ffiwrapper.fn(result,...)
         local rv = result[0]
@@ -584,6 +585,9 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     function types.type:isstruct()
         return self.kind == terra.kinds["struct"]
+    end
+    function types.type:ispassedaspointer() --warning: if you update this, you also need to update the behavior in tcompiler.cpp's getType function to set the ispassedaspointer flag
+        return self:isstruct() or self:isarray()
     end
     
     function types.type:iscanonical()
@@ -903,7 +907,8 @@ do --construct type table that holds the singleton value representing each uniqu
             local name = a.."->"..r
             local value = types.table[name]
             if value == nil then
-                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name, isvararg = isvararg }
+                local issret = #returns > 1 or (#returns == 1 and returns[1]:ispassedaspointer())
+                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name, isvararg = isvararg, issret = issret }
             end
             return value
         end
