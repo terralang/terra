@@ -123,6 +123,15 @@ static void push_kind(LexState * ls, const char * str) {
         assert(!lua_isnil(ls->L,-1));
     }
 }
+static void table_setposition(LexState * ls, int t, int line, int offset) {
+    lua_pushstring(ls->L,"linenumber");
+    lua_pushinteger(ls->L,line);
+    lua_settable(ls->L,t);
+    
+    lua_pushstring(ls->L,"offset");
+    lua_pushinteger(ls->L,offset);
+    lua_settable(ls->L,t);
+}
 static int new_table(LexState * ls, T_Kind k) {
     if(ls->in_terra) {
         //printf("push %s ",str);
@@ -131,22 +140,26 @@ static int new_table(LexState * ls, T_Kind k) {
         add_field(ls, t,"kind");
         lua_pushvalue(ls->L,TA_TREE_METATABLE);
         lua_setmetatable(ls->L,-2);
-        
-        lua_pushstring(ls->L,"linenumber");
-        lua_pushinteger(ls->L,ls->linenumber);
-        lua_settable(ls->L,t);
-        
-        lua_pushstring(ls->L,"offset");
-        lua_pushinteger(ls->L,ls->currentoffset - 1);
-        lua_settable(ls->L,t);
-        
+        table_setposition(ls,t,ls->linenumber, ls->currentoffset - 1);
         return t;
     } else return 0;
 }
-static int new_table_before(LexState * ls, T_Kind k) {
+static int new_table_before(LexState * ls, T_Kind k, bool infix = false) {
+    lua_State * L = ls->L;
     if(ls->in_terra) {
         int t = new_table(ls,k);
-        lua_insert(ls->L,-2);
+        //check if the thing on the top of the stack has line number and offset info, if it does then propagate it to this entry
+        if(!infix && lua_istable(L, -2)) {
+            lua_getfield(L, -2, "linenumber");
+            lua_getfield(L, -3, "offset");
+            if(lua_isnumber(L, -1) && lua_isnumber(L,-2)) {
+                int offset = lua_tointeger(L, -1);
+                int linenumber = lua_tointeger(L, -2);
+                table_setposition(ls,t,linenumber,offset);
+            }
+            lua_pop(L,2);
+        }
+        lua_insert(L,-2);
         return t - 1;
     } else return 0;
 }
@@ -415,7 +428,7 @@ static void fieldsel (LexState *ls, expdesc *v) {
   expdesc key;
   //luaK_exp2anyregup(fs, v);
   luaX_next(ls);  /* skip the dot or colon */
-  int tbl = new_table_before(ls,T_select);
+  int tbl = new_table_before(ls,T_select, true);
   add_field(ls,tbl,"value");
   checkname(ls, &key);
   add_field(ls,tbl,"field");
@@ -873,7 +886,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
         expdesc key;
         //luaK_exp2anyregup(fs, v);
         
-        int tbl = new_table_before(ls,T_index);
+        int tbl = new_table_before(ls,T_index,true);
         add_field(ls,tbl,"value");
         RETURNS_1(yindex(ls, &key));
         add_field(ls,tbl,"index");
@@ -883,7 +896,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
       case ':': {  /* `:' NAME funcargs */
         expdesc key;
         luaX_next(ls);
-        int tbl = new_table_before(ls,T_method);
+        int tbl = new_table_before(ls,T_method,true);
         add_field(ls,tbl,"value");
         RETURNS_1(checkname(ls, &key));
         add_field(ls,tbl,"name");
@@ -894,7 +907,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
       }
       case '(': case TK_STRING: case '{': {  /* funcargs */
         //luaK_exp2nextreg(fs, v);
-        int tbl = new_table_before(ls,T_apply);
+        int tbl = new_table_before(ls,T_apply,true);
         add_field(ls,tbl,"value");
         RETURNS_1(funcargs(ls, v, line));
         add_field(ls,tbl,"arguments");
@@ -1152,7 +1165,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     int line = ls->linenumber;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
-    int tbl = new_table_before(ls,T_operator); //need to create this before we call next to ensure we record the right position
+    int tbl = new_table_before(ls,T_operator,true); //need to create this before we call next to ensure we record the right position
     exps++; //we just put a table before it, so it is one higher on the stack
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
@@ -1303,7 +1316,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs)
   else {  /* assignment -> `=' explist */
     int nexps;
     checknext(ls, '=');
-    int tbl = new_table_before(ls,T_assignment);
+    int tbl = new_table_before(ls,T_assignment, true);
     add_field(ls,tbl,"lhs");
     RETURNS_1(nexps = explist(ls, &e,0));
     add_field(ls,tbl,"rhs");

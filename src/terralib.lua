@@ -44,7 +44,7 @@ function terra.tree:printraw()
                     terra.tree.printraw(k)
                     error("table is key?")
                 end
-                if k ~= "kind" and k ~= "offset" and k ~= "linenumber" then
+                if k ~= "kind" and k ~= "offset" --[[and k ~= "linenumber"]] then
                     local prefix = spacing..k..": "
                     if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
                         print(prefix..tostring(v))
@@ -1871,7 +1871,7 @@ function terra.func:typecheck(ctx)
                 for i,v in ipairs(s.variables) do
                     local typ = terra.types.error
                     if not v.type then
-                        terra.reporterror(ctx,v,"type must be specified for unitialized variables")
+                        terra.reporterror(ctx,v,"type must be specified for uninitialized variables")
                     else
                         typ = resolvetype(v.type)
                     end
