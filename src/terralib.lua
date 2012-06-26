@@ -1550,7 +1550,7 @@ function terra.func:typecheck(ctx)
     local function insertfunctionliteral(anchor,e)
         local fntyp = e:gettype(ctx)
         local typ = fntyp and terra.types.pointer(fntyp)
-        return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ })
+        return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
     
     function checkcall(exp, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
@@ -1559,7 +1559,11 @@ function terra.func:typecheck(ctx)
         local function resolvefn(fn)
             if terra.isfunction(fn) then
                 local tree = insertfunctionliteral(exp,fn)
-                return tree,tree.type.type
+                if tree.type ~= terra.types.error then
+                    return tree,tree.type.type
+                else
+                    return tree, terra.types.error
+                end
             elseif terra.istree(fn) then
                 if fn.type:ispointer() and fn.type.type:isfunction() then
                     return asrvalue(fn),fn.type.type
@@ -2051,7 +2055,7 @@ function terra.func:typecheck(ctx)
         elseif iscall(s) then
             local ismacro, c = checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
             if ismacro then
-                return c:map(checkstmt)
+                return c:flatmap(checkstmt)
             else
                 return c
             end

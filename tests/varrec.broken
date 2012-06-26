@@ -1,0 +1,7 @@
+var a,b = foo()
+
+terra foo() : (int,int)
+    return a,b
+end
+
+print(foo())
