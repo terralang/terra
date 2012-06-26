@@ -5,10 +5,12 @@ Language Implementation:
 --calling lua functions from terra
 -- code quotations of statements and expressions
 -- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
+   
 
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
+
 
 DONE:
 --function pointers
@@ -33,3 +35,8 @@ DONE:
 -- nil should translate to any pointer type's NULL value, this will require adding an implicit conversion for <nulltype> to any pointer type,
    and allowing nulltype to exist
 -- union annontations in struct types
+-- support for aggregate types in Lua-terra interface
+   extend cstring to work for arrays and structs (+unions) being careful to work for recursive types
+   to work around c's weird syntax, each non-primitive will need to generate a typedef for its type
+   fold the typedef for functions into cstring and simplify makewrapper to use its type instead
+   pointers to functions will need to be handled as a special case

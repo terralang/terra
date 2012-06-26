@@ -634,7 +634,20 @@ do --construct type table that holds the singleton value representing each uniqu
                 self.cachedcstring = nm -- prevent recursive structs from re-entering this function by having them return the name
                 local str = "struct "..nm.." { "
                 for i,v in ipairs(self.entries) do
+                
+                    local prevalloc = self.entries[i-1] and self.entries[i-1].allocation
+                    local nextalloc = self.entries[i+1] and self.entries[i+1].allocation
+            
+                    if v.inunion and prevalloc ~= v.allocation then
+                        str = str .. " union { "
+                    end
+                    
                     str = str..v.type:cstring().." "..v.key.."; "
+                    
+                    if v.inunion and nextalloc ~= v.allocation then
+                        str = str .. " }; "
+                    end
+                    
                 end
                 str = str .. "};"
                 ffi.cdef(str)
