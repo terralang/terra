@@ -2,6 +2,13 @@ io.write("loading terra lib...")
 
 local ffi = require("ffi")
 
+--debug wrapper around cdef function to print out all the things being defined
+local oldcdef = ffi.cdef
+ffi.cdef = function(...)
+    print(...)
+    return oldcdef(...)
+end
+
 -- TREE
 terra.tree = {} --metatype for trees
 terra.tree.__index = terra.tree
@@ -292,40 +299,18 @@ function terra.func:gettype(ctx)
 end
 function terra.func:makewrapper()
     local fntyp = self.type
-    
-    local rt
-    local rname
-    if #fntyp.returns == 0 then
-        rt = "void"
-    elseif not fntyp.issret then
-        rt = fntyp.returns[1]:cstring()
-    else
-        local rtype = "typedef struct { "
-        for i,v in ipairs(fntyp.returns) do
-            rtype = rtype..v:cstring().." v"..tostring(i).."; "
-        end
-        rname = self.name.."_return_t"
-        self.ffireturnname = rname.."[1]"
-        rtype = rtype .. " } "..rname..";"
-        print(rtype)
-        ffi.cdef(rtype)
-        rt = "void"
-    end
-    local function getcstring(t)
-        return t:cstring()
-    end
-    local pa = fntyp.parameters:map(getcstring)
-    
-    if #fntyp.returns > 1 then
-        pa:insert(1,rname .. "*")
-    end
-    
-    pa = pa:mkstring("(",",",")")
+    local cfntyp,returnname = fntyp:cstring()
+    self.ffireturnname = returnname
     local ntyp = self.name.."_t"
-    local cdef = "typedef struct { "..rt.." (*fn)"..pa.."; } "..ntyp..";"
-    print(cdef)
-    ffi.cdef(cdef)
+    ffi.cdef("typedef struct { "..cfntyp.." fn; } "..ntyp..";")
     self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
+    local passedaspointers = {}
+    for i,p in ipairs(fntyp.parameters) do
+        if p:ispassedaspointer() then
+            passedaspointers[i] = p:cstring().."[1]"
+            self.passedaspointers = passedaspointers --passedaspointers is only set if at least one of the arguments needs to be passed as a pointer
+        end
+    end
 end
 
 function terra.func:compile(ctx)
@@ -364,20 +349,33 @@ end
 function terra.func:__call(...)
     self:compile()
     
-    --TODO: generate code to do this for each function rather than interpret it on every call
-    
-    if self.type.issret then
-        local nr = #self.type.returns
-        local result = ffi.new(self.ffireturnname)
-        self.ffiwrapper.fn(result,...)
-        local rv = result[0]
-        local rs = {}
-        for i = 1,nr do
-            table.insert(rs,rv["v"..i])
-        end
-        return unpack(rs)
-    else
+    if not self.type.issret and not self.passedaspointers then --fast path
         return self.ffiwrapper.fn(...)
+    else
+    
+        local params = {...}
+        if self.passedaspointers then
+            for idx,allocname in pairs(self.passedaspointers) do
+                local a  = ffi.new(allocname) --create a copy of the C object and initialize it with the parameter
+                a[0] = params[idx]
+                params[idx] = a --replace the original parameter with the pointer
+                
+            end
+        end
+        
+        if self.type.issret then
+            local nr = #self.type.returns
+            local result = ffi.new(self.ffireturnname)
+            self.ffiwrapper.fn(result,unpack(params))
+            local rv = result[0]
+            local rs = {}
+            for i = 1,nr do
+                table.insert(rs,rv["v"..i])
+            end
+            return unpack(rs)
+        else
+            return self.ffiwrapper.fn(unpack(params))
+        end
     end
 end
 
@@ -594,27 +592,104 @@ do --construct type table that holds the singleton value representing each uniqu
         return not (self.kind == terra.kinds.proxy or (self:isstruct() and self.incomplete))
     end
     
-    function types.type:cstring()
-        if self:isintegral() then
-            return tostring(self).."_t"
-        elseif self:isfloat() then
-            return tostring(self)
-        elseif self:ispointer() then
-            return self.type:cstring().."*"
-        elseif self:islogical() then
-            return "unsigned char"
-        elseif self:isstruct() then
-            return "void *" --TODO: this should actually declare the struct and make wrapper should handle the wrapping up of struct values
-        elseif self:isarray() then
-            return self.type:cstring().."*" --arrays are passed as pointers
-        elseif self:isfunction() then
-            print("WARNING: wrapper for function pointers not implemented")
-            return "void" 
-        else
-            print(debug.traceback())
-            self:printraw()
-            error("NYI - cstring")
+    
+    local next_type_id = 0 --used to generate uniq type names
+    local function uniquetypename(base,name) --used to generate unique typedefs for C
+        local r = base.."_"
+        if name then
+            r = r..name.."_"
         end
+        r = r..next_type_id
+        next_type_id = next_type_id + 1
+        return r
+    end
+    
+    function types.type:cstring()
+        if not self.cachedcstring then
+            
+            local function definetype(base,name,value)
+                local nm = uniquetypename(base,name)
+                ffi.cdef("typedef "..value.." "..nm..";")
+                return nm
+            end
+            
+            --assumption: cachedcstring needs to be an identifier, it cannot be a derived type (e.g. int*)
+            --this makes it possible to predict the syntax of subsequent typedef operations
+            if self:isintegral() then
+                self.cachedcstring = tostring(self).."_t"
+            elseif self:isfloat() then
+                self.cachedcstring = tostring(self)
+            elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
+                self.cachedcstring = self.type:cstring()
+            elseif self:ispointer() then
+                local value = self.type:cstring()
+                if not self.cachedcstring then --if this type was recursive then it might have created the value already   
+                    self.cachedcstring = definetype(value,"ptr",value .. "*")
+                end
+            elseif self:islogical() then
+                self.cachedcstring = "unsigned char"
+            elseif self:isstruct() then
+                local nm = uniquetypename((self.isnamed and self.name) or "anonstruct")
+                ffi.cdef("typedef struct "..nm.." "..nm..";") --first make a typedef to the opaque pointer
+                self.cachedcstring = nm -- prevent recursive structs from re-entering this function by having them return the name
+                local str = "struct "..nm.." { "
+                for i,v in ipairs(self.entries) do
+                    str = str..v.type:cstring().." "..v.key.."; "
+                end
+                str = str .. "};"
+                ffi.cdef(str)
+            elseif self:isarray() then
+                local value = self.type:cstring()
+                if not self.cachedcstring then
+                    local nm = uniquetypename(value,"arr")
+                    ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
+                    self.cachedcstring = nm
+                end
+            elseif self:isfunction() then
+                local rt
+                local rname
+                if #self.returns == 0 then
+                    rt = "void"
+                elseif not self.issret then
+                    rt = self.returns[1]:cstring()
+                else
+                    local rtype = "typedef struct { "
+                    for i,v in ipairs(self.returns) do
+                        rtype = rtype..v:cstring().." v"..tostring(i).."; "
+                    end
+                    rname = uniquetypename("return")
+                    self.cachedreturnname = rname.."[1]"
+                    rtype = rtype .. " } "..rname..";"
+                    ffi.cdef(rtype)
+                    rt = "void"
+                end
+                local function getcstring(t)
+                    if t:ispassedaspointer() then
+                        return types.pointer(t):cstring()
+                    else
+                        return t:cstring()
+                    end
+                end
+                local pa = self.parameters:map(getcstring)
+                
+                if self.issret then
+                    pa:insert(1,rname .. "*")
+                end
+                
+                pa = pa:mkstring("(",",",")")
+                local ntyp = uniquetypename("function")
+                local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
+                ffi.cdef(cdef)
+                self.cachedcstring = ntyp
+            else
+                print(debug.traceback())
+                self:printraw()
+                error("NYI - cstring")
+            end    
+        end
+        if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
+        
+        return self.cachedcstring,self.cachedreturnname --cachedreturnname is only set for sret functions where we need to know the name of the struct to allocate to hold the return value
     end
     
     function types.type:getcanonical(ctx) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
