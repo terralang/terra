@@ -16,13 +16,18 @@ extern "C" {
 using namespace llvm;
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
+static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
+
 
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_compile,1);
     lua_setfield(T->L,-2,"compile");
+    lua_pushcfunction(T->L, terra_pointertolightuserdata);
+    lua_setfield(T->L,-2,"pointertolightuserdata");
     lua_pop(T->L,1); //remove terra from stack
+    
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
     memset(T->C, 0, sizeof(terra_CompilerState));
     InitializeNativeTarget();
@@ -350,9 +355,7 @@ struct TerraCompiler {
         
         void * ptr = C->ee->getPointerToFunction(func);
         
-        void ** data = (void**) lua_newuserdata(L,sizeof(void*));
-        assert(ptr);
-        *data = ptr;
+        lua_pushlightuserdata(L, ptr);
         funcobj.setfield("fptr");
         
         //cleanup -- ensure we left the stack the way we started
@@ -1247,4 +1250,20 @@ static int terra_compile(lua_State * L) { //entry point into compiler from lua c
     lobj_removereftable(T->L,ref_table);
     
     return 0;
+}
+
+static void doassign(void * fn, void ** result) {
+    *result = fn;
+}
+static int terra_pointertolightuserdata(lua_State * L) {
+    void * result;
+    lua_getfield(L,LUA_GLOBALSINDEX, "terra");
+    lua_getfield(L,-1,"pointertolightuserdatahelper");
+    lua_remove(L,-2); 
+    lua_pushvalue(L, -2); //original argument
+    lua_pushlightuserdata(L, (void*)doassign);
+    lua_pushlightuserdata(L, &result);
+    lua_call(L, 3, 0);
+    lua_pushlightuserdata(L, result);
+    return 1;
 }

@@ -301,9 +301,7 @@ function terra.func:makewrapper()
     local fntyp = self.type
     local cfntyp,returnname = fntyp:cstring()
     self.ffireturnname = returnname
-    local ntyp = self.name.."_t"
-    ffi.cdef("typedef struct { "..cfntyp.." fn; } "..ntyp..";")
-    self.ffiwrapper = ffi.cast(ntyp.."*",self.fptr)
+    self.ffiwrapper = ffi.cast(cfntyp,self.fptr)
     local passedaspointers = {}
     for i,p in ipairs(fntyp.parameters) do
         if p:ispassedaspointer() then
@@ -350,7 +348,7 @@ function terra.func:__call(...)
     self:compile()
     
     if not self.type.issret and not self.passedaspointers then --fast path
-        return self.ffiwrapper.fn(...)
+        return self.ffiwrapper(...)
     else
     
         local params = {...}
@@ -366,7 +364,7 @@ function terra.func:__call(...)
         if self.type.issret then
             local nr = #self.type.returns
             local result = ffi.new(self.ffireturnname)
-            self.ffiwrapper.fn(result,unpack(params))
+            self.ffiwrapper(result,unpack(params))
             local rv = result[0]
             local rs = {}
             for i = 1,nr do
@@ -374,7 +372,7 @@ function terra.func:__call(...)
             end
             return unpack(rs)
         else
-            return self.ffiwrapper.fn(unpack(params))
+            return self.ffiwrapper(unpack(params))
         end
     end
 end
@@ -2157,6 +2155,13 @@ _G["sizeof"] = macro(function(ctx,typ)
 end)    
     
 -- END GLOBAL MACROS
+
+function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
+    local afn = ffi.cast("void (*)(void *,void**)",assignfn)
+    afn(cdataobj,assignresult)
+end
+
+
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")

@@ -542,9 +542,7 @@ int register_c_function(lua_State * L) {
         lua_pushlightuserdata(L, llvmfn);
         fn.setfield("llvm_function");
         void * fptr = T->C->ee->getPointerToFunction(llvmfn);
-        assert(fptr);
-        void ** data = (void**) lua_newuserdata(L,sizeof(void*));
-        *data = fptr;
+        lua_pushlightuserdata(L, fptr);
         fn.setfield("fptr");
     }
     lobj_removereftable(L, ref_table);
