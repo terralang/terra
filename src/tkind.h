@@ -74,7 +74,8 @@ _(sizeof, "sizeof") \
 _(niltype, "niltype") \
 _(union, "union") \
 _(lshift, "<<") \
-_(rshift, ">>") 
+_(rshift, ">>") \
+_(luafunction, "luafunction")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

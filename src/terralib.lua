@@ -692,6 +692,12 @@ do --construct type table that holds the singleton value representing each uniqu
                 local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
                 ffi.cdef(cdef)
                 self.cachedcstring = ntyp
+            elseif self == types.niltype then
+                local nilname = uniquetypename("niltype")
+                ffi.cdef("typedef void * "..nilname..";")
+                self.cachedcstring = nilname
+            elseif self == types.error then
+                self.cachedcstring = "int"
             else
                 print(debug.traceback())
                 self:printraw()
@@ -1037,6 +1043,9 @@ do --construct type table that holds the singleton value representing each uniqu
         return checkcanon(parameters) or checkcanon(returns) or create(parameters,returns)
         
     end
+    --a function type that represents lua functions in the type checker
+    types.luafunction = mktyp { kind = terra.kinds.functype, islua = true, parameters = terra.newlist(), returns = terra.newlist(), name = "luafunciton", isvararg = true, issret = false}
+    
     
     for name,typ in pairs(types.table) do
         --introduce primitive types into global namespace
@@ -1569,6 +1578,8 @@ function terra.func:typecheck(ctx)
                     terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
                     return asrvalue(fn),terra.types.error
                 end
+            elseif type(fn) == "function" then
+                return fn, terra.types.luafunction
             elseif fn == nil then
                 terra.reporterror(ctx,exp,"call to undefined function")
                 return nil,terra.types.error
@@ -1604,9 +1615,22 @@ function terra.func:typecheck(ctx)
             
             fn,fntyp = resolvefn(rawfn)
             
-            if fntyp ~= terra.types.error and fntyp.parameters[1] ~= nil then
+            if fntyp ~= terra.types.error then
             
-                local rtyp = fntyp.parameters[1]
+                local rtyp
+                if fntyp.parameters[1] then
+                    rtyp = fntyp.parameters[1]
+                else --either we had an error, or this function is vararg
+                    if reciever.type:ispointer() then --in the case of vararg if the reciever is a pointer then pass it directly
+                        rtyp = reciever.type
+                    else
+                        rtyp = terra.types.pointer(reciever.type) --otherwise, we force it to be a pointer
+                        --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
+                        --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
+                        --in other cases, you would consistently get a value or a pointer regardless of receiver type
+                        --for consistency, we all lua methods take pointers
+                    end
+                end
                 local rexp = exp.value
                 --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
                 local function mkunary(op) 
@@ -1658,13 +1682,27 @@ function terra.func:typecheck(ctx)
         
         local typ = terra.types.error
         if fntyp ~= terra.types.error and paramlist ~= nil then
-            insertcasts(getparametertypes(fntyp,paramlist),paramlist)
-            if #fntyp.returns >= 1 then
+            local paramtypes = getparametertypes(fntyp,paramlist)
+            insertcasts(paramtypes,paramlist)
+            if #fntyp.returns > 0 then
                 typ = fntyp.returns[1]
             elseif mustreturnatleast1 then
                 terra.reporterror(ctx,exp,"expected call to return at least 1 value")
-            end --otherwise this is used in statement context and does not require a type
+            else --otherwise this is used in statement context and does not require a type
+                typ = nil
+            end
+            
+            if fntyp == terra.types.luafunction then --we need to generate the wrapper around "fn" that will invoke it
+                local castedtype = terra.types.funcpointer(paramtypes,{})
+                local cb = ffi.cast(castedtype:cstring(),fn)
+                local fptr = terra.pointertolightuserdata(cb)
+                local tree = terra.newtree(exp, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
+                fn = tree
+            end
         end
+        
+
+        
         return false, exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = fn, type = typ, types = fntyp.returns or terra.newlist() }
         
     end

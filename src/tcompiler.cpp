@@ -793,6 +793,17 @@ if(t->type->isIntegerTy()) { \
                     assert(!"NYI - literal");
                 }
             } break;
+            case T_luafunction: {
+                TType * typ = typeOfValue(exp);
+                PointerType *pt = cast<PointerType>(typ->type);
+                assert(pt);
+                FunctionType * fntyp = cast<FunctionType>(pt->getElementType());
+                assert(fntyp);
+                Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"", C->m);
+                void * ptr = exp->ud("fptr");
+                C->ee->addGlobalMapping(fn, ptr); //if we deserialize this function it will be necessary to relink this to the lua runtime
+                return fn;
+            } break;
             case T_cast: {
                 Obj a;
                 Obj to,from;
