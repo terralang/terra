@@ -38,7 +38,10 @@ enum TA_Globals {
     TA_KINDS_TABLE,
     TA_LAST_GLOBAL
 };
-
+static void dump_stack(lua_State * L, int elem);
+static int get_global(LexState * ls, TA_Globals k) {
+    return ls->stacktop + k;
+}
 //helpers to ensure that the lua stack contains the right number of arguments after a call
 #define RETURNS_N(x,n) do { \
     if(ls->in_terra) { \
@@ -82,7 +85,7 @@ static int new_table(LexState * ls) {
 static int new_list(LexState * ls) {
     if(ls->in_terra) {
         int t = new_table(ls); //printf("(new table)\n");
-        lua_pushvalue(ls->L,TA_LIST_METATABLE);
+        lua_pushvalue(ls->L,get_global(ls,TA_LIST_METATABLE));
         lua_setmetatable(ls->L,-2);
         return t;
     } else return 0;
@@ -119,7 +122,7 @@ static void push_string(LexState * ls, const char * str) {
 static void push_kind(LexState * ls, const char * str) {
     if(ls->in_terra) {
         lua_pushstring(ls->L,str);
-        lua_gettable(ls->L,TA_KINDS_TABLE);
+        lua_gettable(ls->L,get_global(ls,TA_KINDS_TABLE));
         assert(!lua_isnil(ls->L,-1));
     }
 }
@@ -138,7 +141,7 @@ static int new_table(LexState * ls, T_Kind k) {
         int t = new_table(ls);
         lua_pushinteger(ls->L,k);
         add_field(ls, t,"kind");
-        lua_pushvalue(ls->L,TA_TREE_METATABLE);
+        lua_pushvalue(ls->L,get_global(ls,TA_TREE_METATABLE));
         lua_setmetatable(ls->L,-2);
         table_setposition(ls,t,ls->linenumber, ls->currentoffset - 1);
         return t;
@@ -643,7 +646,7 @@ static void terrastruct(LexState * ls, int islocal) {
 
     structconstructor(ls,T_struct);
     
-    int id = add_entry(ls,TA_FUNCTION_TABLE);
+    int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     luaX_patchbegin(ls,&begin);
     if(islocal) {
         OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.namedstruct(_G.terra._trees[%d],\"",getstr(vname),getstr(vname),id);
@@ -1001,7 +1004,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
         luaX_next(ls);
         body(ls,v,0,ls->linenumber);
         luaX_patchbegin(ls,&begin);
-        int id = add_entry(ls,TA_FUNCTION_TABLE);
+        int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
         OutputBuffer_printf(&ls->output_buffer,"terra.newfunction(nil,_G.terra._trees[%d],nil,",id);
         print_captured_locals(ls);
         OutputBuffer_printf(&ls->output_buffer,")");
@@ -1018,7 +1021,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
         ls->in_terra++;
     
         structconstructor(ls,T_struct);
-        int id = add_entry(ls,TA_FUNCTION_TABLE);
+        int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     
         luaX_patchbegin(ls,&begin);
         OutputBuffer_printf(&ls->output_buffer,"terra.anonstruct(_G.terra._trees[%d],",id);
@@ -1575,7 +1578,7 @@ static void localterra (LexState *ls) {
   TString * name = str_checkname(ls);
   fs->bl->local_variables.push_back(name);
   RETURNS_1(body(ls, &b, 0, ls->linenumber));
-  int id = add_entry(ls,TA_FUNCTION_TABLE);
+  int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
   luaX_patchbegin(ls,&begin);
   OutputBuffer_printf(&ls->output_buffer,"%s; %s = terra.newfunction(nil,_G.terra._trees[%d],\"%s\",",getstr(name),getstr(name),id,getstr(name));
   print_captured_locals(ls);
@@ -1673,7 +1676,7 @@ static void terravar(LexState * ls, int islocal) {
     }
     push_string(ls,getstr(ls->source));
     add_field(ls,varexp,"filename");
-    int id = add_entry(ls,TA_FUNCTION_TABLE);
+    int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     
     luaX_patchbegin(ls,&begin);
     print_names(ls);
@@ -1769,7 +1772,7 @@ static void terrastat(LexState * ls, int line) {
     Token begin = ls->t;
     int ismethod;
     RETURNS_1(ismethod = funcstat(ls,line));
-    int n = add_entry(ls,TA_FUNCTION_TABLE);
+    int n = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     luaX_patchbegin(ls,&begin);
     print_names(ls); //a.b.c.d
     
@@ -1962,22 +1965,23 @@ int luaY_parser (terra_State *T, ZIO *z,
   if(!lua_checkstack(L,1 + LUAI_MAXCCALLS)) {
       abort();
   }
+  lexstate.stacktop = lua_gettop(L);
   lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
-  assert(lua_gettop(L) == TA_TERRA_OBJECT);
-  
+  assert(lua_gettop(L) == lexstate.stacktop + TA_TERRA_OBJECT);
+  int to = get_global(&lexstate,TA_TERRA_OBJECT);
   lua_newtable(L);//TA_FUNCTION_TABLE
   lua_setfield(L,-2,"_trees");
   
-  lua_getfield(L,TA_TERRA_OBJECT,"_trees");
-  assert(lua_gettop(L) == TA_FUNCTION_TABLE);
+  lua_getfield(L,to,"_trees");
+  assert(lua_gettop(L) == lexstate.stacktop + TA_FUNCTION_TABLE);
   
-  lua_getfield(L,TA_TERRA_OBJECT,"tree");
-  assert(lua_gettop(L) == TA_TREE_METATABLE);
+  lua_getfield(L,to,"tree");
+  assert(lua_gettop(L) == lexstate.stacktop + TA_TREE_METATABLE);
   
-  lua_getfield(L,TA_TERRA_OBJECT,"list");
-  assert(lua_gettop(L) == TA_LIST_METATABLE);
-  lua_getfield(L,TA_TERRA_OBJECT,"kinds");
-  assert(lua_gettop(L) == TA_KINDS_TABLE);
+  lua_getfield(L,to,"list");
+  assert(lua_gettop(L) == lexstate.stacktop + TA_LIST_METATABLE);
+  lua_getfield(L,to,"kinds");
+  assert(lua_gettop(L) ==  lexstate.stacktop + TA_KINDS_TABLE);
   
   int err = sigsetjmp(lexstate.error_dest,0);
   if(!err) {
@@ -1990,12 +1994,14 @@ int luaY_parser (terra_State *T, ZIO *z,
     assert(!funcstate.prev && !lexstate.fs);
   } else {
     cleanup(&lexstate);
+    lua_replace(L,lexstate.stacktop + 1); //put the error message at the new top of stack
+    lua_settop(L, lexstate.stacktop + 1); //reset the stack to just 1 above where it orignally (holding the error message)
     return err;
   }
   
   lua_pop(L,TA_LAST_GLOBAL - 1);
 
-  assert(lua_gettop(L) == 0);
+  assert(lua_gettop(L) == lexstate.stacktop);
   
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');

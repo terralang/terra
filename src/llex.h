@@ -139,6 +139,7 @@ typedef struct LexState {
   } patchinfo; //data to fix up output stream when we insert terra information
   
   sigjmp_buf error_dest; /* where to jump when a parse error occurs */
+  int stacktop; /* top of lua stack when we start this function */
 } LexState;
 
 

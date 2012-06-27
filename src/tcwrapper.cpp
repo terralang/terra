@@ -391,7 +391,6 @@ private:
 };
 
 static void dorewrite(terra_State * T, const char * code, const char ** argbegin, const char ** argend, std::string * output, Obj * result) {
-    	
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
@@ -442,7 +441,6 @@ static void dorewrite(terra_State * T, const char * code, const char ** argbegin
 }
 
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
-	
     std::string buffer;
     dorewrite(T,code,argbegin,argend,&buffer,result);
     
@@ -474,9 +472,9 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     CodeGenOptions CGO;
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", CGO, llvm::getGlobalContext() );
 
-	ParseAST(TheCompInst.getPreprocessor(),
-			codegen,
-			TheCompInst.getASTContext());
+    ParseAST(TheCompInst.getPreprocessor(),
+            codegen,
+            TheCompInst.getASTContext());
 
     llvm::Module * mod = codegen->ReleaseModule();
     

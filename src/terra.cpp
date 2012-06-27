@@ -188,17 +188,69 @@ static const char * file_reader(lua_State * T, void * fi, size_t *sz) {
     *sz = fread(fileinfo->buf,1,512,fileinfo->file);
     return fileinfo->buf;
 }
-int terra_loadfile(lua_State * L, const char * file) {
+
+int terra_load(lua_State *L,lua_Reader reader, void *data, const char *chunkname) {
+    int st = lua_gettop(L);
     terra_State * T = getterra(L);
-    FileInfo fileinfo;
-    fileinfo.file = fopen(file,"r");
-    if(!fileinfo.file) {
+    Zio zio;
+    luaZ_init(T,&zio,reader,data);
+    int r = luaY_parser(T,&zio,chunkname,zgetc(&zio));
+    assert(lua_gettop(L) == st + 1);
+    return r;
+}
+
+
+//these helper functions are from the LuaJIT implementation for loadfile and loadstring:
+
+#define TERRA_BUFFERSIZE 512
+
+typedef struct FileReaderCtx {
+  FILE *fp;
+  char buf[TERRA_BUFFERSIZE];
+} FileReaderCtx;
+
+static const char *reader_file(lua_State *L, void *ud, size_t *size)
+{
+  FileReaderCtx *ctx = (FileReaderCtx *)ud;
+  if (feof(ctx->fp)) return NULL;
+  *size = fread(ctx->buf, 1, sizeof(ctx->buf), ctx->fp);
+  return *size > 0 ? ctx->buf : NULL;
+}
+
+typedef struct StringReaderCtx {
+  const char *str;
+  size_t size;
+} StringReaderCtx;
+
+static const char *reader_string(lua_State *L, void *ud, size_t *size)
+{
+  StringReaderCtx *ctx = (StringReaderCtx *)ud;
+  if (ctx->size == 0) return NULL;
+  *size = ctx->size;
+  ctx->size = 0;
+  return ctx->str;
+}
+//end helper functions
+
+int terra_loadfile(lua_State * L, const char * file) {
+    FileReaderCtx ctx;
+    ctx.fp = fopen(file,"r");
+    if(!ctx.fp) {
+       terra_State * T = getterra(L);
        terra_pusherror(T,"failed to open file %s",file);
        return LUA_ERRFILE;
     }
-    Zio zio;
-    luaZ_init(T,&zio,file_reader,&fileinfo);
-    int r = luaY_parser(T,&zio,file,zgetc(&zio));
-    fclose(fileinfo.file);
+    int r = terra_load(L,reader_file,&ctx,file);
+    fclose(ctx.fp);
     return r;
+}
+
+int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *name) {
+    StringReaderCtx ctx;
+    ctx.str = buf;
+    ctx.size = size;
+    return terra_load(L,reader_string,&ctx,name);
+}
+int terra_loadstring(lua_State *L, const char *s) {
+  return terra_loadbuffer(L, s, strlen(s), s);
 }
