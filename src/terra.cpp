@@ -254,3 +254,12 @@ int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *na
 int terra_loadstring(lua_State *L, const char *s) {
   return terra_loadbuffer(L, s, strlen(s), s);
 }
+int terra_setverbose(lua_State * L, int v) {
+    terra_State * T = getterra(L);
+    T->verbose = v;
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_pushinteger(L, v);
+    lua_setfield(L, -2, "isverbose");
+    lua_pop(L,1);
+    return 0;
+}

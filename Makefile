@@ -4,6 +4,7 @@ UNAME := $(shell uname)
 
 CXX = /usr/local/bin/clang++
 CC = /usr/local/bin/clang
+AR = ar
 FLAGS = -g $(INCLUDE_PATH)
 LFLAGS = -g
 
@@ -15,7 +16,7 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
-LFLAGS += -Lbuild -lluajit
+LFLAGS += -Lbuild -lluajit -lterra
 INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 
 # point LLVM_CONFIG at the llvm-config binary for your llvm distribution
@@ -47,9 +48,17 @@ INCLUDE_PATH += -Ibuild
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 
-SRC = tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp linenoise.cpp
-OBJS = $(SRC:.cpp=.o)
+LIBSRC = tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp linenoise.cpp
+EXESRC = main.cpp linenoise.cpp
+
+LIBOBJS = $(LIBSRC:.cpp=.o)
+EXEOBJS = $(EXESRC:.cpp=.o)
+
+OBJS = $(LIBOBJS) $(EXEOBJS)
+SRC = $(LIBSRC) $(EXESRC)
+
 EXECUTABLE = terra
+LIBRARY = build/libterra.a
 
 BIN2C = build/bin2c
 
@@ -77,8 +86,11 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd $(LUAJIT_DIR); make)
 	cp $(LUAJIT_DIR)/src/libluajit.a build/libluajit.a
 	ln -s $(LUAJIT_VERSION)/lib build/jit
-	
-$(EXECUTABLE):	$(addprefix build/, $(OBJS))
+
+$(LIBRARY):	$(addprefix build/, $(LIBOBJS))
+	$(AR) -cq $@ $^
+
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	$(CXX) $^ -o $@ $(LFLAGS)
 
 $(BIN2C):	src/bin2c.c
@@ -89,7 +101,7 @@ build/terralib.h:	src/terralib.lua
 	
 clean:
 	rm -rf build/*.o build/*.d build/terralib.h build/llvmheaders.h.pch
-	rm -rf $(EXECUTABLE)
+	rm -rf $(EXECUTABLE) $(LIBRARY)
 
 purge:	clean
 	rm -rf build/*

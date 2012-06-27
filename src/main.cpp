@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <getopt.h>
 #include "terra.h"
 
 static void doerror(lua_State * L) {
@@ -7,40 +8,76 @@ static void doerror(lua_State * L) {
 }
 const char * progname = NULL;
 static void dotty (lua_State *L);
+void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive);
 int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
     if(terra_init(L))
         doerror(L);
-    if(argc > 1) {
-        for(int i = 1; i < argc; i++) {
-            if(terra_dofile(L,argv[i]))
-                doerror(L);
-        }
-    } else if(isatty(0)) {
+    bool interactive = false;
+    
+    parse_args(L,&argc,&argv,&interactive);
+    
+    for(int i = 0; i < argc; i++) {
+        if(terra_dofile(L,argv[i]))
+            doerror(L);
+    }
+    
+    if(isatty(0) && (interactive || argc == 0)) {
         dotty(L);
     }
+    
     return 0;
 }
 
+static void print_welcome();
+void usage() {
+    print_welcome();
+    printf("terra [OPTIONS] source-files\n"
+           "    -v enable verbose debugging output\n"
+           "    -h print this help message\n"
+           "    -i enter the REPL after processing source files\n");
+}
+
+void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
+    int ch;
+    static struct option longopts[] = {
+        { "help",      0,     NULL,           'h' },
+        { "verbose",   0,     NULL,           'v' },
+        { "interactive",     0,     NULL,     'i' },
+        { NULL,        0,     NULL,            0 }
+    };
+
+    /*  Parse commandline options  */
+    opterr = 0;
+    while ((ch = getopt_long(*argc, *argv, "hvi", longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'h':
+                usage();
+                exit (-1);
+                break;
+            case 'v':
+                terra_setverbose(L,1);
+                break;
+            case 'i':
+                *interactive = true;
+                break;
+            default:
+                break;
+        }
+    }
+    *argc -= optind;
+    *argv += optind;
+}
 //this stuff is from lua's lua.c repl implementation:
 
 #include "linenoise.h"
-#define lua_readline(L,b,p)	((void)L, ((b)=linenoise(p)) != NULL)
+#define lua_readline(L,b,p)    ((void)L, ((b)=linenoise(p)) != NULL)
 #define lua_saveline(L,idx) \
-	if (lua_strlen(L,idx) > 0)  /* non-empty line? */ \
-	  linenoiseHistoryAdd(lua_tostring(L, idx));  /* add it to history */
-#define lua_freeline(L,b)	((void)L, free(b))
-
-
-#if 0
-#define lua_readline(L,b,p)	\
-	((void)L, fputs(p, stdout), fflush(stdout),  /* show prompt */ \
-	fgets(b, LUA_MAXINPUT, stdin) != NULL)  /* get line */
-#define lua_saveline(L,idx)	{ (void)L; (void)idx; }
-#define lua_freeline(L,b)	{ (void)L; (void)b; }
-#endif
+    if (lua_strlen(L,idx) > 0)  /* non-empty line? */ \
+      linenoiseHistoryAdd(lua_tostring(L, idx));  /* add it to history */
+#define lua_freeline(L,b)    ((void)L, free(b))
 
 static void l_message (const char *pname, const char *msg) {
   if (pname) fprintf(stderr, "%s: ", pname);
@@ -170,10 +207,18 @@ static int docall (lua_State *L, int narg, int clear) {
   if (status != 0) lua_gc(L, LUA_GCCOLLECT, 0);
   return status;
 }
-
+static void print_welcome() {
+    printf("\n"
+           "Terra -- A low-level counterpart to Lua\n"
+           "\n"
+           "Stanford University\n"
+           "zdevito@stanford.edu\n"
+           "\n");
+}
 static void dotty (lua_State *L) {
   int status;
   globalL = L;
+  print_welcome();
   while ((status = loadline(L)) != -1) {
     if (status == 0) status = docall(L, 0, 0);
     report(L,status);
@@ -191,3 +236,24 @@ static void dotty (lua_State *L) {
   fputs("\n", stdout);
   fflush(stdout);
 }
+
+#if 0
+//a much simpler main function:
+#include <stdio.h>
+#include "terra.h"
+
+static void doerror(lua_State * L) {
+    printf("%s\n",luaL_checkstring(L,-1));
+    exit(1);
+}
+int main(int argc, char ** argv) {
+    lua_State * L = luaL_newstate();
+    luaL_openlibs(L);
+    if(terra_init(L))
+        doerror(L);
+    for(int i = 1; i < argc; i++)
+        if(terra_dofile(L,argv[i]))
+            doerror(L);
+    return 0;
+}
+#endif

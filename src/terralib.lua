@@ -2199,7 +2199,5 @@ function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
     afn(cdataobj,assignresult)
 end
 
-
-
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 io.write("done\n")
