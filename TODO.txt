@@ -1,16 +1,25 @@
 Language Implementation:
 
---vector types
---sane numeric casting rules for constants
---calling lua functions from terra
+-- vector types
+-- sane numeric casting rules for constants
 -- code quotations of statements and expressions
 -- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
-   
+-- returning values from lua functions   
 
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
+-- generate TBAA metadata like C will so that we can match perf
 
+
+For LANL:
+-- getting started guide
+-- turn debug on/off debug printing
+-- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
+   handle as much as possible in the JIT, and make sure the offline compiler does everything
+   make configurable (perhaps a general config mechanism)
+-- write 1 or two language benchmarks in terra to get baseline perf (do this after figuring out -O3)
+-- simple save of functions (give a key-value pair and export the symbols with those names to a .o file, see if you can use aliases to export these functions)
 
 DONE:
 --function pointers
@@ -40,3 +49,4 @@ DONE:
    to work around c's weird syntax, each non-primitive will need to generate a typedef for its type
    fold the typedef for functions into cstring and simplify makewrapper to use its type instead
    pointers to functions will need to be handled as a special case
+--calling lua functions from terra

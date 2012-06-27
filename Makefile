@@ -53,7 +53,7 @@ EXECUTABLE = terra
 
 BIN2C = build/bin2c
 
-.PHONY:	all clean purge test
+.PHONY:	all clean purge test docs
 all:	$(EXECUTABLE)
 
 test:	$(EXECUTABLE)
@@ -93,7 +93,10 @@ clean:
 
 purge:	clean
 	rm -rf build/*
-	
+
+docs:	
+	make -C docs
+ 
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h
