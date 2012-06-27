@@ -13,6 +13,9 @@ extern "C" {
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 
+
+
+
 using namespace llvm;
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
@@ -134,9 +137,11 @@ struct TerraCompiler {
             }
         }
         st->setBody(entry_types);
-        printf("Struct Layout Is:\n");
-        st->dump();
-        printf("\nEnd Layout\n");
+        DEBUG_ONLY(T) {
+            printf("Struct Layout Is:\n");
+            st->dump();
+            printf("\nEnd Layout\n");
+        }
     }
     TType * getType(Obj * typ) {
         TType * t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
@@ -340,19 +345,21 @@ struct TerraCompiler {
             }
             ++ai;
         }
-        
+         
         Obj body;
         typedtree.obj("body",&body);
         emitStmt(&body);
         if(BB) { //no terminating return statment, we need to insert one
             emitReturnUndef();
         }
-        
-        func->dump();
+        DEBUG_ONLY(T) {
+            func->dump();
+        }
         verifyFunction(*func);
         C->fpm->run(*func);
-        func->dump();
-        
+        DEBUG_ONLY(T) {
+            func->dump();
+        }
         void * ptr = C->ee->getPointerToFunction(func);
         
         lua_pushlightuserdata(L, ptr);

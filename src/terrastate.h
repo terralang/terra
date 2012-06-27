@@ -27,4 +27,6 @@ void terra_reporterror(terra_State * T, const char * fmt, ...);
 void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
 
+#define DEBUG_ONLY(T) if((T)->verbose != 0)
+
 #endif

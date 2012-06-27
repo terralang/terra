@@ -1,11 +1,22 @@
-io.write("loading terra lib...")
+--io.write("loading terra lib...")
 
 local ffi = require("ffi")
+
+local function dbprint(...) 
+    if terra.isverbose then
+        print(...)
+    end
+end
+local function dbprintraw(obj)
+    if terra.isverbose then
+        obj:printraw()
+    end
+end
 
 --debug wrapper around cdef function to print out all the things being defined
 local oldcdef = ffi.cdef
 ffi.cdef = function(...)
-    print(...)
+    dbprint(...)
     return oldcdef(...)
 end
 
@@ -127,7 +138,7 @@ function terra.tree:astype(ctx)
 end
 
 function terra.tree:asvalue(ctx)
-    self:printraw()
+    --self:printraw()
     local success,fn = terra.treeload(ctx,self)
     if not success then
         return nil
@@ -322,11 +333,11 @@ function terra.func:compile(ctx)
         return
     end
     ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
-    print("compiling function:")
-    self.untypedtree:printraw()
-    print("with local environment:")
+    dbprint("compiling function:")
+    dbprintraw(self.untypedtree)
+    dbprint("with local environment:")
     for k,v in pairs(self:env()) do
-        print("  ",k)
+        dbprint("  ",k)
     end
     
     self.typedtree = self:typecheck(ctx)
@@ -968,8 +979,8 @@ do --construct type table that holds the singleton value representing each uniqu
                 checkrecursion(v.type)
             end
             
-            print("Resolved Named Struct To:")
-            self:printraw()
+            dbprint("Resolved Named Struct To:")
+            dbprintraw(self)
             return self
         end
         return typ
@@ -1593,7 +1604,7 @@ function terra.func:typecheck(ctx)
             local exps = terra.newlist{}
             if #result ~= 0 then
                 for i,e in ipairs(result) do
-                    e:printraw()
+                    --e:printraw()
                     exps:insert(e)
                 end
             else
@@ -2086,7 +2097,7 @@ function terra.func:typecheck(ctx)
             })
         
             local desugared = terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist {dv,wh} } )
-            desugared:printraw()
+            --desugared:printraw()
             return checkstmt(desugared)
         elseif iscall(s) then
             local ismacro, c = checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
@@ -2109,7 +2120,7 @@ function terra.func:typecheck(ctx)
     end
     
     
-    print("Return Stmts:")
+    dbprint("Return Stmts:")
     
     
     local return_types
@@ -2157,8 +2168,8 @@ function terra.func:typecheck(ctx)
     
     local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
     
-    print("TypedTree")
-    typedtree:printraw()
+    dbprint("TypedTree")
+    dbprintraw(typedtree)
     
     ctx:pop()
     
@@ -2200,4 +2211,4 @@ function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
-io.write("done\n")
+--io.write("done\n")

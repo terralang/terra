@@ -88,6 +88,7 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	ln -s $(LUAJIT_VERSION)/lib build/jit
 
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
+	rm -f $(LIBRARY)
 	$(AR) -cq $@ $^
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)

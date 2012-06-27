@@ -4,6 +4,7 @@ for line in io.popen("ls"):lines() do
 	if string.sub(line,-2) == ".t" then
 		local e = { k = line }
 		table.insert(results,e)
+		print(e.k..":")
 		if os.execute("../terra "..line) ~= 0 then
 			e.v = "FAIL"
 		else
