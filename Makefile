@@ -97,9 +97,10 @@ $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
 
-build/terralib.h:	src/terralib.lua
+build/terralib.h:	src/terralib.lua $(PACKAGE_DEPS)
 	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
-	
+
+
 clean:
 	rm -rf build/*.o build/*.d build/terralib.h build/llvmheaders.h.pch
 	rm -rf $(EXECUTABLE) $(LIBRARY)
