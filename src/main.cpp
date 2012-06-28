@@ -25,6 +25,7 @@ int main(int argc, char ** argv) {
     }
     
     if(isatty(0) && (interactive || argc == 0)) {
+        progname = NULL;
         dotty(L);
     }
     
@@ -146,7 +147,7 @@ static int loadline (lua_State *L) {
   if (!pushline(L, 1))
     return -1;  /* no input */
   for (;;) {  /* repeat until gets a complete line */
-    status = terra_loadbuffer(L, lua_tostring(L, 1), lua_strlen(L, 1), "=stdin");
+    status = terra_loadbuffer(L, lua_tostring(L, 1), lua_strlen(L, 1), "stdin");
     if (!incomplete(L, status)) break;  /* cannot try to add lines? */
     if (!pushline(L, 0))  /* no more input? */
       return -1;

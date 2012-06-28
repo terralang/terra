@@ -13,7 +13,7 @@ body {
 
 #allstuff {
   width: 600px;
-  margin-left: 20%;
+  margin-left: 10%;
 }
 body > *:first-child {
   margin-top: 0 !important; }
@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#x6D;&#x61;&#x69;&#x6C;&#x74;o:&#122;&#100;e&#x76;&#105;&#x74;&#111;&#64;&#x73;&#116;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#x64;&#117;">&#122;&#100;e&#x76;&#105;&#x74;&#111;&#64;&#x73;&#116;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#x64;&#117;</a></em></p>
+<p><em>Zach DeVito <a href="&#109;&#97;&#105;&#x6C;&#116;&#111;:z&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#115;&#116;&#x61;&#110;f&#x6F;&#114;&#100;&#46;&#101;d&#x75;">z&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#115;&#116;&#x61;&#110;f&#x6F;&#114;&#100;&#46;&#101;d&#x75;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language, while still being backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -353,6 +353,16 @@ Stanford University
 zdevito@stanford.edu
 
 &gt;
+</code></pre>
+
+<p>Terra's REPL behaves similar to Lua's REPL. If you are familiar with other languages like Python, the one major difference is that expressions must be prefixed with <code>return</code> or <code>=</code> if you want to get their value:</p>
+
+<pre><code>&gt; 3        --ERROR! it is expecting a statement
+stdin:1: unexpected symbol near 3
+&gt; return 3 -- OK!
+3
+&gt; = 3      -- syntax sugar in the REPL for 'return 3'
+3
 </code></pre>
 
 <p>You can also run it on already written files:</p>
@@ -710,7 +720,7 @@ end
 
 <p>Let's examine what is happens when this function is compiled. The Terra compiler will resolve the <code>math</code> symbol to the Lua table holding the power functions. It will then see the select operator (<code>math.pow3</code>). Because <code>math</code> is a Lua table, the Terra compiler will perform this select operator at compile time, and resolve <code>math.pow3</code> to the third Terra function constructed inside the loop.  It will then insert a direct call to that function inside <code>doit</code>. This behavior is a form of <em>partial execution</em>. In general, Lua will resolve any chain of select operations <code>a.b.c.d</code> at compile time. This behavior enables Terra to use Lua tables to organize code into different namespaces. There is no need for a Terra specific namespace mechanism!</p>
 
-<p>Revisiting including C files:</p>
+<p>Recall how we can include C files:</p>
 
 <pre><code>local c = terralib.includec("stdio.h")
 </code></pre>
@@ -729,6 +739,8 @@ FILE
 ...
 </code></pre>
 
+<h3>Scoping</h3>
+
 <p>Additionally, you may want to declare a Terra function as a <em>locally</em> scoped Lua variable. You can use the <code>local</code> keyword:</p>
 
 <pre><code>local terra foo()
@@ -741,4 +753,79 @@ end
 end()
 </code></pre>
 
-<h2>Types</h2>
+<h2>Types and Operators</h2>
+
+<p>Terra's type system closely resembles the type system of C, with a few differences that make it interoperate better with the Lua language.</p>
+
+<h3>Primitive Types</h3>
+
+<p>We've already seen some basic Terra types like <code>int</code> or <code>double</code>. Terra has the usual set of basic types:</p>
+
+<ul>
+<li>Integers: <code>int</code> <code>int8</code> <code>int16</code> <code>int32</code> <code>int64</code></li>
+<li>Unsigned integers: <code>uint</code> <code>uint8</code> <code>uint16</code> <code>uint32</code> <code>uint64</code></li>
+<li>Boolean: <code>bool</code></li>
+<li>Floating Point: <code>float</code> <code>double</code></li>
+</ul>
+
+<p>Integers are explicitly sized except for <code>int</code> and <code>uint</code> which should only be used when the particular size is not important. Most implicit conversions from C are also valid in Terra. The one major exception is the <code>bool</code> type. Unlike C, all control-flow explicitly requires a <code>bool</code> and integers are not explicitly convertible to <code>bool</code>.</p>
+
+<pre><code>if 3 then end -- ERROR 3 is not bool
+if 3 == 0 then end -- OK! 3 == 0 is bool
+</code></pre>
+
+<p>You can force the conversion from <code>int</code> to <code>bool</code> using an explicit cast:</p>
+
+<pre><code>var a : bool = (3):as(bool)
+</code></pre>
+
+<p>The <code>a:b(c)</code> syntax is a method invocation syntax borrowed from Lua that will be discussed later.</p>
+
+<p>Primitive types have the standard operators defined:</p>
+
+<ul>
+<li>Arithmetic: <code>- + * / %</code></li>
+<li>Comparison: <code>&lt; &lt;= &gt; &gt;= == ~=</code></li>
+<li>Logical: <code>and or not</code></li>
+<li>Bitwise: <code>and or not ^ &lt;&lt; &gt;&gt;</code></li>
+</ul>
+
+<p>These behave the same C except for the logical operators, which are overloaded based on the type of the operators:</p>
+
+<pre><code>true and false --Lazily evaluated logical and
+1 and 3        --Eagerly evaluated bitwise and
+</code></pre>
+
+<h3>Pointers</h3>
+
+<p>Pointers behave similarly to C, including pointer arithmetic. The syntax is slightly different to work with Lua's grammar:</p>
+
+<pre><code>var a : int = 1
+var pa : &amp;int = &amp;a
+@a = 4
+var b = @a
+</code></pre>
+
+<p>You can read <code>&amp;int</code> as a value holding the <em>address</em> of an <code>int</code>, and <code>@a</code> as the value <em>at</em> address <code>a</code>. To get a pointer to allocated memory you can use <code>malloc</code>:</p>
+
+<pre><code>c = terralib.includec("stdlib.h")
+terra doit()
+    var a = c.malloc(sizeof(int) * 3):as(&amp;int)
+    @a,@(a+1) = 1,2
+end
+</code></pre>
+
+<p>Indexing operators also work on pointers:</p>
+
+<pre><code>a[3] --syntax sugar for @(a + 3)
+</code></pre>
+
+<h3>Arrays</h3>
+
+<p>You can construct statically sized arrays as well:</p>
+
+<pre><code>var a : int[4]
+a[0],a[1],a[2],a[3] = 0,1,2,3
+</code></pre>
+
+<p>In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets.</p>

@@ -257,7 +257,9 @@ function terra.context:printsource(anchor)
     if not top.filehandle then
         top.filehandle = terra.opensourcefile(top.filename)
     end
-    terra.printlocation(top.filehandle,anchor.offset)
+    if top.filehandle then --if the code did not come from a file then we don't print the carrot, since we cannot reopen the text
+        terra.printlocation(top.filehandle,anchor.offset)
+    end
 end
 function terra.context:reporterror(anchor,...)
     self.has_errors = true
@@ -815,7 +817,8 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         
         local function create(typ)
-            local name = typ.name .. "[" .. N .. "]"
+            local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
+            local name = tname .. "[" .. N .. "]"
             local value = types.table[name]
             if value == nil then
                 value = mktyp { kind = terra.kinds.array, type = typ, name = name, N = N }

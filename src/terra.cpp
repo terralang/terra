@@ -71,7 +71,10 @@ static int opensourcefile(lua_State * L) {
     const char * filename = luaL_checkstring(L,-1);
     FILE * f = fopen(filename,"r");
     if(!f) {
-        terra_reporterror(getterra(L),"failed to open file %s\n",filename);
+        //this might not be a valid filename, or might no longer exist..
+        //returning 0 here will suppress printing the carrot ^ but other error messages will still print
+        //terra_reporterror(getterra(L),"failed to open file %s\n",filename);
+        return 0;
     }
     fseek(f,0, SEEK_END);
     size_t filesize = ftell(f);

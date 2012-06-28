@@ -59,7 +59,16 @@ To run the REPL:
     zdevito@stanford.edu
     
     > 
-    
+
+Terra's REPL behaves similar to Lua's REPL. If you are familiar with other languages like Python, the one major difference is that expressions must be prefixed with `return` or `=` if you want to get their value:
+
+	> 3        --ERROR! it is expecting a statement
+	stdin:1: unexpected symbol near 3
+	> return 3 -- OK!
+	3
+	> = 3      -- syntax sugar in the REPL for 'return 3'
+	3
+	
 You can also run it on already written files:
 
     $ ./terra tests/hello.t
@@ -391,7 +400,7 @@ You can also call these power functions from a Terra function:
     
 Let's examine what is happens when this function is compiled. The Terra compiler will resolve the `math` symbol to the Lua table holding the power functions. It will then see the select operator (`math.pow3`). Because `math` is a Lua table, the Terra compiler will perform this select operator at compile time, and resolve `math.pow3` to the third Terra function constructed inside the loop.  It will then insert a direct call to that function inside `doit`. This behavior is a form of _partial execution_. In general, Lua will resolve any chain of select operations `a.b.c.d` at compile time. This behavior enables Terra to use Lua tables to organize code into different namespaces. There is no need for a Terra specific namespace mechanism!
 
-Revisiting including C files:
+Recall how we can include C files:
     
     local c = terralib.includec("stdio.h")
 
@@ -407,7 +416,7 @@ Revisiting including C files:
     puts
     FILE
     ...
-
+### Scoping ###
 Additionally, you may want to declare a Terra function as a _locally_ scoped Lua variable. You can use the `local` keyword:
 
     local terra foo()
@@ -418,5 +427,67 @@ Which is just sugar for:
     local foo; foo = terra()
     end()
 
-Types
------
+Types and Operators
+-------------------
+Terra's type system closely resembles the type system of C, with a few differences that make it interoperate better with the Lua language.
+
+### Primitive Types ###
+We've already seen some basic Terra types like `int` or `double`. Terra has the usual set of basic types:
+
+* Integers: `int` `int8` `int16` `int32` `int64`
+* Unsigned integers: `uint` `uint8` `uint16` `uint32` `uint64`
+* Boolean: `bool`
+* Floating Point: `float` `double`
+
+Integers are explicitly sized except for `int` and `uint` which should only be used when the particular size is not important. Most implicit conversions from C are also valid in Terra. The one major exception is the `bool` type. Unlike C, all control-flow explicitly requires a `bool` and integers are not explicitly convertible to `bool`.
+
+	if 3 then end -- ERROR 3 is not bool
+	if 3 == 0 then end -- OK! 3 == 0 is bool
+
+You can force the conversion from `int` to `bool` using an explicit cast:
+
+	var a : bool = (3):as(bool)
+
+The `a:b(c)` syntax is a method invocation syntax borrowed from Lua that will be discussed later.
+
+Primitive types have the standard operators defined:
+
+* Arithmetic: `- + * / %`
+* Comparison: `< <= > >= == ~=`
+* Logical: `and or not`
+* Bitwise: `and or not ^ << >>`
+
+These behave the same C except for the logical operators, which are overloaded based on the type of the operators:
+
+	true and false --Lazily evaluated logical and
+	1 and 3        --Eagerly evaluated bitwise and
+	
+### Pointers ###
+
+Pointers behave similarly to C, including pointer arithmetic. The syntax is slightly different to work with Lua's grammar:
+	
+	var a : int = 1
+	var pa : &int = &a
+	@a = 4
+	var b = @a
+	
+You can read `&int` as a value holding the _address_ of an `int`, and `@a` as the value _at_ address `a`. To get a pointer to allocated memory you can use `malloc`:
+
+	c = terralib.includec("stdlib.h")
+	terra doit()
+		var a = c.malloc(sizeof(int) * 3):as(&int)
+		@a,@(a+1) = 1,2
+	end
+
+Indexing operators also work on pointers:
+
+	a[3] --syntax sugar for @(a + 3)
+	
+### Arrays ###
+
+You can construct statically sized arrays as well:
+
+	var a : int[4]
+	a[0],a[1],a[2],a[3] = 0,1,2,3
+	
+In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets.
