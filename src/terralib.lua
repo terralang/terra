@@ -224,6 +224,10 @@ function terra.list:mkstring(begin,sep,finish)
     return str..finish
 end
 
+function terra.islist(exp)
+    return getmetatable(exp) == terra.list
+end
+
 -- END LIST
 
 -- CONTEXT
@@ -692,6 +696,7 @@ do --construct type table that holds the singleton value representing each uniqu
                         return t:cstring()
                     end
                 end
+                
                 local pa = self.parameters:map(getcstring)
                 
                 if self.issret then
@@ -998,6 +1003,13 @@ do --construct type table that holds the singleton value representing each uniqu
     
     function types.functype(parameters,returns,isvararg)
         
+        if not terra.islist(parameters) then
+            parameters = terra.newlist(parameters)
+        end
+        if not terra.islist(returns) then
+            returns = terra.newlist(returns)
+        end
+        
         local function create(parameters,returns)
             local function getname(t) return t.name end
             local a = terra.list.map(parameters,getname):mkstring("{",",","")
@@ -1064,6 +1076,7 @@ do --construct type table that holds the singleton value representing each uniqu
         _G[name] = typ 
     end
     _G["int"] = int32
+    _G["uint"] = uint32
     _G["long"] = int64
     _G["intptr"] = uint64
     _G["ptrdiff"] = int64

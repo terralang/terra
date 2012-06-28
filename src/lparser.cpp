@@ -951,12 +951,20 @@ static void simpleexp (LexState *ls, expdesc *v) {
   switch (ls->t.token) {
     case TK_NUMBER: {
       //v->u.nval = ls->t.seminfo.r;
-      if(ls->t.seminfo.is_integer) {
+      int flags = ls->t.seminfo.flags;
+      if(flags & SemInfo::F_ISINTEGER) {
         push_integer(ls,ls->t.seminfo.i);
-        push_literal(ls,"int64");
+        const char * sign = (flags & SemInfo::F_ISUNSIGNED) ? "u" : "";
+        const char * sz = (flags & SemInfo::F_IS8BYTES) ? "64" : "";
+        char buf[8];
+        sprintf(buf,"%sint%s",sign,sz);
+        push_literal(ls,buf);
       } else {
         push_double(ls,ls->t.seminfo.r);
-        push_literal(ls,"double");
+        if(flags & SemInfo::F_IS8BYTES)
+            push_literal(ls,"double");
+        else
+            push_literal(ls,"float");
       }
       break;
     }

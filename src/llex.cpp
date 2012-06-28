@@ -344,7 +344,9 @@ int buff2d(Mbuffer * b, SemInfo * seminfo) {
     int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
     char * end;
     seminfo->i = strtoull(luaZ_buffer(b),&end,0);
-    seminfo->is_integer = *end == '\0';
+    if(*end == '\0') {
+        seminfo->flags |= SemInfo::F_ISINTEGER;
+    }
     return r;
 }
 
@@ -363,19 +365,57 @@ static void trydecpoint (LexState *ls, SemInfo *seminfo) {
   }
 }
 
+static bool tislalnum(LexState * ls) {
+    return lislalnum(ls->current) && ls->current != 'f' && ls->current != 'L' && ls->current != 'U';
+}
+
 
 /* LUA_NUMBER */
 static void read_numeral (LexState *ls, SemInfo *seminfo) {
   assert(lisdigit(ls->current));
+  seminfo->flags = 0;
   do {
     save_and_next(ls);
     if (check_next(ls, "EePp"))  /* exponent part? */
       check_next(ls, "+-");  /* optional exponent sign */
-  } while (lislalnum(ls->current) || ls->current == '.');
+  } while ( tislalnum(ls) || ls->current == '.');
   save(ls, '\0');
   buffreplace(ls, '.', ls->decpoint);  /* follow locale for decimal point */
   if (!buff2d(ls->buff, seminfo))  /* format error? */
     trydecpoint(ls, seminfo); /* try to update decimal point separator */
+
+  if(seminfo->flags & SemInfo::F_ISINTEGER) {
+    if(ls->current == 'L') {
+        next(ls);
+        if(ls->current == 'L') {
+            next(ls);
+            //LL suffix
+            seminfo->flags |= SemInfo::F_IS8BYTES;
+        } else {
+            lexerror(ls, "malformed number", TK_NUMBER);
+        }
+    } else if(ls->current == 'U') {
+        next(ls);
+        if(ls->current == 'L') {
+            next(ls);
+            if(ls->current == 'L') {
+                next(ls);
+                seminfo->flags |= SemInfo::F_IS8BYTES;
+                seminfo->flags |= SemInfo::F_ISUNSIGNED;
+            } else {
+                lexerror(ls, "malformed number", TK_NUMBER);
+            }
+        } else {
+            lexerror(ls, "malformed number", TK_NUMBER);
+        }
+    }
+  } else {
+    if(ls->current == 'f' && ls->in_terra) {
+        next(ls);
+    } else {
+        seminfo->flags |= SemInfo::F_IS8BYTES;
+    }
+  }
 }
 
 

@@ -13,7 +13,6 @@ Runtime Implementation:
 
 For LANL:
 -- getting started guide
--- introduce LL, ULL, and f to make constants have the expected types
 -- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
    handle as much as possible in the JIT, and make sure the offline compiler does everything
    make configurable (perhaps a general config mechanism)
@@ -50,3 +49,4 @@ DONE:
    pointers to functions will need to be handled as a special case
 --calling lua functions from terra
 -- turn debug on/off debug printing
+-- introduce LL, ULL, and f to make constants have the expected types

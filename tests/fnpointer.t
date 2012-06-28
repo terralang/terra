@@ -1,10 +1,10 @@
 
 terra foo()
-    return 4
+    return 4LL
 end
 
 terra bar()
-    return 5
+    return 5LL
 end
 
 terra bar3(fn: {} -> int64)
