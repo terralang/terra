@@ -27,7 +27,7 @@ FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FO
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs)
+LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs engine) -lLLVMLinker
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
