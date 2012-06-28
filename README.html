@@ -78,7 +78,10 @@ h2 {
   color: black; }
 
 h3 {
-  font-size: 18px; }
+  font-size: 16px;
+  font-family: Georgia;
+  font-style:italic;
+  font-weight: normal; }
 
 h4 {
   font-size: 16px; }
@@ -292,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#109;&#x61;&#105;&#x6C;t&#111;:&#x7A;&#x64;&#101;&#x76;i&#x74;&#x6F;&#64;&#115;&#x74;a&#x6E;&#x66;&#111;&#x72;&#100;&#x2E;&#x65;&#x64;&#x75;">&#x7A;&#x64;&#101;&#x76;i&#x74;&#x6F;&#64;&#115;&#x74;a&#x6E;&#x66;&#111;&#x72;&#100;&#x2E;&#x65;&#x64;&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#x61;&#x69;&#x6C;&#x74;o:&#122;&#100;e&#x76;&#105;&#x74;&#111;&#64;&#x73;&#116;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#x64;&#117;">&#122;&#100;e&#x76;&#105;&#x74;&#111;&#64;&#x73;&#116;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#x64;&#117;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language, while still being backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -319,19 +322,19 @@ pre {
 
 <p>Unzip the tar ball and then copy it into <code>/usr/local</code>:</p>
 
-<pre><code>$ tar-xf clang+llvm-3.1-x86_64-apple-darwin11.tar.gz
+<pre><code>$ tar -xf clang+llvm-3.1-x86_64-apple-darwin11.tar.gz
 $ cp -r clang+llvm-3.1-x86_64-apple-darwin11/ /usr/local
 </code></pre>
 
-<p>Clang should now report being version 3.1</p>
+<p>Clang should now report being version 3.1:</p>
 
 <pre><code>$ clang --version
-Apple clang version 3.0 (tags/Apple/clang-211.10.1) (based on LLVM 3.0svn)
+clang version 3.1 (branches/release_31)
 Target: x86_64-apple-darwin10.8.0
 Thread model: posix
 </code></pre>
 
-<p>Type make in the terra directory to build terra:</p>
+<p>Type make in the <code>terra</code> directory to build Terra:</p>
 
 <pre><code>$ make
 </code></pre>
@@ -359,7 +362,7 @@ hello, world
 </code></pre>
 
 <p>Terra can also be used as a library from C by linking against <code>libterra.a</code>. The interface is very similar that of the <a href="http://queue.acm.org/detail.cfm?id=1983083">Lua interpreter</a>.
-A simple example initialized Terra subsystem inside a Lua state and then runs the code in each file:</p>
+A simple example initializes Terra and then runs code from the file specified in each argument:</p>
 
 <pre><code>#include &lt;stdio.h&gt;
 #include "terra.h"
@@ -375,7 +378,7 @@ int main(int argc, char ** argv) {
 }
 </code></pre>
 
-<p>In addition to these modes, terra code can be compiled to <code>.o</code> files which can be directly linked into an executable. This feature is not yet implemented. Features that are not implemented will be marked with <em>NYI</em> in this guide when they come up.</p>
+<p>In addition to these modes, Terra code can be compiled to <code>.o</code> files which can be directly linked into an executable. This feature is not yet implemented. Features that are not implemented will be marked with <em>NYI</em> in this guide when they come up.</p>
 
 <p>For the remainder of the guide, we will assume that you are using the <code>terra</code> executable to run scripts. A bunch of example scripts can be found in the <code>tests/</code> directory.</p>
 
@@ -386,9 +389,9 @@ int main(int argc, char ** argv) {
 <pre><code>print("hello, world")
 </code></pre>
 
-<p>Note that this program is actually completely valid Lua program as well. In fact, the top-level declarations in a Terra source code file are actually run as normal Lua code! The top-level Lua layer handles the details like conditional compilation, namespaces, and templating of terra code. We'll see later that it additionally allows for more powerful features such as function specialization, lisp-style macros, and code quotations.</p>
+<p>This program is actually a completely valid Lua program as well. In fact, the top-level declarations in a Terra source code file are always run as normal Lua code! This top-level Lua layer handles the details like conditional compilation, namespaces, and templating of terra code. We'll see later that it additionally allows for more powerful features such as function specialization, lisp-style macros, and code quotations.</p>
 
-<p>To actually introduce a Terra function we use the keyword <code>terra</code>:</p>
+<p>To actually begin writing Terra code, we introduce a Terra function with the keyword <code>terra</code>:</p>
 
 <pre><code>terra addone(a : int)
     return a + 1
@@ -397,12 +400,12 @@ end
 print(addone(2)) --this outputs: 3
 </code></pre>
 
-<p>Note that unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simple static type propagation to infer the return type of the <code>addone</code> function. You can also explicitly specify it:</p>
+<p>Unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simple static type propagation to infer the return type of the <code>addone</code> function. You can also explicitly specify it:</p>
 
 <pre><code>terra addone(a : int) : int
 </code></pre>
 
-<p>Note that the last line of the example invokes the Terra function from the top level context (which is Lua code). This is an example of the interaction between Terra and Lua.
+<p>The last line of the example invokes the Terra function from the top level context (which is Lua code). This is an example of the interaction between Terra and Lua.
 Terra code is JIT compiled to machine code when it is first <em>needed</em>. In this example, this occurs when <code>addone</code> is called. In general, functions are <em>needed</em> when then are called, or when they are referred to by other functions that are being compiled. If you want to avoid the overhead of compiling code at runtime, you can also compile code ahead of time and save it in a <code>.o</code> file (NYI).</p>
 
 <p>More information on the interface between Terra and Lua can be found in <a href="#interaction">Lua-Terra interaction</a>.</p>
@@ -418,4 +421,324 @@ end
 main()
 </code></pre>
 
-<p>The function <code>terralib.includec</code> is a Lua function that invokes Terra's backward compatibility later to import C code in <code>stdio.h</code> into the Lua table <code>c</code>. Terra functions can then directly call the C functions. Since both clang (our C frontend) and Terra target the LLVM intermediate representation, there is no additional overhead int calling a C function. Terra can even inline across these calls if the source of the C function is available!</p>
+<p>The function <code>terralib.includec</code> is a Lua function that invokes Terra's backward compatibility layeer to import C code in <code>stdio.h</code> into the Lua table <code>c</code>. Terra functions can then directly call the C functions. Since both clang (our C frontend) and Terra target the LLVM intermediate representation, there is no additional overhead in calling a C function. Terra can even inline across these calls if the source of the C function is available!</p>
+
+<p>The <code>local</code> keyword is a Lua construct. It introduces a locally scoped Lua variable named <code>c</code>. If omitted it would create a globally scoped variable.</p>
+
+<h2>Variables and Assignments</h2>
+
+<p>Variables in Terra code are introduced with the <code>var</code> keyword:</p>
+
+<pre><code>terra myfn()
+    var a : int = 3
+    var b : double
+end
+</code></pre>
+
+<p>Unlike Lua, all Terra variables must be declared.  Initializers are optional. <code>b</code>'s value above is undefined until it is assigned. If an initializer is specified, then Terra can infer the variables type automatically:</p>
+
+<pre><code>terra myfn()
+    var a = 3.0 --a will have type double
+end
+</code></pre>
+
+<p>You can have multiple declarations on one line:</p>
+
+<pre><code>terra myfn()
+    var a : int, b : double = 3, 4.5
+    var c : double, d       = 3, 4.5
+end
+</code></pre>
+
+<p>Lua and Terra are both whitespace invariant. However, there is no need for semicolons between statements. The above statement is equivalent to:</p>
+
+<pre><code>terra myfn()
+    var a : int, b : double = 3, 4.5 var c : double, d = 3, 4.5
+end
+</code></pre>
+
+<p>If you want to put a semicolon in for clarity you can:</p>
+
+<pre><code>terra myfn()
+    var a : int, b : double = 3, 4.5; var c : double, d = 3, 4.5
+end
+</code></pre>
+
+<p>Assignments have a similar form:</p>
+
+<pre><code>terra myfn()
+    var a,b = 3.0, 4.5
+    a,b = b,a 
+    -- a has value 4.5, b has value 3.0 
+end
+</code></pre>
+
+<p>As in Lua, the right-hand size is executed before the assignments are performed, so the above example will swap the values of the two variables.</p>
+
+<p>Variables can be declared outside <code>terra</code> functions as well:
+    var a = 3.0
+    terra myfn()
+        return a
+    end
+This makes <code>a</code> a <em>global</em> variable that is visible to multiple Terra functions.</p>
+
+<p>Variables in Terra are always lexically scoped. The statement <code>do &lt;stmts&gt; end</code> introduces a new level of scoping (for the remainder of this guide, the enclosing <code>terra</code> declaration will be omitted when it is clear we are talking about Terra code):</p>
+
+<pre><code>var a = 3.0
+do
+    var a = 4.0
+end
+-- a has value 3.0 now
+</code></pre>
+
+<h2>Control Flow</h2>
+
+<p>Terra's control flow is almost identical to Lua except for the behavior of <code>for</code> loops.</p>
+
+<h3>If Statements</h3>
+
+<pre><code>if a or b and not c then
+    c.printf("then\n")
+elseif c then
+    c.printf("elseif\n")
+else
+    c.printf("else\n")
+end
+</code></pre>
+
+<h3>Loops</h3>
+
+<pre><code>var a = 0
+while a &lt; 10 do
+    c.printf("loop\n")
+    a = a + 1
+end
+
+repeat
+    a = a - 1
+    c.printf("loop2\n")
+until a == 0
+
+while a &lt; 10 do
+    if b then
+        break
+    end
+    a = a + 1
+end
+</code></pre>
+
+<p>Terra also includes <code>for</code> loop. This example counts from 0 up to but not including 10:</p>
+
+<pre><code>for i = 0,10 do
+    c.printf("%d\n",i)
+end
+</code></pre>
+
+<p>This is different from Lua's behavior (which is inclusive of 10) since Terra uses 0-based indexing and pointer arithmetic in contrast with Lua's 1-based indexing. </p>
+
+<p>Lua also has a <code>for</code> loop that operates using iterators. This is not yet implemented (NYI) in Terra, but a version will be added eventually.</p>
+
+<p>The loop may also specify an option step parameter:</p>
+
+<pre><code>for i = 0,10,2 do
+    c.printf("%d\n",i) --0, 2, 4, ...
+end
+</code></pre>
+
+<h3>Gotos</h3>
+
+<p>Terra includes goto statements. Use them wisely. They are included since they can be useful when generating code for embedded languages.</p>
+
+<pre><code>::loop::
+c.printf("y\n")
+goto loop
+</code></pre>
+
+<h2>Functions Revisited</h2>
+
+<p>We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:</p>
+
+<pre><code>terra sort2(a : int, b : int, c : int) : (int,int) --the return type is optional
+    if a &lt; b then   
+        return a, b
+    else
+        return b, a
+    end
+end
+
+terra doit()
+    var a,b = sort2(3,4)
+    --now a == 4, b == 3
+end
+doit()
+</code></pre>
+
+<p>As mentioned previously, compilation occurs when functions are first <em>needed</em>. In this example, when <code>doit()</code> is called, both <code>doit()</code> and <code>sort2</code> are compiled because <code>doit</code> refers to <code>sort2</code>. </p>
+
+<h3>Mutual Recursion</h3>
+
+<p>Symbols such as variables and types are resolved and <em>compilation</em> time. This makes it possible to define mutually recursive functions without first declaring them:</p>
+
+<pre><code>terra iseven(n : uint32)
+    if n == 0 then
+        return true
+    else
+        return isodd(n - 1)
+    end
+end
+
+terra isodd(n : uint32)
+    if n == 0 then
+        return false
+    else
+        return iseven(n - 1)
+    end
+end
+
+print(iseven(3)) -- OK! isodd has been defined
+</code></pre>
+
+<p>When <code>iseven</code> is compiled on the last line, <code>isodd</code> has been defined. </p>
+
+<h3>Terra Functions Are Lua Objects</h3>
+
+<p>So far, we have been treating <code>terra</code> functions as special constructs in the top-level Lua code. In reality, Terra functions are actually just Lua values. In fact, the code:</p>
+
+<pre><code>terra foo()
+end
+</code></pre>
+
+<p>Is just syntax sugar for:</p>
+
+<pre><code>foo = terra()
+    --this is an anonymous terra function
+end
+</code></pre>
+
+<p>The symbol <code>foo</code> is just a Lua <em>variable</em> whose <em>value</em> is a Terra function. Lua is Terra's meta-language, and you can use it to perform reflection on Terra functions. For instance, you can ask for the function's type:</p>
+
+<pre><code>terra add1(a : double)
+    return a + 1.0
+end
+
+--this is Lua code:
+&gt; print(add1:gettype())
+"{double} -&gt; {double}"
+</code></pre>
+
+<p>You can also force a function to be compiled:</p>
+
+<pre><code>add1:compile()
+</code></pre>
+
+<p>Or look at the functions internal abstract syntax tree:</p>
+
+<pre><code>function
+  parameters: 
+    1: entry
+         linenumber: 1
+         name: a
+         type: type
+                 linenumber: 1
+                 expression: function: 0x00065930
+  linenumber: 1
+  is_varargs: false
+  filename: =stdin
+  body: block
+          linenumber: 1
+          statements: 
+            1: return
+                 linenumber: 1
+                 expressions: 
+                   1: operator
+                        linenumber: 1
+                        operands: 
+                          1: var
+                               linenumber: 1
+                               name: a
+                          2: literal
+                               value: 1
+                               linenumber: 1
+                               type: double
+                        operator: + (enum 0)
+</code></pre>
+
+<h3>Symbol Resolution</h3>
+
+<p>When the Terra compiler looks up a symbol like <code>add1</code> it first looks in the local environment of the <code>terra</code> function. If it doesn't find the symbol, then it simply continues the search in the enclosing (Lua) environment. If the compiler resolves the symbol to a Lua value, then it converts it to a Terra value where possible. Let's look at a few examples:</p>
+
+<pre><code>local N = 4
+terra powN(a : double)
+    var r = 1
+    for i = 0, N do
+        r = r * a
+    end
+    return r
+end
+</code></pre>
+
+<p>Here <code>N</code> is a Lua value of type <code>number</code>. When <code>powN</code> is compiled, the value of <code>N</code> is looked up and inlined into the function. </p>
+
+<p>Since <code>N</code> is resolved at <em>compile</em> time, changing <code>N</code> after <code>powN</code> is compiled will not change the behavior of <code>powN</code>.  For this reason, it is strongly recommended that you don't change the value of Lua variables that appear in Terra code once they are initialized.</p>
+
+<p>Of course, a single power function is boring. Instead we might want to create specialized versions of 10 power functions:</p>
+
+<pre><code>local math = {}
+for i = 1,10 do
+    math["pow"..tostring(i)] = terra(a : double)
+        var r = 1
+        for i = 0, i do
+            r = r * a
+        end
+        return r
+    end
+end
+
+math.pow1(2) -- 2
+math.pow2(2) -- 4
+math.pow3(2) -- 8
+</code></pre>
+
+<p>Here we use the fact that in Lua the select operator on tables (<code>a.b</code>) is equivalent to looking up the value in table (<code>a["b"]</code>).</p>
+
+<p>You can also call these power functions from a Terra function:</p>
+
+<pre><code>terra doit()
+    return math.pow3(3) 
+end
+</code></pre>
+
+<p>Let's examine what is happens when this function is compiled. The Terra compiler will resolve the <code>math</code> symbol to the Lua table holding the power functions. It will then see the select operator (<code>math.pow3</code>). Because <code>math</code> is a Lua table, the Terra compiler will perform this select operator at compile time, and resolve <code>math.pow3</code> to the third Terra function constructed inside the loop.  It will then insert a direct call to that function inside <code>doit</code>. This behavior is a form of <em>partial execution</em>. In general, Lua will resolve any chain of select operations <code>a.b.c.d</code> at compile time. This behavior enables Terra to use Lua tables to organize code into different namespaces. There is no need for a Terra specific namespace mechanism!</p>
+
+<p>Revisiting including C files:</p>
+
+<pre><code>local c = terralib.includec("stdio.h")
+</code></pre>
+
+<p><code>terralib.includec</code> is just a normal Lua function. It builds a Lua table that contains references to the Terra functions that represent calls to (in this case) the standard library functions. We can iterate through the table as well:</p>
+
+<pre><code>for k,v in pairs(c) do
+    print(k)
+end
+--output:
+fseek
+gets
+printf
+puts
+FILE
+...
+</code></pre>
+
+<p>Additionally, you may want to declare a Terra function as a <em>locally</em> scoped Lua variable. You can use the <code>local</code> keyword:</p>
+
+<pre><code>local terra foo()
+end
+</code></pre>
+
+<p>Which is just sugar for:</p>
+
+<pre><code>local foo; foo = terra()
+end()
+</code></pre>
+
+<h2>Types</h2>
