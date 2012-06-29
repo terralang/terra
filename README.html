@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#x6D;&#97;i&#x6C;&#116;&#111;:z&#100;&#x65;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#97;&#110;f&#111;&#114;&#100;&#46;e&#100;&#x75;">z&#100;&#x65;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#97;&#110;f&#111;&#114;&#100;&#46;e&#100;&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#97;&#105;&#108;t&#x6F;:&#x7A;&#100;&#101;&#x76;&#105;&#x74;&#111;&#64;s&#116;&#x61;&#x6E;f&#x6F;&#x72;&#x64;&#x2E;&#x65;&#100;&#117;">&#x7A;&#100;&#101;&#x76;&#105;&#x74;&#111;&#64;s&#116;&#x61;&#x6E;f&#x6F;&#x72;&#x64;&#x2E;&#x65;&#100;&#117;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language, while still being backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -568,7 +568,7 @@ goto loop
 
 <p>We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:</p>
 
-<pre><code>terra sort2(a : int, b : int, c : int) : (int,int) --the return type is optional
+<pre><code>terra sort2(a : int, b : int, c : int) : {int,int} --the return type is optional
     if a &lt; b then   
         return a, b
     else
@@ -854,6 +854,15 @@ terra doit()
 end
 </code></pre>
 
+<p>Unlike C, you can use the select operator <code>a.b</code> on pointers. This has the effect of dereferencing the pointer once and then applying the select operator (similar to the <code>-&gt;</code> operator in C).</p>
+
+<pre><code>terra doit()
+    var c : Complex
+    var pc = &amp;c
+    return pc.real --sugar for (@pc).real
+end
+</code></pre>
+
 <p>Like functions, symbols in struct definitions are resolved at compile time, allowing for recursive structural types:</p>
 
 <pre><code>struct LinkedList { value : int; next : &amp;LinkedList; }
@@ -872,5 +881,127 @@ end
 
 <h3>Anonymous Structs</h3>
 
-<p>In Terra you can also create structs that have no name:
-    var a : struct { real : float, imag : float } </p>
+<p>In Terra you can also create structs that have no name:</p>
+
+<pre><code>var a : struct { real : float, imag : float }
+</code></pre>
+
+<p>These structs are similar to the anonymous structs found in languages like C-sharp.
+They may also contain unnamed members:</p>
+
+<pre><code>var a : struct { float, float }
+</code></pre>
+
+<p>Unnamed members will be given the names <code>_0</code>, <code>_1</code>, ... <code>_N</code>:</p>
+
+<pre><code>a._0 + a._1
+</code></pre>
+
+<p>You can use struct constructor syntax to quickly generate values that have an anonymous struct type:</p>
+
+<pre><code>var a = { 1,2,3,4 } --has type struct {int,int,int, int}
+var b = { a = 3.0, b = 3 } --has type struct {double, b : int }
+</code></pre>
+
+<p>Terra allows you to implicitly convert any anonymous struct to a named struct that has a superset of its fields.</p>
+
+<pre><code>struct Complex { real : float, imag : float}
+var a : Complex = { real = 3, imag = 1 }
+</code></pre>
+
+<p>If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:</p>
+
+<pre><code>var b : Complex = {1, 2}
+</code></pre>
+
+<p>Anonymous structs can also be implicitly converted to array and vector types:</p>
+
+<pre><code>var a : int[4] = {1,2,3,4}
+var b : vec(int,4) = {1,2,3,4}
+</code></pre>
+
+<p>Since constructors like <code>{1,2}</code> are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a declaration.</p>
+
+<h3>Function Pointers</h3>
+
+<p>Terra also allows for function pointers:</p>
+
+<pre><code>terra add(a : int, b : int) return a + b end
+terra sub(a : int, b : int) return a - b end
+terra doit(usesub : bool, v : int)
+    var a : {int,int} -&gt; int
+    if usesub then
+        a = sub
+    else
+        a = add
+    end
+    return a(v,v)
+end
+</code></pre>
+
+<p>Terra does not have a <code>void</code> type. Instead, functions may return zero arguments:</p>
+
+<pre><code>terra zerorets() : {}  --this is optional, of course
+end
+print(zerorets:gettype()) -- "{} -&gt; {}"
+</code></pre>
+
+<h3>Types as Lua Values</h3>
+
+<p>TODO</p>
+
+<ul>
+<li>Templating on types example</li>
+<li>Calling a Lua function to resolve a type</li>
+</ul>
+
+<h2>Literals</h2>
+
+<p>Terra has standard literal notation:</p>
+
+<ul>
+<li><code>3</code> is an <code>int</code></li>
+<li><code>3.</code> is a <code>double</code></li>
+<li><code>3.f</code> is a <code>float</code></li>
+<li><code>3LL</code> is a <code>int64</code></li>
+<li><code>3ULL</code> is a <code>uint64</code></li>
+<li><code>"a string"</code> or <code>[[ a multi-line long string ]]</code> is a <code>int8*</code></li>
+<li><code>nil</code> is the null pointer for any pointer type</li>
+</ul>
+
+<h2>Expression Lists</h2>
+
+<p>In cases where multiple expressions can appear in a list (i.e. in declarations, assignments, return statements, and struct initializers), functions that return multiple values appearing at the end of the list append to it.  </p>
+
+<p>Here are some examples (adapted from the Lua reference manual):</p>
+
+<pre><code> f()                -- adjusted to 0 results
+ g(f(), x)          -- f() is adjusted to 1 result
+ g(x, f())          -- g gets x plus all results from f()
+ a,b = f(), x       -- f() is adjusted to 1 result
+ a,b,c = x, f()     -- f() is adjusted to 2 results
+ a,b,c = f()        -- f() is adjusted to 3 results
+ return f()         -- returns all results from f()
+ return x,y,f()     -- returns x, y, and all results from f()
+ {f()}              -- creates a struct all results from f()
+ {f(), nil}         -- f() is adjusted to 1 result
+ {(f())}            -- f adjusted to 1 result
+</code></pre>
+
+<h2>Methods</h2>
+
+<p>TODO</p>
+
+<ul>
+<li>explanation of method table</li>
+<li>lookup rules (on pointers and values and allowed casts)</li>
+<li>declaration sugar</li>
+</ul>
+
+<h2>Lua-Terra Interaction</h2>
+
+<p>TODO</p>
+
+<h2>Macros</h2>
+
+<p>TODO</p>

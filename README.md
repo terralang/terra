@@ -259,7 +259,7 @@ Functions Revisited
 
 We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
-    terra sort2(a : int, b : int, c : int) : (int,int) --the return type is optional
+    terra sort2(a : int, b : int, c : int) : {int,int} --the return type is optional
         if a < b then   
             return a, b
         else
@@ -514,6 +514,14 @@ You can create aggregate types using the `struct` keyword. Structs must be decla
         c.imag = 5
     end
     
+Unlike C, you can use the select operator `a.b` on pointers. This has the effect of dereferencing the pointer once and then applying the select operator (similar to the `->` operator in C).
+
+    terra doit()
+        var c : Complex
+        var pc = &c
+        return pc.real --sugar for (@pc).real
+    end
+    
 Like functions, symbols in struct definitions are resolved at compile time, allowing for recursive structural types:
 
     struct LinkedList { value : int; next : &LinkedList; } 
@@ -532,4 +540,116 @@ Terra has no union type. Instead, you can declare that you want two or more elem
 ### Anonymous Structs ###
 
 In Terra you can also create structs that have no name:
+
     var a : struct { real : float, imag : float } 
+    
+These structs are similar to the anonymous structs found in languages like C-sharp.
+They may also contain unnamed members:
+
+    var a : struct { float, float }
+    
+Unnamed members will be given the names `_0`, `_1`, ... `_N`:
+
+    a._0 + a._1
+    
+You can use struct constructor syntax to quickly generate values that have an anonymous struct type:
+
+    var a = { 1,2,3,4 } --has type struct {int,int,int, int}
+    var b = { a = 3.0, b = 3 } --has type struct {double, b : int }
+    
+Terra allows you to implicitly convert any anonymous struct to a named struct that has a superset of its fields.
+    
+    struct Complex { real : float, imag : float}
+    var a : Complex = { real = 3, imag = 1 }
+    
+If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:
+    
+    var b : Complex = {1, 2}
+    
+Anonymous structs can also be implicitly converted to array and vector types:
+
+    var a : int[4] = {1,2,3,4}
+    var b : vec(int,4) = {1,2,3,4}
+    
+Since constructors like `{1,2}` are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a declaration.
+
+### Function Pointers ###
+
+Terra also allows for function pointers:
+
+    terra add(a : int, b : int) return a + b end
+    terra sub(a : int, b : int) return a - b end
+    terra doit(usesub : bool, v : int)
+        var a : {int,int} -> int
+        if usesub then
+            a = sub
+        else
+            a = add
+        end
+        return a(v,v)
+    end
+    
+Terra does not have a `void` type. Instead, functions may return zero arguments:
+
+    terra zerorets() : {}  --this is optional, of course
+    end
+    print(zerorets:gettype()) -- "{} -> {}"
+    
+### Types as Lua Values ###
+
+TODO
+
+* Templating on types example
+* Calling a Lua function to resolve a type
+
+Literals
+--------
+Terra has standard literal notation:
+
+* `3` is an `int`
+* `3.` is a `double`
+* `3.f` is a `float`
+* `3LL` is a `int64`
+* `3ULL` is a `uint64`
+* `"a string"` or `[[ a multi-line long string ]]` is a `int8*`
+* `nil` is the null pointer for any pointer type
+
+
+Expression Lists
+----------------
+
+In cases where multiple expressions can appear in a list (i.e. in declarations, assignments, return statements, and struct initializers), functions that return multiple values appearing at the end of the list append to it.  
+
+Here are some examples (adapted from the Lua reference manual):
+
+     f()                -- adjusted to 0 results
+     g(f(), x)          -- f() is adjusted to 1 result
+     g(x, f())          -- g gets x plus all results from f()
+     a,b = f(), x       -- f() is adjusted to 1 result
+     a,b,c = x, f()     -- f() is adjusted to 2 results
+     a,b,c = f()        -- f() is adjusted to 3 results
+     return f()         -- returns all results from f()
+     return x,y,f()     -- returns x, y, and all results from f()
+     {f()}              -- creates a struct all results from f()
+     {f(), nil}         -- f() is adjusted to 1 result
+     {(f())}            -- f adjusted to 1 result
+
+Methods
+-------
+
+TODO
+
+  * explanation of method table
+  * lookup rules (on pointers and values and allowed casts)
+  * declaration sugar
+
+Lua-Terra Interaction
+---------------------
+
+TODO
+
+Macros
+------
+
+TODO
+    

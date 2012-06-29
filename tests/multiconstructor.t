@@ -1,5 +1,5 @@
 
-terra foo() : (double, double)
+terra foo() : {double, double}
 	return 1.0,3.0
 end
 

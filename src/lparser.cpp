@@ -731,12 +731,12 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
-      if(testnext(ls,'(')) {
-          if(testnext(ls,')')) { //zero args
+      if(testnext(ls,'{')) {
+          if(testnext(ls,'}')) { //zero args
               new_list(ls);
           } else { //(arg0,args1,...)
               RETURNS_1(typelist(ls));
-              checknext(ls,')');
+              checknext(ls,'}');
           }
       } else { //single arg: arg0 
           int lst = new_list(ls);
