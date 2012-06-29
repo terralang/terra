@@ -705,16 +705,6 @@ static void parlist (LexState *ls) {
   }
 }
 
-static void typelist (LexState *ls) {
-  /* typelist -> type { `,' type } */
-  int lst = new_list(ls);
-  terratype(ls);
-  add_entry(ls,lst);
-  while (testnext(ls, ',')) {
-    terratype(ls);
-    add_entry(ls,lst);
-  }
-}
 static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
@@ -731,18 +721,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
-      if(testnext(ls,'{')) {
-          if(testnext(ls,'}')) { //zero args
-              new_list(ls);
-          } else { //(arg0,args1,...)
-              RETURNS_1(typelist(ls));
-              checknext(ls,'}');
-          }
-      } else { //single arg: arg0 
-          int lst = new_list(ls);
-          RETURNS_1(terratype(ls));
-          add_entry(ls,lst);
-      }
+    RETURNS_1(terratype(ls));
     add_field(ls,tbl,"return_types");
   }
   int blk = new_table(ls,T_block);

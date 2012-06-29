@@ -300,7 +300,7 @@ function terra.func:gettype(ctx)
                 for _,v in ipairs(self.untypedtree.parameters) do
                     params:insert(rt(v.type))
                 end
-                local rets = self.untypedtree.return_types:map(rt)
+                local rets = terra.resolvetype(ctx,self.untypedtree.return_types,true)
                 self.type = terra.types.functype(params,rets) --for future calls
                 return self.type
             else
@@ -1101,9 +1101,16 @@ function terra.parseerror(startline, errmsg)
     return startline + tonumber(line) - 1, err
 end
 
-function terra.resolvetype(ctx,t)
+function terra.resolvetype(ctx,t,returnlist)
+    local function wrap(r)
+        if returnlist then
+            return terra.newlist {r}
+        else
+            return r
+        end
+    end
     if terra.types.istype(t) then --if the AST contains a direct reference to a type, then accept that, otherwise try to evaluate the type
-        return t:getcanonical(ctx)
+        return wrap(t:getcanonical(ctx))
     end
     
     if not terra.istree(t) or not t:is "type" then
@@ -1115,14 +1122,25 @@ function terra.resolvetype(ctx,t)
     local success,typ = terra.treeeval(ctx,t,t.expression)
     
     if not success then
-        return terra.types.error
+        return wrap(terra.types.error)
     end
     
     if terra.types.istype(typ) then
-        return typ:getcanonical(ctx)
+        return wrap(typ:getcanonical(ctx))
+    elseif returnlist and type(typ) == "table" then
+        local rl = terra.newlist()
+        for i,v in ipairs(typ) do
+            if terra.types.istype(v) then
+                rl:insert(v:getcanonical(ctx))
+            else
+                terra.reporterror(ctx,t,"expected a type but found ", type(v))
+                rl:insert(terra.types.error)
+            end
+        end
+        return rl
     else
         terra.reporterror(ctx,t,"expected a type but found ", type(typ))
-        return terra.types.error
+        return wrap(terra.types.error)
     end
 end
 local function map(lst,fn)
@@ -1176,8 +1194,8 @@ function terra.func:typecheck(ctx)
     
     local ftree = self.untypedtree
     
-    local function resolvetype(t)
-        return terra.resolvetype(ctx,t)
+    local function resolvetype(t,returnlist)
+        return terra.resolvetype(ctx,t,returnlist)
     end
     
     
@@ -2141,7 +2159,7 @@ function terra.func:typecheck(ctx)
     
     local return_types
     if ftree.return_types then --take the return types to be as specified
-        return_types = ftree.return_types:map(resolvetype)
+        return_types = resolvetype(ftree.return_types,true)
     else --calculate the meet of all return type to calculate the actual return type
         if #return_stmts == 0 then
             return_types = terra.newlist()
