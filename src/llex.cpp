@@ -138,13 +138,13 @@ const char * luaX_token2rawstr(LexState * ls, int token) {
 const char * luaX_token2str (LexState *ls, int token) {
   if (token < FIRST_RESERVED) {
     assert(token == cast(unsigned char, token));
-    return (lisprint(token)) ? luaS_cstringf(ls->LP,"'%c'", token) :
+    return (lisprint(token)) ? luaS_cstringf(ls->LP,LUA_QL("%c"), token) :
                                luaS_cstringf(ls->LP,"char(%d)");
   }
   else {
     const char *s = luaX_tokens[token - FIRST_RESERVED];
     if (token < TK_EOS) //TODO: why is this check here?
-      return getstr(luaS_new(ls->LP, s));
+      return luaS_cstringf(ls->LP,LUA_QS,s);
     else
       return s;
   }
@@ -157,7 +157,7 @@ static const char *txtToken (LexState *ls, int token) {
     case TK_STRING:
     case TK_NUMBER:
       save(ls, '\0');
-      return getstr(luaS_new(ls->LP,luaZ_buffer(ls->buff)));
+      return luaS_cstringf(ls->LP,LUA_QS,luaZ_buffer(ls->buff));
     default:
       return luaX_token2str(ls, token);
   }
