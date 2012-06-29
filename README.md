@@ -62,13 +62,13 @@ To run the REPL:
 
 Terra's REPL behaves similar to Lua's REPL. If you are familiar with other languages like Python, the one major difference is that expressions must be prefixed with `return` or `=` if you want to get their value:
 
-	> 3        --ERROR! it is expecting a statement
-	stdin:1: unexpected symbol near 3
-	> return 3 -- OK!
-	3
-	> = 3      -- syntax sugar in the REPL for 'return 3'
-	3
-	
+    > 3        --ERROR! it is expecting a statement
+    stdin:1: unexpected symbol near 3
+    > return 3 -- OK!
+    3
+    > = 3      -- syntax sugar in the REPL for 'return 3'
+    3
+    
 You can also run it on already written files:
 
     $ ./terra tests/hello.t
@@ -441,12 +441,12 @@ We've already seen some basic Terra types like `int` or `double`. Terra has the 
 
 Integers are explicitly sized except for `int` and `uint` which should only be used when the particular size is not important. Most implicit conversions from C are also valid in Terra. The one major exception is the `bool` type. Unlike C, all control-flow explicitly requires a `bool` and integers are not explicitly convertible to `bool`.
 
-	if 3 then end -- ERROR 3 is not bool
-	if 3 == 0 then end -- OK! 3 == 0 is bool
+    if 3 then end -- ERROR 3 is not bool
+    if 3 == 0 then end -- OK! 3 == 0 is bool
 
 You can force the conversion from `int` to `bool` using an explicit cast:
 
-	var a : bool = (3):as(bool)
+    var a : bool = (3):as(bool)
 
 The `a:b(c)` syntax is a method invocation syntax borrowed from Lua that will be discussed later.
 
@@ -459,35 +459,77 @@ Primitive types have the standard operators defined:
 
 These behave the same C except for the logical operators, which are overloaded based on the type of the operators:
 
-	true and false --Lazily evaluated logical and
-	1 and 3        --Eagerly evaluated bitwise and
-	
+    true and false --Lazily evaluated logical and
+    1 and 3        --Eagerly evaluated bitwise and
+    
 ### Pointers ###
 
 Pointers behave similarly to C, including pointer arithmetic. The syntax is slightly different to work with Lua's grammar:
-	
-	var a : int = 1
-	var pa : &int = &a
-	@a = 4
-	var b = @a
-	
+    
+    var a : int = 1
+    var pa : &int = &a
+    @a = 4
+    var b = @a
+    
 You can read `&int` as a value holding the _address_ of an `int`, and `@a` as the value _at_ address `a`. To get a pointer to allocated memory you can use `malloc`:
 
-	c = terralib.includec("stdlib.h")
-	terra doit()
-		var a = c.malloc(sizeof(int) * 3):as(&int)
-		@a,@(a+1) = 1,2
-	end
+    c = terralib.includec("stdlib.h")
+    terra doit()
+        var a = c.malloc(sizeof(int) * 3):as(&int)
+        @a,@(a+1) = 1,2
+    end
 
 Indexing operators also work on pointers:
 
-	a[3] --syntax sugar for @(a + 3)
-	
+    a[3] --syntax sugar for @(a + 3)
+    
 ### Arrays ###
 
 You can construct statically sized arrays as well:
 
-	var a : int[4]
-	a[0],a[1],a[2],a[3] = 0,1,2,3
-	
-In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets.
+    var a : int[4]
+    a[0],a[1],a[2],a[3] = 0,1,2,3
+    
+In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets. `&int[3]` is a pointer to an array of length 3. `(&int)[3]` is an array of three pointers to integers.
+
+### Vectors (NYI) ###
+
+Vectors are like arrays, but also allow you to perform vector-wide operations:
+
+    terra diffuse(L : vec(float,3), V : vec(float,3), N : vec(float,3))
+        var H = (L + V) / size(L + V)
+        return dot(H,N)
+    end
+
+They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code.
+
+### Structs ###
+
+You can create aggregate types using the `struct` keyword. Structs must be declared outside of Terra code:
+
+    struct Complex { real : float; imag : float; }
+    terra doit()
+        var c : Complex
+        c.real = 4
+        c.imag = 5
+    end
+    
+Like functions, symbols in struct definitions are resolved at compile time, allowing for recursive structural types:
+
+    struct LinkedList { value : int; next : &LinkedList; } 
+    
+
+Terra has no union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:
+
+    struct MyStruct { 
+        a : int; --unique memory
+        union { 
+            b : double;  --memory for b and c overlap
+            c : int;
+        } 
+    }
+    
+### Anonymous Structs ###
+
+In Terra you can also create structs that have no name:
+    var a : struct { real : float, imag : float } 

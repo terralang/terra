@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#109;&#97;&#105;&#x6C;&#116;&#111;:z&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#115;&#116;&#x61;&#110;f&#x6F;&#114;&#100;&#46;&#101;d&#x75;">z&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#115;&#116;&#x61;&#110;f&#x6F;&#114;&#100;&#46;&#101;d&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#97;i&#x6C;&#116;&#111;:z&#100;&#x65;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#97;&#110;f&#111;&#114;&#100;&#46;e&#100;&#x75;">z&#100;&#x65;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#97;&#110;f&#111;&#114;&#100;&#46;e&#100;&#x75;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language, while still being backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -828,4 +828,49 @@ end
 a[0],a[1],a[2],a[3] = 0,1,2,3
 </code></pre>
 
-<p>In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets.</p>
+<p>In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets. <code>&amp;int[3]</code> is a pointer to an array of length 3. <code>(&amp;int)[3]</code> is an array of three pointers to integers.</p>
+
+<h3>Vectors (NYI)</h3>
+
+<p>Vectors are like arrays, but also allow you to perform vector-wide operations:</p>
+
+<pre><code>terra diffuse(L : vec(float,3), V : vec(float,3), N : vec(float,3))
+    var H = (L + V) / size(L + V)
+    return dot(H,N)
+end
+</code></pre>
+
+<p>They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code.</p>
+
+<h3>Structs</h3>
+
+<p>You can create aggregate types using the <code>struct</code> keyword. Structs must be declared outside of Terra code:</p>
+
+<pre><code>struct Complex { real : float; imag : float; }
+terra doit()
+    var c : Complex
+    c.real = 4
+    c.imag = 5
+end
+</code></pre>
+
+<p>Like functions, symbols in struct definitions are resolved at compile time, allowing for recursive structural types:</p>
+
+<pre><code>struct LinkedList { value : int; next : &amp;LinkedList; }
+</code></pre>
+
+<p>Terra has no union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:</p>
+
+<pre><code>struct MyStruct { 
+    a : int; --unique memory
+    union { 
+        b : double;  --memory for b and c overlap
+        c : int;
+    } 
+}
+</code></pre>
+
+<h3>Anonymous Structs</h3>
+
+<p>In Terra you can also create structs that have no name:
+    var a : struct { real : float, imag : float } </p>
