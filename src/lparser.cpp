@@ -1251,7 +1251,9 @@ static void terratype(LexState * ls) {
     data.step = 0;
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     
-    
+    for(int i = 0; i < data.N; i++) {
+        printf("%d: '%c' (%d)\n",i,data.data[i],(int)data.data[i]);
+    }
     if(lua_load(ls->L, type_reader, &data, "type") != 0) {
         //we already parsed this buffer, so this should rarely cause an error
         //we need to find the line number in the error string, add it to where we began this line,

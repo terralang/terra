@@ -230,10 +230,6 @@ void luaX_setinput (terra_State *LP, LexState *ls, ZIO *z, TString * source,
 void luaX_patchbegin(LexState *ls, Token * begin_token) {
     //save everything from the current token to the end of the output buffer in the patch buffer
     OutputBuffer * ob = &ls->output_buffer;
-    if(ls->t.token == TK_EOS) {
-        ls->t.seminfo.buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
-                                      //we need to not include the last character in the patch, so we updated the pointer here
-    }
     int n_bytes = ob->N - ls->t.seminfo.buffer_begin;
     if(n_bytes > ls->patchinfo.space) {
         int newsize = std::max(n_bytes, ls->patchinfo.space * 2);
@@ -268,10 +264,6 @@ void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, in
     OutputBuffer * ob = &ls->output_buffer;
     
     int buffer_begin = ls->t.seminfo.buffer_begin;
-    if(ls->t.token == TK_EOS) {
-        buffer_begin++; //when EOS is reached, the current position isn't updated past the last token
-                        //we need to not include the last character in the patch, so we updated the pointer here
-    }
     int n_bytes = buffer_begin - begin_token->seminfo.buffer_begin;
     *output = ob->data + begin_token->seminfo.buffer_begin;
     *N = n_bytes;
@@ -662,6 +654,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
         return TK_NUMBER;
       }
       case EOZ: {
+        seminfo->buffer_begin = ls->output_buffer.N; //EOS is not counted as a character, so we need to make sure the beginning of this token points to the end of the tokens
         return TK_EOS;
       }
       default: {
