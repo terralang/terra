@@ -2244,5 +2244,22 @@ function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
     afn(cdataobj,assignresult)
 end
 
+function terra.saveobj(filename,env)
+    local cleanenv = {}
+    for k,v in pairs(env) do
+        if terra.isfunction(v) then
+            v:compile()
+            cleanenv[k] = v
+        end
+    end
+    local isexe
+    if filename:sub(-2) == ".o" then
+        isexe = 0
+    else
+        isexe = 1
+    end
+    return terra.saveobjimpl(filename,cleanenv,isexe)
+end
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")

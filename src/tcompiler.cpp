@@ -20,20 +20,28 @@ using namespace llvm;
 
 static int terra_compile(lua_State * L);  //entry point from lua into compiler
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
-
+static int terra_saveobjimpl(lua_State * L);
 
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_compile,1);
     lua_setfield(T->L,-2,"compile");
+    
     lua_pushcfunction(T->L, terra_pointertolightuserdata);
     lua_setfield(T->L,-2,"pointertolightuserdata");
+    
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_saveobjimpl,1);
+    lua_setfield(T->L,-2,"saveobjimpl");
+    
     lua_pop(T->L,1); //remove terra from stack
     
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
     memset(T->C, 0, sizeof(terra_CompilerState));
     InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
     
     T->C->ctx = &getGlobalContext();
     T->C->m = new Module("terra",*T->C->ctx);
@@ -46,6 +54,7 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->fpm = new FunctionPassManager(T->C->m);
     
     //TODO: add optimization passes here, these are just from llvm tutorial and are probably not good
+    //look here: http://lists.cs.uiuc.edu/pipermail/llvmdev/2011-December/045867.html
     T->C->fpm->add(new TargetData(*T->C->ee->getTargetData()));
     // Provide basic AliasAnalysis support for GVN.
     T->C->fpm->add(createBasicAliasAnalysisPass());
@@ -63,6 +72,20 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->fpm->add(createCFGSimplificationPass());
     
     T->C->fpm->doInitialization();
+    
+    std::string Triple = llvm::sys::getDefaultTargetTriple();
+    std::string Error;
+    const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
+    if(!TheTarget) {
+        terra_pusherror(T,"llvm: %s\n",err.c_str());
+        return LUA_ERRRUN;
+    }
+    TargetOptions options;
+    CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "", options,Reloc::Default,CodeModel::Default,OL);
+    
+    T->C->tm = TM;
+    
     return 0;
 }
 
@@ -1266,6 +1289,115 @@ static int terra_compile(lua_State * L) { //entry point into compiler from lua c
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);
+    
+    return 0;
+}
+
+//adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
+static bool EmitObjFile(Module * Mod, TargetMachine * TM, const char * Filename, std::string * ErrorMessage) {
+
+
+    
+    PassManager pass;
+
+    const TargetData* td = TM->getTargetData();
+
+    if (!td) {
+        *ErrorMessage = "No TargetData in TargetMachine";
+        return true;
+    }
+    pass.add(new TargetData(*td));
+
+    TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
+    
+    raw_fd_ostream dest(Filename, *ErrorMessage, raw_fd_ostream::F_Binary);
+    formatted_raw_ostream destf(dest);
+    if (!ErrorMessage->empty()) {
+        return true;
+    }
+
+    if (TM->addPassesToEmitFile(pass, destf, ft)) {
+        *ErrorMessage = "addPassesToEmitFile";
+        return true;
+    }
+
+    pass.run(*Mod);
+
+    destf.flush();
+    dest.flush();
+    return false;
+}
+
+static int terra_saveobjimpl(lua_State * L) {
+    const char * filename = luaL_checkstring(L, -3);
+    int tbl = lua_gettop(L) - 1;
+    bool isexe = luaL_checkint(L, -1);
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    int ref_table = lobj_newreftable(T->L);
+    
+    char tmpnamebuf[20];
+    const char * objname = NULL;
+    
+    if(isexe) {
+        const char * tmp = "/tmp/terraXXXX.o";
+        strcpy(tmpnamebuf, tmp);
+        int fd = mkstemps(tmpnamebuf,2);
+        close(fd);
+        objname = tmpnamebuf;
+    } else {
+        objname = filename;
+    }
+    
+    {
+        //TODO: copy the module with CloneModule so that we don't mess stuff up when internalizing things
+        
+        std::vector< const char *> names;
+        //iterate over the key value pairs in the table
+        lua_pushnil(L);
+        while (lua_next(L, tbl) != 0) {
+            const char * key = luaL_checkstring(L, -2);
+            Obj obj;
+            obj.initFromStack(L, ref_table);
+            Function * fn = (Function*) obj.ud("llvm_function");
+            assert(fn);
+            //printf("%s = \n",key);
+            //fn->dump();
+            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, key, fn, T->C->m);
+            names.push_back(key);
+        }
+        
+        //T->C->m->dump();
+        
+        //at this point we should really run optimizations on the module
+        //first internalize all functions not mentioned in "names" using an internalize pass and then perform dead function elimination
+        //along with the other standard optimizations
+        
+        //printf("saving %s\n",objname);
+        std::string err = "";
+        if(EmitObjFile(T->C->m,T->C->tm,objname,&err)) {
+            if(isexe)
+                unlink(objname);
+            terra_reporterror(T,"llvm: %s\n",err.c_str());
+        }
+        
+        if(isexe) {
+            sys::Path gcc = sys::Program::FindProgramByName("gcc");
+            if (gcc.isEmpty()) {
+                unlink(objname);
+                terra_reporterror(T,"llvm: Failed to find gcc");
+            }
+            const char * args[] = { gcc.c_str(), objname, "-o", filename, 0};
+            int c = sys::Program::ExecuteAndWait(gcc, &args[0], 0, 0, 0, 0, &err);
+            if(0 != c) {
+                unlink(objname);
+                terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);
+            }
+            unlink(objname);
+        }
+                
+    }
+    lobj_removereftable(T->L, ref_table);
     
     return 0;
 }

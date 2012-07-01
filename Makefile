@@ -27,7 +27,7 @@ FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FO
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs engine) -lLLVMLinker
+LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs) -lLLVMLinker
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
@@ -62,7 +62,7 @@ LIBRARY = build/libterra.a
 
 BIN2C = build/bin2c
 
-.PHONY:	all clean purge test docs
+.PHONY:	all clean purge test docs package
 all:	$(EXECUTABLE)
 
 test:	$(EXECUTABLE)
@@ -111,6 +111,9 @@ purge:	clean
 docs:	
 	make -C docs
  
+package:
+	git archive HEAD | bzip2 > terra.tar.bz2
+	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h

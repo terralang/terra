@@ -30,5 +30,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Transforms/Scalar.h"
-
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/Program.h"
 #endif

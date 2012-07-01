@@ -1,7 +1,6 @@
 local c = terralib.includec("stdio.h")
 
-terra main()
+terra hello()
 	c.printf("hello, world\n")
 end
-
-main()
+terralib.saveobj("hello",{main = hello})
