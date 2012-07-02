@@ -924,6 +924,7 @@ static void print_captured_locals(LexState * ls) {
     OutputBuffer_printf(&ls->output_buffer," }, { __index = getfenv() }) end");
 }
 
+static void block (LexState *ls);
 
 static void doquote(LexState * ls, bool isexp) {
     const char * quotetyp = isexp ? "exp" : "stmt";
@@ -936,20 +937,19 @@ static void doquote(LexState * ls, bool isexp) {
         expdesc exp;
         RETURNS_1(expr(ls,&exp));
     } else {
-        FuncState *fs = ls->fs;
-        BlockCnt bl;
-        enterblock(fs, &bl, 0);
-        RETURNS_1(statlist(ls));
-        leaveblock(fs);
+        RETURNS_1(block(ls));
         check_match(ls, TK_END, TK_QUOTE, line);
     }
+    int tbl = lua_gettop(ls->L);
+    push_string(ls,getstr(ls->source));
+    add_field(ls,tbl,"filename");
     luaX_patchbegin(ls,&begin);
     int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     OutputBuffer_printf(&ls->output_buffer,"terra.newquote(_G.terra._trees[%d],\"%s\",",id,quotetyp);
     print_captured_locals(ls);
     OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
-    ls->in_terra--;   
+    ls->in_terra--;
 }
 static void simpleexp (LexState *ls, expdesc *v) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |

@@ -128,6 +128,8 @@ end
 
 function terra.newtree(ref,body)
     if not ref or not terra.istree(ref) then
+        terra.tree.printraw(ref)
+        print(debug.traceback())
         error("not a tree?",2)
     end
     body.offset = ref.offset
@@ -466,7 +468,24 @@ terra.quote.__index = terra.quote
 function terra.isquote(t)
     return getmetatable(t) == terra.quote
 end
-
+function terra.isquotelist(ql) 
+    if type(ql) == "table" then
+        local sz = #ql
+        local i = 0
+        for k,v in pairs(ql) do
+            i = i + 1
+        end
+        if i == sz then --table only has integer keys, it is a list
+            for i,v in ipairs(ql) do
+                if not terra.isquote(v) then
+                    return false
+                end
+            end
+            return true
+        end
+    end
+    return false
+end
 function terra.quote:astype(ctx)
     local success,fn = terra.treeload(ctx,self.tree)
     
@@ -1420,7 +1439,7 @@ function terra.func:typecheck(ctx)
         loopstmts:remove()
     end
     
-    local checkexp,checkstmt, checkexpraw, checkrvalue
+    local checkexp,checkstmt, checkexpraw, checkrvalue, resolverawexp,resolvequote
     
     local function checkunary(ee,property)
         local e = checkrvalue(ee.operands[1])
@@ -1602,8 +1621,22 @@ function terra.func:typecheck(ctx)
                         end
                     end
                 else
-                    local rv = checkrvalue(last)
-                    exps:insert(rv)
+                    local raw = checkexpraw(last)
+                    if terra.isquote(raw) then
+                        resolvequote(last,raw,"exp",addlastelement)
+                    elseif terra.isquotelist(raw) then
+                        for i,e in ipairs(raw) do
+                            if i == #raw then
+                                resolvequote(last,e,"exp",addlastelement)
+                            else
+                                local rv = resolvequote(last,e,"exp",checkrvalue)
+                                exps:insert(rv)
+                            end
+                        end
+                    else
+                        local rv = asrvalue(resolverawexp(last,raw))
+                        exps:insert(rv)
+                    end
                 end
             end
             addlastelement(params[#params])
@@ -1660,9 +1693,10 @@ function terra.func:typecheck(ctx)
         end
         
         local function resolvemacro(macrocall,...)
-            local macroargs = {...}
-            for i,v in ipairs(macroargs) do
-                macroargs[i] = terra.newquote(macroargs[i],"exp",ctx:luaenv(),ctx:varenv())
+            local macroargs = {}
+            for i,v in ipairs({...}) do
+                v.filename = self.filename
+                macroargs[i] = terra.newquote(v,"exp",ctx:luaenv(),ctx:varenv())
             end
             local result = macrocall(ctx,unpack(macroargs))
             local exps = terra.newlist{}
@@ -1838,7 +1872,9 @@ function terra.func:typecheck(ctx)
                 return v
             end
         end
-
+        if terra.isquote(e) then --macros might inject quotes directly into the AST, we we must pass them through here
+            return e
+        end
         if e:is "literal" then
             if e.type == "string" then
                 return e.value
@@ -1859,6 +1895,11 @@ function terra.func:typecheck(ctx)
             end
         elseif e:is "select" then
             local v = checkexpraw(e.value)
+            
+            while terra.isquote(v) do --make sure select on a quote inserts a Terra select, and does not partially evaluate the quote object
+                v = resolvequote(e,v,"exp",checkexpraw)
+            end
+            
             if terra.istree(v) then
                 
                 if v.type:ispointer() then --allow 1 implicit dereference
@@ -1959,8 +2000,25 @@ function terra.func:typecheck(ctx)
         print(debug.traceback())
         error("NYI - expression "..terra.kinds[e.kind],2)
     end
-    function checkexp(ee)
-        local e = checkexpraw(ee)
+    
+    function resolvequote(anchor,q,variant,checkfn)
+        if q.variant ~= variant then
+            terra.reporterror(ctx,anchor,"found a quoted ",q.variant, " where a ",variant, " is expected.")
+            return anchor:copy { type = terra.types.error }
+        end
+        ctx:push(q.tree.filename,q:env()) --q:env() returns both the luaenv and varenv here
+        local r = checkfn(q.tree)
+        ctx:pop()
+        return r
+    end
+    local function resolvequotestatement(anchor,q)
+        local function checkstmtlist(tree) --each quoted statement is wrapped in a block tree, which we ignore here and return a list of statements
+            return tree.statements:map(checkstmt)
+        end
+        return resolvequote(anchor,q,"stmt",checkstmtlist)
+    end
+    
+    function resolverawexp(ee,e)
         if terra.istree(e) then
             return e
         elseif type(e) == "number" then
@@ -1971,10 +2029,16 @@ function terra.func:typecheck(ctx)
             return terra.newtree(ee, { kind = terra.kinds.literal, value = e, type = terra.types.pointer(int8) })
         elseif terra.isfunction(e) then
             return insertfunctionliteral(ee,e)
+        elseif terra.isquote(e) then
+           return resolvequote(ee,e,"exp",checkexp)
         else
             terra.reporterror(ctx,ee, "expected a terra expression but found "..type(e))
             return ee:copy { type = terra.types.error }
         end
+    end
+    function checkexp(ee)
+        local e = checkexpraw(ee)
+        return resolverawexp(ee,e)
     end
     
     local function checkexptyp(re,target)
@@ -2171,8 +2235,22 @@ function terra.func:typecheck(ctx)
             else
                 return c
             end
-        else 
-            return checkrvalue(s)
+        else
+            local raw = checkexpraw(s)
+            if terra.isquote(raw) then
+                return resolvequotestatement(s,raw)
+            elseif terra.isquotelist(raw) then
+                local stmts = terra.newlist()
+                for i,v in ipairs(raw) do
+                    local s = resolvequotestatement(s,v)
+                    for i,v2 in ipairs(s) do
+                        stmts:insert(v2)
+                    end
+                end
+                return stmts
+            else
+                return asrvalue(resolverawexp(s,raw)) 
+            end
         end
         error("NYI - "..terra.kinds[s.kind],2)
     end
