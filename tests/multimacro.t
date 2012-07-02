@@ -1,6 +1,6 @@
 
 local bar = macro(function(ctx,typ,x)
-	return {terralib.newtree(typ, { kind = terralib.kinds.literal, type = double, value = 4.0 }), terralib.newtree(typ, { kind = terralib.kinds.literal, type = double, value = x:asvalue(ctx) }) }
+	return {terralib.newtree(typ.tree, { kind = terralib.kinds.literal, type = double, value = 4.0 }), terralib.newtree(typ.tree, { kind = terralib.kinds.literal, type = double, value = x:asvalue(ctx) }) }
 end)
 
 local x,y,z = 1,2,3

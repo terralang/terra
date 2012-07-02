@@ -169,6 +169,9 @@ int terra_init(lua_State * L) {
     lua_setfield(T->L,-2,"closesourcefile");
     lua_pushcfunction(T->L,printlocation);
     lua_setfield(T->L,-2,"printlocation");
+    
+    lua_newtable(T->L);
+    lua_setfield(T->L,-2,"_trees"); //to hold parser generated trees
     lua_pop(T->L,1);
     
     luaX_init(T);

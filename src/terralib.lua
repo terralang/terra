@@ -112,7 +112,7 @@ function terra.treeload(ctx,self)
 end
 
 function terra.treeeval(ctx,t,fn)
-    local env = ctx:env()
+    local env = ctx:combinedenv()
     setfenv(fn,env)
     local success,v = pcall(fn)
     if not success then --v contains the error message
@@ -124,32 +124,6 @@ function terra.treeeval(ctx,t,fn)
         return false
     end
     return true,v
-end
-
-function terra.tree:astype(ctx)
-    local success,fn = terra.treeload(ctx,self)
-    
-    if not success then
-        return terra.types.error
-    else
-        local typtree = terra.newtree(self, { kind = terra.kinds.type, expression = fn })
-        return terra.resolvetype(ctx,typtree)
-    end
-end
-
-function terra.tree:asvalue(ctx)
-    --self:printraw()
-    local success,fn = terra.treeload(ctx,self)
-    if not success then
-        return nil
-    else
-        local success,v = terra.treeeval(ctx,self,fn)
-        if not success then
-            return nil
-        else
-            return v
-        end
-    end
 end
 
 function terra.newtree(ref,body)
@@ -233,10 +207,27 @@ end
 -- CONTEXT
 terra.context = {}
 terra.context.__index = terra.context
-function terra.context:push(filename, env)
-    local tbl = { filename = filename, env = env } 
+function terra.context:push(filename, luaenv, varenv)
+
+    local combinedenv = { __index = function(_,idx) 
+        return varenv[idx] or luaenv[idx] 
+    end }
+    
+    setmetatable(combinedenv,combinedenv)
+    
+    local tbl = { filename = filename, varenv = varenv, luaenv = luaenv, combinedenv = combinedenv } 
+        
     table.insert(self.stack,tbl)
 end
+
+function terra.context:enterblock()
+    self.stack[#self.stack].varenv = setmetatable({},{ __index = self:varenv() })
+end
+
+function terra.context:leaveblock()
+    self.stack[#self.stack].varenv = getmetatable(self:varenv()).__index
+end
+
 function terra.context:pop()
     local tbl = table.remove(self.stack)
     if tbl.filehandle then
@@ -244,12 +235,16 @@ function terra.context:pop()
         tbl.filehandle = nil
     end
 end
-function terra.context:env()
-    return self.stack[#self.stack].env
+function terra.context:luaenv()
+    return self.stack[#self.stack].luaenv
 end
-function terra.context:setenv(env)
-    self.stack[#self.stack].env = env
+function terra.context:varenv()
+    return self.stack[#self.stack].varenv
 end
+function terra.context:combinedenv()
+    return self.stack[#self.stack].combinedenv
+end
+
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
 function terra.context:printsource(anchor)
@@ -465,6 +460,48 @@ _G["macro"] = terra.createmacro --introduce macro intrinsic into global namespac
 
 -- END MACRO
 
+-- QUOTE
+terra.quote = {}
+terra.quote.__index = terra.quote
+function terra.isquote(t)
+    return getmetatable(t) == terra.quote
+end
+
+function terra.quote:astype(ctx)
+    local success,fn = terra.treeload(ctx,self.tree)
+    
+    if not success then
+        return terra.types.error
+    else
+        local typtree = terra.newtree(self.tree, { kind = terra.kinds.type, expression = fn })
+        return terra.resolvetype(ctx,typtree)
+    end
+end
+
+function terra.quote:asvalue(ctx)
+    local success,fn = terra.treeload(ctx,self.tree)
+    if not success then
+        return nil
+    else
+        local success,v = terra.treeeval(ctx,self.tree,fn)
+        if not success then
+            return nil
+        else
+            return v
+        end
+    end
+end
+
+function terra.quote:env()
+    if not self.luaenv then
+        self.luaenv = self.luaenvfunction()
+        self.luaenvfunction = nil
+    end
+    return self.luaenv,self.varenv
+end
+
+-- END QUOTE
+
 -- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
     local name_count = 0
@@ -541,6 +578,17 @@ do  --constructor functions for terra functions and variables
     end
     function terra.anonstruct(tree,env)
        return terra.types.newanonstruct(tree,env)
+    end
+    
+    function terra.newquote(tree,variant,luaenvorfn,varenv) -- kind == "exp" or "stmt"
+        local obj = { tree = tree, variant = variant, varenv = varenv or {}}
+        if type(luaenvorfn) == "function" then
+            obj.luaenvfunction = luaenvorfn
+        else
+            obj.luaenv = luaenvorfn
+        end
+        setmetatable(obj,terra.quote)
+        return obj
     end
 end
 
@@ -733,7 +781,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     types.type.methods = {} --metatable of all types
     types.type.methods.as = macro(function(ctx,exp,typ)
-        return terra.newtree(exp,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp })
+        return terra.newtree(exp.tree,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp.tree })
     end)    
     function types.istype(t)
         return getmetatable(t) == types.type
@@ -906,7 +954,7 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     local function buildstruct(ctx,typ,tree,env)
-        ctx:push(tree.filename,env())
+        ctx:push(tree.filename,env(),{})
         
         
         local function addstructentry(v)
@@ -1188,7 +1236,7 @@ other:
 
 function terra.func:typecheck(ctx)
     
-    ctx:push(self.filename,self:env())
+    ctx:push(self.filename,self:env(),{})
     
     self.iscompiling = true --to catch recursive compilation calls
     
@@ -1197,8 +1245,6 @@ function terra.func:typecheck(ctx)
     local function resolvetype(t,returnlist)
         return terra.resolvetype(ctx,t,returnlist)
     end
-    
-    
     
     
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue
@@ -1354,35 +1400,15 @@ function terra.func:typecheck(ctx)
     local parameter_types = terra.newlist() --just the types, used to create the function type
     for _,v in ipairs(ftree.parameters) do
         local typ = resolvetype(v.type)
-        typed_parameters:insert( v:copy({ type = typ }) )
+        local tv = v:copy({ type = typ })
+        typed_parameters:insert( tv )
         parameter_types:insert( typ )
-        --print(v.name,parameters_to_type[v.name])
+        ctx:varenv()[tv.name] = tv
     end
     
     local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
     
-    local parameters_to_type = {}
-    for _,v in ipairs(typed_parameters) do
-        parameters_to_type[v.name] = v
-    end
-    
-    
     local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
-    
-    local env = parameters_to_type
-    
-    local typingenv = { __index = function(_,idx) 
-        return env[idx] or self:env()[idx] 
-    end }
-    setmetatable(typingenv,typingenv)
-    ctx:setenv(typingenv)
-    
-    local function enterblock()
-        env = setmetatable({},{ __index = env })
-    end
-    local function leaveblock()
-        env = getmetatable(env).__index
-    end
     
     local loopstmts = terra.newlist()
     local function enterloop()
@@ -1634,7 +1660,11 @@ function terra.func:typecheck(ctx)
         end
         
         local function resolvemacro(macrocall,...)
-            local result = macrocall(ctx,...)
+            local macroargs = {...}
+            for i,v in ipairs(macroargs) do
+                macroargs[i] = terra.newquote(macroargs[i],"exp",ctx:luaenv(),ctx:varenv())
+            end
+            local result = macrocall(ctx,unpack(macroargs))
             local exps = terra.newlist{}
             if #result ~= 0 then
                 for i,e in ipairs(result) do
@@ -1808,6 +1838,7 @@ function terra.func:typecheck(ctx)
                 return v
             end
         end
+
         if e:is "literal" then
             if e.type == "string" then
                 return e.value
@@ -1815,11 +1846,11 @@ function terra.func:typecheck(ctx)
                 return e:copy {}
             end
         elseif e:is "var" then
-            local v = env[e.name]
+            local v = ctx:varenv()[e.name]
             if v ~= nil then
                 return e:copy { type = v.type, definition = v, lvalue = true }
             end
-            v = self:env()[e.name]  
+            v = ctx:luaenv()[e.name]  
             if v ~= nil then
                 return resolveglobal(v)
             else
@@ -1963,9 +1994,9 @@ function terra.func:typecheck(ctx)
 
     function checkstmt(s)
         if s:is "block" then
-            enterblock()
+            ctx:enterblock()
             local r = s.statements:flatmap(checkstmt)
-            leaveblock()
+            ctx:leaveblock()
             return s:copy {statements = r}
         elseif s:is "return" then
             local rstmt = s:copy { expressions = checkparameterlist(s,s.expressions) }
@@ -2012,10 +2043,10 @@ function terra.func:typecheck(ctx)
             return s:copy{ branches = br, orelse = els }
         elseif s:is "repeat" then
             local breaktable = enterloop()
-            enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
+            ctx:enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
             local new_blk = s.body:copy { statements = s.body.statements:map(checkstmt) }
             local e = checkexptyp(s.condition,bool)
-            leaveblock()
+            ctx:leaveblock()
             leaveloop()
             return s:copy { body = new_blk, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
@@ -2056,7 +2087,7 @@ function terra.func:typecheck(ctx)
             --unless they are global variables (which are resolved through lua's env)
             if not s.isglobal then
                 for i,v in ipairs(lhs) do
-                    env[v.name] = v
+                    ctx:varenv()[v.name] = v
                 end
             end
             return res
@@ -2234,7 +2265,7 @@ end
 
 -- GLOBAL MACROS
 _G["sizeof"] = macro(function(ctx,typ)
-    return terra.newtree(typ,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+    return terra.newtree(typ.tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
 end)    
     
 -- END GLOBAL MACROS

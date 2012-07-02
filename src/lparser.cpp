@@ -924,6 +924,33 @@ static void print_captured_locals(LexState * ls) {
     OutputBuffer_printf(&ls->output_buffer," }, { __index = getfenv() }) end");
 }
 
+
+static void doquote(LexState * ls, bool isexp) {
+    const char * quotetyp = isexp ? "exp" : "stmt";
+    check_no_terra(ls, isexp ? "`" : "quote");
+    ls->in_terra++;
+    Token begin = ls->t;
+    int line = ls->linenumber;
+    luaX_next(ls); //skip ` or quote
+    if(isexp) {
+        expdesc exp;
+        RETURNS_1(expr(ls,&exp));
+    } else {
+        FuncState *fs = ls->fs;
+        BlockCnt bl;
+        enterblock(fs, &bl, 0);
+        RETURNS_1(statlist(ls));
+        leaveblock(fs);
+        check_match(ls, TK_END, TK_QUOTE, line);
+    }
+    luaX_patchbegin(ls,&begin);
+    int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
+    OutputBuffer_printf(&ls->output_buffer,"terra.newquote(_G.terra._trees[%d],\"%s\",",id,quotetyp);
+    print_captured_locals(ls);
+    OutputBuffer_printf(&ls->output_buffer,")");
+    luaX_patchend(ls,&begin);
+    ls->in_terra--;   
+}
 static void simpleexp (LexState *ls, expdesc *v) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | primaryexp */
@@ -978,6 +1005,14 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case '{': {  /* constructor */
       constructor(ls, v);
       return;
+    }
+    case '`': { /* quote expression */
+        doquote(ls,true);
+        return;
+    }
+    case TK_QUOTE: {
+        doquote(ls,false);
+        return;
     }
     case TK_FUNCTION: {
       luaX_next(ls);
@@ -1955,8 +1990,6 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
   assert(lua_gettop(L) == lexstate.stacktop + TA_TERRA_OBJECT);
   int to = get_global(&lexstate,TA_TERRA_OBJECT);
-  lua_newtable(L);//TA_FUNCTION_TABLE
-  lua_setfield(L,-2,"_trees");
   
   lua_getfield(L,to,"_trees");
   assert(lua_gettop(L) == lexstate.stacktop + TA_FUNCTION_TABLE);
