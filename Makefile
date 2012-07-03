@@ -27,7 +27,45 @@ FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FO
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs) -lLLVMLinker
+#LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs) -lLLVMLinker
+LFLAGS += \
+-lLLVMAsmParser \
+-lLLVMLinker \
+-lLLVMArchive \
+-lLLVMBitReader \
+-lLLVMDebugInfo \
+-lLLVMJIT \
+-lLLVMipo \
+-lLLVMVectorize \
+-lLLVMBitWriter \
+-lLLVMTableGen \
+-lLLVMX86Disassembler \
+-lLLVMX86CodeGen \
+-lLLVMSelectionDAG \
+-lLLVMAsmPrinter \
+-lLLVMX86AsmParser \
+-lLLVMX86Desc \
+-lLLVMX86Info \
+-lLLVMX86AsmPrinter \
+-lLLVMX86Utils \
+-lLLVMMCParser \
+-lLLVMInterpreter \
+-lLLVMCodeGen \
+-lLLVMScalarOpts \
+-lLLVMInstCombine \
+-lLLVMTransformUtils \
+-lLLVMipa \
+-lLLVMAnalysis \
+-lLLVMMCJIT \
+-lLLVMRuntimeDyld \
+-lLLVMExecutionEngine \
+-lLLVMTarget \
+-lLLVMMC \
+-lLLVMObject \
+-lLLVMCore \
+-lLLVMSupport
+
+
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
