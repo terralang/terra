@@ -112,7 +112,7 @@ docs:
 	make -C docs
  
 package:
-	git archive --prefix=terra/ HEAD | bzip2 > terra.tar.bz2
+	git archive --prefix=terra/ HEAD | bzip2 > terra-`git rev-parse --short HEAD`.tar.bz2
 	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
