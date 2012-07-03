@@ -792,28 +792,68 @@ Macros
 
 By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a _macro_ since it behaves similarly to macros found in Lisp and other languages.  You can create macro using the function `macro` which takes a normal Lua function and returns a macro:
 
-    local literal4 = macro(function(ctx,typ)
-        return terralib.newtree(typ, { 
-            kind = terralib.kinds.literal, 
-            type = typ:, 
-            value = 4.0 
-        })
+    local times2 = macro(function(ctx,a)
+        return `a + a
     end)
     
     terra doit()
-        var a = literal4(double)
-        -- a == 4
+        var a = times2(3)
+        -- a == 6
     end
 
-Unlike a normal function, which works on Terra values, Terra macros are given the AST representation of Terra code. The example above constructs the AST node representing the literal `4.0`. Each macros is passed the compilation context `ctx` as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.
+Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree). The example above constructs the AST node representing the addition of the AST node `a` to itself. To do this, it uses the backtick operator to create a _code quotation_ (similar to `quote` int LISP, or [those of F#](http://msdn.microsoft.com/en-us/library/dd233212.aspx)).  It will construct the appropriate AST nodes to perform the addition. Each macro is also passed the compilation context `ctx` as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.
+
+Since macros take AST nodes rather than values, they have different behavior than function calls. For instance:
+    
+    var c = 0
+    terra up()
+        c = c + 1
+        return c
+    end
+    
+    terra doit()
+        return times2(up()) --returns 1 + 2 == 3
+    end
+    
+The example returns `3` because `up()` is evaluated twice
 
 Some built-in operators are implemented as macros. For instance the `sizeof` operator earlier, just inserts a special AST node that will calculate the size of a type:
 
     sizeof = macro(function(ctx,typ)
         return terra.newtree(typ,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
     end) 
+    
+`terra.newtree` creates a new node in this AST. For the most part, macros can rely on code quotations to generate AST nodes, and only need to fallback to explicilty creating AST nodes in special cases. Additionally, if you want to take an argument passed to a macro and convert it into a Terra type you can call its `astype` method, as seen in the previous example. `typ:astype(ctx)` takes the AST `typ` and evaluates it as a Terra type. 
 
-Here `typ:astype(ctx)` takes the AST `typ` and evaluates it as a Terra type. Currently using macros is difficult because it requires that you understand Terra's AST data structures. We are currently implementating a way for you to generate ASTs concisely using qutoation code quotations similar to [those of F#](http://msdn.microsoft.com/en-us/library/dd233212.aspx) that allow you to generate Terra ASTs in a concise way:
+Macros can also be used to create useful patterns like a C++ style new operator:
+
+    new = macro(function(ctx,typquote)
+        local typ = typquote:astype(ctx)
+        return `c.malloc(sizeof(typ)):as(&typ)
+    end)
+    
+    terra doit()
+        var a = new(int)
+    end
+    
+If you want to generate statements (not expressions) you can use the long-form `quote` operator, which creates an AST for multiple statements
+    
+    iamclean = macro(function(ctx,arg)
+        quote
+            var a = 3
+            c.printf("%d %d\n",a,arg)
+        end
+    end)
+    
+    terra doit()
+        var a = 4
+        iamclean(a)
+    end
+    -- prints 3 4
+
+The above code will print `3 4` not `3 3` even though `a` is passed into a macro which defines another `a`.  This occurs because Terra code quotations are _hygienic_. Variables obey lexical scoping rules.
+
+Currently using macros is difficult because it requires that you understand Terra's AST data structures. We are currently implementating a way for you to generate ASTs concisely using qutoation code quotations similar to that allow you to generate Terra ASTs in a concise way:
 
     --Not yet implemented--
     add2 = macro(function(ctx,lhs,rhs)

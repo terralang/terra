@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="m&#97;&#105;&#x6C;&#x74;&#x6F;:&#122;&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#x73;&#x74;a&#110;&#102;&#x6F;&#x72;&#x64;&#x2E;&#101;&#x64;&#117;">&#122;&#x64;&#x65;&#x76;&#105;&#116;&#x6F;&#64;&#x73;&#x74;a&#110;&#102;&#x6F;&#x72;&#x64;&#x2E;&#101;&#x64;&#117;</a></em></p>
+<p><em>Zach DeVito <a href="&#109;&#x61;&#105;&#108;&#x74;&#x6F;:&#122;&#100;&#x65;&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#100;&#x75;">&#122;&#100;&#x65;&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;a&#x6E;&#x66;&#x6F;&#114;&#x64;.&#x65;&#100;&#x75;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language, while still being backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -1155,21 +1155,32 @@ end
 
 <p>By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a <em>macro</em> since it behaves similarly to macros found in Lisp and other languages.  You can create macro using the function <code>macro</code> which takes a normal Lua function and returns a macro:</p>
 
-<pre><code>local literal4 = macro(function(ctx,typ)
-    return terralib.newtree(typ, { 
-        kind = terralib.kinds.literal, 
-        type = typ:, 
-        value = 4.0 
-    })
+<pre><code>local times2 = macro(function(ctx,a)
+    return `a + a
 end)
 
 terra doit()
-    var a = literal4(double)
-    -- a == 4
+    var a = times2(3)
+    -- a == 6
 end
 </code></pre>
 
-<p>Unlike a normal function, which works on Terra values, Terra macros are given the AST representation of Terra code. The example above constructs the AST node representing the literal <code>4.0</code>. Each macros is passed the compilation context <code>ctx</code> as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.</p>
+<p>Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree). The example above constructs the AST node representing the addition of the AST node <code>a</code> to itself. To do this, it uses the backtick operator to create a <em>code quotation</em> (similar to <code>quote</code> int LISP, or <a href="http://msdn.microsoft.com/en-us/library/dd233212.aspx">those of F#</a>).  It will construct the appropriate AST nodes to perform the addition. Each macro is also passed the compilation context <code>ctx</code> as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.</p>
+
+<p>Since macros take AST nodes rather than values, they have different behavior than function calls. For instance:</p>
+
+<pre><code>var c = 0
+terra up()
+    c = c + 1
+    return c
+end
+
+terra doit()
+    return times2(up()) --returns 1 + 2 == 3
+end
+</code></pre>
+
+<p>The example returns <code>3</code> because <code>up()</code> is evaluated twice</p>
 
 <p>Some built-in operators are implemented as macros. For instance the <code>sizeof</code> operator earlier, just inserts a special AST node that will calculate the size of a type:</p>
 
@@ -1178,7 +1189,39 @@ end
 end)
 </code></pre>
 
-<p>Here <code>typ:astype(ctx)</code> takes the AST <code>typ</code> and evaluates it as a Terra type. Currently using macros is difficult because it requires that you understand Terra's AST data structures. We are currently implementating a way for you to generate ASTs concisely using qutoation code quotations similar to <a href="http://msdn.microsoft.com/en-us/library/dd233212.aspx">those of F#</a> that allow you to generate Terra ASTs in a concise way:</p>
+<p><code>terra.newtree</code> creates a new node in this AST. For the most part, macros can rely on code quotations to generate AST nodes, and only need to fallback to explicilty creating AST nodes in special cases. Additionally, if you want to take an argument passed to a macro and convert it into a Terra type you can call its <code>astype</code> method, as seen in the previous example. <code>typ:astype(ctx)</code> takes the AST <code>typ</code> and evaluates it as a Terra type. </p>
+
+<p>Macros can also be used to create useful patterns like a C++ style new operator:</p>
+
+<pre><code>new = macro(function(ctx,typquote)
+    local typ = typquote:astype(ctx)
+    return `c.malloc(sizeof(typ)):as(&amp;typ)
+end)
+
+terra doit()
+    var a = new(int)
+end
+</code></pre>
+
+<p>If you want to generate statements (not expressions) you can use the long-form <code>quote</code> operator, which creates an AST for multiple statements</p>
+
+<pre><code>iamclean = macro(function(ctx,arg)
+    quote
+        var a = 3
+        c.printf("%d %d\n",a,arg)
+    end
+end)
+
+terra doit()
+    var a = 4
+    iamclean(a)
+end
+-- prints 3 4
+</code></pre>
+
+<p>The above code will print <code>3 4</code> not <code>3 3</code> even though <code>a</code> is passed into a macro which defines another <code>a</code>.  This occurs because Terra code quotations are <em>hygienic</em>. Variables obey lexical scoping rules.</p>
+
+<p>Currently using macros is difficult because it requires that you understand Terra's AST data structures. We are currently implementating a way for you to generate ASTs concisely using qutoation code quotations similar to that allow you to generate Terra ASTs in a concise way:</p>
 
 <pre><code>--Not yet implemented--
 add2 = macro(function(ctx,lhs,rhs)

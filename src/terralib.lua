@@ -1872,7 +1872,8 @@ function terra.func:typecheck(ctx)
                 return v
             end
         end
-        if terra.isquote(e) then --macros might inject quotes directly into the AST, we we must pass them through here
+        if terra.isquote(e) then --macros might inject quotes directly into the AST, we we must pass them through here, 
+                                 --we should change the macros to and other things that resolve quotes to create an explicit quote node
             return e
         end
         if e:is "literal" then
@@ -2057,6 +2058,29 @@ function terra.func:typecheck(ctx)
 
 
     function checkstmt(s)
+        local function handlequote(raw)
+            if terra.isquote(raw) then
+                return true, resolvequotestatement(s,raw)
+            elseif terra.isquotelist(raw) then
+                local stmts = terra.newlist()
+                for i,v in ipairs(raw) do
+                    local s = resolvequotestatement(s,v)
+                    for i,v2 in ipairs(s) do
+                        stmts:insert(v2)
+                    end
+                end
+                return true,stmts
+            else
+                return false
+            end
+        end
+            
+        --macros might introduce quotes directly into ast
+        local handled,r = handlequote(s)
+        if handled then
+            return r
+        end
+        
         if s:is "block" then
             ctx:enterblock()
             local r = s.statements:flatmap(checkstmt)
@@ -2237,17 +2261,9 @@ function terra.func:typecheck(ctx)
             end
         else
             local raw = checkexpraw(s)
-            if terra.isquote(raw) then
-                return resolvequotestatement(s,raw)
-            elseif terra.isquotelist(raw) then
-                local stmts = terra.newlist()
-                for i,v in ipairs(raw) do
-                    local s = resolvequotestatement(s,v)
-                    for i,v2 in ipairs(s) do
-                        stmts:insert(v2)
-                    end
-                end
-                return stmts
+            local handled,r = handlequote(raw)
+            if handled then
+                return r
             else
                 return asrvalue(resolverawexp(s,raw)) 
             end
