@@ -1255,18 +1255,31 @@ other:
 
 function terra.func:typecheck(ctx)
     
+    
+    --initialization
+    
     ctx:push(self.filename,self:env(),{})
     
     self.iscompiling = true --to catch recursive compilation calls
     
     local ftree = self.untypedtree
     
+    
+    --wrapper for resolve type, if returnlist is true then resolvetype will return a list of types (e.g. the return value of a function)
     local function resolvetype(t,returnlist)
         return terra.resolvetype(ctx,t,returnlist)
     end
     
     
-    local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue
+    --declarations of local functions used in type checking
+    local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
+          checkexp,checkstmt, checkexpraw, checkrvalue, resolverawexp,resolvequote
+          
+          
+    --cast  handlint functions
+    --insertcast handles implicitly allowed casts
+    --insertexplicitcast handles casts performed using the :as method
+    --structcast handles casting from an anonymous structure type to an array or struct
     
     function structcast(cast,exp,typ)
         local from = exp.type
@@ -1344,6 +1357,7 @@ function terra.func:typecheck(ctx)
             elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
+                --if we have an rvalue array, it must be converted to lvalue (i.e. placed on the stack) before the cast is valid
                 cast_exp.expression = aslvalue(cast_exp.expression)
                 return cast_exp
             else
@@ -1370,6 +1384,8 @@ function terra.func:typecheck(ctx)
             return insertcast(exp,typ) --otherwise, allow any implicit casts
         end
     end
+    
+    --functions to calculate what happens when two types are input to a binary method
     
     local function typemeet(op,a,b)
         local function err()
@@ -1425,21 +1441,7 @@ function terra.func:typecheck(ctx)
         ctx:varenv()[tv.name] = tv
     end
     
-    local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
     
-    local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
-    
-    local loopstmts = terra.newlist()
-    local function enterloop()
-        local bt = {}
-        loopstmts:insert(bt)
-        return bt
-    end
-    local function leaveloop()
-        loopstmts:remove()
-    end
-    
-    local checkexp,checkstmt, checkexpraw, checkrvalue, resolverawexp,resolvequote
     
     local function checkunary(ee,property)
         local e = checkrvalue(ee.operands[1])
@@ -2057,6 +2059,22 @@ function terra.func:typecheck(ctx)
     end
 
 
+    --state that is modified by checkstmt:
+    
+    local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
+    
+    local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
+    local loopstmts = terra.newlist() -- stack of loopstatements (for resolving where a break goes)
+    
+    local function enterloop()
+        local bt = {}
+        loopstmts:insert(bt)
+        return bt
+    end
+    local function leaveloop()
+        loopstmts:remove()
+    end
+    
     function checkstmt(s)
         local function handlequote(raw)
             if terra.isquote(raw) then
@@ -2270,6 +2288,10 @@ function terra.func:typecheck(ctx)
         end
         error("NYI - "..terra.kinds[s.kind],2)
     end
+    
+    
+    
+    -- actual implementation begins here
     
     local result = checkstmt(ftree.body)
     for _,v in pairs(labels) do
