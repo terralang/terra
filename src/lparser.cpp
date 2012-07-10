@@ -442,11 +442,7 @@ static void push_literal(LexState * ls, const char * typ) {
     if(ls->in_terra) {
         int lit = new_table_before(ls,T_literal);
         add_field(ls,lit,"value");
-        if(strcmp(typ, "string") == 0) { //literal strings are not types but are passed directly, set the type field to the literal "string"
-            lua_pushstring(ls->L, typ);
-        } else {
-            lua_getglobal(ls->L,typ);
-        }
+        lua_getglobal(ls->L,typ);
         add_field(ls,lit,"type");
     }
 }
@@ -494,7 +490,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   if (ls->t.token == TK_NAME) {
     checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
     RETURNS_1(checkname(ls, &key));
-    push_literal(ls,"string");
+    push_literal(ls,"rawstring");
   }
   else  /* ls->t.token == '[' */
     RETURNS_1(yindex(ls, &key));
@@ -800,7 +796,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       //codestring(ls, &args, ls->t.seminfo.ts);
       int exps = new_list(ls);
       push_string(ls,ls->t.seminfo.ts);
-      push_literal(ls,"string");
+      push_literal(ls,"rawstring");
       add_entry(ls,exps);
       luaX_next(ls);  /* must use `seminfo' before `next' */
       break;
@@ -976,7 +972,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
     }
     case TK_STRING: {
       push_string(ls,ls->t.seminfo.ts);
-      push_literal(ls,"string");
+      push_literal(ls,"rawstring");
       break;
     }
     case TK_NIL: {
