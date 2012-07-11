@@ -9,15 +9,13 @@ Language Implementation:
       same goes for global variables
       partial eval of select is handeld
       macro nodes are expanded (recursively) until there are no non-tree literals left
+-- pointer arithmetic on niltype?
       
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
 -- generate TBAA metadata like C will so that we can match perf
 
-
-For LANL:
--- getting started guide
 -- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
    handle as much as possible in the JIT, and make sure the offline compiler does everything
    make configurable (perhaps a general config mechanism) (look a preconfigured stuff)
@@ -56,3 +54,4 @@ DONE:
 -- introduce LL, ULL, and f to make constants have the expected types
 -- simple save of functions (give a key-value pair and export the symbols with those names to a .o file, see if you can use aliases to export these functions)
 -- code quotations of statements and expressions
+-- getting started guide

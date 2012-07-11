@@ -5,6 +5,11 @@ for line in io.popen("find . -name '*.t'"):lines() do
     local e = { k = file }
     table.insert(results,e)
     print(e.k..":")
+    --things in the fail directory should cause terra compiler errors
+    --we dont check for the particular error
+    --but we do check to see that the "Errors reported.." message prints
+    --which suggests that the error was reported gracefully
+    --(if the compiler bites it before it finishes typechecking then it will not print this)
     if string.sub(file,1,5) == "fails" then
         if os.execute("../terra "..file.." | grep 'Errors reported during compilation'") ~= 0 then
             e.v = "FAIL"

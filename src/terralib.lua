@@ -1284,9 +1284,18 @@ function terra.func:typecheck(ctx)
     --insertexplicitcast handles casts performed using the :as method
     --structcast handles casting from an anonymous structure type to an array or struct
     
-    function structcast(cast,exp,typ)
+    function structcast(cast,exp,typ, speculative) --if speculative is true, then errors will not be reported (caller must check)
         local from = exp.type
         local to = typ
+        
+    
+        local valid = true
+        local function err(...)
+            valid = false
+            if not speculative then
+                terra.reporterror(ctx,exp,...)
+            end
+        end
         
         cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = from })
         local var_ref = insertvar(exp,from,cast.structvariable.name,cast.structvariable)
@@ -1296,14 +1305,14 @@ function terra.func:typecheck(ctx)
             local selected = asrvalue(insertselect(var_ref,entry.key))
             if entry.hasname then
                 if to:isarray() then
-                    terra.reporterror(ctx,exp, "structural cast invalid, assigning a named field to an array")
+                    err(ctx,exp, "structural cast invalid, assigning a named field to an array")
                 else 
                     local offset = to.keytoindex[entry.key]
                     if not offset then
-                        terra.reporterror(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
+                        err(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
                     else
                         if indextoinit[offset] then
-                            terra.reporterror(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
+                            err(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
                         end
                         indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
                     end
@@ -1325,7 +1334,7 @@ function terra.func:typecheck(ctx)
                 end
                 
                 if offset == maxsz then
-                    terra.reporterror(ctx,exp,"structural cast invalid, too many unnamed fields")
+                    err(ctx,exp,"structural cast invalid, too many unnamed fields")
                 else
                     indextoinit[offset] = insertcast(selected,totyp)
                 end
@@ -1337,35 +1346,37 @@ function terra.func:typecheck(ctx)
             cast.entries:insert( { index = i, value = v } )
         end
         
-        return cast
+        return cast, valid
     end
     
     local function createcast(exp,typ)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
     end
-    function insertcast(exp,typ)
+    function insertcast(exp,typ,speculative) --if speculative is true, then an error will not be reported and the caller should check the second return value to see if the cast was valid
         if typ == nil then
             print(debug.traceback())
         end
         if typ == exp.type or typ == terra.types.error or exp.type == terra.types.error then
-            return exp
+            return exp, true
         else
             local cast_exp = createcast(exp,typ)
             if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
-                return cast_exp
+                return cast_exp, true
             elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
-                return cast_exp
+                return cast_exp, true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
-                return cast_exp
+                return cast_exp, true
             elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
-                return structcast(cast_exp,exp,typ)
+                return structcast(cast_exp,exp,typ,speculative)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 --if we have an rvalue array, it must be converted to lvalue (i.e. placed on the stack) before the cast is valid
                 cast_exp.expression = aslvalue(cast_exp.expression)
-                return cast_exp
+                return cast_exp, true
             else
-                terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
-                return cast_exp
+                if not speculative then
+                    terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
+                end
+                return cast_exp, false
             end
         end
     end
@@ -1441,6 +1452,9 @@ function terra.func:typecheck(ctx)
         local tv = v:copy({ type = typ })
         typed_parameters:insert( tv )
         parameter_types:insert( typ )
+        if ctx:varenv()[tv.name] then
+            terra.reporterror(ctx,v,"duplicate definition of parameter ",tv.name)
+        end
         ctx:varenv()[tv.name] = tv
     end
     
@@ -1449,7 +1463,7 @@ function terra.func:typecheck(ctx)
     local function checkunary(ee,property)
         local e = checkrvalue(ee.operands[1])
         if e.type ~= terra.types.error and not e.type[property](e.type) then
-            terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",t)
+            terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",e.type)
             return e:copy { type = terra.types.error }
         end
         return ee:copy { type = e.type, operands = terra.newlist{e} }
@@ -1484,13 +1498,19 @@ function terra.func:typecheck(ctx)
         local l = checkrvalue(e.operands[1])
         local r = checkrvalue(e.operands[2])
 
+        local function pointerlike(t)
+            return t:ispointer() or t:isarray()
+        end
+        local function aspointer(exp) --convert pointer like things into pointers
+            return (insertcast(exp,terra.types.pointer(exp.type.type)))
+        end
         -- subtracting 2 pointers
-        if l.type:ispointer() and l.type == r.type and e.operator == terra.kinds["-"] then
-            return e:copy { type = ptrdiff, operands = terra.newlist {l,r} }
-        elseif l.type:ispointer() and r.type:isintegral() then -- adding or subtracting a int to a pointer 
-            return e:copy { type = l.type, operands = terra.newlist {l,r} }
-        elseif l.type:isintegral() and r.type:ispointer() then
-            return e:copy { type = r.type, operands = terra.newlist {r,l} }
+        if  pointerlike(l.type) and pointerlike(r.type) and l.type.type == r.type.type and e.operator == terra.kinds["-"] then
+            return e:copy { type = ptrdiff, operands = terra.newlist {aspointer(l),aspointer(r)} }
+        elseif pointerlike(l.type) and r.type:isintegral() then -- adding or subtracting a int to a pointer 
+            return e:copy { type = terra.types.pointer(l.type.type), operands = terra.newlist {aspointer(l),r} }
+        elseif l.type:isintegral() and pointerlike(r.type) then
+            return e:copy { type = terra.types.pointer(r.type.type), operands = terra.newlist {aspointer(r),l} }
         else
             return meetbinary(e,"isarithmetic",l,r)
         end
@@ -1670,7 +1690,9 @@ function terra.func:typecheck(ctx)
             elseif fn.type:ispointer() and fn.type.type:isfunction() then
                 return asrvalue(fn),fn.type.type
             else
-                terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
+                if fn.type ~= terra.types.error then
+                    terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
+                end
                 return asrvalue(fn),terra.types.error
             end
             error("NYI - check call on non-literal function calls")
@@ -2012,7 +2034,9 @@ function terra.func:typecheck(ctx)
                             k = "<error>"
                         end
                     end
-                    typ:addentry(k,v.type)
+                    if not typ:addentry(k,v.type) then
+                        terra.reporterror(ctx,v,"duplicate definition of field ",k)
+                    end
                 end
                 
                 return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
@@ -2025,7 +2049,7 @@ function terra.func:typecheck(ctx)
         local result = docheck(resolveluaspecial(e_))
         
         if result:is "luaobject" and not allowluaobjects then
-            terra.reporterror(ctx,e, "expected a terra expression but found "..type(e.value))
+            terra.reporterror(ctx,result, "expected a terra expression but found "..type(result.value))
             result.type = terra.types.error
         end
         
