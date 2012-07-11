@@ -1,25 +1,18 @@
 Language Implementation:
 
 -- vector types
--- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
 -- returning values from lua functions   
--- revise how quoted code is injected into AST. In particular, macros should not drop Quote objects into the AST (it should instead resolve the quotes in place)
-   also consider the way that checkexp allows quote objects to propogate: consider a different design where untyped code is first resolved:
-      vars are check if they are Quotes and inserted as Quote nodes
-      same goes for global variables
-      partial eval of select is handeld
-      macro nodes are expanded (recursively) until there are no non-tree literals left
 -- pointer arithmetic on niltype?
       
 Runtime Implementation:
 
 -- how to save results for later (both Lua state and Terra JIT state)
 -- generate TBAA metadata like C will so that we can match perf
-
 -- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
    handle as much as possible in the JIT, and make sure the offline compiler does everything
    make configurable (perhaps a general config mechanism) (look a preconfigured stuff)
 -- write 1 or two language benchmarks in terra to get baseline perf (do this after figuring out -O3)
+
 
 DONE:
 --function pointers
@@ -55,3 +48,10 @@ DONE:
 -- simple save of functions (give a key-value pair and export the symbols with those names to a .o file, see if you can use aliases to export these functions)
 -- code quotations of statements and expressions
 -- getting started guide
+-- revise how quoted code is injected into AST. In particular, macros should not drop Quote objects into the AST (it should instead resolve the quotes in place)
+   also consider the way that checkexp allows quote objects to propogate: consider a different design where untyped code is first resolved:
+      vars are check if they are Quotes and inserted as Quote nodes
+      same goes for global variables
+      partial eval of select is handeld
+      macro nodes are expanded (recursively) until there are no non-tree literals left
+-- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)

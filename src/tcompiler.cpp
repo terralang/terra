@@ -18,15 +18,22 @@ extern "C" {
 
 using namespace llvm;
 
-static int terra_compile(lua_State * L);  //entry point from lua into compiler
+static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function
+static int terra_jit(lua_State * L);  //entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction
+
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
 
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    
     lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_compile,1);
-    lua_setfield(T->L,-2,"compile");
+    lua_pushcclosure(T->L,terra_codegen,1);
+    lua_setfield(T->L,-2,"codegen");
+    
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_jit,1);
+    lua_setfield(T->L,-2,"jit");
     
     lua_pushcfunction(T->L, terra_pointertolightuserdata);
     lua_setfield(T->L,-2,"pointertolightuserdata");
@@ -383,10 +390,6 @@ struct TerraCompiler {
         DEBUG_ONLY(T) {
             func->dump();
         }
-        void * ptr = C->ee->getPointerToFunction(func);
-        
-        lua_pushlightuserdata(L, ptr);
-        funcobj.setfield("fptr");
         
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
@@ -1276,7 +1279,7 @@ if(t->type->isIntegerTy()) { \
     }
 };
 
-static int terra_compile(lua_State * L) { //entry point into compiler from lua code
+static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
     
@@ -1286,6 +1289,33 @@ static int terra_compile(lua_State * L) { //entry point into compiler from lua c
     {
         TerraCompiler c;
         c.run(T,ref_table);
+    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
+    
+    lobj_removereftable(T->L,ref_table);
+    
+    return 0;
+}
+
+static int terra_jit(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    
+    int ref_table = lobj_newreftable(T->L);
+    
+    {
+        Obj funcobj;
+        lua_pushvalue(L,-2); //original argument
+        funcobj.initFromStack(L, ref_table);
+        Function * func = (Function*) funcobj.ud("llvm_function");
+        assert(func);
+        DEBUG_ONLY(T) {
+            std::string s = func->getName();
+            printf("jitting %s\n",s.c_str());
+        }
+        void * ptr = T->C->ee->getPointerToFunction(func);
+        
+        lua_pushlightuserdata(L, ptr);
+        funcobj.setfield("fptr");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);
