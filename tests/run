@@ -1,18 +1,25 @@
 #!../build/LuaJIT-2.0.0-beta10/src/luajit
 local results = {}
-for line in io.popen("ls"):lines() do
-	if string.sub(line,-2) == ".t" then
-		local e = { k = line }
-		table.insert(results,e)
-		print(e.k..":")
-		if os.execute("../terra "..line) ~= 0 then
-			e.v = "FAIL"
-		else
-			e.v = "pass"
-		end
-	end
+for line in io.popen("find . -name '*.t'"):lines() do
+    local file = string.sub(line,3)
+    local e = { k = file }
+    table.insert(results,e)
+    print(e.k..":")
+    if string.sub(file,1,5) == "fails" then
+        if os.execute("../terra "..file.." | grep 'Errors reported during compilation'") ~= 0 then
+            e.v = "FAIL"
+        else
+            e.v = "pass"
+        end
+    else
+        if os.execute("../terra "..file) ~= 0 then
+            e.v = "FAIL"
+        else
+            e.v = "pass"
+        end
+    end
 end
 
 for i,e in ipairs(results) do
-	print(i,e.v,e.k)
+    print(i,e.v,e.k)
 end

@@ -1887,7 +1887,7 @@ function terra.func:typecheck(ctx)
     --if it is a special object (e.g. terra function, macro, quote, global var), it will insert the appropriate tree in its place
     --this function is (and must remain) idempotent (i.e. resolveluaspecial(e) == resolveluaspecial(resolveluaspecial(e)) )
     function resolveluaspecial(e)
-        if not e:is "var" or e.definition ~= nil then
+        if not e:is "var" or e.definition ~= nil or e.type == terra.types.error then
             return e
         end
         
