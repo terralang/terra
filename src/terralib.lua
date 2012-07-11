@@ -469,7 +469,7 @@ function terra.isquote(t)
     return getmetatable(t) == terra.quote
 end
 function terra.isquotelist(ql) 
-    if type(ql) == "table" then
+    if type(ql) == "table" and #ql ~= 0 then
         local sz = #ql
         local i = 0
         for k,v in pairs(ql) do
@@ -1706,7 +1706,7 @@ function terra.func:typecheck(ctx)
             end
             local result = macrocall(ctx,unpack(macroargs))
             local exps = terra.newlist{}
-            if #result ~= 0 then
+            if type(result) == "table" and #result ~= 0 then
                 for i,e in ipairs(result) do
                     exps:insert(createspecial(exp,e))
                 end
@@ -1897,7 +1897,7 @@ function terra.func:typecheck(ctx)
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else
-            terra.reporterror(ctx,anchor,"lua object of type ", type(v), "not understood by terra code.")
+            terra.reporterror(ctx,anchor,"lua object of type ", type(v), " not understood by terra code.")
             return anchor:copy { type = terra.types.error }
         end
     end
@@ -2030,7 +2030,7 @@ function terra.func:typecheck(ctx)
                         if kexp:is "literal" and kexp.type == rawstring then
                             k = kexp.value
                         else
-                            terra.reporterror(ctx,e,"expected string literal but found ",terra.kinds[e.kind])
+                            terra.reporterror(ctx,e,"expected string literal but found ",terra.kinds[kexp.kind])
                             k = "<error>"
                         end
                     end
@@ -2112,6 +2112,8 @@ function terra.func:typecheck(ctx)
             return rstmt
         elseif s:is "label" then
             local lbls = labels[s.value] or terra.newlist()
+            print("LABEL")
+            terra.tree.printraw(lbls)
             if terra.istree(lbls) then
                 terra.reporterror(ctx,s,"label defined twice")
                 terra.reporterror(ctx,lbls,"previous definition here")

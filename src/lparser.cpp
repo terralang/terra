@@ -1356,14 +1356,14 @@ static void gotostat (LexState *ls) {
   TString *label;
   int g;
   if (testnext(ls, TK_GOTO)) {
-    label = str_checkname(ls);
     int tbl = new_table(ls,T_goto);
+    label = str_checkname(ls);
     push_string(ls,label);
     add_field(ls,tbl,"label");
   } else {
+    int tbl = new_table(ls,T_break);
     luaX_next(ls);  /* skip break */
     label = luaS_new(ls->LP, "break");
-    int tbl = new_table(ls,T_break);
   }
 
 }
@@ -1372,13 +1372,13 @@ static void labelstat (LexState *ls, TString *label, int line) {
   check_terra(ls,"goto labels");
   /* label -> '::' NAME '::' */
   FuncState *fs = ls->fs;
+  int tbl = new_table(ls,T_label);
   checknext(ls, TK_DBCOLON);  /* skip double colon */
   /* create new entry for this label */
   /* skip other no-op statements */
-  int tbl = new_table(ls,T_label);
   push_string(ls,getstr(label));
   add_field(ls,tbl,"value");
-  while (ls->t.token == ';' || ls->t.token == TK_DBCOLON) {
+  while (ls->t.token == ';' /*|| ls->t.token == TK_DBCOLON*/) { //why does lua skip double labels?
     statement(ls);
     if(ls->in_terra)
         lua_pop(ls->L,1); //discard the AST node
