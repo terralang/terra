@@ -2094,13 +2094,11 @@ function terra.func:typecheck(ctx)
                     end
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
-            elseif e:is "identity" then --simply a passthrough
-                local ee = checkexp(e.value,allowluaobjects)
-                if ee:is "luaobject" then
-                    return ee
-                else
-                    return e:copy { type = ee.type, value = ee }
-                end
+            elseif e:is "identity" then --there were parens around this expression
+                                        --that means we treat it as an expression even if it is in a place where it could be a statement
+                                        --or list of statements 
+                local ee = checkrvalue(e.value)
+                return e:copy { type = ee.type, value = ee }
             elseif e:is "explicitcast" then
                 return insertexplicitcast(checkrvalue(e.value),e.type)
             elseif e:is "sizeof" then
@@ -2219,7 +2217,6 @@ function terra.func:typecheck(ctx)
             return rstmt
         elseif s:is "label" then
             local lbls = labels[s.value] or terra.newlist()
-            print("LABEL")
             terra.tree.printraw(lbls)
             if terra.istree(lbls) then
                 terra.reporterror(ctx,s,"label defined twice")
@@ -2391,7 +2388,7 @@ function terra.func:typecheck(ctx)
         elseif s:is "quote" then
             local function resolvequotestatement(anchor,q)
                 local function checkstmtlist(tree) --each quoted statement is wrapped in a block tree, which we ignore here and return a list of statements
-                    return tree.statements:map(checkstmt)
+                    return tree.statements:flatmap(checkstmt)
                 end
                 return resolvequote(anchor,q,"stmt",checkstmtlist)
             end

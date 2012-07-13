@@ -828,7 +828,12 @@ static void prefixexp (LexState *ls, expdesc *v) {
         lua_getfield(ls->L, -1, "kind");
         T_Kind k = (T_Kind) luaL_checkint(ls->L, -1);
         lua_pop(ls->L,1);
-        if(k == T_apply || k == T_method) { //if an call was parenthesized, mark it as only returned one argument
+        //if an call was parenthesized, mark it as only returned one argument
+        //we only care in cases where the result might return multiple values
+        //this can occur on function invocation (apply or method)
+        //or if the value is resolved via create special, which can occur for variables, or select statements
+        //that resolve to lua objects
+        if(k == T_apply || k == T_method || k == T_var || k == T_select) { 
             int tbl = new_table_before(ls, T_identity);
             add_field(ls, tbl, "value");
         }
