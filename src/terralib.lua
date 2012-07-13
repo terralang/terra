@@ -1690,12 +1690,15 @@ function terra.func:typecheck(ctx)
     local function iscall(t)
         return t.kind == terra.kinds.apply or t.kind == terra.kinds.method
     end
+    local function canreturnmultiple(t)
+        return iscall(t) or t.kind == terra.kinds.var or t.kind == terra.kinds.select
+    end
     function checkparameterlist(anchor,params)
         local exps = terra.newlist()
         local multiret = nil
         
         local function addelement(elem,islast)
-            if not islast then
+            if not islast or elem.truncated then
                 exps:insert(checkrvalue(elem))
             else
                 elem = resolveluaspecial(elem)
@@ -2094,11 +2097,6 @@ function terra.func:typecheck(ctx)
                     end
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
-            elseif e:is "identity" then --there were parens around this expression
-                                        --that means we treat it as an expression even if it is in a place where it could be a statement
-                                        --or list of statements 
-                local ee = checkrvalue(e.value)
-                return e:copy { type = ee.type, value = ee }
             elseif e:is "explicitcast" then
                 return insertexplicitcast(checkrvalue(e.value),e.type)
             elseif e:is "sizeof" then
@@ -2117,11 +2115,11 @@ function terra.func:typecheck(ctx)
                 local paramlist = terra.newlist{}
                 
                 for i,f in ipairs(e.records) do
-                    if i == #e.records and iscall(f.value) and f.key then --if there is a key assigned to a multireturn then it gets truncated to 1 value
-                        paramlist:insert(terra.newtree(f.value,{ kind = terra.kinds.identity, value = f.value }))
-                    else
-                        paramlist:insert(f.value)
+                    if i == #e.records and f.key and canreturnmultiple(f.value) then
+                        --if there is a key assigned to a multireturn then it gets truncated to 1 value
+                        f.value.truncated = true
                     end
+                    paramlist:insert(f.value)
                 end
                 
                 local entries = checkparameterlist(e,paramlist)

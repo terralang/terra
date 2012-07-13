@@ -816,6 +816,15 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 ** =======================================================================
 */
 
+
+//true when an expression might return multiple values and needs to be marked 'truncated'
+//this can occur on function invocation (apply or method)
+//or if the value is resolved via create special, which can occur for variables, or select statements
+//that resolve to lua objects
+static bool canreturnmultiple(T_Kind k) {
+    return k == T_apply || k == T_method || k == T_var || k == T_select;
+}
+
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
   
@@ -825,17 +834,15 @@ static void prefixexp (LexState *ls, expdesc *v) {
       luaX_next(ls);
       RETURNS_1(expr(ls, v));
       if(ls->in_terra) {
-        lua_getfield(ls->L, -1, "kind");
+        int tbl = lua_gettop(ls->L);
+        lua_getfield(ls->L, tbl, "kind");
         T_Kind k = (T_Kind) luaL_checkint(ls->L, -1);
         lua_pop(ls->L,1);
         //if an call was parenthesized, mark it as only returned one argument
         //we only care in cases where the result might return multiple values
-        //this can occur on function invocation (apply or method)
-        //or if the value is resolved via create special, which can occur for variables, or select statements
-        //that resolve to lua objects
-        if(k == T_apply || k == T_method || k == T_var || k == T_select) { 
-            int tbl = new_table_before(ls, T_identity);
-            add_field(ls, tbl, "value");
+        if(canreturnmultiple(k)) { 
+            push_boolean(ls, true);
+            add_field(ls, tbl, "truncated");
         }
       }
       check_match(ls, ')', '(', line);

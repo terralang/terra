@@ -59,7 +59,6 @@ _(integer,"integer") \
 _(logical,"logical") \
 _(ltor,"ltor") \
 _(cast,"cast") \
-_(identity,"identity") \
 _(extractreturn,"extractreturn") \
 _(parameterlist,"parameterlist") \
 _(globalvar, "globalvar") \
