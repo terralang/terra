@@ -5,7 +5,7 @@ local bar = macro(function(ctx,typ)
 end)
 
 local bar2 = macro(function(ctx,typ)
-	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], type = double, name = "a" })
+	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], name = "a" })
 	
 end)
 

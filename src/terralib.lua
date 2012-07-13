@@ -1989,30 +1989,65 @@ function terra.func:typecheck(ctx)
         end
     end
     
-    --takes a tree and resolves references to lua objects
-    --if the tree is not a var, it will just be returned
+    --takes a tree and resolves references to lua objects that can result from partial evaluation
+    --if the tree is not a var or select, it will just be returned
     --if it is a var, it will be resolved to its definition
     --if that definition is terra code, the var is returned with the definition field set
     --if it is a special object (e.g. terra function, macro, quote, global var), it will insert the appropriate tree in its place
+    --if it is a select node a.b it first check 'a' as an expression.
+    --if that turns into a luaobject then it will try to perform the partial evaluation of the select
+    --otherwise, it will just typecheck the normal select operator
+    
     --this function is (and must remain) idempotent (i.e. resolveluaspecial(e) == resolveluaspecial(resolveluaspecial(e)) )
+    --to accomplish this, it guarentees that e.type is set for any var/select returned from the expression and will
+    --not operator on a var/select node with the type already resolved
+    
     function resolveluaspecial(e)
-        if not e:is "var" or e.definition ~= nil or e.type == terra.types.error then
+        local canbespecial = (e:is "var" or e:is "select") and not e.type
+        if not canbespecial then
             return e
         end
         
-        local v = ctx:varenv()[e.name]
-        if v ~= nil then
-            return e:copy { type = v.type, definition = v, lvalue = true }
-        end
-        
-        v = ctx:luaenv()[e.name]  
-        
-        if v ~= nil then
+        if e:is "var" and not e.resolved then
+            local v = ctx:varenv()[e.name]
+            if v ~= nil then
+                return e:copy { type = v.type, definition = v, lvalue = true }
+            end
+            
+            v = ctx:luaenv()[e.name]  
+            
+            if v == nil then
+                terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
+                return e:copy { type = terra.types.error }
+            end
+            
             return createspecial(e,v)
+                
+        elseif e:is "select" and not e.resolved then
+            local v = checkexp(e.value,true)
+            if v:is "luaobject" then
+                if type(v.value) ~= "table" then
+                    terra.reporterror(ctx,e,"expected a table but found ", type(v.value))
+                    return e:copy{ type = terra.types.error }
+                end
+
+                local selected = v.value[e.field]
+                if selected == nil then
+                    terra.reporterror(ctx,e,"no field ",e.field," in object")
+                    return e:copy { type = terra.types.error }
+                end
+                
+                return createspecial(e,selected)
+            else
+                if v.type:ispointer() then --allow 1 implicit dereference
+                    v = insertdereference(v)
+                end
+                return insertselect(v,e.field)
+            end
         else
-            terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
-            return e:copy { type = terra.types.error }
+            return e
         end
+        
     end
     
     
@@ -2023,26 +2058,11 @@ function terra.func:typecheck(ctx)
             elseif e:is "literal" then
                 return e
             elseif e:is "var" then
+                assert(e.type ~= nil, "found an unresolved var in checkexp")
                 return e --we already resolved and typed the variable in resolveluaspecial
             elseif e:is "select" then
-                local v = checkexp(e.value,true)
-                if v:is "luaobject" then
-                    if type(v.value) ~= "table" then
-                        terra.reporterror(ctx,e,"expected a table but found ", type(v.value))
-                        return e:copy{ type = terra.types.error }
-                    end
-                    local selected = v.value[e.field]
-                    if selected == nil then
-                        terra.reporterror(ctx,e,"no field ",e.field," in object")
-                        return e:copy { type = terra.types.error }
-                    end
-                    return createspecial(e,selected) 
-                else
-                    if v.type:ispointer() then --allow 1 implicit dereference
-                        v = insertdereference(v)
-                    end
-                    return insertselect(v,e.field)
-                end
+                assert(e.type ~= nil,"found an unresolved select in checkexp")
+                return e --select has already been resolved by resolveluaspecial
             elseif e:is "operator" then
                 local op_string = terra.kinds[e.operator]
                 local op = operator_table[op_string]
