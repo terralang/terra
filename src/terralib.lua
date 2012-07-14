@@ -272,65 +272,52 @@ function terra.context:isempty()
     return #self.stack == 0
 end
 
-function terra.context:adddeferred(action)
-    self.deferred:insert(action)
+
+function terra.context:functionbegin(func)
+    func.compileindex = self.nextindex
+    func.lowlink = func.compileindex
+    self.nextindex = self.nextindex + 1
+    
+    table.insert(self.functions,func)
+    table.insert(self.tobecompiled,func)
+    
 end
 
-function terra.context:rundeferred()
-    for i,a in ipairs(self.deferred) do
-        a()
+function terra.context:functionend()
+    local func = table.remove(self.functions)
+    local prev = self.functions[#self.functions]
+    if prev ~= nil then
+        prev.lowlink = math.min(prev.lowlink,func.lowlink)
     end
-end
-
-function terra.context:depth()
-    return #self.stack
-end
-
-function terra.context:begininitializer(initfn)
-    table.insert(self.initializers,{ depth = self:depth(), initfn = initfn })
-end
-
-function terra.context:endinitializer()
-    table.remove(self.initializers)
-end
-
-function terra.context:check_current_initializer_required_by_function_at_depth(funcobj)
-    local n = #self.initializers
-    if n > 0 and funcobj.compiledepth then
-        local init = self.initializers[n]
-        if init.depth > funcobj.compiledepth then
-            --init.depth is the position on the stack of the current variable being initialized
-            --depth is the position on the stack of a recursively visited function that is compiling
-            -- when init.depth > depth, then
-            -- compilation stack looks like
-            -- compile foo() -> ... -> compile global var a -> ... -> compile foo()
-            -- since foo requires a, but a's initializer requires foo, we have a circular dependency
-            -- otherwise it looks like
-            -- ... -> compile global var a -> ... -> compile foo() -> ... -> compile foo()
-            -- which is not a circular dependency
-            
-            local function report(anchor,...)
-                
-                if not anchor.filename then
-                    error("filename?")
-                end
-                if self.stack[#self.stack].filename ~= anchor.filename then
-                    self:push(anchor.filename)
-                    self:reporterror(anchor,...)
-                    self:pop()
-                else
-                    self:reporterror(anchor,...)
-                end
+    
+    if func.lowlink == func.compileindex then
+        local scc = terra.newlist{}
+        repeat
+            local tocompile = table.remove(self.tobecompiled)
+            scc:insert(tocompile)
+        until tocompile == func
+        
+        --TODO: this should call the compiler with the whole SCC at a time to allow it to optimize the scc together
+        for i,f in ipairs(scc) do
+            if not self.has_errors then
+                terra.jit(f)
+                f:makewrapper()
             end
-            
-            report(funcobj.untypedtree,"function requires a global variable but is used in that variable's initializer")
-            report(init.initfn.untypedtree,"global variable is here")
+            f.state = "initialized"
         end
+    end
+    
+end
+
+function terra.context:functioncalls(func)
+    local curfunc = self.functions[#self.functions]
+    if curfunc then
+        curfunc.lowlink = math.min(curfunc.lowlink,func.compileindex)
     end
 end
 
 function terra.newcontext()
-    return setmetatable({stack = {}, initializers = {}, deferred = terra.newlist{}},terra.context)
+    return setmetatable({stack = {}, functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
 end
 
 -- END CONTEXT
@@ -344,29 +331,30 @@ function terra.func:env()
     return self.envtbl
 end
 function terra.func:gettype(ctx)
-    if self.type then --already typechecked
+    if self.state == "codegen" then --function is in the same strongly connected component of the call graph as its called, even though it has already been typechecked
+        ctx:functioncalls(self)
+        assert(self.type ~= nil, "no type in codegen'd function?")
         return self.type
-    else --we need to compile the function now because it has been referenced
-        if self.compiledepth then
-            if self.untypedtree.return_types then --we are already compiling this function, but the return types are listed, so we can resolve the type anyway  
-                ctx:check_current_initializer_required_by_function_at_depth(self)
-                local params = terra.newlist()
-                local function rt(t) return terra.resolvetype(ctx,t) end
-                for _,v in ipairs(self.untypedtree.parameters) do
-                    params:insert(rt(v.type))
-                end
-                local rets = terra.resolvetype(ctx,self.untypedtree.return_types,true)
-                self.type = terra.types.functype(params,rets) --for future calls
-                return self.type
-            else
-                return terra.types.error, "recursively called function needs an explicit return type"
-            end
-        else
-            self:compile(ctx)
+    elseif self.state == "typecheck" then
+        ctx:functioncalls(self)
+        if self.type then --already resolved the type in previous recursive call
             return self.type
+        elseif self.untypedtree.return_types then --we are already compiling this function, but the return types are listed, so we can resolve the type anyway  
+            local params = terra.newlist()
+            local function rt(t) return terra.resolvetype(ctx,t) end
+            for _,v in ipairs(self.untypedtree.parameters) do
+                params:insert(rt(v.type))
+            end
+            local rets = terra.resolvetype(ctx,self.untypedtree.return_types,true)
+            self.type = terra.types.functype(params,rets) --for future calls
+            return self.type
+        else
+            return terra.types.error, "recursively called function needs an explicit return type"
         end
-    end
-    
+    else
+        self:compile(ctx)
+        return self.type
+    end    
 end
 function terra.func:makewrapper()
     local fntyp = self.type
@@ -383,16 +371,24 @@ function terra.func:makewrapper()
 end
 
 function terra.func:compile(ctx)
-    if self.llvm_function then
-        return --already compiled, or on the list of compiles to complete in ctx
-    end
-    if self.ctype then --this is a stub generated by the c wrapper, connect it with the right llvm_function object and set fptr
-        self.type,self.ctype = self.ctype,nil
-        terra.registercfunction(self)
-        self:makewrapper()
+    
+    if self.state == "initialized" then
         return
     end
+    
+    if self.state == "uninitializedc" then --this is a stub generated by the c wrapper, connect it with the right llvm_function object and set fptr
+        terra.registercfunction(self)
+        self:makewrapper()
+        self.state = "initialized"
+        return
+    end
+    
+    if self.state ~= "uninitializedterra" then
+        error("attempting to compile a function that is already in the process of being compiled.",2)
+    end
+    
     local ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
+    
     dbprint("compiling function:")
     dbprintraw(self.untypedtree)
     dbprint("with local environment:")
@@ -400,26 +396,23 @@ function terra.func:compile(ctx)
         dbprint("  ",k)
     end
     
+    ctx:functionbegin(self)
+    self.state = "typecheck"
     self.typedtree = self:typecheck(ctx)
     self.type = self.typedtree.type
+    
+    self.state = "codegen"
     
     if ctx.has_errors then 
         if ctx:isempty() then --if this was not the top level compile we let type-checking of other functions continue, 
                                 --though we don't actually compile because of the errors
             error("Errors reported during compilation.")
         end
-    else 
-        --now call into llvm to emit code...
+    else
         terra.codegen(self)
-        ctx:adddeferred(function()
-            terra.jit(self)
-            self:makewrapper()
-        end)
     end
     
-    if ctx:isempty() then
-        ctx:rundeferred()
-    end
+    ctx:functionend(self)
     
 end
 
@@ -477,47 +470,36 @@ function terra.globalvar:compile(ctx)
     local ctx = ctx or terra.newcontext()
     local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
     
-    ctx:begininitializer(globalinit.initfn)
-    
     globalinit.initfn:compile(ctx)
-    
-    ctx:endinitializer()
     
     local entries = globalinit.initfn.typedtree.body.statements[1].variables --extract definitions from generated function
     for i,v in ipairs(globalinit.globals) do
         v.tree = entries[i]
         v.type = v.tree.type
     end
-    
-    --TODO: we need to detect if initfn relies on a function (fn) already being compiled lower on the stack.
-    --if so, that means that fn uses these global variables, but the initializers for these global variables requires fn, which is a cyclic dependency.
-    --detecting this requires know if everything below the call to compile has been completed
-    
-    --running initfn will  initialize the variables, must be done after everything has been compiled
-    ctx:adddeferred(function()
-        globalinit.initfn()
-    end)
-    
-    if ctx:isempty() then
-        ctx:rundeferred()
+    --this will happen when function referring to this GV is in the same strongly connected component as the global variables initializer
+    if globalinit.initfn.state ~= "initialized" then 
+        local tree = globalinit.initfn.untypedtree
+        ctx:push(tree.filename)
+        ctx:reporterror(tree,"global variable recursively used by its own initializer")
+        ctx:pop()
     end
     
+    if not ctx.has_errors then
+        globalinit.initfn()
+    end
 end
+
 function terra.globalvar:gettype(ctx) 
-    if self.type then
+    local state = self.initializer.initfn.state
+    if state == "initialized" then
         return self.type
-    else --we need to compile
-        if self.initializer.iscompiling then
-            return terra.types.error,"recursive reference to global variable in its initializer"
-        else
-            self.initializer.iscompiling = true
-            self:compile(ctx)
-            if self.type == nil then
-                error("nil type?")
-            end
-            self.initializer.iscompiling = nil
-        end
+    elseif state == "uninitializedterra" then
+        self:compile(ctx)
+        assert(self.type ~= nil, "nil type?")
         return self.type
+    else
+        return terra.types.error, "reference to global variable in its own initializer"
     end
 end
 
@@ -615,7 +597,7 @@ do  --constructor functions for terra functions and variables
         end
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
-        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname }
+        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname, state = "uninitializedterra" }
         local fn = setmetatable(obj,terra.func)
         
         --handle desugaring of methods defintions by adding an implicit self argument
@@ -629,7 +611,7 @@ do  --constructor functions for terra functions and variables
         return fn
     end
     function terra.newcfunction(name,typ)
-        local obj = { name = name, ctype =  typ}
+        local obj = { name = name, type = typ, state = "uninitializedc" }
         setmetatable(obj,terra.func)
         return obj
     end
@@ -1338,7 +1320,6 @@ function terra.func:typecheck(ctx)
     
     
     --initialization
-    self.compiledepth = ctx:depth() --to catch recursive compilation calls
     ctx:push(self.filename,self:env(),{})
     
     
@@ -2467,7 +2448,6 @@ function terra.func:typecheck(ctx)
     
     ctx:pop()
     
-    self.compiledepth = nil
     return typedtree
 end
 
