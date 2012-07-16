@@ -12,7 +12,7 @@ extern "C" {
 #include "llvmheaders.h"
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
-
+#include "tinline.h"
 
 
 
@@ -92,6 +92,9 @@ int terra_compilerinit(struct terra_State * T) {
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "", options,Reloc::Default,CodeModel::Default,OL);
     
     T->C->tm = TM;
+    
+    T->C->mi = createManualFunctionInliningPass(T->C->ee->getTargetData());
+    T->C->mi->doInitialization();
     
     return 0;
 }
@@ -386,10 +389,6 @@ struct TerraCompiler {
             func->dump();
         }
         verifyFunction(*func);
-        C->fpm->run(*func);
-        DEBUG_ONLY(T) {
-            func->dump();
-        }
         
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
@@ -1298,19 +1297,52 @@ static int terra_jit(lua_State * L) {
     int ref_table = lobj_newreftable(T->L);
     
     {
-        Obj funcobj;
+        Obj funclist;
         lua_pushvalue(L,-2); //original argument
-        funcobj.initFromStack(L, ref_table);
-        Function * func = (Function*) funcobj.ud("llvm_function");
-        assert(func);
+        funclist.initFromStack(L, ref_table);
+        std::vector<Function *> scc;
+        int N = funclist.size();
         DEBUG_ONLY(T) {
-            std::string s = func->getName();
-            printf("jitting %s\n",s.c_str());
+            printf("jitting scc containing: ");
         }
-        void * ptr = T->C->ee->getPointerToFunction(func);
+        for(int i = 0; i < N; i++) {
+            Obj funcobj;
+            funclist.objAt(i,&funcobj);
+            Function * func = (Function*) funcobj.ud("llvm_function");
+            assert(func);
+            scc.push_back(func);
+            DEBUG_ONLY(T) {
+                std::string s = func->getName();
+                printf("%s ",s.c_str());
+            }
+        }
+        DEBUG_ONLY(T) {
+            printf("\n");
+        }
         
-        lua_pushlightuserdata(L, ptr);
-        funcobj.setfield("fptr");
+        T->C->mi->runOnSCC(scc);
+        
+        for(int i = 0; i < N; i++) {
+            Obj funcobj;
+            funclist.objAt(i,&funcobj);
+            Function * func = (Function*) funcobj.ud("llvm_function");
+            assert(func);
+            
+            DEBUG_ONLY(T) {
+                std::string s = func->getName();
+                printf("jitting %s\n",s.c_str());
+            }
+            
+            T->C->fpm->run(*func);
+            DEBUG_ONLY(T) {
+                func->dump();
+            }
+            
+            void * ptr = T->C->ee->getPointerToFunction(func);
+            
+            lua_pushlightuserdata(L, ptr);
+            funcobj.setfield("fptr");
+        }
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);

@@ -86,7 +86,7 @@ INCLUDE_PATH += -Ibuild
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 
-LIBSRC = tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp linenoise.cpp
+LIBSRC = tinline.cpp tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp linenoise.cpp
 EXESRC = main.cpp linenoise.cpp
 
 LIBOBJS = $(LIBSRC:.cpp=.o)

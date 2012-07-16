@@ -297,10 +297,12 @@ function terra.context:functionend()
             scc:insert(tocompile)
         until tocompile == func
         
-        --TODO: this should call the compiler with the whole SCC at a time to allow it to optimize the scc together
+        if not self.has_errors then
+            terra.jit(scc)
+        end
+        
         for i,f in ipairs(scc) do
             if not self.has_errors then
-                terra.jit(f)
                 f:makewrapper()
             end
             f.state = "initialized"
