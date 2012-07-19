@@ -23,12 +23,14 @@ INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 #LLVM_CONFIG=$(shell which llvm-config)
 
 LLVM_CONFIG=/usr/local/bin/llvm-config
-FLAGS += -I/usr/local/include -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 #LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs) -lLLVMLinker
+
 LFLAGS += \
+-L$(shell $(LLVM_CONFIG) --libdir) \
 -lLLVMAsmParser \
 -lLLVMLinker \
 -lLLVMArchive \
