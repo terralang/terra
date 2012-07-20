@@ -24,6 +24,26 @@ static int terra_jit(lua_State * L);  //entry point from lua into compiler to ac
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
 
+struct OptInfo {
+    int OptLevel;
+    int SizeLevel;
+    bool DisableUnitAtATime;
+    bool DisableSimplifyLibCalls;
+    bool DisableUnrollLoops;
+    bool Vectorize;
+    bool UseGVNAfterVectorization;
+    OptInfo() {
+        OptLevel = 3;
+        SizeLevel = 0;
+        DisableSimplifyLibCalls = false;
+        DisableUnrollLoops = false;
+        UseGVNAfterVectorization = false;
+        Vectorize = true;
+    }
+};
+
+static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi);
+
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
@@ -59,26 +79,9 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
     }
     T->C->fpm = new FunctionPassManager(T->C->m);
-    
-    //TODO: add optimization passes here, these are just from llvm tutorial and are probably not good
-    //look here: http://lists.cs.uiuc.edu/pipermail/llvmdev/2011-December/045867.html
     T->C->fpm->add(new TargetData(*T->C->ee->getTargetData()));
-    // Provide basic AliasAnalysis support for GVN.
-    T->C->fpm->add(createBasicAliasAnalysisPass());
-    // Promote allocas to registers.
-    T->C->fpm->add(createPromoteMemoryToRegisterPass());
-    // Also promote aggregates like structs....
-    T->C->fpm->add(createScalarReplAggregatesPass());
-    // Do simple "peephole" optimizations and bit-twiddling optzns.
-    T->C->fpm->add(createInstructionCombiningPass());
-    // Reassociate expressions.
-    T->C->fpm->add(createReassociatePass());
-    // Eliminate Common SubExpressions.
-    T->C->fpm->add(createGVNPass());
-    // Simplify the control flow graph (deleting unreachable blocks, etc).
-    T->C->fpm->add(createCFGSimplificationPass());
-    
-    T->C->fpm->doInitialization();
+    OptInfo info; //TODO: make configurable from terra
+    addoptimizationpasses(T->C->fpm,&info);
     
     std::string Triple = llvm::sys::getDefaultTargetTriple();
     std::string Error;
@@ -97,6 +100,77 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->mi->doInitialization();
     
     return 0;
+}
+
+static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi) {
+    //These passes are passes from PassManagerBuilder adapted to work a function at at time
+    //inlining is handled as a preprocessing step before this gets called
+    
+    //look here: http://lists.cs.uiuc.edu/pipermail/llvmdev/2011-December/045867.html
+
+    // If all optimizations are disabled, just run the always-inline pass. (TODO: actually run the always-inline pass and disable other inlining)
+    if(oi->OptLevel == 0)
+        return;
+    
+    //fpm->add(createTypeBasedAliasAnalysisPass()); //TODO: emit metadata so that this pass does something
+    fpm->add(createBasicAliasAnalysisPass());
+    
+    
+    
+    // Start of CallGraph SCC passes. (
+    //if (!DisableUnitAtATime)
+    //    fpm->add(createFunctionAttrsPass());       // Set readonly/readnone attrs (TODO: can we run this if we modify it to work with JIT?)
+    
+    //if (OptLevel > 2)
+    //    fpm->add(createArgumentPromotionPass());   // Scalarize uninlined fn args (TODO: can we run this if we modify it to work wit ==h JIT?)
+
+    // Start of function pass.
+    // Break up aggregate allocas, using SSAUpdater.
+    fpm->add(createScalarReplAggregatesPass(-1, false));
+    fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
+    if (!oi->DisableSimplifyLibCalls)
+        fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
+    fpm->add(createJumpThreadingPass());         // Thread jumps.
+    fpm->add(createCorrelatedValuePropagationPass()); // Propagate conditionals
+    fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
+    fpm->add(createInstructionCombiningPass());  // Combine silly seq's
+
+    fpm->add(createTailCallEliminationPass());   // Eliminate tail calls
+    fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
+    fpm->add(createReassociatePass());           // Reassociate expressions
+    fpm->add(createLoopRotatePass());            // Rotate Loop
+    fpm->add(createLICMPass());                  // Hoist loop invariants
+    fpm->add(createLoopUnswitchPass(oi->SizeLevel || oi->OptLevel < 3));
+    fpm->add(createInstructionCombiningPass());
+    fpm->add(createIndVarSimplifyPass());        // Canonicalize indvars
+    fpm->add(createLoopIdiomPass());             // Recognize idioms like memset.
+    fpm->add(createLoopDeletionPass());          // Delete dead loops
+    if (!oi->DisableUnrollLoops)
+        fpm->add(createLoopUnrollPass());          // Unroll small loops
+    
+    if (oi->OptLevel > 1)
+        fpm->add(createGVNPass());                 // Remove redundancies
+    fpm->add(createMemCpyOptPass());             // Remove memcpy / form memset
+    fpm->add(createSCCPPass());                  // Constant prop with SCCP
+
+    // Run instcombine after redundancy elimination to exploit opportunities
+    // opened up by them.
+    fpm->add(createInstructionCombiningPass());
+    fpm->add(createJumpThreadingPass());         // Thread jumps
+    fpm->add(createCorrelatedValuePropagationPass());
+    fpm->add(createDeadStoreEliminationPass());  // Delete dead stores
+
+    if (oi->Vectorize) {
+        fpm->add(createBBVectorizePass());
+        fpm->add(createInstructionCombiningPass());
+        if (oi->OptLevel > 1 && oi->UseGVNAfterVectorization)
+            fpm->add(createGVNPass());                   // Remove redundancies
+        else
+            fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
+    }
+    fpm->add(createAggressiveDCEPass());         // Delete dead instructions
+    fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
+    fpm->add(createInstructionCombiningPass());  // Clean up after everything.
 }
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
@@ -807,13 +881,8 @@ if(t->type->isIntegerTy()) { \
                         return fn; 
                     } else if(pt->getElementType()->isIntegerTy(8)) {
                         if(exp->boolean("value")) { //string literal
-                            Constant * init = ConstantDataArray::getString(*C->ctx, exp->string("value"));
-                            std::stringstream ss;
-                            ss << ".str" << C->next_unused_id++;
-                            //TODO: we should de-duplicate strings that are the same
-                            GlobalVariable * gv = new GlobalVariable(*C->m,init->getType(), true, GlobalValue::InternalLinkage, init,ss.str());
-                            int64_t idxs[] = { 0, 0};
-                            return emitCGEP(gv,idxs,2);
+                            Value * str = B->CreateGlobalString(exp->string("value"));
+                            return  B->CreateBitCast(str, pt);
                         } else { //null pointer
                             return ConstantPointerNull::get(pt);
                         }
@@ -1385,6 +1454,9 @@ static bool EmitObjFile(Module * Mod, TargetMachine * TM, const char * Filename,
     return false;
 }
 
+static char * copyName(const StringRef & name) {
+    return strdup(name.str().c_str());
+}
 static int terra_saveobjimpl(lua_State * L) {
     const char * filename = luaL_checkstring(L, -3);
     int tbl = lua_gettop(L) - 1;
@@ -1407,36 +1479,70 @@ static int terra_saveobjimpl(lua_State * L) {
     }
     
     {
-        //TODO: copy the module with CloneModule so that we don't mess stuff up when internalizing things
         
-        std::vector< const char *> names;
+        //TODO: copy the module with CloneModule so that we don't mess stuff up when internalizing things
+        ValueToValueMapTy VMap;
+        Module * M = CloneModule(T->C->m, VMap);
+        PassManager * MPM = new PassManager();
+        MPM->add(new TargetData(*T->C->ee->getTargetData())); //TODO: do I have to free the targetdata?
+        
+        std::vector<const char *> names;
         //iterate over the key value pairs in the table
         lua_pushnil(L);
         while (lua_next(L, tbl) != 0) {
             const char * key = luaL_checkstring(L, -2);
             Obj obj;
             obj.initFromStack(L, ref_table);
-            Function * fn = (Function*) obj.ud("llvm_function");
-            assert(fn);
-            //printf("%s = \n",key);
-            //fn->dump();
-            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, key, fn, T->C->m);
-            names.push_back(key);
+            Function * fnold = (Function*) obj.ud("llvm_function");
+            assert(fnold);
+            Function * fn = cast<Function>(VMap[fnold]);
+            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, key, fn, M);
+            names.push_back(copyName(ga->getName())); //internalize pass has weird interface, so we need to copy the names here
         }
         
-        //T->C->m->dump();
+        //at this point we run optimizations on the module
+        //first internalize all functions not mentioned in "names" using an internalize pass and then perform 
+        //standard optimizations
         
-        //at this point we should really run optimizations on the module
-        //first internalize all functions not mentioned in "names" using an internalize pass and then perform dead function elimination
-        //along with the other standard optimizations
+        MPM->add(createVerifierPass()); //make sure we haven't messed stuff up yet
+        MPM->add(createInternalizePass(names));
+        MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
+                                         //this will remove dead functions
+        
+        //clean up the name list
+        for(size_t i = 0; i < names.size(); i++) {
+            free((char*)names[i]);
+            names[i] = NULL;
+        }
+        
+        PassManagerBuilder PMB;
+        PMB.OptLevel = 3;
+        
+        PMB.populateModulePassManager(*MPM);
+        PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
+        
+        
+        MPM->run(*M);
+        
+        delete MPM;
+        MPM = NULL;
+        
+        DEBUG_ONLY(T) {
+            printf("resulting module to be saved is:\n");
+            M->dump();
+        }
         
         //printf("saving %s\n",objname);
         std::string err = "";
-        if(EmitObjFile(T->C->m,T->C->tm,objname,&err)) {
+        if(EmitObjFile(M,T->C->tm,objname,&err)) {
             if(isexe)
                 unlink(objname);
+            delete M;
             terra_reporterror(T,"llvm: %s\n",err.c_str());
         }
+        
+        delete M;
+        M = NULL;
         
         if(isexe) {
             sys::Path gcc = sys::Program::FindProgramByName("gcc");

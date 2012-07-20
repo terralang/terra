@@ -11,4 +11,10 @@ function test.neq(a,b)
 	end
 end
 
+function test.time(fn)
+    local s = os.clock()
+    fn()
+    local e = os.clock()
+    return e - s
+end
 return test

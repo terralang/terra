@@ -33,4 +33,8 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Program.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/Vectorize.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #endif
