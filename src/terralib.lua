@@ -1367,14 +1367,14 @@ function terra.func:typecheck(ctx)
             local selected = asrvalue(insertselect(var_ref,entry.key))
             if entry.hasname then
                 if to:isarray() then
-                    err(ctx,exp, "structural cast invalid, assigning a named field to an array")
+                    err("structural cast invalid, assigning a named field to an array")
                 else 
                     local offset = to.keytoindex[entry.key]
                     if not offset then
-                        err(ctx,exp, "structural cast invalid, result structure has no key ", entry.key)
+                        err("structural cast invalid, result structure has no key ", entry.key)
                     else
                         if indextoinit[offset] then
-                            err(ctx,exp, "structural cast invalid, ",entry.key," initialized more than once")
+                            err("structural cast invalid, ",entry.key," initialized more than once")
                         end
                         indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
                     end
@@ -1396,7 +1396,7 @@ function terra.func:typecheck(ctx)
                 end
                 
                 if offset == maxsz then
-                    err(ctx,exp,"structural cast invalid, too many unnamed fields")
+                    err("structural cast invalid, too many unnamed fields")
                 else
                     indextoinit[offset] = insertcast(selected,totyp)
                 end
@@ -2198,7 +2198,6 @@ function terra.func:typecheck(ctx)
             return rstmt
         elseif s:is "label" then
             local lbls = labels[s.value] or terra.newlist()
-            terra.tree.printraw(lbls)
             if terra.istree(lbls) then
                 terra.reporterror(ctx,s,"label defined twice")
                 terra.reporterror(ctx,lbls,"previous definition here")

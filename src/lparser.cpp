@@ -1724,11 +1724,11 @@ static void localstat (LexState *ls) {
   int tbl = new_table(ls,T_defvar);
   int vars = new_list(ls);
   do {
+    int entry = new_table(ls,T_entry);
     TString * name = str_checkname(ls);
     if(!ls->in_terra)
         ls->fs->bl->local_variables.push_back(name);
     nvars++;
-    int entry = new_table(ls,T_entry);
     push_string(ls,name);
     add_field(ls,entry,"name");
     if(ls->in_terra && testnext(ls,':')) {
