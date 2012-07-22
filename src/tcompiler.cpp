@@ -382,7 +382,7 @@ struct TerraCompiler {
     GlobalVariable * allocGlobal(Obj * v) {
         const char * name = v->string("name");
         Type * typ = typeOfValue(v)->type;
-        GlobalVariable * gv = new GlobalVariable(*C->m, typ, false, GlobalValue::CommonLinkage, UndefValue::get(typ), name);
+        GlobalVariable * gv = new GlobalVariable(*C->m, typ, false, GlobalValue::ExternalLinkage, UndefValue::get(typ), name);
         lua_pushlightuserdata(L, gv);
         v->setfield("value");
         return gv;
