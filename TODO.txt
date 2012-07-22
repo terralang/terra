@@ -1,17 +1,16 @@
 Language Implementation:
 
--- vector types
--- returning values from lua functions   
--- pointer arithmetic on niltype?
-      
-Runtime Implementation:
 
+-- creating references to variables found in another quote object despite hygiene
+-- vector types
+-- overloaded functions
+-- overloaded operator behavior
 -- how to save results for later (both Lua state and Terra JIT state)
 -- generate TBAA metadata like C will so that we can match perf
--- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
-   handle as much as possible in the JIT, and make sure the offline compiler does everything
-   make configurable (perhaps a general config mechanism) (look a preconfigured stuff)
--- write 1 or two language benchmarks in terra to get baseline perf (do this after figuring out -O3)
+-- vectorized load/stores (allow vec(int*) and its loads)
+-- pointer arithmetic on niltype?
+-- returning values from lua functions   
+      
 
 
 DONE:
@@ -55,3 +54,7 @@ DONE:
       partial eval of select is handeld
       macro nodes are expanded (recursively) until there are no non-tree literals left
 -- good error message for when there is a circular dependency on global variable initializationlocation like old C for now)
+-- getting the right -O3 passes (llvm-as < /dev/null | opt -O3 -disable-output -debug-pass=Arguments)
+   handle as much as possible in the JIT, and make sure the offline compiler does everything
+   make configurable (perhaps a general config mechanism) (look a preconfigured stuff)
+-- write 1 or two language benchmarks in terra to get baseline perf (do this after figuring out -O3)
