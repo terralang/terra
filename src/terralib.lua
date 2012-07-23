@@ -2457,7 +2457,7 @@ end
 -- INCLUDEC
 
 function terra.includecstring(code)
-    return terra.registercfile(code,{"-I","."})
+    return terra.registercfile(code,{"-I",".","-O3","-w"})
 end
 function terra.includec(fname)
     return terra.includecstring("#include \""..fname.."\"\n")

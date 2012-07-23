@@ -36,9 +36,9 @@ struct OptInfo {
         OptLevel = 3;
         SizeLevel = 0;
         DisableSimplifyLibCalls = false;
-        DisableUnrollLoops = false;
+        DisableUnrollLoops = true;
         UseGVNAfterVectorization = false;
-        Vectorize = true;
+        Vectorize = false;
     }
 };
 
@@ -1517,9 +1517,10 @@ static int terra_saveobjimpl(lua_State * L) {
         
         PassManagerBuilder PMB;
         PMB.OptLevel = 3;
+        PMB.DisableUnrollLoops = true;
         
         PMB.populateModulePassManager(*MPM);
-        PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
+        //PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
         
         
         MPM->run(*M);

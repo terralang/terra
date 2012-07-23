@@ -415,7 +415,10 @@ static void dorewrite(terra_State * T, const char * code, const char ** argbegin
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(code, "<buffer>");
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
     TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
-
+    Preprocessor &PP = TheCompInst.getPreprocessor();
+    PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
+                                           PP.getLangOpts());
+                                           
     // Create an AST consumer instance which is going to get called by
     // ParseAST.
   
@@ -436,7 +439,6 @@ static void dorewrite(terra_State * T, const char * code, const char ** argbegin
     << "void __makeeverythinginclanglive_" << T->C->next_unused_id++ << "() {\n"
     << dummy.str() << "\n}\n";
     *output = out.str();
-    //delete membuffer;
     //printf("output is %s\n",(*output).c_str());
 }
 
@@ -451,8 +453,9 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
+    
     TheCompInst.setTarget(TI);
-
+    
     TheCompInst.createFileManager();
     FileManager &FileMgr = TheCompInst.getFileManager();
     TheCompInst.createSourceManager(FileMgr);
@@ -468,9 +471,11 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, "<buffer>");
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
     TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
-
-    CodeGenOptions CGO;
-    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", CGO, llvm::getGlobalContext() );
+    Preprocessor &PP = TheCompInst.getPreprocessor();
+    PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
+                                           PP.getLangOpts());
+                                           
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), llvm::getGlobalContext() );
 
     ParseAST(TheCompInst.getPreprocessor(),
             codegen,
@@ -480,10 +485,13 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     
     if(mod) {
         std::string err;
+        DEBUG_ONLY(T) {
+            mod->dump();
+        }
         if(llvm::Linker::LinkModules(T->C->m, mod, 0, &err)) {
             terra_reporterror(T,"llvm: %s\n",err.c_str());
         }
-        //mod->dump();
+        
     } else {
         terra_reporterror(T,"compilation of included c code failed\n");
     }
