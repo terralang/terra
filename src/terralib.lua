@@ -879,6 +879,22 @@ do --construct type table that holds the singleton value representing each uniqu
         return setmetatable(v,types.type)
     end
     
+    local function registertype(name, constructor)
+        local typ = types.table[name]
+        if typ == nil then
+            if types.istype(constructor) then
+                typ = constructor
+            elseif type(constructor) == "function" then
+                typ = constructor()
+            else
+                error("expected function or type")
+            end
+            typ.name = name
+            types.table[name] = typ
+        end
+        return typ
+    end
+    
     --initialize integral types
     local integer_sizes = {1,2,4,8}
     for _,size in ipairs(integer_sizes) do
@@ -887,17 +903,17 @@ do --construct type table that holds the singleton value representing each uniqu
             if not s then
                 name = "u"..name
             end
-            local typ = mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s, name = name}
-            types.table[name] = typ
+            registertype(name,
+                         mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s})
         end
     end  
     
-    types.table["float"] = mktyp { kind = terra.kinds.primitive, bytes = 4, type = terra.kinds.float, name = "float" }
-    types.table["double"] = mktyp { kind = terra.kinds.primitive, bytes = 8, type = terra.kinds.float, name = "double" }
-    types.table["bool"] = mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical, name = "bool" }
+    registertype("float", mktyp { kind = terra.kinds.primitive, bytes = 4, type = terra.kinds.float })
+    registertype("double",mktyp { kind = terra.kinds.primitive, bytes = 8, type = terra.kinds.float })
+    registertype("bool",  mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical})
     
-    types.error = mktyp { kind = terra.kinds.error , name = "error" } --object representing where the typechecker failed
-    types.niltype = mktyp { kind = terra.kinds.niltype, name = "niltype" } -- the type of the singleton nil (implicitly convertable to any pointer type)
+    types.error   = registertype("error",  mktyp { kind = terra.kinds.error })
+    types.niltype = registertype("niltype",mktyp { kind = terra.kinds.niltype}) -- the type of the singleton nil (implicitly convertable to any pointer type)
     
     local function checkistype(typ)
         if not types.istype(typ) then 
@@ -922,40 +938,59 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
+    
+    
     function types.pointer(typ)
         checkistype(typ)
         if typ == types.error then return types.error end
         
         local function create(typ)
-            local name = "&"..typ.name 
-            local value = types.table[name]
-            if value == nil then
-                value = mktyp { kind = terra.kinds.pointer, type = typ, name = name }
+            return registertype("&"..typ.name, function()
+                local value = mktyp { kind = terra.kinds.pointer, type = typ }
                 setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
-                types.table[name] = value
-            end
-            return value
+                return value
+            end)
         end
+        
         return makewrapper(typ,create)
     end
     
-    function types.array(typ, N_)
+    local function checkarraylike(typ, N_)
         local N = tonumber(N_)
         checkistype(typ)
-        if typ == types.error then return types.error end
         if not N then
             error("expected a number but found "..type(N_))
         end
+        return N
+    end
+    
+    function types.array(typ, N_)
+        local N = checkarraylike(typ,N_)
+        if typ == types.error then return types.error end
         
         local function create(typ)
             local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
             local name = tname .. "[" .. N .. "]"
-            local value = types.table[name]
-            if value == nil then
-                value = mktyp { kind = terra.kinds.array, type = typ, name = name, N = N }
-                types.table[name] = value
+            return registertype(name,function()
+                return mktyp { kind = terra.kinds.array, type = typ, N = N }
+            end)
+        end
+        
+        return makewrapper(typ,create)
+    end
+    
+    function types.vector(typ,N_)
+        local N = checkarraylike(typ,N_)
+        if typ == types.error then return types.error end
+        
+        local function create(typ)
+            if not typ:isprimitive() then
+                error("vectors must be composed of primitive types (for now...) but found type ",type(typ))
             end
-            return value
+            local name = "vec("..typ.name..","..N..")"
+            return registertype(name,function()
+                return mktyp { kind = terra.kinds.vector, type = typ, N = N }
+            end)
         end
         
         return makewrapper(typ,create)
@@ -1027,13 +1062,7 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         name = name .. "}"
         
-        if types.table[name] then
-            return types.table[name]
-        else
-            prototype.name = name
-            types.table[name] = prototype
-            return prototype
-        end
+        return registertype(name,prototype)
     end
     
     local function buildstruct(ctx,typ,tree,env)
@@ -1154,12 +1183,10 @@ do --construct type table that holds the singleton value representing each uniqu
             end
             local r = terra.list.map(returns,getname):mkstring("{",",","}")
             local name = a.."->"..r
-            local value = types.table[name]
-            if value == nil then
+            return registertype(name,function()
                 local issret = #returns > 1 or (#returns == 1 and returns[1]:ispassedaspointer())
-                value = mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, name = name, isvararg = isvararg, issret = issret }
-            end
-            return value
+                return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, issret = issret }
+            end)
         end
         
         function checkalltypes(l)
@@ -1201,13 +1228,22 @@ do --construct type table that holds the singleton value representing each uniqu
         
     end
     --a function type that represents lua functions in the type checker
-    types.luafunction = mktyp { kind = terra.kinds.functype, islua = true, parameters = terra.newlist(), returns = terra.newlist(), name = "luafunction", isvararg = true, issret = false}
-    
+    types.luafunction = registertype("luafunction",
+                          mktyp { 
+                            kind = terra.kinds.functype, 
+                            islua = true,
+                            parameters = terra.newlist(), 
+                            returns = terra.newlist(), 
+                            isvararg = true, 
+                            issret = false
+                          })
     
     for name,typ in pairs(types.table) do
         --introduce primitive types into global namespace
         -- outside of the typechecker and internal terra modules
-        _G[name] = typ 
+        if typ:isprimitive() then
+            _G[name] = typ
+        end 
     end
     _G["int"] = int32
     _G["uint"] = uint32
