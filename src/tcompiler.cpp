@@ -13,7 +13,7 @@ extern "C" {
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 #include "tinline.h"
-
+#include<llvm-c/Disassembler.h>
 
 
 using namespace llvm;
@@ -43,6 +43,28 @@ struct OptInfo {
 };
 
 static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi);
+
+
+struct DisassembleFunctionListener : public JITEventListener {
+    terra_State * T;
+    DisassembleFunctionListener(terra_State * T_)
+    : T(T_) {}
+    virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails &) {
+        DEBUG_ONLY(T) {
+            LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
+            assert(disasm != NULL);
+            char buf[1024];
+            buf[0] = '\0';
+            int64_t offset = 0;
+            while(offset < sz) {
+                int64_t inc = LLVMDisasmInstruction(disasm, (uint8_t*)data + offset, sz - offset, 0, buf,1024);
+                printf("%s\n",buf);
+                offset += inc;
+            }
+            LLVMDisasmDispose(disasm);
+        }
+    }
+};
 
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
@@ -98,6 +120,8 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C->mi = createManualFunctionInliningPass(T->C->ee->getTargetData());
     T->C->mi->doInitialization();
+    
+    T->C->ee->RegisterJITEventListener(new DisassembleFunctionListener(T));
     
     return 0;
 }

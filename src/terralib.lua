@@ -360,7 +360,17 @@ function terra.func:gettype(ctx)
 end
 function terra.func:makewrapper()
     local fntyp = self.type
-    local cfntyp,returnname = fntyp:cstring()
+    
+    local success,cfntyp,returnname = pcall(fntyp.cstring,fntyp)
+    
+    if not success then
+        dbprint("cstring error: ",cfntyp)
+        self.ffiwrapper = function()
+            error("function not callable directly from lua")
+        end
+        return
+    end
+    
     self.ffireturnname = returnname
     self.ffiwrapper = ffi.cast(cfntyp,self.fptr)
     local passedaspointers = {}
@@ -858,8 +868,6 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self == types.error then
                 self.cachedcstring = "int"
             else
-                print(debug.traceback())
-                self:printraw()
                 error("NYI - cstring")
             end    
         end
@@ -1598,7 +1606,7 @@ function terra.func:typecheck(ctx)
     local function meetbinary(e,property,lhs,rhs)
         local t,l,r = typematch(e,lhs,rhs)
         if t ~= terra.types.error and not t[property](t) then
-            terra.reporterror(ctx,e,"arguments of binary operators are not valid type but ",t)
+            terra.reporterror(ctx,e,"arguments of binary operator are not valid type but ",t)
             return e:copy { type = terra.types.error }
         end
         return e:copy { type = t, operands = terra.newlist {l,r} }

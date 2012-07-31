@@ -27,10 +27,11 @@ FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_
 
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-#LFLAGS += $(shell $(LLVM_CONFIG) --ldflags --libs) -lLLVMLinker
 
 LFLAGS += \
--L$(shell $(LLVM_CONFIG) --libdir) \
+-L$(shell $(LLVM_CONFIG) --libdir --libs)
+
+LFLAGS_MANUAL += \
 -lLLVMAsmParser \
 -lLLVMLinker \
 -lLLVMArchive \
@@ -66,7 +67,6 @@ LFLAGS += \
 -lLLVMObject \
 -lLLVMCore \
 -lLLVMSupport
-
 
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \

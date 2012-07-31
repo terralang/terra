@@ -9,4 +9,19 @@ terra foo(a : double)
     --return ptr[0] + ptr[1] + ptr[2]
 end
 
-print(foo(3))
+
+N = 64
+terra addsomevecs(a : vector(double,N), b : vector(double,N), c : vector(double,N) )
+	return (a + b) / c
+end
+
+
+terra foo2(a : double, b : double)
+	var c = addsomevecs(a,b,b)
+	return c[0] + c[1]
+end
+
+local test = require("test")
+
+test.eq(foo(3), 1)
+test.eq(foo2(3,4), 3.5)
