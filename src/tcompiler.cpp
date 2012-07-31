@@ -365,6 +365,19 @@ struct TerraCompiler {
                 case T_niltype: {
                     t->type = Type::getInt8PtrTy(*C->ctx);
                 } break;
+                case T_vector: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    TType * ttype = getType(&base);
+                    Type * baseType = ttype->type;
+                    t->issigned = ttype->issigned;
+                    if(ttype->islogical) {
+                        baseType = Type::getInt1Ty(*C->ctx);
+                        t->islogical = true;
+                    }
+                    t->type = VectorType::get(baseType, N);
+                } break;
                 default: {
                     printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
                     terra_reporterror(T,"type not understood\n");
@@ -588,7 +601,7 @@ if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
         T_Kind kind = exp->kind("operator");
 
         //check for lazy operators before evaluateing arguments
-        if(t->islogical) {
+        if(t->islogical && !t->type->isVectorTy()) {
             switch(kind) {
                 case T_and:
                     return emitLazyLogical(t,ao,bo,true);
@@ -693,10 +706,19 @@ if(t->type->isIntegerTy()) { \
         return emitCGEP(exp,idxs,2);
     }
     Value * emitPrimitiveCast(TType * from, TType * to, Value * exp) {
-        int fsize = from->type->getPrimitiveSizeInBits();
-        int tsize = to->type->getPrimitiveSizeInBits(); 
-        if(from->type->isIntegerTy()) {
-            if(to->type->isIntegerTy()) {
+        Type * fBase = from->type;
+        Type * tBase = to->type;
+        
+        if(fBase->isVectorTy()) {
+            fBase = cast<VectorType>(fBase)->getElementType();
+            tBase = cast<VectorType>(tBase)->getElementType();
+        }
+        
+        int fsize = fBase->getPrimitiveSizeInBits();
+        int tsize = tBase->getPrimitiveSizeInBits();
+         
+        if(fBase->isIntegerTy()) {
+            if(tBase->isIntegerTy()) {
                 if(fsize > tsize) {
                     return B->CreateTrunc(exp, to->type);
                 } else if(fsize == tsize) {
@@ -708,21 +730,21 @@ if(t->type->isIntegerTy()) { \
                         return B->CreateZExt(exp, to->type);
                     }
                 }
-            } else if(to->type->isFloatingPointTy()) {
+            } else if(tBase->isFloatingPointTy()) {
                 if(from->issigned) {
                     return B->CreateSIToFP(exp, to->type);
                 } else {
                     return B->CreateUIToFP(exp, to->type);
                 }
             } else goto nyi;
-        } else if(from->type->isFloatingPointTy()) {
-            if(to->type->isIntegerTy()) {
+        } else if(fBase->isFloatingPointTy()) {
+            if(tBase->isIntegerTy()) {
                 if(to->issigned) {
                     return B->CreateFPToSI(exp, to->type);
                 } else {
                     return B->CreateFPToUI(exp, to->type);
                 }
-            } else if(to->type->isFloatingPointTy()) {
+            } else if(tBase->isFloatingPointTy()) {
                 if(fsize < tsize) {
                     return B->CreateFPExt(exp, to->type);
                 } else {
@@ -833,6 +855,20 @@ if(t->type->isIntegerTy()) { \
                 
                 Value * valueExp = emitExp(&value);
                 Value * idxExp = emitExp(&idx);
+                
+                TType * aggType = typeOfValue(&value);
+                //if this is a vector index, emit an extractElement
+                if(aggType->type->isVectorTy()) {
+                    Value * result = B->CreateExtractElement(valueExp, idxExp);
+                    if(aggType->islogical) {
+                        TType * rType = typeOfValue(exp);
+                        result = B->CreateZExt(result, rType->type);
+                    }
+                    return result;
+                }
+                
+                //otherwise we have an array or pointer access, both of which will use a GEP instruction
+                
                 bool pa = exp->boolean("lvalue");
                 
                 //if the array is an rvalue type, we need to store it, then index it, and then reload it
@@ -928,6 +964,18 @@ if(t->type->isIntegerTy()) { \
                 } else if(toT->type->isPointerTy()) {
                     assert(fromT->type->isIntegerTy());
                     return B->CreateIntToPtr(v, toT->type);
+                } else if(toT->type->isVectorTy()) {
+                    if(fromT->type->isVectorTy())
+                        return emitPrimitiveCast(fromT,toT,v);
+                    //otherwise this is a broadcast:
+                    Value * result = UndefValue::get(toT->type);
+                    if(toT->islogical)
+                        v = emitCond(v);
+                    VectorType * vt = cast<VectorType>(toT->type);
+                    Type * integerType = Type::getInt32Ty(*C->ctx);
+                    for(int i = 0; i < vt->getNumElements(); i++)
+                        result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
+                    return result;
                 } else {
                     return emitPrimitiveCast(fromT,toT,v);
                 }

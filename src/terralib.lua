@@ -738,6 +738,16 @@ do --construct type table that holds the singleton value representing each uniqu
         return not (self.kind == terra.kinds.proxy or (self:isstruct() and self.incomplete))
     end
     
+    function types.type:isvector()
+        return self.kind == terra.kinds.vector
+    end
+    
+    local applies_to_vectors = {"isprimitive","isintegral","isarithmetic","islogical", "canbeord"}
+    for i,n in ipairs(applies_to_vectors) do
+        types.type[n.."orvector"] = function(self)
+            return self[n](self) or (self:isvector() and self.type[n](self.type))  
+        end
+    end
     
     local next_type_id = 0 --used to generate uniq type names
     local function uniquetypename(base,name) --used to generate unique typedefs for C
@@ -987,7 +997,7 @@ do --construct type table that holds the singleton value representing each uniqu
             if not typ:isprimitive() then
                 error("vectors must be composed of primitive types (for now...) but found type ",type(typ))
             end
-            local name = "vec("..typ.name..","..N..")"
+            local name = "vector("..typ.name..","..N..")"
             return registertype(name,function()
                 return mktyp { kind = terra.kinds.vector, type = typ, N = N }
             end)
@@ -1252,6 +1262,7 @@ do --construct type table that holds the singleton value representing each uniqu
     _G["ptrdiff"] = int64
     _G["niltype"] = types.niltype
     _G["rawstring"] = types.pointer(int8)
+    _G["vector"] = types.vector
     terra.types = types
 end
 
@@ -1450,6 +1461,7 @@ function terra.func:typecheck(ctx)
     local function createcast(exp,typ)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
     end
+    
     function insertcast(exp,typ,speculative) --if speculative is true, then an error will not be reported and the caller should check the second return value to see if the cast was valid
         if typ == nil then
             print(debug.traceback())
@@ -1458,7 +1470,9 @@ function terra.func:typecheck(ctx)
             return exp, true
         else
             local cast_exp = createcast(exp,typ)
-            if typ:isprimitive() and exp.type:isprimitive() and not typ:islogical() and not exp.type:islogical() then
+            if ((typ:isprimitive() and exp.type:isprimitive()) or
+                (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N)) and 
+               not typ:islogicalorvector() and not exp.type:islogicalorvector() then
                 return cast_exp, true
             elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
                 return cast_exp, true
@@ -1470,6 +1484,10 @@ function terra.func:typecheck(ctx)
                 --if we have an rvalue array, it must be converted to lvalue (i.e. placed on the stack) before the cast is valid
                 cast_exp.expression = aslvalue(cast_exp.expression)
                 return cast_exp, true
+            elseif typ:isvector() and exp.type:isprimitive() then
+                local primitivecast, valid = insertcast(exp,typ.type,speculative)
+                local broadcast = createcast(primitivecast,typ)
+                return broadcast, valid
             else
                 if not speculative then
                     terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
@@ -1532,6 +1550,15 @@ function terra.func:typecheck(ctx)
             return a
         elseif a == terra.types.niltype and b:ispointer() then
             return b
+        elseif a:isvector() and b:isvector() and a.N == b.N then
+            local rt, valid = typemeet(op,a.type,b.type)
+            return (rt == terra.types.error and rt) or terra.types.vector(rt,a.N)
+        elseif (a:isvector() and b:isprimitive()) or (b:isvector() and a:isprimitive()) then
+            if a:isprimitive() then
+                a,b = b,a --ensure a is vector and b is primitive
+            end
+            local rt = typemeet(op,a.type,b)
+            return (rt == terra.types.error and rt) or terra.types.vector(rt,a.N)
         else    
             err()
             return terra.types.error
@@ -1585,12 +1612,12 @@ function terra.func:typecheck(ctx)
     end
     
     local function checkarith(e)
-        return checkbinaryorunary(e,"isarithmetic")
+        return checkbinaryorunary(e,"isarithmeticorvector")
     end
 
     local function checkarithpointer(e)
         if #e.operands == 1 then
-            return checkunary(e,"isarithmetic")
+            return checkunary(e,"isarithmeticorvector")
         end
         
         local l = checkrvalue(e.operands[1])
@@ -1610,19 +1637,23 @@ function terra.func:typecheck(ctx)
         elseif l.type:isintegral() and pointerlike(r.type) then
             return e:copy { type = terra.types.pointer(r.type.type), operands = terra.newlist {aspointer(r),l} }
         else
-            return meetbinary(e,"isarithmetic",l,r)
+            return meetbinary(e,"isarithmeticorvector",l,r)
         end
     end
 
     local function checkintegralarith(e)
-        return checkbinaryorunary(e,"isintegral")
+        return checkbinaryorunary(e,"isintegralorvector")
     end
     local function checkcomparision(e)
         local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
-        return e:copy { type = bool, operands = terra.newlist {l,r} }
+        local rt = bool
+        if t:isvector() then
+            rt = terra.types.vector(bool,t.N)
+        end
+        return e:copy { type = rt, operands = terra.newlist {l,r} }
     end
     local function checklogicalorintegral(e)
-        return checkbinaryorunary(e,"canbeord")
+        return checkbinaryorunary(e,"canbeordorvector")
     end
     
     local function checklvalue(ee)
@@ -1669,9 +1700,18 @@ function terra.func:typecheck(ctx)
         local b = checkrvalue(ee.operands[2])
         local typ = terra.types.error
         if a.type ~= terra.types.error and b.type ~= terra.types.error then
-            if a.type:isintegral() and b.type:isintegral() then
-                b = insertcast(b,a.type)
-                typ = a.type
+            if a.type:isintegralorvector() and b.type:isintegralorvector() then
+                if a.type:isvector() then
+                    typ = a.type
+                elseif b.type:isvector() then
+                    typ = terra.types.vector(a.type,b.type.N)
+                else
+                    typ = a.type
+                end
+                
+                a = insertcast(a,typ)
+                b = insertcast(b,typ)
+            
             else
                 terra.reporterror(ctx,ee,"arguments to shift must be integers but found ",a.type," and ", b.type)
             end
@@ -2098,7 +2138,7 @@ function terra.func:typecheck(ctx)
                 local v = checkexp(e.value)
                 local idx = checkrvalue(e.index)
                 local typ,lvalue
-                if v.type:ispointer() or v.type:isarray() then
+                if v.type:ispointer() or v.type:isarray() or v.type:isvector() then
                     typ = v.type.type
                     if not idx.type:isintegral() and idx.type ~= terra.types.error then
                         terra.reporterror(ctx,e,"expected integral index but found ",idx.type)
@@ -2106,8 +2146,11 @@ function terra.func:typecheck(ctx)
                     if v.type:ispointer() then
                         v = asrvalue(v)
                         lvalue = true
-                    else
+                    elseif v.type:isarray() then
                         lvalue = v.lvalue
+                    elseif v.type:isvector() then
+                        v = asrvalue(v)
+                        lvalue = nil
                     end
                 else
                     typ = terra.types.error
