@@ -508,6 +508,7 @@ struct TerraCompiler {
     
     Value * emitUnary(Obj * exp, Obj * ao) {
         TType * t = typeOfValue(exp);
+        Type * baseT = getPrimitiveType(t);
         Value * a = emitExp(ao);
         T_Kind kind = exp->kind("operator");
         switch(kind) {
@@ -515,7 +516,7 @@ struct TerraCompiler {
                 return B->CreateNot(a);
                 break;
             case T_sub:
-                if(t->type->isIntegerTy()) {
+                if(baseT->isIntegerTy()) {
                     return B->CreateNeg(a);
                 } else {
                     return B->CreateFNeg(a);
@@ -536,14 +537,15 @@ struct TerraCompiler {
     }
     Value * emitCompare(Obj * exp, Obj * ao, Value * a, Value * b) {
         TType * t = typeOfValue(ao);
+        Type * baseT = getPrimitiveType(t);
 #define RETURN_OP(op) \
-if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
+if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     return B->CreateICmp(CmpInst::ICMP_##op,a,b); \
 } else { \
     return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
 }
 #define RETURN_SOP(op) \
-if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
+if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     if(t->issigned) { \
         return B->CreateICmp(CmpInst::ICMP_S##op,a,b); \
     } else { \
@@ -652,15 +654,17 @@ if(t->type->isIntegerTy() || t->type->isPointerTy()) { \
                 return emitPointerArith(kind, a, b);
             }
         }
-
+        
+        Type * baseT = getPrimitiveType(t);
+        
 #define RETURN_OP(op) \
-if(t->type->isIntegerTy()) { \
+if(baseT->isIntegerTy()) { \
     return B->Create##op(a,b); \
 } else { \
     return B->CreateF##op(a,b); \
 }
 #define RETURN_SOP(op) \
-if(t->type->isIntegerTy()) { \
+if(baseT->isIntegerTy()) { \
     if(t->issigned) { \
         return B->CreateS##op(a,b); \
     } else { \
@@ -729,14 +733,15 @@ if(t->type->isIntegerTy()) { \
         int64_t idxs[] = {0,0};
         return emitCGEP(exp,idxs,2);
     }
+    Type * getPrimitiveType(TType * t) {
+        if(t->type->isVectorTy())
+            return cast<VectorType>(t->type)->getElementType();
+        else
+            return t->type;
+    }
     Value * emitPrimitiveCast(TType * from, TType * to, Value * exp) {
-        Type * fBase = from->type;
-        Type * tBase = to->type;
-        
-        if(fBase->isVectorTy()) {
-            fBase = cast<VectorType>(fBase)->getElementType();
-            tBase = cast<VectorType>(tBase)->getElementType();
-        }
+        Type * fBase = getPrimitiveType(from);
+        Type * tBase = getPrimitiveType(to);
         
         int fsize = fBase->getPrimitiveSizeInBits();
         int tsize = tBase->getPrimitiveSizeInBits();
@@ -780,6 +785,16 @@ if(t->type->isIntegerTy()) { \
         assert(!"NYI - casts");
         return NULL;
         
+    }
+    Value * emitBroadcast(TType * fromT, TType * toT, Value * v) {
+        Value * result = UndefValue::get(toT->type);
+        if(toT->islogical)
+            v = emitCond(v); //logicals become packed so that vector selects work
+        VectorType * vt = cast<VectorType>(toT->type);
+        Type * integerType = Type::getInt32Ty(*C->ctx);
+        for(int i = 0; i < vt->getNumElements(); i++)
+            result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
+        return result;
     }
     Value * emitStructOrArraySelect(Obj * structType, Value * structPtr, int index) {
         assert(structPtr->getType()->isPointerTy());
@@ -991,15 +1006,8 @@ if(t->type->isIntegerTy()) { \
                 } else if(toT->type->isVectorTy()) {
                     if(fromT->type->isVectorTy())
                         return emitPrimitiveCast(fromT,toT,v);
-                    //otherwise this is a broadcast:
-                    Value * result = UndefValue::get(toT->type);
-                    if(toT->islogical)
-                        v = emitCond(v);
-                    VectorType * vt = cast<VectorType>(toT->type);
-                    Type * integerType = Type::getInt32Ty(*C->ctx);
-                    for(int i = 0; i < vt->getNumElements(); i++)
-                        result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
-                    return result;
+                    else
+                        return emitBroadcast(fromT, toT, v);
                 } else {
                     return emitPrimitiveCast(fromT,toT,v);
                 }
