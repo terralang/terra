@@ -1,0 +1,1 @@
+var a : struct { real : float, imag : float }
