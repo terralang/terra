@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#109;&#x61;&#x69;&#108;&#x74;&#111;:&#122;&#100;&#101;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#x61;&#x6E;&#x66;&#x6F;&#x72;&#100;&#46;&#x65;d&#117;">&#122;&#100;&#101;&#x76;&#x69;&#x74;&#x6F;&#64;&#x73;&#x74;&#x61;&#x6E;&#x66;&#x6F;&#x72;&#100;&#46;&#x65;d&#117;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#97;&#x69;&#x6C;&#116;&#x6F;:&#x7A;&#100;e&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;&#x61;&#110;&#x66;&#x6F;&#x72;&#x64;&#46;&#x65;&#100;&#x75;">&#x7A;&#100;e&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;&#x61;&#110;&#x66;&#x6F;&#x72;&#x64;&#46;&#x65;&#100;&#x75;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -1159,7 +1159,7 @@ end
 
 <p>By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a <em>macro</em> since it behaves similarly to macros found in Lisp and other languages.  You can create macro using the function <code>macro</code> which takes a normal Lua function and returns a macro:</p>
 
-<pre><code>local times2 = macro(function(ctx,a)
+<pre><code>local times2 = macro(function(ctx,tree,a)
     return `a + a
 end)
 
@@ -1169,7 +1169,14 @@ terra doit()
 end
 </code></pre>
 
-<p>Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree, or AST). The example above constructs the AST node representing the addition of the AST node <code>a</code> to itself. To do this, it uses the backtick operator to create a <em>code quotation</em> (similar to <code>quote</code> int LISP, or <a href="http://msdn.microsoft.com/en-us/library/dd233212.aspx">those of F#</a>).  It will construct the appropriate AST nodes to perform the addition. Each macro is also passed the compilation context <code>ctx</code> as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.</p>
+<p>Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree, or AST). The example above constructs the AST node representing the addition of the AST node <code>a</code> to itself. To do this, it uses the backtick operator to create a <em>code quotation</em> (similar to <code>quote</code> int LISP, or <a href="http://msdn.microsoft.com/en-us/library/dd233212.aspx">those of F#</a>).  It will construct the appropriate AST nodes to perform the addition. </p>
+
+<p>The first argument to every macro is the compilation context <code>ctx</code>. It can be used to report an error if the macro doesn't apply to the arguments given, and is needed in certain API calls used in macros. The second argument to every macro (<code>tree</code>) is the AST node in the code that represents the macro call. It is typically used as the location at which to report an error in a macro call. The following code will cause the compiler to emit an error referring to the macro call with given error message:</p>
+
+<pre><code>ctx:reporterror(tree, "something in the macro went wrong")
+</code></pre>
+
+<p>The remaining arguments to the macro are the AST nodes of the arguments to the macro function.</p>
 
 <p>Since macros take AST nodes rather than values, they have different behavior than function calls. For instance:</p>
 
@@ -1188,8 +1195,8 @@ end
 
 <p>Some built-in operators are implemented as macros. For instance the <code>sizeof</code> operator just inserts a special AST node that will calculate the size of a type:</p>
 
-<pre><code>sizeof = macro(function(ctx,typ)
-    return terra.newtree(typ,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+<pre><code>sizeof = macro(function(ctx,tree,typ)
+    return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
 end)
 </code></pre>
 
@@ -1199,7 +1206,7 @@ end)
 
 <p>Macros can also be used to create useful patterns like a C++ style new operator:</p>
 
-<pre><code>new = macro(function(ctx,typquote)
+<pre><code>new = macro(function(ctx,tree,typquote)
     local typ = typquote:astype(ctx)
     return `c.malloc(sizeof(typ)):as(&amp;typ)
 end)
@@ -1211,7 +1218,7 @@ end
 
 <p>If you want to generate statements (not expressions) you can use the long-form <code>quote</code> operator, which creates an AST for multiple statements</p>
 
-<pre><code>iamclean = macro(function(ctx,arg)
+<pre><code>iamclean = macro(function(ctx,tree,arg)
     quote
         var a = 3
         c.printf("%d %d\n",a,arg)

@@ -1,6 +1,6 @@
 local c = terralib.includec("stdlib.h")
 
-new = macro(function(ctx,typquote)
+new = macro(function(ctx,tree,typquote)
     local typ = typquote:astype(ctx)
     return `c.malloc(sizeof(typ)):as(&typ)
 end)

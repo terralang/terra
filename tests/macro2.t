@@ -1,5 +1,5 @@
 
-local bar2 = macro(function(ctx,typ)
+local bar2 = macro(function(ctx,tree,typ)
 	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], name = "a" })
 	
 end)

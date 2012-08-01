@@ -1,16 +1,16 @@
 
-local bar = macro(function(ctx,typ)
+local bar = macro(function(ctx,tree,typ)
 	return terralib.newtree(typ.tree, { kind = terralib.kinds.literal, type = double, value = 4.0 })
 	
 end)
 
-local bar2 = macro(function(ctx,typ)
+local bar2 = macro(function(ctx,tree,typ)
 	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], name = "a" })
 	
 end)
 
 
-local bar3 = macro(function(ctx,a,b)
+local bar3 = macro(function(ctx,tree,a,b)
     return {a.tree,b.tree}
 end)
 

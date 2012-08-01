@@ -881,8 +881,8 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     types.type.methods = {} --metatable of all types
-    types.type.methods.as = macro(function(ctx,exp,typ)
-        return terra.newtree(exp.tree,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp.tree })
+    types.type.methods.as = macro(function(ctx,tree,exp,typ)
+        return terra.newtree(tree,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp.tree })
     end)    
     function types.istype(t)
         return getmetatable(t) == types.type
@@ -1270,7 +1270,6 @@ do --construct type table that holds the singleton value representing each uniqu
     _G["ptrdiff"] = int64
     _G["niltype"] = types.niltype
     _G["rawstring"] = types.pointer(int8)
-    _G["vector"] = types.vector
     terra.types = types
 end
 
@@ -1850,13 +1849,13 @@ function terra.func:typecheck(ctx)
             error("NYI - check call on non-literal function calls")
         end
         
-        local function resolvemacro(macrocall,...)
+        local function resolvemacro(macrocall,anchor,...)
             local macroargs = {}
             for i,v in ipairs({...}) do
                 v.filename = self.filename
                 macroargs[i] = terra.newquote(v,"exp",ctx:luaenv(),ctx:varenv())
             end
-            local result = macrocall(ctx,unpack(macroargs))
+            local result = macrocall(ctx,anchor,unpack(macroargs))
             local exps = terra.newlist{}
             if type(result) == "table" and #result ~= 0 then
                 for i,e in ipairs(result) do
@@ -1884,7 +1883,7 @@ function terra.func:typecheck(ctx)
             end
             
             if terra.ismacro(fn) then
-               return true, resolvemacro(fn,exp.value,unpack(exp.arguments))
+               return true, resolvemacro(fn,exp,exp.value,unpack(exp.arguments))
             end
             
             if fntyp ~= terra.types.error then
@@ -1929,7 +1928,7 @@ function terra.func:typecheck(ctx)
             fn,fntyp = checkfn(exp.value)
             
             if fn and terra.ismacro(fn) then
-                return true,resolvemacro(fn,unpack(exp.arguments))
+                return true,resolvemacro(fn,exp,unpack(exp.arguments))
             end
             
             paramlist = checkparameterlist(exp,exp.arguments)
@@ -2078,7 +2077,7 @@ function terra.func:typecheck(ctx)
             return e
         end
         
-        if e:is "var" and not e.resolved then
+        if e:is "var" then
             local v = ctx:varenv()[e.name]
             if v ~= nil then
                 return e:copy { type = v.type, definition = v, lvalue = true }
@@ -2093,7 +2092,7 @@ function terra.func:typecheck(ctx)
             
             return createspecial(e,v)
                 
-        elseif e:is "select" and not e.resolved then
+        elseif e:is "select" then
             local v = checkexp(e.value,true)
             if v:is "luaobject" then
                 if type(v.value) ~= "table" then
@@ -2561,8 +2560,13 @@ function terra.includetableindex(tbl,name)    --this is called when a table retu
 end
 
 -- GLOBAL MACROS
-_G["sizeof"] = macro(function(ctx,typ)
-    return terra.newtree(typ.tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+_G["sizeof"] = macro(function(ctx,tree,typ)
+    return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+end)
+_G["vector"] = macro(function(ctx,tree,...)
+    if terra.types.istype(ctx) then --vector used as a type constructor vector(int,3)
+        return terra.types.vector(ctx,tree)
+    end
 end)    
     
 -- END GLOBAL MACROS

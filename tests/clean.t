@@ -1,6 +1,6 @@
 local c = terralib.includec("stdio.h")
 
-iamclean = macro(function(ctx,arg)
+iamclean = macro(function(ctx,tree,arg)
     return quote
         var a = 3
         return a,arg

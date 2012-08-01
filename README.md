@@ -795,7 +795,7 @@ Macros
 
 By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a _macro_ since it behaves similarly to macros found in Lisp and other languages.  You can create macro using the function `macro` which takes a normal Lua function and returns a macro:
 
-    local times2 = macro(function(ctx,a)
+    local times2 = macro(function(ctx,tree,a)
         return `a + a
     end)
     
@@ -804,7 +804,14 @@ By default, when you call a Lua function from Terra code, it will execute at run
         -- a == 6
     end
 
-Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree, or AST). The example above constructs the AST node representing the addition of the AST node `a` to itself. To do this, it uses the backtick operator to create a _code quotation_ (similar to `quote` int LISP, or [those of F#](http://msdn.microsoft.com/en-us/library/dd233212.aspx)).  It will construct the appropriate AST nodes to perform the addition. Each macro is also passed the compilation context `ctx` as its first argument. It can be used to report an error if the macro doesn't apply to the arguments given.
+Unlike a normal function, which works on Terra values, the arguments to Terra macros are data structures representing the code (i.e the abstract syntax tree, or AST). The example above constructs the AST node representing the addition of the AST node `a` to itself. To do this, it uses the backtick operator to create a _code quotation_ (similar to `quote` int LISP, or [those of F#](http://msdn.microsoft.com/en-us/library/dd233212.aspx)).  It will construct the appropriate AST nodes to perform the addition. 
+
+The first argument to every macro is the compilation context `ctx`. It can be used to report an error if the macro doesn't apply to the arguments given, and is needed in certain API calls used in macros. The second argument to every macro (`tree`) is the AST node in the code that represents the macro call. It is typically used as the location at which to report an error in a macro call. The following code will cause the compiler to emit an error referring to the macro call with given error message:
+
+    ctx:reporterror(tree, "something in the macro went wrong")
+    
+
+The remaining arguments to the macro are the AST nodes of the arguments to the macro function.
 
 Since macros take AST nodes rather than values, they have different behavior than function calls. For instance:
     
@@ -822,8 +829,8 @@ The example returns `3` because `up()` is evaluated twice
 
 Some built-in operators are implemented as macros. For instance the `sizeof` operator just inserts a special AST node that will calculate the size of a type:
 
-    sizeof = macro(function(ctx,typ)
-        return terra.newtree(typ,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+    sizeof = macro(function(ctx,tree,typ)
+        return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
     end) 
     
 `terra.newtree` creates a new node in this AST. For the most part, macros can rely on code quotations to generate AST nodes, and only need to fallback to explicitly creating AST nodes in special cases. 
@@ -832,7 +839,7 @@ If you want to take an argument passed to a macro and convert it into a Terra ty
 
 Macros can also be used to create useful patterns like a C++ style new operator:
 
-    new = macro(function(ctx,typquote)
+    new = macro(function(ctx,tree,typquote)
         local typ = typquote:astype(ctx)
         return `c.malloc(sizeof(typ)):as(&typ)
     end)
@@ -843,7 +850,7 @@ Macros can also be used to create useful patterns like a C++ style new operator:
     
 If you want to generate statements (not expressions) you can use the long-form `quote` operator, which creates an AST for multiple statements
     
-    iamclean = macro(function(ctx,arg)
+    iamclean = macro(function(ctx,tree,arg)
         quote
             var a = 3
             c.printf("%d %d\n",a,arg)
