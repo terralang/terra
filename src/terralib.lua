@@ -1003,7 +1003,7 @@ do --construct type table that holds the singleton value representing each uniqu
         
         local function create(typ)
             if not typ:isprimitive() then
-                error("vectors must be composed of primitive types (for now...) but found type ",type(typ))
+                error("vectors must be composed of primitive types (for now...) but found type "..tostring(typ))
             end
             local name = "vector("..typ.name..","..N..")"
             return registertype(name,function()
@@ -2170,6 +2170,38 @@ function terra.func:typecheck(ctx)
                 return insertexplicitcast(checkrvalue(e.value),e.type)
             elseif e:is "sizeof" then
                 return e:copy { type = uint64 }
+            elseif e:is "vectorconstructor" then
+                local entries = checkparameterlist(e,e.expressions)
+                local N = entries.maxsize
+                
+                if N == 0 then
+                    terra.reporterror(ctx,e,"cannot determine type of empty vector")
+                    return e:copy { type = terra.types.error }
+                end
+                
+                --figure out what type this vector has
+                local typ = entries.parameters[1].type
+                for i,p in ipairs(entries.parameters) do
+                    typ = typemeet(e,typ,p.type)
+                end
+                
+                if not typ:isprimitive() and typ ~= terra.types.error then
+                    terra.reporterror(ctx,e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
+                    return e:copy { type = terra.types.error }
+                end
+                
+                --insert the casts to the right type in the parameter list
+                local typs = terra.newlist()
+                for i,p in ipairs(entries.parameters) do
+                    typs:insert(typ)
+                end
+                
+                insertcasts(typs,entries)
+                
+                local vtyp = terra.types.vector(typ,N)
+                
+                return e:copy { type = vtyp, expressions = entries }
+                
             elseif iscall(e) then
                 local ismacro, c = checkcall(e,true)
                 if ismacro then
@@ -2567,6 +2599,13 @@ _G["vector"] = macro(function(ctx,tree,...)
     if terra.types.istype(ctx) then --vector used as a type constructor vector(int,3)
         return terra.types.vector(ctx,tree)
     end
+    --otherwise this is a macro that constructs a vector literal
+    local exps = terra.newlist()
+    for i,v in ipairs({...}) do
+        exps:insert(v.tree)
+    end
+    return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
+    
 end)    
     
 -- END GLOBAL MACROS

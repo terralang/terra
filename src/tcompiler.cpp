@@ -1064,6 +1064,19 @@ if(baseT->isIntegerTy()) { \
                 }
                 return B->CreateLoad(result);
             } break;
+            case T_vectorconstructor: {
+                Obj expressions;
+                exp->obj("expressions",&expressions);
+                std::vector<Value *> values;
+                emitParameterList(&expressions,&values,NULL);
+                TType * vecType = typeOfValue(exp);
+                Value * vec = UndefValue::get(vecType->type);
+                Type * intType = Type::getInt32Ty(*C->ctx);
+                for(size_t i = 0; i < values.size(); i++) {
+                    vec = B->CreateInsertElement(vec, values[i], ConstantInt::get(intType, i));
+                }
+                return vec;
+            }
             default: {
                 assert(!"NYI - exp");
             } break;
