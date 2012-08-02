@@ -722,7 +722,7 @@ if(baseT->isIntegerTy()) { \
             Obj value;
             entry.obj("value", &value);
             int idx = entry.number("index");
-            Value * oe = emitStructOrArraySelect(toObj,output,idx);
+            Value * oe = emitStructSelect(toObj,output,idx);
             Value * in = emitExp(&value); //these expressions will select from the structvariable and perform any casts necessary
             B->CreateStore(in,oe);
         }
@@ -796,16 +796,11 @@ if(baseT->isIntegerTy()) { \
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
     }
-    Value * emitStructOrArraySelect(Obj * structType, Value * structPtr, int index) {
+    Value * emitStructSelect(Obj * structType, Value * structPtr, int index) {
         assert(structPtr->getType()->isPointerTy());
         PointerType * objTy = cast<PointerType>(structPtr->getType());
-        
-        if(objTy->getElementType()->isArrayTy()) {
-            int64_t idxs[] = {0 , index};
-            return emitCGEP(structPtr,idxs,2);
-        }
-        
         assert(objTy->getElementType()->isStructTy());
+        
         Obj entries;
         structType->obj("entries",&entries);
         Obj entry;
@@ -1043,11 +1038,11 @@ if(baseT->isIntegerTy()) { \
                 int offset = exp->number("index");
                 
                 if(exp->boolean("lvalue")) {
-                    return emitStructOrArraySelect(&typ,v,offset);
+                    return emitStructSelect(&typ,v,offset);
                 } else {
                     Value * mem = B->CreateAlloca(v->getType());
                     B->CreateStore(v,mem);
-                    Value * addr = emitStructOrArraySelect(&typ,mem,offset);
+                    Value * addr = emitStructSelect(&typ,mem,offset);
                     return B->CreateLoad(addr);
                 }
             } break;

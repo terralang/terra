@@ -73,7 +73,11 @@ end
 terra tk(n : int)
     var i = 0
     var f : int
-    var c : elem[16] = {0}
+    var c : elem[16]
+    
+    for i = 0,16 do
+        c[i] = 0
+    end
     
     while i < n do
         rotate(i)

@@ -1398,7 +1398,7 @@ function terra.func:typecheck(ctx)
     --cast  handlint functions
     --insertcast handles implicitly allowed casts
     --insertexplicitcast handles casts performed using the :as method
-    --structcast handles casting from an anonymous structure type to an array or struct
+    --structcast handles casting from an anonymous structure type to another struct type
     
     function structcast(cast,exp,typ, speculative) --if speculative is true, then errors will not be reported (caller must check)
         local from = exp.type
@@ -1420,34 +1420,24 @@ function terra.func:typecheck(ctx)
         for i,entry in ipairs(from.entries) do
             local selected = asrvalue(insertselect(var_ref,entry.key))
             if entry.hasname then
-                if to:isarray() then
-                    err("structural cast invalid, assigning a named field to an array")
-                else 
-                    local offset = to.keytoindex[entry.key]
-                    if not offset then
-                        err("structural cast invalid, result structure has no key ", entry.key)
-                    else
-                        if indextoinit[offset] then
-                            err("structural cast invalid, ",entry.key," initialized more than once")
-                        end
-                        indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
+                local offset = to.keytoindex[entry.key]
+                if not offset then
+                    err("structural cast invalid, result structure has no key ", entry.key)
+                else
+                    if indextoinit[offset] then
+                        err("structural cast invalid, ",entry.key," initialized more than once")
                     end
+                    indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
                 end
             else
                 local offset = 0
-                local totyp, maxsz
-                if to:isarray() then
-                    offset = i - 1
-                    totyp = to.type
-                    maxsz = to.N
-                else
-                    --find the first non initialized entry
-                    while offset < #to.entries and indextoinit[offset] do
-                        offset = offset + 1
-                    end
-                    totyp = to.entries[offset+1] and to.entries[offset+1].type
-                    maxsz = #to.entries
+                
+                --find the first non initialized entry
+                while offset < #to.entries and indextoinit[offset] do
+                    offset = offset + 1
                 end
+                local totyp = to.entries[offset+1] and to.entries[offset+1].type
+                local maxsz = #to.entries
                 
                 if offset == maxsz then
                     err("structural cast invalid, too many unnamed fields")
@@ -1485,7 +1475,7 @@ function terra.func:typecheck(ctx)
                 return cast_exp, true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return cast_exp, true
-            elseif (typ:isstruct() or typ:isarray()) and exp.type:isstruct() and not exp.type.isnamed then 
+            elseif typ:isstruct() and exp.type:isstruct() and not exp.type.isnamed then 
                 return structcast(cast_exp,exp,typ,speculative)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 --if we have an rvalue array, it must be converted to lvalue (i.e. placed on the stack) before the cast is valid
@@ -2174,15 +2164,21 @@ function terra.func:typecheck(ctx)
                 local entries = checkparameterlist(e,e.expressions)
                 local N = entries.maxsize
                 
-                if N == 0 then
-                    terra.reporterror(ctx,e,"cannot determine type of empty aggregate")
-                    return e:copy { type = terra.types.error }
-                end
                 
-                --figure out what type this vector has
-                local typ = entries.parameters[1].type
-                for i,p in ipairs(entries.parameters) do
-                    typ = typemeet(e,typ,p.type)
+                local typ
+                if e.oftype ~= nil then
+                    typ = e.oftype
+                else
+                    if N == 0 then
+                        terra.reporterror(ctx,e,"cannot determine type of empty aggregate")
+                        return e:copy { type = terra.types.error }
+                    end
+                    
+                    --figure out what type this vector has
+                    typ = entries.parameters[1].type
+                    for i,p in ipairs(entries.parameters) do
+                        typ = typemeet(e,typ,p.type)
+                    end
                 end
                 
                 local aggtype
@@ -2605,9 +2601,17 @@ _G["vector"] = macro(function(ctx,tree,...)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
     
 end)
+_G["vectorof"] = macro(function(ctx,tree,typ,...)
+    local exps = terra.newlist({...}):map(function(x) return x.tree end)
+    return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, oftype = typ:astype(ctx), expressions = exps })
+end)
 _G["array"] = macro(function(ctx,tree,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, expressions = exps })
+end)
+_G["arrayof"] = macro(function(ctx,tree,typ,...)
+    local exps = terra.newlist({...}):map(function(x) return x.tree end)
+    return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(ctx), expressions = exps })
 end)    
 -- END GLOBAL MACROS
 

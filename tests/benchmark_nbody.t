@@ -83,7 +83,7 @@ end
 NBODIES = 5
 
 terra main(argc : int, argv : &&int8)
-    var bodies : planet[NBODIES] = {
+    var bodies = arrayof(planet,
       {                               -- sun */
         0, 0, 0, 0, 0, 0, solar_mass
       },
@@ -123,7 +123,7 @@ terra main(argc : int, argv : &&int8)
         -9.51592254519715870e-05 * days_per_year,
         5.15138902046611451e-05 * solar_mass
       }
-    }
+    )
     var n = C.atoi(argv[1])    
     offset_momentum(NBODIES, bodies)
     C.printf ("%.9f\n", energy(NBODIES, bodies))

@@ -16,7 +16,13 @@ terra foo3()
 	return a[3]
 end
 
+terra foo4()
+	var a = vectorof(int,1,2.5,3)
+	return a[1]
+end
+
 local test = require("test")
 test.eq(foo(),12)
 test.eq(foo2(),2.5)
 test.eq(foo3(),4.5)
+test.eq(foo4(),2)

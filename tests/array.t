@@ -46,7 +46,7 @@ end
 
 
 terra foo7()
-    var a : int[4] = {1,2,3,4}
+    var a = array(1,2,3,4)
     return a[1]+a[2]
 end
 local test = require("test")

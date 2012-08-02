@@ -11,22 +11,22 @@ terra returnstruct2()
 end
 
 terra returnarray()
-    var a : int[4] = {1,2,3,4}
+    var a : int[4] = array(1,2,3,4)
     return a
 end
 terra returnarray2()
-    var a : int[4] = {1,2,3,4}
-    var b : int[4] = {5,6,7,8}
+    var a : int[4] = array(1,2,3,4)
+    var b : int[4] = array(5,6,7,8)
     return a,b
 end
 
 terra returnaos()
-    var a : A[2] = { {1,2.5}, {2,3.5} }
+    var a : A[2] = arrayof(A, {1,2.5}, {2,3.5} )
     return a
 end
 struct B { a : int[4] }
 terra returnsoa()
-    var a : B = { {1,2,3,4} }
+    var a : B = { array(1,2,3,4) }
     return a
 end
 
@@ -38,7 +38,7 @@ terra structptr(a : &A)
     return a.a + a.b
 end
 
-var global_arr : int[2] = {3, 4}
+var global_arr : int[2] = array(3, 4)
 terra retarrptr()
     return &global_arr
 end
