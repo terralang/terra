@@ -78,7 +78,8 @@ _(luafunction, "luafunction") \
 _(luatable, "luaobject") \
 _(quote, "quote") \
 _(vector, "vector") \
-_(vectorconstructor,"vectorconstructor")
+_(vectorconstructor,"vectorconstructor") \
+_(arrayconstructor,"arrayconstructor")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

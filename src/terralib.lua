@@ -2170,12 +2170,12 @@ function terra.func:typecheck(ctx)
                 return insertexplicitcast(checkrvalue(e.value),e.type)
             elseif e:is "sizeof" then
                 return e:copy { type = uint64 }
-            elseif e:is "vectorconstructor" then
+            elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
                 local entries = checkparameterlist(e,e.expressions)
                 local N = entries.maxsize
                 
                 if N == 0 then
-                    terra.reporterror(ctx,e,"cannot determine type of empty vector")
+                    terra.reporterror(ctx,e,"cannot determine type of empty aggregate")
                     return e:copy { type = terra.types.error }
                 end
                 
@@ -2185,22 +2185,23 @@ function terra.func:typecheck(ctx)
                     typ = typemeet(e,typ,p.type)
                 end
                 
-                if not typ:isprimitive() and typ ~= terra.types.error then
-                    terra.reporterror(ctx,e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
-                    return e:copy { type = terra.types.error }
+                local aggtype
+                if e:is "vectorconstructor" then
+                    if not typ:isprimitive() and typ ~= terra.types.error then
+                        terra.reporterror(ctx,e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
+                        return e:copy { type = terra.types.error }
+                    end
+                    aggtype = terra.types.vector(typ,N)
+                else
+                    aggtype = terra.types.array(typ,N)
                 end
                 
                 --insert the casts to the right type in the parameter list
-                local typs = terra.newlist()
-                for i,p in ipairs(entries.parameters) do
-                    typs:insert(typ)
-                end
+                local typs = entries.parameters:map(function(x) return typ end)
                 
                 insertcasts(typs,entries)
                 
-                local vtyp = terra.types.vector(typ,N)
-                
-                return e:copy { type = vtyp, expressions = entries }
+                return e:copy { type = aggtype, expressions = entries }
                 
             elseif iscall(e) then
                 local ismacro, c = checkcall(e,true)
@@ -2243,7 +2244,7 @@ function terra.func:typecheck(ctx)
                     end
                 end
                 
-                return e:copy { records = entries, type = terra.types.canonicalanonstruct(typ) }
+                return e:copy { expressions = entries, type = terra.types.canonicalanonstruct(typ) }
             end
             e:printraw()
             print(debug.traceback())
@@ -2600,14 +2601,14 @@ _G["vector"] = macro(function(ctx,tree,...)
         return terra.types.vector(ctx,tree)
     end
     --otherwise this is a macro that constructs a vector literal
-    local exps = terra.newlist()
-    for i,v in ipairs({...}) do
-        exps:insert(v.tree)
-    end
+    local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
     
+end)
+_G["array"] = macro(function(ctx,tree,...)
+    local exps = terra.newlist({...}):map(function(x) return x.tree end)
+    return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, expressions = exps })
 end)    
-    
 -- END GLOBAL MACROS
 
 function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)

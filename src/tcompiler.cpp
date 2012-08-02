@@ -1051,12 +1051,12 @@ if(baseT->isIntegerTy()) { \
                     return B->CreateLoad(addr);
                 }
             } break;
-            case T_constructor: {
-                Obj records;
-                exp->obj("records",&records);
+            case T_constructor: case T_arrayconstructor: {
+                Obj expressions;
+                exp->obj("expressions",&expressions);
                 Value * result = B->CreateAlloca(typeOfValue(exp)->type);
                 std::vector<Value *> values;
-                emitParameterList(&records,&values,NULL);
+                emitParameterList(&expressions,&values,NULL);
                 for(size_t i = 0; i < values.size(); i++) {
                     int64_t idxs[] = { 0, i };
                     Value * addr = emitCGEP(result,idxs,2);
@@ -1076,7 +1076,7 @@ if(baseT->isIntegerTy()) { \
                     vec = B->CreateInsertElement(vec, values[i], ConstantInt::get(intType, i));
                 }
                 return vec;
-            }
+            } break;
             default: {
                 assert(!"NYI - exp");
             } break;
