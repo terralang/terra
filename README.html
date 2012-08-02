@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#x6D;&#97;&#x69;&#x6C;&#116;&#x6F;:&#x7A;&#100;e&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;&#x61;&#110;&#x66;&#x6F;&#x72;&#x64;&#46;&#x65;&#100;&#x75;">&#x7A;&#100;e&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#x74;&#x61;&#110;&#x66;&#x6F;&#x72;&#x64;&#46;&#x65;&#100;&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#x61;&#105;&#108;&#116;&#111;:&#x7A;de&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#116;&#x61;&#110;f&#111;&#x72;&#x64;&#x2E;&#x65;&#100;u">&#x7A;de&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#116;&#x61;&#110;f&#111;&#x72;&#x64;&#x2E;&#x65;&#100;u</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -848,17 +848,33 @@ a[0],a[1],a[2],a[3] = 0,1,2,3
 
 <p>In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets. <code>&amp;int[3]</code> is a pointer to an array of length 3. <code>(&amp;int)[3]</code> is an array of three pointers to integers.</p>
 
-<h3>Vectors (NYI)</h3>
+<p>The function <code>array</code> will construct an array from a variable number of arguments:</p>
+
+<pre><code>var a = array(1,2,3,4) -- a has type int[4]
+</code></pre>
+
+<p>If you want to specify a particular type for the elements of the array you can use <code>arrayof</code> function:</p>
+
+<pre><code>var a = arrayof(int,3,4.5,4) -- a has type int[3]
+                           -- 4.5 will be cast to an int
+</code></pre>
+
+<h3>Vectors</h3>
 
 <p>Vectors are like arrays, but also allow you to perform vector-wide operations:</p>
 
-<pre><code>terra diffuse(L : vec(float,3), V : vec(float,3), N : vec(float,3))
+<pre><code>terra diffuse(L : vector(float,3), V : vector(float,3), N : vector(float,3))
     var H = (L + V) / size(L + V)
     return dot(H,N)
 end
 </code></pre>
 
-<p>They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code.</p>
+<p>They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code (NYI - library functions like size or dot are not implemented yet). The constructors <code>vector</code> and <code>vectorof</code> create vectors, and behave similarly to arrays:</p>
+
+<pre><code>var a = vector(1,2,3,4) -- a has type int[4]
+var a = vectorof(int,3,4.5,4) -- a has type int[3]
+                              -- 4.5 will be cast to an int
+</code></pre>
 
 <h3>Structs</h3>
 
@@ -929,12 +945,6 @@ var a : Complex = { real = 3, imag = 1 }
 <p>If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:</p>
 
 <pre><code>var b : Complex = {1, 2}
-</code></pre>
-
-<p>Anonymous structs can also be implicitly converted to array and vector types:</p>
-
-<pre><code>var a : int[4] = {1,2,3,4}
-var b : vec(int,4) = {1,2,3,4}
 </code></pre>
 
 <p>Since constructors like <code>{1,2}</code> are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a struct declaration.</p>

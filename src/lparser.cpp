@@ -789,7 +789,9 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       break;
     }
     case '{': {  /* funcargs -> constructor */
+      int exps = new_list(ls);
       RETURNS_1(constructor(ls, &args));
+      add_entry(ls,exps);
       break;
     }
     case TK_STRING: {  /* funcargs -> STRING */

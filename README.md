@@ -510,16 +510,29 @@ You can construct statically sized arrays as well:
     
 In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets. `&int[3]` is a pointer to an array of length 3. `(&int)[3]` is an array of three pointers to integers.
 
-### Vectors (NYI) ###
+The function `array` will construct an array from a variable number of arguments:
+
+    var a = array(1,2,3,4) -- a has type int[4]
+
+If you want to specify a particular type for the elements of the array you can use `arrayof` function:
+    
+    var a = arrayof(int,3,4.5,4) -- a has type int[3]
+                               -- 4.5 will be cast to an int
+    
+### Vectors ###
 
 Vectors are like arrays, but also allow you to perform vector-wide operations:
 
-    terra diffuse(L : vec(float,3), V : vec(float,3), N : vec(float,3))
+    terra diffuse(L : vector(float,3), V : vector(float,3), N : vector(float,3))
         var H = (L + V) / size(L + V)
         return dot(H,N)
     end
+    
+They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code (NYI - library functions like size or dot are not implemented yet). The constructors `vector` and `vectorof` create vectors, and behave similarly to arrays:
 
-They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code.
+    var a = vector(1,2,3,4) -- a has type int[4]
+    var a = vectorof(int,3,4.5,4) -- a has type int[3]
+                                  -- 4.5 will be cast to an int
 
 ### Structs ###
 
@@ -581,11 +594,6 @@ Terra allows you to implicitly convert any anonymous struct to a named struct th
 If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:
     
     var b : Complex = {1, 2}
-    
-Anonymous structs can also be implicitly converted to array and vector types:
-
-    var a : int[4] = {1,2,3,4}
-    var b : vec(int,4) = {1,2,3,4}
     
 Since constructors like `{1,2}` are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a struct declaration.
 

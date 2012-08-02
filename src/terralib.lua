@@ -1824,6 +1824,14 @@ function terra.func:typecheck(ctx)
             if fn:is "luaobject" then
                 if terra.ismacro(fn.value) or type(fn.value) == "function" then
                     return fn.value, terra.types.luafunction
+                elseif terra.types.istype(fn.value) and fn.value:isstruct() then
+                    local typfn = fn.value:getcanonical(ctx)
+                    local castmacro = macro(function(ctx,tree,arg)
+                        tree:printraw()
+                        print(arg,type(arg))
+                        return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, type = typfn })
+                    end)
+                    return castmacro, terra.types.luafunction
                 else
                     terra.reporterror(ctx,exp,"expected a function or macro but found lua value of type ",type(fn.value))
                     return nil, terra.types.error
