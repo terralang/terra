@@ -324,15 +324,20 @@ end
 
 -- END CONTEXT
 
--- FUNC
-terra.func = {} --metatable for all function types
-terra.func.__index = terra.func
-function terra.func:env()
+-- FUNCVARIANT
+
+-- a function variant is an implementation of a function for a particular set of arguments
+-- functions themselves are overloadable. Each potential implementation is its own function variant
+-- with its own compile state, type, AST, etc.
+ 
+terra.funcvariant = {} --metatable for all function types
+terra.funcvariant.__index = terra.funcvariant
+function terra.funcvariant:env()
     self.envtbl = self.envtbl or self.envfunction() --evaluate the environment if needed
     self.envfunction = nil --we don't need the closure anymore
     return self.envtbl
 end
-function terra.func:gettype(ctx)
+function terra.funcvariant:gettype(ctx)
     if self.state == "codegen" then --function is in the same strongly connected component of the call graph as its called, even though it has already been typechecked
         ctx:functioncalls(self)
         assert(self.type ~= nil, "no type in codegen'd function?")
@@ -358,7 +363,7 @@ function terra.func:gettype(ctx)
         return self.type
     end    
 end
-function terra.func:makewrapper()
+function terra.funcvariant:makewrapper()
     local fntyp = self.type
     
     local success,cfntyp,returnname = pcall(fntyp.cstring,fntyp)
@@ -382,7 +387,7 @@ function terra.func:makewrapper()
     end
 end
 
-function terra.func:compile(ctx)
+function terra.funcvariant:compile(ctx)
     
     if self.state == "initialized" then
         return
@@ -428,7 +433,7 @@ function terra.func:compile(ctx)
     
 end
 
-function terra.func:__call(...)
+function terra.funcvariant:__call(...)
     self:compile()
     
     if not self.type.issret and not self.passedaspointers then --fast path
@@ -462,11 +467,59 @@ function terra.func:__call(...)
 end
 
 
+function terra.isfunctionvariant(obj)
+    return getmetatable(obj) == terra.funcvariant
+end
+
+--END FUNCVARIANT
+
+-- FUNCTION
+-- a function is a list of possible function variants that can be invoked
+-- it is implemented this way to support function overloading, where the same symbol
+-- may have different variants
+
+terra.func = {} --metatable for all function types
+terra.func.__index = terra.func
+
+function terra.func:compile(ctx)
+    for i,v in ipairs(self.variants) do
+        v:compile(ctx)
+    end
+end
+
+function terra.func:__call(...)
+    self:compile()
+    if #self.variants == 1 then --fast path for the non-overloaded case
+        return self.variants[1](...)
+    end
+    
+    local results
+    for i,v in ipairs(self.variants) do
+        --TODO: this is very inefficient, we should have a routine which
+        --figures out which function to call based on argument types
+        results = {pcall(v.__call,...)}
+        if results[1] == true then
+            table.remove(results,1)
+            return unpack(results)
+        end
+    end
+    --none of the variants worked, remove the final error
+    error(results[2])
+end
+
+function terra.func:addvariant(v)
+    self.variants:insert(v)
+end
+
+function terra.func:getvariants()
+    return self.variants
+end
+
 function terra.isfunction(obj)
     return getmetatable(obj) == terra.func
 end
 
---END FUNC
+-- END FUNCTION
 
 -- GLOBALVAR
 
@@ -603,14 +656,11 @@ do  --constructor functions for terra functions and variables
         name_count = name_count + 1
         return fixed
     end
-    function terra.newfunction(olddef,newtree,name,env,reciever)
-        if olddef then
-            error("NYI - overloaded functions",2)
-        end
+    function terra.newfunctionvariant(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
         local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname, state = "uninitializedterra" }
-        local fn = setmetatable(obj,terra.func)
+        local fn = setmetatable(obj,terra.funcvariant)
         
         --handle desugaring of methods defintions by adding an implicit self argument
         if reciever ~= nil then
@@ -622,10 +672,29 @@ do  --constructor functions for terra functions and variables
         
         return fn
     end
+    
+    local function mkfunction()
+        return setmetatable({variants = terra.newlist()},terra.func)
+    end
+    
+    function terra.newfunction(olddef,newtree,name,env,reciever)
+        if not olddef then
+            olddef = mkfunction()
+        end
+        
+        olddef:addvariant(terra.newfunctionvariant(newtree,name,env,reciever))
+        
+        return olddef
+    end
+    
     function terra.newcfunction(name,typ)
         local obj = { name = name, type = typ, state = "uninitializedc" }
-        setmetatable(obj,terra.func)
-        return obj
+        setmetatable(obj,terra.funcvariant)
+        
+        local fn = mkfunction()
+        fn:addvariant(obj)
+        
+        return fn
     end
     
     function terra.newvariables(tree,env)
@@ -660,7 +729,7 @@ do  --constructor functions for terra functions and variables
         local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
                                               is_varargs = false, filename = tree.filename, body = body})
         
-        globalinit.initfn = terra.newfunction(nil,ftree,nil,env)
+        globalinit.initfn = terra.newfunctionvariant(ftree,nil,env)
         globalinit.globals = globals
 
         return unpack(globals)
@@ -1372,7 +1441,7 @@ other:
 ]]
 
 
-function terra.func:typecheck(ctx)
+function terra.funcvariant:typecheck(ctx)
     
     
     --initialization
@@ -2034,7 +2103,12 @@ function terra.func:typecheck(ctx)
                 return anchor:copy{type = terra.types.error}
             end
         elseif terra.isfunction(v) then
-            return insertfunctionliteral(anchor,v)
+            local variants = v:getvariants()
+            if #variants == 1 then
+                return insertfunctionliteral(anchor,variants[1])
+            else
+                error("NYI - overloaded functions")
+            end
         elseif terra.isquote(v) then
             return insertquote(anchor,terra.newlist{v})
         elseif terra.isquotelist(v) then
@@ -2633,7 +2707,11 @@ function terra.saveobj(filename,env)
     for k,v in pairs(env) do
         if terra.isfunction(v) then
             v:compile()
-            cleanenv[k] = v
+            local variants = v:getvariants()
+            if #variants > 1 then
+                error("cannot create a C function from an overloaded terra function, "..k)
+            end
+            cleanenv[k] = variants[1]
         end
     end
     local isexe
