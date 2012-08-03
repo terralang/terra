@@ -935,6 +935,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local function checkistype(typ)
         if not types.istype(typ) then 
+            print(debug.traceback())
             error("expected a type but found "..type(typ))
         end
     end
@@ -1392,7 +1393,8 @@ function terra.func:typecheck(ctx)
     --declarations of local functions used in type checking
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
           checkexp,checkstmt, checkrvalue,resolvequote,
-          checkparameterlist, checkcall, createspecial, resolveluaspecial
+          checkparameterlist, checkcall, createspecial, resolveluaspecial,
+          insertdereference, insertaddressof
           
           
     --cast  handlint functions
@@ -1512,6 +1514,31 @@ function terra.func:typecheck(ctx)
         end
     end
     
+    local function insertrecievercast(exp,typ,speculative) --casts allow for method recievers a:b(c,d) ==> b(a,c,d), but 'a' has additional allowed implicit casting rules
+                                                           --type can also be == "vararg" if the expected type of the reciever was an argument to the varargs of a function (this often happens when it is a lua function
+        if typ == "vararg" then
+            if exp.type:ispointer() then --in the case of vararg if the reciever is a pointer then pass it directly
+                return exp
+            else --otherwise, we force it to be a pointer
+                 --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
+                 --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
+                 --in other cases, you would consistently get a value or a pointer regardless of receiver type
+                 --for consistency, we all lua methods take pointers
+                return insertaddressof(exp)
+            end
+        else 
+            --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
+            if typ:ispointer() and typ.type == exp.type then
+                --implicit address of
+                return insertaddressof(exp)
+            elseif exp.type:ispointer() and exp.type.type == typ then
+                --implicit dereference
+                return asrvalue(insertdereference(exp))
+            else
+                return insertcast(exp,typ,speculative)
+            end
+        end
+    end
     --functions to calculate what happens when two types are input to a binary method
     
     local function typemeet(op,a,b)
@@ -1661,18 +1688,20 @@ function terra.func:typecheck(ctx)
         end
         return e
     end
+    
     local function checkaddressof(ee)
-        local e
-        if ee.allowltor then
-            e = aslvalue(checkexp(ee.operands[1]))
-        else
-            e = checklvalue(ee.operands[1])
-        end
+        local e = checklvalue(ee.operands[1])
         local ty = terra.types.pointer(e.type)
         return ee:copy { type = ty, operands = terra.newlist{e} }
     end
     
-    local function insertdereference(ee)
+    function insertaddressof(ee)
+        local e = aslvalue(ee)
+        local ret = terra.newtree(e,{ kind = terra.kinds.operator, type = terra.types.pointer(ee.type), operator = terra.kinds["&"], operands = terra.newlist{e} })
+        return ret
+    end
+    
+    function insertdereference(ee)
         local e = asrvalue(ee)
         local ret = terra.newtree(e,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{e}, lvalue = true })
         if not e.type:ispointer() then
@@ -1794,15 +1823,19 @@ function terra.func:typecheck(ctx)
         local maxsize = #exps
         return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, call = multiret })
     end
-    local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value 'false'), paramlist is a parameter list that might have a multiple return value at the end
+    local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value "passthrough"), paramlist is a parameter list that might have a multiple return value at the end
         if #typelist > paramlist.maxsize then
             terra.reporterror(ctx,paramlist,"expected at least "..#typelist.." parameters, but found only "..paramlist.maxsize)
         elseif #typelist < paramlist.minsize then
             terra.reporterror(ctx,paramlist,"expected no more than "..#typelist.." parameters, but found at least "..paramlist.minsize)
         end
         for i,typ in ipairs(typelist) do
-            if typ and i <= paramlist.maxsize then
-                paramlist.parameters[i] = insertcast(paramlist.parameters[i],typ)
+            if i <= paramlist.maxsize and typ ~= "passthrough" then --i >= paramlist.maxsize can occur during an error, but we still want to generate meaningful casting errors
+                if i == 1 and paramlist.firstargumentisreciever then
+                    paramlist.parameters[i] = insertrecievercast(paramlist.parameters[i],typ)
+                elseif typ ~= "vararg" then
+                    paramlist.parameters[i] = insertcast(paramlist.parameters[i],typ)
+                end
             end
         end
         paramlist.size = #typelist
@@ -1865,74 +1898,7 @@ function terra.func:typecheck(ctx)
             return exps
         end
         
-        local fn,fntyp, paramlist
-        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
-                                --then extract a's type from the parameter list and look in the method table for "b" 
-            
-            local reciever = checkexp(exp.value)
-            local rawfn = reciever.type.methods[exp.name]
-            rawfn = rawfn and createspecial(exp.value,rawfn)
-            
-            if not rawfn then
-                fn,fntyp = nil,terra.types.error
-                terra.reporterror(ctx,exp,"no such method ",exp.name," defined for type ",reciever.type)
-            else
-                fn,fntyp = checkfn(rawfn)
-            end
-            
-            if terra.ismacro(fn) then
-               return true, resolvemacro(fn,exp,exp.value,unpack(exp.arguments))
-            end
-            
-            if fntyp ~= terra.types.error then
-                local rtyp
-                if fntyp.parameters[1] then
-                    rtyp = fntyp.parameters[1]
-                else --either we had an error, or this function is vararg
-                    if reciever.type:ispointer() then --in the case of vararg if the reciever is a pointer then pass it directly
-                        rtyp = reciever.type
-                    else
-                        rtyp = terra.types.pointer(reciever.type) --otherwise, we force it to be a pointer
-                        --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
-                        --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
-                        --in other cases, you would consistently get a value or a pointer regardless of receiver type
-                        --for consistency, we all lua methods take pointers
-                    end
-                end
-                local rexp = exp.value
-                --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
-                local function mkunary(op) 
-                    return terra.newtree(rexp, { kind = terra.kinds.operator, operator = terra.kinds[op], operands = terra.newlist{rexp} } )
-                end
-                if rtyp:ispointer() and rtyp.type == reciever.type then
-                    --implicit address of
-                    rexp = mkunary("&")
-                    rexp.allowltor = true --allow address of even if we have an rvalue, this allows methods taking pointers to be called on rvalues
-                elseif reciever.type:ispointer() and reciever.type.type == rtyp then
-                    --implicit dereference
-                    rexp = mkunary("@")
-                end     
-                                
-                local arguments = terra.newlist()
-                arguments:insert(rexp)
-                for _,v in ipairs(exp.arguments) do
-                    arguments:insert(v)
-                end
-                
-                paramlist = checkparameterlist(exp,arguments)
-            end
-            
-        else
-            fn,fntyp = checkfn(exp.value)
-            
-            if fn and terra.ismacro(fn) then
-                return true,resolvemacro(fn,exp,unpack(exp.arguments))
-            end
-            
-            paramlist = checkparameterlist(exp,exp.arguments)
-        end
-    
-        local function getparametertypes(fntyp, paramlist) --get the expected types for parameters to the call (this extends the function type to the length of the parameters if the function is vararg)
+        local function getparametertypes(fntyp,paramlist) --get the expected types for parameters to the call (this extends the function type to the length of the parameters if the function is vararg)
             if not fntyp.isvararg then
                 return fntyp.parameters
             end
@@ -1943,14 +1909,56 @@ function terra.func:typecheck(ctx)
                 if i <= #fntyp.parameters then
                     vatypes[i] = fntyp.parameters[i]
                 else
-                    vatypes[i] = v.type
+                    vatypes[i] = "vararg"
                 end
             end
             return vatypes
         end
         
+        local function generatenativewrapper(fn,paramlist)
+            local paramtypes = paramlist.parameters:map(function(p) return p.type end)
+            local castedtype = terra.types.funcpointer(paramtypes,{})
+            local cb = ffi.cast(castedtype:cstring(),fn)
+            local fptr = terra.pointertolightuserdata(cb)
+            return terra.newtree(exp, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
+        end
+
+        local fnobj, arguments
+        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
+                                --then extract a's type from the parameter list and look in the method table for "b" 
+            
+            local reciever = checkexp(exp.value)
+            fnobj = reciever.type.methods[exp.name]
+            fnobj = fnobj and createspecial(exp.value,fnobj)
+            
+            if not fnobj then
+                terra.reporterror(ctx,exp,"no such method ",exp.name," defined for type ",reciever.type)
+                return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
+            end
+            
+            arguments = terra.newlist()
+            arguments:insert(exp.value)
+            for _,v in ipairs(exp.arguments) do
+                arguments:insert(v)
+            end
+        else
+            fnobj = exp.value
+            arguments = exp.arguments
+        end
+        
+        
+        local fn,fntyp = checkfn(fnobj)
+        
+        if fn and terra.ismacro(fn) then
+            return true,resolvemacro(fn,exp,unpack(arguments))
+        end
+        
+        local paramlist = checkparameterlist(exp,arguments)
+        paramlist.firstargumentisreciever = exp:is "method"
+        
         local typ = terra.types.error
-        if fntyp ~= terra.types.error and paramlist ~= nil then
+        
+        if fntyp ~= terra.types.error then
             local paramtypes = getparametertypes(fntyp,paramlist)
             insertcasts(paramtypes,paramlist)
             if #fntyp.returns > 0 then
@@ -1961,12 +1969,8 @@ function terra.func:typecheck(ctx)
                 typ = nil
             end
             
-            if fntyp == terra.types.luafunction then --we need to generate the wrapper around "fn" that will invoke it
-                local castedtype = terra.types.funcpointer(paramtypes,{})
-                local cb = ffi.cast(castedtype:cstring(),fn)
-                local fptr = terra.pointertolightuserdata(cb)
-                local tree = terra.newtree(exp, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
-                fn = tree
+            if fntyp == terra.types.luafunction then
+                fn = generatenativewrapper(fn,paramlist)
             end
         end
         
@@ -2374,7 +2378,7 @@ function terra.func:typecheck(ctx)
                 
                 local vtypes = terra.newlist()
                 for i,v in ipairs(s.variables) do
-                    local typ = false
+                    local typ = "passthrough"
                     if v.type then
                         typ = resolvetype(v.type)
                     end

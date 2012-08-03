@@ -1182,7 +1182,6 @@ if(baseT->isIntegerTy()) { \
                 params[i] = p;
             }
         }
-        
         Value * result = B->CreateCall(fn, params);
         
         if(returnsN == 0) {
