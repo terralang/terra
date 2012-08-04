@@ -1587,22 +1587,22 @@ function terra.funcvariant:typecheck(ctx)
                                                            --type can also be == "vararg" if the expected type of the reciever was an argument to the varargs of a function (this often happens when it is a lua function
         if typ == "vararg" then
             if exp.type:ispointer() then --in the case of vararg if the reciever is a pointer then pass it directly
-                return exp
+                return exp,true
             else --otherwise, we force it to be a pointer
                  --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
                  --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
                  --in other cases, you would consistently get a value or a pointer regardless of receiver type
                  --for consistency, we all lua methods take pointers
-                return insertaddressof(exp)
+                return insertaddressof(exp),true
             end
         else 
             --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
             if typ:ispointer() and typ.type == exp.type then
                 --implicit address of
-                return insertaddressof(exp)
+                return insertaddressof(exp), true
             elseif exp.type:ispointer() and exp.type.type == typ then
                 --implicit dereference
-                return asrvalue(insertdereference(exp))
+                return asrvalue(insertdereference(exp)),true
             else
                 return insertcast(exp,typ,speculative)
             end
@@ -1892,23 +1892,91 @@ function terra.funcvariant:typecheck(ctx)
         local maxsize = #exps
         return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, call = multiret })
     end
-    local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value "passthrough"), paramlist is a parameter list that might have a multiple return value at the end
-        if #typelist > paramlist.maxsize then
-            terra.reporterror(ctx,paramlist,"expected at least "..#typelist.." parameters, but found only "..paramlist.maxsize)
-        elseif #typelist < paramlist.minsize then
-            terra.reporterror(ctx,paramlist,"expected no more than "..#typelist.." parameters, but found at least "..paramlist.minsize)
-        end
-        for i,typ in ipairs(typelist) do
-            if i <= paramlist.maxsize and typ ~= "passthrough" then --i >= paramlist.maxsize can occur during an error, but we still want to generate meaningful casting errors
-                if i == 1 and paramlist.firstargumentisreciever then
-                    paramlist.parameters[i] = insertrecievercast(paramlist.parameters[i],typ)
-                elseif typ ~= "vararg" then
-                    paramlist.parameters[i] = insertcast(paramlist.parameters[i],typ)
+    
+    local function tryinsertcasts(typelists,paramlist)
+        
+        local function trylist(typelist, speculate)
+            local allvalid = true
+            if #typelist > paramlist.maxsize then
+                allvalid = false
+                if not speculate then
+                    terra.reporterror(ctx,paramlist,"expected at least "..#typelist.." parameters, but found only "..paramlist.maxsize)
+                end
+            elseif #typelist < paramlist.minsize then
+                allvalid = false
+                if not speculate then
+                    terra.reporterror(ctx,paramlist,"expected no more than "..#typelist.." parameters, but found at least "..paramlist.minsize)
                 end
             end
+            
+            local results = terra.newlist{}
+            
+            for i,param in ipairs(paramlist.parameters) do
+                local typ = typelist[i]
+                
+                local result,valid
+                if typ == nil or typ == "passthrough" then
+                    result,valid = param,true 
+                elseif i == 1 and paramlist.firstargumentisreciever then
+                    result,valid = insertrecievercast(param,typ,speculate)
+                elseif typ == "vararg" then
+                    result,valid = param,true
+                else
+                    result,valid = insertcast(param,typ,speculate)
+                end
+                results[i] = result
+                allvalid = allvalid and valid
+            end
+            
+            return results,allvalid
+            
         end
-        paramlist.size = #typelist
+        
+        if #typelists == 1 then
+            local typelist = typelists[1]    
+            local results,allvalid = trylist(typelist,false)
+            assert(#results == paramlist.maxsize)
+            paramlist.parameters = results
+            paramlist.size = #typelist
+            return 1
+        else
+            --evaluate each potential list
+            local valididx,validcasts
+            for i,typelist in ipairs(typelists) do
+                local results,allvalid = trylist(typelist,true)
+                if allvalid then
+                    if valididx == nil then
+                        valididx = i
+                        validcasts = results
+                    else
+                        local optiona = typelists[valididx]:mkstring("(",",",")")
+                        local optionb = typelist:mkstring("(",",",")")
+                        terra.reporterror(ctx,paramlist,"call to overloaded function is ambiguous. can apply to both ", optiona, " and ", optionb)
+                        break
+                    end
+                end
+            end
+            
+            if valididx then
+               paramlist.parameters = validcasts
+               paramlist.size = #typelists[valididx]
+            else
+                --no options were valid, lets emit some errors
+                terra.reporterror(ctx,paramlist,"call to overloaded function does not apply to any arguments")
+                for i,typelist in ipairs(typelists) do
+                    terra.reporterror(ctx,paramlist,"option ",i," with type ",typelist:mkstring("(",",",")"))
+                    trylist(typelist,false)
+                end
+            end
+            return valididx
+        end
     end
+    
+    local function insertcasts(typelist,paramlist) --typelist is a list of target types (or the value "passthrough"), paramlist is a parameter list that might have a multiple return value at the end
+        return tryinsertcasts(terra.newlist { typelist }, paramlist)
+    end
+    
+    
     local function insertfunctionliteral(anchor,e)
         local fntyp,errstr = e:gettype(ctx)
         if fntyp == terra.types.error then
@@ -1921,34 +1989,6 @@ function terra.funcvariant:typecheck(ctx)
     function checkcall(exp, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
                                                 --returns true, <macro exp list> if call was a macro
                                                 --returns false, <typed tree> otherwise
-        local function checkfn(fntree)
-            local fn = checkexp(fntree,true)
-            if fn:is "luaobject" then
-                if terra.ismacro(fn.value) or type(fn.value) == "function" then
-                    return fn.value, terra.types.luafunction
-                elseif terra.types.istype(fn.value) and fn.value:isstruct() then
-                    local typfn = fn.value:getcanonical(ctx)
-                    local castmacro = macro(function(ctx,tree,arg)
-                        tree:printraw()
-                        print(arg,type(arg))
-                        return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, type = typfn })
-                    end)
-                    return castmacro, terra.types.luafunction
-                else
-                    terra.reporterror(ctx,exp,"expected a function or macro but found lua value of type ",type(fn.value))
-                    return nil, terra.types.error
-                end
-            elseif fn.type:ispointer() and fn.type.type:isfunction() then
-                return asrvalue(fn),fn.type.type
-            else
-                if fn.type ~= terra.types.error then
-                    terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
-                end
-                return asrvalue(fn),terra.types.error
-            end
-            error("NYI - check call on non-literal function calls")
-        end
-        
         local function resolvemacro(macrocall,anchor,...)
             local macroargs = {}
             for i,v in ipairs({...}) do
@@ -1993,6 +2033,7 @@ function terra.funcvariant:typecheck(ctx)
         end
 
         local fnobj, arguments
+        
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
                                 --then extract a's type from the parameter list and look in the method table for "b" 
             
@@ -2016,35 +2057,68 @@ function terra.funcvariant:typecheck(ctx)
         end
         
         
-        local fn,fntyp = checkfn(fnobj)
         
-        if fn and terra.ismacro(fn) then
-            return true,resolvemacro(fn,exp,unpack(arguments))
+        local fn = checkexp(fnobj,true)
+        
+        local alternatives = terra.newlist()
+        --check for and dispatch all macros, or build the list of possible function calls
+        if fn:is "luaobject" then
+            if terra.ismacro(fn.value) then
+                 return true,resolvemacro(fn.value,exp,unpack(arguments))
+            elseif terra.types.istype(fn.value) and fn.value:isstruct() then
+                local typfn = fn.value:getcanonical(ctx)
+                local castmacro = macro(function(ctx,tree,arg)
+                    return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, type = typfn })
+                end)
+                return true, resolvemacro(castmacro,exp,unpack(arguments))
+            elseif type(fn.value) == "function" then
+                alternatives:insert( { type = terra.types.luafunction, fn = fn.value } ) 
+            elseif terra.isfunction(fn.value) then
+                for i,v in ipairs(fn.value:getvariants()) do
+                    local fnlit = insertfunctionliteral(exp,v)
+                    if fnlit.type ~= terra.types.error then
+                        alternatives:insert( { type = fnlit.type.type, fn = fnlit } )
+                    end
+                end
+            else
+                terra.reporterror(ctx,exp,"expected a function or macro but found lua value of type ",type(fn.value))
+            end
+        elseif fn.type:ispointer() and fn.type.type:isfunction() then
+            alternatives:insert( { type = fn.type.type, fn = asrvalue(fn) })
+        else
+            if fn.type ~= terra.types.error then
+                terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
+            end
         end
+        
+        --OK, no macros! we can check the parameter list safely now
         
         local paramlist = checkparameterlist(exp,arguments)
         paramlist.firstargumentisreciever = exp:is "method"
         
-        local typ = terra.types.error
         
-        if fntyp ~= terra.types.error then
-            local paramtypes = getparametertypes(fntyp,paramlist)
-            insertcasts(paramtypes,paramlist)
-            if #fntyp.returns > 0 then
-                typ = fntyp.returns[1]
+        local typelists = alternatives:map(function(a) return getparametertypes(a.type,paramlist) end)
+        local valididx = tryinsertcasts(typelists,paramlist)
+        local typ,types,callee
+        if valididx then
+            local fntyp = alternatives[valididx].type
+            callee = alternatives[valididx].fn
+            if type(callee) == "function" then
+                callee = generatenativewrapper(fn.value,paramlist)
+            end
+            types = fntyp.returns
+            if #types > 0 then
+                typ = types[1]
             elseif mustreturnatleast1 then
+                typ = terra.types.error
                 terra.reporterror(ctx,exp,"expected call to return at least 1 value")
-            else --otherwise this is used in statement context and does not require a type
-                typ = nil
-            end
-            
-            if fntyp == terra.types.luafunction then
-                fn = generatenativewrapper(fn,paramlist)
-            end
+            end --otherwise this is used in statement context and does not require a type
+        else
+            typ = terra.types.error
+            types = terra.newlist()
         end
-        
-        return false, exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = fn, type = typ, types = fntyp.returns or terra.newlist() }
-        
+        local callexp = exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = callee, type = typ, types = types }
+        return false, callexp
     end
     function asrvalue(ee)
         if ee.lvalue then
@@ -2111,7 +2185,7 @@ function terra.funcvariant:typecheck(ctx)
             if #variants == 1 then
                 return insertfunctionliteral(anchor,variants[1])
             else
-                error("NYI - overloaded functions")
+                return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
             end
         elseif terra.isquote(v) then
             return insertquote(anchor,terra.newlist{v})
@@ -2336,7 +2410,13 @@ function terra.funcvariant:typecheck(ctx)
         local result = docheck(resolveluaspecial(e_))
         
         if result:is "luaobject" and not allowluaobjects then
-            terra.reporterror(ctx,result, "expected a terra expression but found "..type(result.value))
+            local found
+            if terra.isfunction(result.value) then
+                found = "an overloaded function"
+            else
+                found = type(result.value)
+            end
+            terra.reporterror(ctx,result, "expected a terra expression but found "..found)
             result.type = terra.types.error
         end
         
