@@ -51,6 +51,8 @@ struct DisassembleFunctionListener : public JITEventListener {
     : T(T_) {}
     virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails &) {
         DEBUG_ONLY(T) {
+        //for some reason linux version of llvm doesn't link correctly if we use LLVMCreateDisasm
+        #ifndef __linux__
             LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
             assert(disasm != NULL);
             char buf[1024];
@@ -62,6 +64,7 @@ struct DisassembleFunctionListener : public JITEventListener {
                 offset += inc;
             }
             LLVMDisasmDispose(disasm);
+        #endif
         }
     }
 };

@@ -1,9 +1,13 @@
+# point LLVM_CONFIG at the llvm-config binary for your llvm distribution
+#LLVM_CONFIG=$(shell which llvm-config)
 
+LLVM_CONFIG=/usr/local/bin/llvm-config
+LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:
 UNAME := $(shell uname)
 
-CXX = /usr/local/bin/clang++
-CC = /usr/local/bin/clang
+CXX = $(LLVM_PREFIX)/bin/clang++
+CC = $(LLVM_PREFIX)/bin/clang
 AR = ar
 FLAGS = -g $(INCLUDE_PATH)
 LFLAGS = -g
@@ -19,17 +23,23 @@ LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 LFLAGS += -Lbuild -lluajit -lterra
 INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 
-# point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-#LLVM_CONFIG=$(shell which llvm-config)
-
-LLVM_CONFIG=/usr/local/bin/llvm-config
 FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
-
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 
-LFLAGS += \
--L$(shell $(LLVM_CONFIG) --libdir --libs)
+LFLAGS += -L$(shell llvm-config --libdir)
+
+# CLANG LIBS
+LFLAGS  += -lclangFrontend -lclangDriver \
+           -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
+           -lclangAnalysis -lclangRewrite \
+           -lclangEdit -lclangAST -lclangLex -lclangBasic
+           #-lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
+           #-lclangStaticAnalyzerCore \
+           #-lclangFrontendTool \
+           #-lclangARCMigrate
+           
+LFLAGS += $(shell $(LLVM_CONFIG) --libs all)
 
 LFLAGS_MANUAL += \
 -lLLVMAsmParser \
@@ -68,25 +78,21 @@ LFLAGS_MANUAL += \
 -lLLVMCore \
 -lLLVMSupport
 
-# CLANG LIBS
-LFLAGS  += -lclangFrontend -lclangDriver \
-           -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
-           -lclangAnalysis -lclangRewrite \
-           -lclangEdit -lclangAST -lclangLex -lclangBasic
-           #-lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
-           #-lclangStaticAnalyzerCore \
-           #-lclangFrontendTool \
-           #-lclangARCMigrate
-
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
 # LFLAGS += -lLLVM-3.1
+
+ifeq ($(UNAME), Linux)
+LFLAGS += -ldl -pthread
+endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
 INCLUDE_PATH += -Ibuild
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
+ifeq ($(UNAME), Darwin)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
+endif
 
 LIBSRC = tinline.cpp tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 EXESRC = main.cpp linenoise.cpp

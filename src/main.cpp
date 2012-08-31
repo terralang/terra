@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <signal.h>
 #include <getopt.h>
 #include "terra.h"
 
