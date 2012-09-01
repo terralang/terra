@@ -39,10 +39,9 @@ LFLAGS  += -lclangFrontend -lclangDriver \
            #-lclangFrontendTool \
            #-lclangARCMigrate
            
-LFLAGS += $(shell $(LLVM_CONFIG) --libs)
-
 LFLAGS_MANUAL += \
 -lLLVMAsmParser \
+-lLLVMInstrumentation \
 -lLLVMLinker \
 -lLLVMArchive \
 -lLLVMBitReader \
@@ -52,15 +51,61 @@ LFLAGS_MANUAL += \
 -lLLVMVectorize \
 -lLLVMBitWriter \
 -lLLVMTableGen \
+-lLLVMHexagonCodeGen \
+-lLLVMHexagonDesc \
+-lLLVMHexagonInfo \
+-lLLVMHexagonAsmPrinter \
+-lLLVMPTXCodeGen \
+-lLLVMPTXDesc \
+-lLLVMPTXInfo \
+-lLLVMPTXAsmPrinter \
+-lLLVMMBlazeAsmParser \
+-lLLVMMBlazeDisassembler \
+-lLLVMMBlazeCodeGen \
+-lLLVMMBlazeDesc \
+-lLLVMMBlazeAsmPrinter \
+-lLLVMMBlazeInfo \
+-lLLVMCppBackendCodeGen \
+-lLLVMCppBackendInfo \
+-lLLVMMSP430CodeGen \
+-lLLVMMSP430Desc \
+-lLLVMMSP430AsmPrinter \
+-lLLVMMSP430Info \
+-lLLVMXCoreCodeGen \
+-lLLVMXCoreDesc \
+-lLLVMXCoreInfo \
+-lLLVMCellSPUCodeGen \
+-lLLVMCellSPUDesc \
+-lLLVMCellSPUInfo \
+-lLLVMMipsDisassembler \
+-lLLVMMipsAsmParser \
+-lLLVMMipsCodeGen \
+-lLLVMMipsDesc \
+-lLLVMMipsInfo \
+-lLLVMMipsAsmPrinter \
+-lLLVMARMDisassembler \
+-lLLVMARMAsmParser \
+-lLLVMARMCodeGen \
+-lLLVMARMDesc \
+-lLLVMARMInfo \
+-lLLVMARMAsmPrinter \
+-lLLVMPowerPCCodeGen \
+-lLLVMPowerPCDesc \
+-lLLVMPowerPCInfo \
+-lLLVMPowerPCAsmPrinter \
+-lLLVMSparcCodeGen \
+-lLLVMSparcDesc \
+-lLLVMSparcInfo \
 -lLLVMX86Disassembler \
+-lLLVMX86AsmParser \
 -lLLVMX86CodeGen \
 -lLLVMSelectionDAG \
 -lLLVMAsmPrinter \
--lLLVMX86AsmParser \
 -lLLVMX86Desc \
 -lLLVMX86Info \
 -lLLVMX86AsmPrinter \
 -lLLVMX86Utils \
+-lLLVMMCDisassembler \
 -lLLVMMCParser \
 -lLLVMInterpreter \
 -lLLVMCodeGen \
@@ -77,6 +122,10 @@ LFLAGS_MANUAL += \
 -lLLVMObject \
 -lLLVMCore \
 -lLLVMSupport
+
+
+#LFLAGS += $(shell $(LLVM_CONFIG) --libs)
+LFLAGS += $(LFLAGS_MANUAL)
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
 # LFLAGS += -lLLVM-3.1
