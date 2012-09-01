@@ -39,7 +39,7 @@ LFLAGS  += -lclangFrontend -lclangDriver \
            #-lclangFrontendTool \
            #-lclangARCMigrate
            
-LFLAGS += $(shell $(LLVM_CONFIG) --libs all)
+LFLAGS += $(shell $(LLVM_CONFIG) --libs)
 
 LFLAGS_MANUAL += \
 -lLLVMAsmParser \
