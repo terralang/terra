@@ -14,6 +14,15 @@
 //===----------------------------------------------------------------------===//
 
 #define DEBUG_TYPE "inline"
+
+#ifndef NDEBUG
+#define NDEBUG
+#include "llvm/Support/Debug.h"
+#undef NDEBUG
+#else
+#include "llvm/Support/Debug.h"
+#endif
+
 #include "llvm/Module.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
@@ -24,7 +33,6 @@
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
