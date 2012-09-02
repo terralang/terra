@@ -1,6 +1,14 @@
 #ifndef _llvmheaders_h
 #define _llvmheaders_h
 
+#ifndef NDEBUG
+#define NDEBUG
+#include "llvm/Support/Valgrind.h"
+#undef NDEBUG
+#else
+#include "llvm/Support/Valgrind.h"
+#endif
+
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/Diagnostic.h"
