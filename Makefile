@@ -27,7 +27,7 @@ FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 
-LFLAGS += -L$(shell llvm-config --libdir)
+LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir)
 
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
