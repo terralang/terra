@@ -395,11 +395,12 @@ static void dorewrite(terra_State * T, const char * code, const char ** argbegin
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
     TheCompInst.createDiagnostics(0, 0);
+    
     CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
     TheCompInst.setTarget(TI);
-
+    
     TheCompInst.createFileManager();
     FileManager &FileMgr = TheCompInst.getFileManager();
     TheCompInst.createSourceManager(FileMgr);
@@ -450,6 +451,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
     TheCompInst.createDiagnostics(0, 0);
+    
     CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
@@ -488,6 +490,20 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
         DEBUG_ONLY(T) {
             mod->dump();
         }
+        
+        //cleanup after clang.
+        //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
+        //the linker will then delete it because it is not used.
+        //switching it to WeakODR means that the linker will keep it even if it is not used
+        for(llvm::Module::iterator it = mod->begin(), end = mod->end();
+            it != end;
+            ++it) {
+            llvm::Function * fn = it;
+            if(fn->hasAvailableExternallyLinkage()) {
+                fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+            }
+        }
+        
         if(llvm::Linker::LinkModules(T->C->m, mod, 0, &err)) {
             terra_reporterror(T,"llvm: %s\n",err.c_str());
         }
@@ -508,6 +524,18 @@ int include_c(lua_State * L) {
     const char * code = luaL_checkstring(L, -2);
     int N = lua_objlen(L, -1);
     std::vector<const char *> args;
+    
+    #ifdef __linux__
+    
+    args.push_back("-I");
+    args.push_back("/usr/include");
+    
+    args.push_back("-I");
+    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
+    
+    #endif
+    
+    
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);
         args.push_back(luaL_checkstring(L,-1));
@@ -521,7 +549,7 @@ int include_c(lua_State * L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
         
-        dofile(T,code,&args[0],&args[N],&result);
+        dofile(T,code,&args[0],&args[args.size()],&result);
     }
     
     lobj_removereftable(L, ref_table);

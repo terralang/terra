@@ -1,7 +1,6 @@
 
 local c = terralib.includec("mytest.h")
 
-
 terra foo()
     var a : int = 3
     return c.myfoobarthing(1,2,3.5,&a) + a
@@ -16,7 +15,7 @@ terra bar2()
 end
 
 terra bar3()
-	var a : c.off_t = 3
+	var a : c.size_t = 3
 	return a
 end
 

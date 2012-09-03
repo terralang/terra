@@ -143,6 +143,10 @@ ifeq ($(UNAME), Darwin)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 endif
 
+#so header include paths can be correctly configured on linux
+FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/3.1/include\""
+
+
 LIBSRC = tinline.cpp tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 EXESRC = main.cpp linenoise.cpp
 

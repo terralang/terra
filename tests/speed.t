@@ -19,7 +19,12 @@ terra main(argc : int, argv : &&int8)
     c.printf("%lld\n",result)
 end
 
+terra what()
+	return c.atoi("54")
+end
+
 local test = require("test")
+print(what())
 print(test.time( function() doit:compile() end))
 print(test.time( function() doit(100000000) end))
 print(test.time( function() terralib.saveobj("speed",{main = main}) end))
