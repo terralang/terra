@@ -646,6 +646,11 @@ function terra.quote:env()
     return self.luaenv,self.varenv
 end
 
+function terra.quote:ref(str)
+    local tree = terra.newtree(self.tree, { kind = terra.kinds["var"], name = str, filename = self.tree.filename})
+    return terra.newquote(tree,"exp",{},self.varenv)
+end
+
 -- END QUOTE
 
 -- CONSTRUCTORS
