@@ -1039,9 +1039,7 @@ do --construct type table that holds the singleton value representing each uniqu
         
         local function create(typ)
             return registertype("&"..typ.name, function()
-                local value = mktyp { kind = terra.kinds.pointer, type = typ }
-                setmetatable(value.methods, { __index = typ.methods } ) --if a method is not defined on the pointer class explicitly it is looked up in the pointee
-                return value
+               return mktyp { kind = terra.kinds.pointer, type = typ }
             end)
         end
         
@@ -1590,28 +1588,19 @@ function terra.funcvariant:typecheck(ctx)
     
     local function insertrecievercast(exp,typ,speculative) --casts allow for method recievers a:b(c,d) ==> b(a,c,d), but 'a' has additional allowed implicit casting rules
                                                            --type can also be == "vararg" if the expected type of the reciever was an argument to the varargs of a function (this often happens when it is a lua function
-        if typ == "vararg" then
-            if exp.type:ispointer() then --in the case of vararg if the reciever is a pointer then pass it directly
-                return exp,true
-            else --otherwise, we force it to be a pointer
-                 --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
-                 --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
-                 --in other cases, you would consistently get a value or a pointer regardless of receiver type
-                 --for consistency, we all lua methods take pointers
-                return insertaddressof(exp),true
-            end
-        else 
-            --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
-            if typ:ispointer() and typ.type == exp.type then
-                --implicit address of
-                return insertaddressof(exp), true
-            elseif exp.type:ispointer() and exp.type.type == typ then
-                --implicit dereference
-                return asrvalue(insertdereference(exp)),true
-            else
-                return insertcast(exp,typ,speculative)
-            end
+        if typ == "vararg" or (typ:ispointer() and typ.type == exp.type) then
+            --implicit address of allowed for recievers
+            return insertaddressof(exp), true
+        else
+            return insertcast(exp,typ,speculative)
         end
+        --notes:
+        --we force vararg recievers to be a pointer
+        --an alternative would be to return reciever.type in this case, but when invoking a lua function as a method
+        --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
+        --in other cases, you would consistently get a value or a pointer regardless of receiver type
+        --for consistency, we all lua methods take pointers
+        --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
     end
     --functions to calculate what happens when two types are input to a binary method
     
@@ -1922,7 +1911,7 @@ function terra.funcvariant:typecheck(ctx)
                 local result,valid
                 if typ == nil or typ == "passthrough" then
                     result,valid = param,true 
-                elseif i == 1 and paramlist.firstargumentisreciever then
+                elseif paramlist.recievers == "all" or (i == 1 and paramlist.recievers == "first") then
                     result,valid = insertrecievercast(param,typ,speculate)
                 elseif typ == "vararg" then
                     result,valid = param,true
@@ -2036,14 +2025,23 @@ function terra.funcvariant:typecheck(ctx)
             local fptr = terra.pointertolightuserdata(cb)
             return terra.newtree(exp, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
         end
-
+        
+        local function insertuntypeddereference(obj)
+            return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
+        end
+        
         local fnobj, arguments
         
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
                                 --then extract a's type from the parameter list and look in the method table for "b" 
+            local untypedreciever = exp.value
+            local reciever = checkexp(untypedreciever)
             
-            local reciever = checkexp(exp.value)
             fnobj = reciever.type.methods[exp.name]
+            if reciever.type:ispointer() and not fnobj then --if the reciever was a pointer, but did not have that method, then dereference and look  up in object
+                untypedreciever = insertuntypeddereference(untypedreciever)
+                fnobj = reciever.type.type.methods[exp.name]
+            end
             fnobj = fnobj and createspecial(exp.value,fnobj)
             
             if not fnobj then
@@ -2051,8 +2049,7 @@ function terra.funcvariant:typecheck(ctx)
                 return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
             end
             
-            arguments = terra.newlist()
-            arguments:insert(exp.value)
+            arguments = terra.newlist { untypedreciever }
             for _,v in ipairs(exp.arguments) do
                 arguments:insert(v)
             end
@@ -2060,8 +2057,6 @@ function terra.funcvariant:typecheck(ctx)
             fnobj = exp.value
             arguments = exp.arguments
         end
-        
-        
         
         local fn = checkexp(fnobj,true)
         
@@ -2099,8 +2094,9 @@ function terra.funcvariant:typecheck(ctx)
         --OK, no macros! we can check the parameter list safely now
         
         local paramlist = checkparameterlist(exp,arguments)
-        paramlist.firstargumentisreciever = exp:is "method"
-        
+        if exp:is "method" then
+            paramlist.recievers = "first"
+        end
         
         local typelists = alternatives:map(function(a) return getparametertypes(a.type,paramlist) end)
         local valididx = tryinsertcasts(typelists,paramlist)
