@@ -1465,7 +1465,7 @@ function terra.funcvariant:typecheck(ctx)
     --declarations of local functions used in type checking
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
           checkexp,checkstmt, checkrvalue,resolvequote,
-          checkparameterlist, checkcall, createspecial, resolveluaspecial,
+          checkparameterlist, checkcall,checkmethodorcall, createspecial, resolveluaspecial,
           insertdereference, insertaddressof
           
           
@@ -1672,8 +1672,8 @@ function terra.funcvariant:typecheck(ctx)
     
     
     
-    local function checkunary(ee,property)
-        local e = checkrvalue(ee.operands[1])
+    local function checkunary(ee,operands,property)
+        local e = operands[1]
         if e.type ~= terra.types.error and not e.type[property](e.type) then
             terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",e.type)
             return e:copy { type = terra.types.error }
@@ -1691,25 +1691,24 @@ function terra.funcvariant:typecheck(ctx)
         return e:copy { type = t, operands = terra.newlist {l,r} }
     end
     
-    local function checkbinaryorunary(e,property)
-        if #e.operands == 1 then
-            return checkunary(e,property)
+    local function checkbinaryorunary(e,operands,property)
+        if #operands == 1 then
+            return checkunary(e,operands,property)
         end
-        return meetbinary(e,property,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
+        return meetbinary(e,property,operands[1],operands[2])
     end
     
-    local function checkarith(e)
-        return checkbinaryorunary(e,"isarithmeticorvector")
+    local function checkarith(e,operands)
+        return checkbinaryorunary(e,operands,"isarithmeticorvector")
     end
 
-    local function checkarithpointer(e)
-        if #e.operands == 1 then
-            return checkunary(e,"isarithmeticorvector")
+    local function checkarithpointer(e,operands)
+        if #operands == 1 then
+            return checkunary(e,operands,"isarithmeticorvector")
         end
         
-        local l = checkrvalue(e.operands[1])
-        local r = checkrvalue(e.operands[2])
-
+        local l,r = unpack(operands)
+        
         local function pointerlike(t)
             return t:ispointer() or t:isarray()
         end
@@ -1728,19 +1727,21 @@ function terra.funcvariant:typecheck(ctx)
         end
     end
 
-    local function checkintegralarith(e)
-        return checkbinaryorunary(e,"isintegralorvector")
+    local function checkintegralarith(e,operands)
+        return checkbinaryorunary(e,operands,"isintegralorvector")
     end
-    local function checkcomparision(e)
-        local t,l,r = typematch(e,checkrvalue(e.operands[1]),checkrvalue(e.operands[2]))
+    
+    local function checkcomparision(e,operands)
+        local t,l,r = typematch(e,operands[1],operands[2])
         local rt = bool
         if t:isvector() then
             rt = terra.types.vector(bool,t.N)
         end
         return e:copy { type = rt, operands = terra.newlist {l,r} }
     end
-    local function checklogicalorintegral(e)
-        return checkbinaryorunary(e,"canbeordorvector")
+    
+    local function checklogicalorintegral(e,operands)
+        return checkbinaryorunary(e,operands,"canbeordorvector")
     end
     
     local function checklvalue(ee)
@@ -1751,13 +1752,7 @@ function terra.funcvariant:typecheck(ctx)
         end
         return e
     end
-    
-    local function checkaddressof(ee)
-        local e = checklvalue(ee.operands[1])
-        local ty = terra.types.pointer(e.type)
-        return ee:copy { type = ty, operands = terra.newlist{e} }
-    end
-    
+        
     function insertaddressof(ee)
         local e = aslvalue(ee)
         local ret = terra.newtree(e,{ kind = terra.kinds.operator, type = terra.types.pointer(ee.type), operator = terra.kinds["&"], operands = terra.newlist{e} })
@@ -1779,14 +1774,8 @@ function terra.funcvariant:typecheck(ctx)
         return ret
     end
     
-    local function checkdereference(ee)
-        local e = checkrvalue(ee.operands[1])
-        return insertdereference(e)
-    end
-    
-    local function checkshift(ee)
-        local a = checkrvalue(ee.operands[1])
-        local b = checkrvalue(ee.operands[2])
+    local function checkshift(ee,operands)
+        local a,b = unpack(operands)
         local typ = terra.types.error
         if a.type ~= terra.types.error and b.type ~= terra.types.error then
             if a.type:isintegralorvector() and b.type:isintegralorvector() then
@@ -1810,26 +1799,48 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     local operator_table = {
-        ["-"] = checkarithpointer;
-        ["+"] = checkarithpointer;
-        ["*"] = checkarith;
-        ["/"] = checkarith;
-        ["%"] = checkarith;
-        ["<"] = checkcomparision;
-        ["<="] = checkcomparision;
-        [">"] = checkcomparision;
-        [">="] =  checkcomparision;
-        ["=="] = checkcomparision;
-        ["~="] = checkcomparision;
-        ["and"] = checklogicalorintegral;
-        ["or"] = checklogicalorintegral;
-        ["not"] = checklogicalorintegral;
-        ["&"] = checkaddressof;
-        ["@"] = checkdereference;
-        ["^"] = checkintegralarith;
-        ["<<"] = checkshift;
-        [">>"] = checkshift;
+        ["-"] = { checkarithpointer, "__sub" };
+        ["+"] = { checkarithpointer, "__add" };
+        ["*"] = { checkarith, "__mul" };
+        ["/"] = { checkarith, "__div" };
+        ["%"] = { checkarith, "__mod" };
+        ["<"] = { checkcomparision, "__lt" };
+        ["<="] = { checkcomparision, "__le" };
+        [">"] = { checkcomparision, "__gt" };
+        [">="] =  { checkcomparision, "__ge" };
+        ["=="] = { checkcomparision, "__eq" };
+        ["~="] = { checkcomparision, "__ne" };
+        ["and"] = { checklogicalorintegral, "__and" };
+        ["or"] = { checklogicalorintegral, "__or" };
+        ["not"] = { checklogicalorintegral, "__not" };
+        ["^"] =  { checkintegralarith, "__xor" };
+        ["<<"] = { checkshift, "__lshift" };
+        [">>"] = { checkshift, "__rshift" };
     }
+    
+    local function checkoperator(ee)
+        local op_string = terra.kinds[ee.operator]
+        
+        --check non-overloadable operators first
+        if op_string == "@" then
+            local e = checkrvalue(ee.operands[1])
+            return false, insertdereference(e)
+        elseif op_string == "&" then
+            local e = checklvalue(ee.operands[1])
+            local ty = terra.types.pointer(e.type)
+            return false, ee:copy { type = ty, operands = terra.newlist{e} }
+        end
+        
+        local op, overloadmethod = unpack(operator_table[op_string] or {})
+        if op == nil then
+            terra.reporterror(ctx,ee,"operator ",op_string," not defined in terra code.")
+            return false, ee:copy { type = terra.types.error }
+        end
+        local operands = ee.operands:map(checkrvalue)
+        
+        return false, op(ee,operands)
+        
+    end
     
     local function createextractreturn(fncall, index, t)
         fncall.result = fncall.result or {} --create a new result table (if there is not already one), to link this extract with the function call
@@ -1841,17 +1852,20 @@ function terra.funcvariant:typecheck(ctx)
     local function canreturnmultiple(t)
         return iscall(t) or t.kind == terra.kinds.var or t.kind == terra.kinds.select
     end
-    function checkparameterlist(anchor,params)
+    function checkparameterlist(anchor,params) --individual params may be already typechecked (e.g. if they were a method call receiver) 
+                                               --in this case they are treated as single expressions
         local exps = terra.newlist()
         local multiret = nil
         
         local function addelement(elem,islast)
-            if not islast or elem.truncated then
+            if elem.type then
+                exps:insert(elem)
+            elseif not islast or elem.truncated then
                 exps:insert(checkrvalue(elem))
             else
                 elem = resolveluaspecial(elem)
                 if iscall(elem) then
-                    local ismacro, multifunc = checkcall(elem,true) --must return at least one value
+                    local ismacro, multifunc = checkmethodorcall(elem,true) --must return at least one value
                     if ismacro then --call was a macro, handle the results as if they were in the list
                        for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional
                             addelement(e,i == #multifunc)
@@ -1980,9 +1994,48 @@ function terra.funcvariant:typecheck(ctx)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
     
-    function checkcall(exp, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
-                                                --returns true, <macro exp list> if call was a macro
-                                                --returns false, <typed tree> otherwise
+    function checkmethodorcall(exp, mustreturnatleast1)
+    
+        local function insertuntypeddereference(obj)
+            return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
+        end
+        
+        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
+                                --then extract a's type from the parameter list and look in the method table for "b" 
+            local untypedreciever = exp.value
+            local reciever = checkrvalue(untypedreciever)
+            
+            local fnobj = reciever.type.methods[exp.name]
+            if reciever.type:ispointer() and not fnobj then --if the reciever was a pointer, but did not have that method, then dereference and look  up in object
+                untypedreciever = insertuntypeddereference(untypedreciever)
+                fnobj = reciever.type.type.methods[exp.name]
+                reciever = asrvalue(insertdereference(reciever))
+            end
+            fnobj = fnobj and createspecial(exp.value,fnobj)
+            
+            if not fnobj then
+                terra.reporterror(ctx,exp,"no such method ",exp.name," defined for type ",reciever.type)
+                return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
+            end
+            
+            local untypedarguments = terra.newlist { untypedreciever }
+            local arguments = terra.newlist { reciever }
+            
+            for _,v in ipairs(exp.arguments) do
+                untypedarguments:insert(v)
+                arguments:insert(v)
+            end
+            
+            return checkcall(exp,fnobj,arguments,untypedarguments,"first",mustreturnatleast1)
+        else
+            return checkcall(exp,exp.value,exp.arguments,exp.arguments,"none",mustreturnatleast1)
+        end
+        
+    end
+    
+    function checkcall(anchor, fnobj, arguments, untypedarguments, recievers, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
+                                                                     --returns true, <macro exp list> if call was a macro
+                                                                     --returns false, <typed tree> otherwise
         local function resolvemacro(macrocall,anchor,...)
             local macroargs = {}
             for i,v in ipairs({...}) do
@@ -1993,10 +2046,10 @@ function terra.funcvariant:typecheck(ctx)
             local exps = terra.newlist{}
             if type(result) == "table" and #result ~= 0 then
                 for i,e in ipairs(result) do
-                    exps:insert(createspecial(exp,e))
+                    exps:insert(createspecial(anchor,e))
                 end
             else
-                exps:insert(createspecial(exp,result))
+                exps:insert(createspecial(anchor,result))
             end
             return exps
         end
@@ -2023,39 +2076,7 @@ function terra.funcvariant:typecheck(ctx)
             local castedtype = terra.types.funcpointer(paramtypes,{})
             local cb = ffi.cast(castedtype:cstring(),fn)
             local fptr = terra.pointertolightuserdata(cb)
-            return terra.newtree(exp, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
-        end
-        
-        local function insertuntypeddereference(obj)
-            return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
-        end
-        
-        local fnobj, arguments
-        
-        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
-                                --then extract a's type from the parameter list and look in the method table for "b" 
-            local untypedreciever = exp.value
-            local reciever = checkexp(untypedreciever)
-            
-            fnobj = reciever.type.methods[exp.name]
-            if reciever.type:ispointer() and not fnobj then --if the reciever was a pointer, but did not have that method, then dereference and look  up in object
-                untypedreciever = insertuntypeddereference(untypedreciever)
-                fnobj = reciever.type.type.methods[exp.name]
-            end
-            fnobj = fnobj and createspecial(exp.value,fnobj)
-            
-            if not fnobj then
-                terra.reporterror(ctx,exp,"no such method ",exp.name," defined for type ",reciever.type)
-                return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
-            end
-            
-            arguments = terra.newlist { untypedreciever }
-            for _,v in ipairs(exp.arguments) do
-                arguments:insert(v)
-            end
-        else
-            fnobj = exp.value
-            arguments = exp.arguments
+            return terra.newtree(anchor, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
         end
         
         local fn = checkexp(fnobj,true)
@@ -2064,39 +2085,37 @@ function terra.funcvariant:typecheck(ctx)
         --check for and dispatch all macros, or build the list of possible function calls
         if fn:is "luaobject" then
             if terra.ismacro(fn.value) then
-                 return true,resolvemacro(fn.value,exp,unpack(arguments))
+                 return true,resolvemacro(fn.value,anchor,unpack(untypedarguments))
             elseif terra.types.istype(fn.value) and fn.value:isstruct() then
                 local typfn = fn.value:getcanonical(ctx)
                 local castmacro = macro(function(ctx,tree,arg)
                     return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = typfn })
                 end)
-                return true, resolvemacro(castmacro,exp,unpack(arguments))
+                return true, resolvemacro(castmacro,anchor,unpack(untypedarguments))
             elseif type(fn.value) == "function" then
                 alternatives:insert( { type = terra.types.luafunction, fn = fn.value } ) 
             elseif terra.isfunction(fn.value) then
                 for i,v in ipairs(fn.value:getvariants()) do
-                    local fnlit = insertfunctionliteral(exp,v)
+                    local fnlit = insertfunctionliteral(anchor,v)
                     if fnlit.type ~= terra.types.error then
                         alternatives:insert( { type = fnlit.type.type, fn = fnlit } )
                     end
                 end
             else
-                terra.reporterror(ctx,exp,"expected a function or macro but found lua value of type ",type(fn.value))
+                terra.reporterror(ctx,anchor,"expected a function or macro but found lua value of type ",type(fn.value))
             end
         elseif fn.type:ispointer() and fn.type.type:isfunction() then
             alternatives:insert( { type = fn.type.type, fn = asrvalue(fn) })
         else
             if fn.type ~= terra.types.error then
-                terra.reporterror(ctx,exp,"expected a function but found ",fn.type)
+                terra.reporterror(ctx,anchor,"expected a function but found ",fn.type)
             end
         end
         
         --OK, no macros! we can check the parameter list safely now
         
-        local paramlist = checkparameterlist(exp,arguments)
-        if exp:is "method" then
-            paramlist.recievers = "first"
-        end
+        local paramlist = checkparameterlist(anchor,arguments)
+        paramlist.recievers = recievers
         
         local typelists = alternatives:map(function(a) return getparametertypes(a.type,paramlist) end)
         local valididx = tryinsertcasts(typelists,paramlist)
@@ -2112,15 +2131,16 @@ function terra.funcvariant:typecheck(ctx)
                 typ = types[1]
             elseif mustreturnatleast1 then
                 typ = terra.types.error
-                terra.reporterror(ctx,exp,"expected call to return at least 1 value")
+                terra.reporterror(ctx,anchor,"expected call to return at least 1 value")
             end --otherwise this is used in statement context and does not require a type
         else
             typ = terra.types.error
             types = terra.newlist()
         end
-        local callexp = exp:copy { kind = terra.kinds.apply, arguments = paramlist,  value = callee, type = typ, types = types }
+        local callexp = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, type = typ, types = types })
         return false, callexp
     end
+    
     function asrvalue(ee)
         if ee.lvalue then
             return terra.newtree(ee,{ kind = terra.kinds.ltor, type = ee.type, expression = ee })
@@ -2272,6 +2292,13 @@ function terra.funcvariant:typecheck(ctx)
     
     
     function checkexp(e_,allowluaobjects) --if allowluaobjects is true, then checkexp can return trees with kind luaobject (e.g. for partial eval)
+        local function handlemacro(ismacro,exp)
+            if ismacro then
+                return checkexp(exp[1],allowluaobjects)
+            else
+                return exp
+            end
+        end
         local function docheck(e)
             if e:is "luaobject" then
                 return e
@@ -2284,14 +2311,7 @@ function terra.funcvariant:typecheck(ctx)
                 assert(e.type ~= nil,"found an unresolved select in checkexp")
                 return e --select has already been resolved by resolveluaspecial
             elseif e:is "operator" then
-                local op_string = terra.kinds[e.operator]
-                local op = operator_table[op_string]
-                if op == nil then
-                    terra.reporterror(ctx,e,"operator ",op_string," not defined in terra code.")
-                    return e:copy { type = terra.types.error }
-                else
-                    return op(e)
-                end
+                return handlemacro(checkoperator(e))
             elseif e:is "index" then
                 local v = checkexp(e.value)
                 local idx = checkrvalue(e.index)
@@ -2361,12 +2381,7 @@ function terra.funcvariant:typecheck(ctx)
                 return e:copy { type = aggtype, expressions = entries }
                 
             elseif iscall(e) then
-                local ismacro, c = checkcall(e,true)
-                if ismacro then
-                    return checkexp(c[1],allowluaobjects)
-                else
-                    return c
-                end
+                return handlemacro(checkmethodorcall(e,true))
             elseif e:is "quote" then
                 return resolvequote(e,e.quotations[1],"exp",checkexp)
             elseif e:is "constructor" then
@@ -2641,7 +2656,7 @@ function terra.funcvariant:typecheck(ctx)
             --desugared:printraw()
             return checkstmt(desugared)
         elseif iscall(s) then
-            local ismacro, c = checkcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
+            local ismacro, c = checkmethodorcall(s,false) --allowed to be void, if this was a macro then this might return a list of values, which are flattened into the enclosing block (see list.flatmap)
             if ismacro then
                 return c:flatmap(checkstmt)
             else
