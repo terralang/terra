@@ -956,7 +956,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     types.type.methods = {} --metatable of all types
     types.type.methods.as = macro(function(ctx,tree,exp,typ)
-        return terra.newtree(tree,{ kind = terra.kinds.explicitcast, type = typ:astype(ctx), value = exp.tree })
+        return terra.newtree(tree,{ kind = terra.kinds.explicitcast, totype = typ:astype(ctx), value = exp.tree })
     end)    
     function types.istype(t)
         return getmetatable(t) == types.type
@@ -2068,7 +2068,7 @@ function terra.funcvariant:typecheck(ctx)
             elseif terra.types.istype(fn.value) and fn.value:isstruct() then
                 local typfn = fn.value:getcanonical(ctx)
                 local castmacro = macro(function(ctx,tree,arg)
-                    return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, type = typfn })
+                    return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = typfn })
                 end)
                 return true, resolvemacro(castmacro,exp,unpack(arguments))
             elseif type(fn.value) == "function" then
@@ -2318,7 +2318,7 @@ function terra.funcvariant:typecheck(ctx)
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
             elseif e:is "explicitcast" then
-                return insertexplicitcast(checkrvalue(e.value),e.type)
+                return insertexplicitcast(checkrvalue(e.value),e.totype)
             elseif e:is "sizeof" then
                 return e:copy { type = uint64 }
             elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
