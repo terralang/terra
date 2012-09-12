@@ -1838,8 +1838,21 @@ function terra.funcvariant:typecheck(ctx)
         end
         local operands = ee.operands:map(checkrvalue)
         
-        return false, op(ee,operands)
+        local overload = nil
+        for i,e in ipairs(operands) do
+            if e.type:isstruct() then
+                overload = e.type.methods[overloadmethod] --TODO: be more intelligent here about merging overloaded functions so that all possibilities are considered
+                if overload then
+                    break
+                end
+            end
+        end
         
+        if overload then
+            return checkcall(ee,createspecial(ee,overload),operands,ee.operands,"all",true)
+        else
+            return false, op(ee,operands)
+        end
     end
     
     local function createextractreturn(fncall, index, t)
@@ -2028,12 +2041,12 @@ function terra.funcvariant:typecheck(ctx)
             
             return checkcall(exp,fnobj,arguments,untypedarguments,"first",mustreturnatleast1)
         else
-            return checkcall(exp,exp.value,exp.arguments,exp.arguments,"none",mustreturnatleast1)
+            return checkcall(exp,checkexp(exp.value,true),exp.arguments,exp.arguments,"none",mustreturnatleast1)
         end
         
     end
     
-    function checkcall(anchor, fnobj, arguments, untypedarguments, recievers, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
+    function checkcall(anchor, fn, arguments, untypedarguments, recievers, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
                                                                      --returns true, <macro exp list> if call was a macro
                                                                      --returns false, <typed tree> otherwise
         local function resolvemacro(macrocall,anchor,...)
@@ -2078,8 +2091,6 @@ function terra.funcvariant:typecheck(ctx)
             local fptr = terra.pointertolightuserdata(cb)
             return terra.newtree(anchor, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
         end
-        
-        local fn = checkexp(fnobj,true)
         
         local alternatives = terra.newlist()
         --check for and dispatch all macros, or build the list of possible function calls
