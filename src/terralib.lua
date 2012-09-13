@@ -2037,19 +2037,15 @@ function terra.funcvariant:typecheck(ctx)
             return checkcall(exp,fnobj,arguments,untypedarguments,"first",mustreturnatleast1)
         end
         
-        if exp.type then
-            return false,exp
-        end
-        
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
                                 --then extract a's type from the parameter list and look in the method table for "b" 
             return checkmethod(checkrvalue(exp.value),exp.value,exp.name)
         else
-            local fn = checkexp(exp.value,true)
+            local fn = exp.fn or checkexp(exp.value,true) --node may be either untyped checked (exp.fn == nil) or the function may already have been typed (e.g. in the select operator)
             if fn.type and (fn.type:isstruct() or (fn.type:ispointer() and fn.type.type:isstruct())) then
                 return checkmethod(fn,exp.value,"__apply")
             end
-            return checkcall(exp,fn,exp.arguments,exp.arguments,"none",mustreturnatleast1)
+            return checkcall(exp,fn,exp.typedarguments or exp.arguments,exp.arguments,exp.recievers or "none",mustreturnatleast1)
         end
         
     end
@@ -2185,31 +2181,17 @@ function terra.funcvariant:typecheck(ctx)
         return asrvalue(ee)
     end
     
-    function insertselect(v, field, untypedv)
+    function insertselect(v, field)
         local tree = terra.newtree(v, { type = terra.types.error, kind = terra.kinds.select, field = field, value = v, lvalue = v.lvalue })
-        if v.type:isstruct() then
-            local index = v.type.keytoindex[field]
-            if index == nil then
-                local getter = v.type.methods["__get"..field]
-                if getter then
-                    assert(untypedv)
-                    local ismacro, exp = checkcall(v,createspecial(v,getter),terra.newlist{v},terra.newlist{untypedv},"first",true)
-                    if ismacro then
-                        return resolveluaspecial(exp[1])
-                    else
-                        return exp
-                    end
-                else
-                    terra.reporterror(ctx,v,"no field ",field," in object")
-                end
-            else
-                tree.index = index
-                tree.type = v.type.entries[index+1].type
-            end
-        else
-            terra.reporterror(ctx,v,"expected a structural type")
+        assert(v.type:isstruct())
+        local index = v.type.keytoindex[field]
+        
+        if index == nil then
+            return nil,false
         end
-        return tree
+        tree.index = index
+        tree.type = v.type.entries[index+1].type
+        return tree,true
     end
     
     function insertvar(anchor, typ, name, definition)
@@ -2313,7 +2295,24 @@ function terra.funcvariant:typecheck(ctx)
                     v = insertdereference(v)
                     untypedv = insertuntypeddereference(untypedv)
                 end
-                return insertselect(v,e.field,untypedv)
+                if v.type:isstruct() then
+                    local ret, success = insertselect(v,e.field)
+                    if not success then
+                        --struct has no member e.field, look for a getter __get<field>
+                        local getter = v.type.methods["__get"..e.field]
+                        if getter then
+                            return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{v}, recievers = "first"})
+                        else
+                            terra.reporterror(ctx,v,"no field ",e.field," in object")
+                            return e:copy { type = terra.types.error }
+                        end
+                    else
+                        return ret
+                    end
+                else
+                    terra.reporterror(ctx,v,"expected a structural type")
+                    return e:copy { type = terra.types.error }
+                end
             end
         else
             return e
