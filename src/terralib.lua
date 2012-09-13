@@ -1466,7 +1466,7 @@ function terra.funcvariant:typecheck(ctx)
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
           checkexp,checkstmt, checkrvalue,resolvequote,
           checkparameterlist, checkcall,checkmethodorcall, createspecial, resolveluaspecial,
-          insertdereference, insertaddressof
+          insertdereference, insertuntypeddereference, insertaddressof
           
           
     --cast  handlint functions
@@ -1774,6 +1774,10 @@ function terra.funcvariant:typecheck(ctx)
         return ret
     end
     
+    function insertuntypeddereference(obj)
+        return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
+    end
+    
     local function checkshift(ee,operands)
         local a,b = unpack(operands)
         local typ = terra.types.error
@@ -2008,11 +2012,6 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     function checkmethodorcall(exp, mustreturnatleast1)
-    
-        local function insertuntypeddereference(obj)
-            return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
-        end
-        
         local function checkmethod(reciever,untypedreciever,methodname)
             local fnobj = reciever.type.methods[methodname]
             if reciever.type:ispointer() and not fnobj then --if the reciever was a pointer, but did not have that method, then dereference and look  up in object
@@ -2036,6 +2035,10 @@ function terra.funcvariant:typecheck(ctx)
             end
             
             return checkcall(exp,fnobj,arguments,untypedarguments,"first",mustreturnatleast1)
+        end
+        
+        if exp.type then
+            return false,exp
         end
         
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
@@ -2129,7 +2132,6 @@ function terra.funcvariant:typecheck(ctx)
         end
         
         --OK, no macros! we can check the parameter list safely now
-        
         local paramlist = checkparameterlist(anchor,arguments)
         paramlist.recievers = recievers
         
@@ -2183,12 +2185,23 @@ function terra.funcvariant:typecheck(ctx)
         return asrvalue(ee)
     end
     
-    function insertselect(v,field)
+    function insertselect(v, field, untypedv)
         local tree = terra.newtree(v, { type = terra.types.error, kind = terra.kinds.select, field = field, value = v, lvalue = v.lvalue })
         if v.type:isstruct() then
             local index = v.type.keytoindex[field]
             if index == nil then
-                terra.reporterror(ctx,v,"no field ",field," in object")
+                local getter = v.type.methods["__get"..field]
+                if getter then
+                    assert(untypedv)
+                    local ismacro, exp = checkcall(v,createspecial(v,getter),terra.newlist{v},terra.newlist{untypedv},"first",true)
+                    if ismacro then
+                        return resolveluaspecial(exp[1])
+                    else
+                        return exp
+                    end
+                else
+                    terra.reporterror(ctx,v,"no field ",field," in object")
+                end
             else
                 tree.index = index
                 tree.type = v.type.entries[index+1].type
@@ -2280,7 +2293,8 @@ function terra.funcvariant:typecheck(ctx)
             return createspecial(e,v)
                 
         elseif e:is "select" then
-            local v = checkexp(e.value,true)
+            local untypedv = e.value
+            local v = checkexp(untypedv,true)
             if v:is "luaobject" then
                 if type(v.value) ~= "table" then
                     terra.reporterror(ctx,e,"expected a table but found ", type(v.value))
@@ -2297,8 +2311,9 @@ function terra.funcvariant:typecheck(ctx)
             else
                 if v.type:ispointer() then --allow 1 implicit dereference
                     v = insertdereference(v)
+                    untypedv = insertuntypeddereference(untypedv)
                 end
-                return insertselect(v,e.field)
+                return insertselect(v,e.field,untypedv)
             end
         else
             return e
