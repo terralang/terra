@@ -2013,21 +2013,17 @@ function terra.funcvariant:typecheck(ctx)
             return terra.newtree(obj,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{obj}})
         end
         
-        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
-                                --then extract a's type from the parameter list and look in the method table for "b" 
-            local untypedreciever = exp.value
-            local reciever = checkrvalue(untypedreciever)
-            
-            local fnobj = reciever.type.methods[exp.name]
+        local function checkmethod(reciever,untypedreciever,methodname)
+            local fnobj = reciever.type.methods[methodname]
             if reciever.type:ispointer() and not fnobj then --if the reciever was a pointer, but did not have that method, then dereference and look  up in object
                 untypedreciever = insertuntypeddereference(untypedreciever)
-                fnobj = reciever.type.type.methods[exp.name]
+                fnobj = reciever.type.type.methods[methodname]
                 reciever = asrvalue(insertdereference(reciever))
             end
-            fnobj = fnobj and createspecial(exp.value,fnobj)
+            fnobj = fnobj and createspecial(untypedreciever,fnobj)
             
             if not fnobj then
-                terra.reporterror(ctx,exp,"no such method ",exp.name," defined for type ",reciever.type)
+                terra.reporterror(ctx,exp,"no such method ",methodname," defined for type ",reciever.type)
                 return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
             end
             
@@ -2040,8 +2036,17 @@ function terra.funcvariant:typecheck(ctx)
             end
             
             return checkcall(exp,fnobj,arguments,untypedarguments,"first",mustreturnatleast1)
+        end
+        
+        if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
+                                --then extract a's type from the parameter list and look in the method table for "b" 
+            return checkmethod(checkrvalue(exp.value),exp.value,exp.name)
         else
-            return checkcall(exp,checkexp(exp.value,true),exp.arguments,exp.arguments,"none",mustreturnatleast1)
+            local fn = checkexp(exp.value,true)
+            if fn.type and (fn.type:isstruct() or (fn.type:ispointer() and fn.type.type:isstruct())) then
+                return checkmethod(fn,exp.value,"__apply")
+            end
+            return checkcall(exp,fn,exp.arguments,exp.arguments,"none",mustreturnatleast1)
         end
         
     end
