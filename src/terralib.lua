@@ -2853,5 +2853,15 @@ function terra.saveobj(filename,env)
     return terra.saveobjimpl(filename,cleanenv,isexe)
 end
 
+
+terra.select = macro(function(ctx,tree,obj,key)
+    local field = key:asvalue(ctx)
+    if type(field) ~= "string" then
+        ctx:reporterror(tree,"selector is not a string but ",type(field))
+        field = "<error>"
+    end
+    return terra.newtree(tree,{ kind = terra.kinds.select, value = obj.tree, field = field })
+end)
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")
