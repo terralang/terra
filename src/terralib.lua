@@ -814,6 +814,9 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.type:isstruct()
         return self.kind == terra.kinds["struct"]
     end
+    function types.type:ispointertostruct()
+        return self:ispointer() and self.type:isstruct()
+    end
     function types.type:ispassedaspointer() --warning: if you update this, you also need to update the behavior in tcompiler.cpp's getType function to set the ispassedaspointer flag
         return self:isstruct() or self:isarray()
     end
@@ -1533,6 +1536,11 @@ function terra.funcvariant:typecheck(ctx)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
     end
     
+    local function createtypedexpression(exp)
+        assert(exp.type)
+        return terra.newtree(exp, { kind = terra.kinds.typedexpression, exp = exp})
+    end
+
     function insertcast(exp,typ,speculative) --if speculative is true, then an error will not be reported and the caller should check the second return value to see if the cast was valid
         if typ == nil then
             print(debug.traceback())
@@ -1559,12 +1567,32 @@ function terra.funcvariant:typecheck(ctx)
                 local primitivecast, valid = insertcast(exp,typ.type,speculative)
                 local broadcast = createcast(primitivecast,typ)
                 return broadcast, valid
-            else
-                if not speculative then
-                    terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
-                end
-                return cast_exp, false
             end
+
+            --no builtin casts worked... now try user-defined casts
+            local cast_fns = terra.newlist()
+            local function addcasts(typ)
+                if typ:isstruct() and typ.methods.__cast then
+                    cast_fns:insert(typ.methods.__cast)
+                elseif typ:ispointertostruct() then
+                    addcasts(typ.type)
+                end
+            end
+            addcasts(exp.type)
+            addcasts(typ)
+
+            for i,__cast in ipairs(cast_fns) do
+                local quotedexp = terra.newquote(createtypedexpression(exp),"exp",ctx:luaenv(),ctx:varenv())
+                local valid,result = __cast(ctx,exp,exp.type,typ,quotedexp)
+                if valid then
+                    return checkrvalue(createspecial(exp,result))
+                end
+            end
+
+            if not speculative then
+                terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
+            end
+            return cast_exp, false
         end
     end
     local function insertexplicitcast(exp,typ) --all implicit casts are allowed plus some additional casts like from int to pointer, pointer to int, and int to int
@@ -1669,9 +1697,7 @@ function terra.funcvariant:typecheck(ctx)
         end
         ctx:varenv()[tv.name] = tv
     end
-    
-    
-    
+
     local function checkunary(ee,operands,property)
         local e = operands[1]
         if e.type ~= terra.types.error and not e.type[property](e.type) then
@@ -1853,7 +1879,7 @@ function terra.funcvariant:typecheck(ctx)
         end
         
         if overload then
-            return checkcall(ee,createspecial(ee,overload),operands,ee.operands,"all",true)
+            return checkcall(ee,createspecial(ee,overload),operands:map(createtypedexpression),ee.operands,"all",true)
         else
             return false, op(ee,operands)
         end
@@ -1875,9 +1901,7 @@ function terra.funcvariant:typecheck(ctx)
         local multiret = nil
         
         local function addelement(elem,islast)
-            if elem.type then
-                exps:insert(elem)
-            elseif not islast or elem.truncated then
+            if not islast or elem.truncated then
                 exps:insert(checkrvalue(elem))
             else
                 elem = resolveluaspecial(elem)
@@ -2027,7 +2051,7 @@ function terra.funcvariant:typecheck(ctx)
             end
             
             local untypedarguments = terra.newlist { untypedreciever }
-            local arguments = terra.newlist { reciever }
+            local arguments = terra.newlist { createtypedexpression(reciever) }
             
             for _,v in ipairs(exp.arguments) do
                 untypedarguments:insert(v)
@@ -2042,7 +2066,7 @@ function terra.funcvariant:typecheck(ctx)
             return checkmethod(checkrvalue(exp.value),exp.value,exp.name)
         else
             local fn = exp.fn or checkexp(exp.value,true) --node may be either untyped checked (exp.fn == nil) or the function may already have been typed (e.g. in the select operator)
-            if fn.type and (fn.type:isstruct() or (fn.type:ispointer() and fn.type.type:isstruct())) then
+            if fn.type and (fn.type:isstruct() or fn.type:ispointertostruct()) then
                 return checkmethod(fn,exp.value,"__apply")
             end
             return checkcall(exp,fn,exp.typedarguments or exp.arguments,exp.arguments,exp.recievers or "none",mustreturnatleast1)
@@ -2291,7 +2315,7 @@ function terra.funcvariant:typecheck(ctx)
                 
                 return createspecial(e,selected)
             else
-                if v.type:ispointer() then --allow 1 implicit dereference
+                if v.type:ispointertostruct() then --allow 1 implicit dereference
                     v = insertdereference(v)
                     untypedv = insertuntypeddereference(untypedv)
                 end
@@ -2301,7 +2325,7 @@ function terra.funcvariant:typecheck(ctx)
                         --struct has no member e.field, look for a getter __get<field>
                         local getter = v.type.methods["__get"..e.field]
                         if getter then
-                            return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{v}, recievers = "first"})
+                            return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
                         else
                             terra.reporterror(ctx,v,"no field ",e.field," in object")
                             return e:copy { type = terra.types.error }
@@ -2340,6 +2364,9 @@ function terra.funcvariant:typecheck(ctx)
             elseif e:is "select" then
                 assert(e.type ~= nil,"found an unresolved select in checkexp")
                 return e --select has already been resolved by resolveluaspecial
+            elseif e:is "typedexpression" then --expression that has been previously typechecked and re-injected into the compiler
+                assert(e.exp.type)
+                return e.exp
             elseif e:is "operator" then
                 return handlemacro(checkoperator(e))
             elseif e:is "index" then
