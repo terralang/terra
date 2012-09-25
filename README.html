@@ -295,7 +295,7 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#x6D;&#x61;&#105;&#108;&#116;&#111;:&#x7A;de&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#116;&#x61;&#110;f&#111;&#x72;&#x64;&#x2E;&#x65;&#100;u">&#x7A;de&#x76;&#x69;&#x74;&#111;&#64;&#x73;&#116;&#x61;&#110;f&#111;&#x72;&#x64;&#x2E;&#x65;&#100;u</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#x61;&#x69;&#108;&#116;&#x6F;:zdevi&#116;&#x6F;&#64;&#115;&#116;&#97;&#x6E;&#102;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;">zdevi&#116;&#x6F;&#64;&#115;&#116;&#97;&#x6E;&#102;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
@@ -901,6 +901,16 @@ end
 <pre><code>struct LinkedList { value : int; next : &amp;LinkedList; }
 </code></pre>
 
+<p>They may also contain unnamed members:</p>
+
+<pre><code>var a : struct { float, float }
+</code></pre>
+
+<p>Unnamed members will be given the names <code>_0</code>, <code>_1</code>, ... <code>_N</code>:</p>
+
+<pre><code>a._0 + a._1
+</code></pre>
+
 <p>Terra has no explicit union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:</p>
 
 <pre><code>struct MyStruct { 
@@ -919,16 +929,7 @@ end
 <pre><code>var a : struct { real : float, imag : float }
 </code></pre>
 
-<p>These structs are similar to the anonymous structs found in languages like C-sharp.
-They may also contain unnamed members:</p>
-
-<pre><code>var a : struct { float, float }
-</code></pre>
-
-<p>Unnamed members will be given the names <code>_0</code>, <code>_1</code>, ... <code>_N</code>:</p>
-
-<pre><code>a._0 + a._1
-</code></pre>
+<p>These structs are similar to the anonymous structs found in languages like C-sharp.</p>
 
 <p>You can use a struct constructor syntax to quickly generate values that have an anonymous struct type:</p>
 

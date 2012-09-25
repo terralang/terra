@@ -555,7 +555,15 @@ Unlike C, you can use the select operator `a.b` on pointers. This has the effect
 Like functions, symbols in struct definitions are resolved at compile time, allowing for recursive structural types:
 
     struct LinkedList { value : int; next : &LinkedList; } 
+
+They may also contain unnamed members:
+
+    var a : struct { float, float }
     
+Unnamed members will be given the names `_0`, `_1`, ... `_N`:
+
+    a._0 + a._1
+
 Terra has no explicit union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:
 
     struct MyStruct { 
@@ -573,13 +581,6 @@ In Terra you can also create struct types that have no name:
     var a : struct { real : float, imag : float } 
     
 These structs are similar to the anonymous structs found in languages like C-sharp.
-They may also contain unnamed members:
-
-    var a : struct { float, float }
-    
-Unnamed members will be given the names `_0`, `_1`, ... `_N`:
-
-    a._0 + a._1
     
 You can use a struct constructor syntax to quickly generate values that have an anonymous struct type:
 
