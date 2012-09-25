@@ -1,54 +1,42 @@
 
 local Class = {}
-
 Class.class = {}
 Class.class.__index = Class.class
-
 Class.defined = {}
 
-function Class.define(name,parentclass_)
+Class.parentclasstable = {}
+function Class.issubclass(c,t)
+    if c == t then return true end
+    local parent = Class.parentclasstable[c]
+    if not parent then return false
+    else return Class.issubclass(parent,t) end
+end
+
+function Class.castmethod(ctx,tree,from,to,exp)
+    if from:ispointer() and to:ispointer() and Class.issubclass(from.type,to.type) then
+        return true, `exp:as(to)
+    end
+    return false
+end
+
+function Class.define(name,parentclass)
     local c = setmetatable({},Class.class)
     
     c.ttype = terralib.types.newstruct(name)
-    
+    c.ttype.methods.__cast = Class.castmethod
+
     Class.defined[c.ttype] = c
     
     c.elements = terralib.newlist()
     
-    if parentclass_ then
-        local parentclass = Class.defined[parentclass_]
-        assert(parentclass)
-        setmetatable(c.ttype.methods, { __index = parentclass:type().methods })
-        for i,e in ipairs(parentclass.elements) do
+    if parentclass then
+        local parentclassbuilder = Class.defined[parentclass]
+        assert(parentclassbuilder)
+        setmetatable(c.ttype.methods, { __index = parentclass.methods })    
+        for i,e in ipairs(parentclassbuilder.elements) do
             c:member(e.name,e.type)
         end
-        
-        c.parent = parentclass
-        
-        function c.ttype.methods.__cast(ctx,tree,from,to,exp)
-            if from:ispointer() and to:ispointer() then
-                local fromS = from.type
-                local toS = to.type
-                if fromS == c.ttype then
-                    local function isparent(cls)
-                        if cls == nil then
-                            return false
-                        elseif cls.ttype == toS then
-                            return true
-                        else
-                            return isparent(cls.parent)
-                        end
-                    end
-                    
-                    if isparent(c) then
-                        return true, `exp:as(to)
-                    end
-                    
-                end
-            end
-            return false 
-        end
-        
+        Class.parentclasstable[c.ttype] = parentclass
     end
     
     return c
