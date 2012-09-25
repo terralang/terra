@@ -51,7 +51,7 @@ function terra.tree:printraw()
             if parents[t] then
                 print(string.rep(" ",#spacing).."<cyclic reference>")
                 return
-            elseif depth > 0 and terra.isfunction(t) then
+            elseif depth > 0 and (terra.isfunction(t) or terra.isfunctionvariant(t)) then
                 return --don't print the entire nested function...
             end
             parents[t] = true
@@ -1562,10 +1562,12 @@ function terra.funcvariant:typecheck(ctx)
     
     local function insertrecievercast(exp,typ,speculative) --casts allow for method recievers a:b(c,d) ==> b(a,c,d), but 'a' has additional allowed implicit casting rules
                                                            --type can also be == "vararg" if the expected type of the reciever was an argument to the varargs of a function (this often happens when it is a lua function
-        if typ == "vararg" or (typ:ispointer() and typ.type == exp.type) then
-            --implicit address of allowed for recievers
-            return insertaddressof(exp), true
-        else
+         if typ == "vararg" then
+             return insertaddressof(exp), true
+         elseif typ:ispointer() and not exp.type:ispointer() then
+             --implicit address of allowed for recievers
+             return insertcast(insertaddressof(exp),typ,speculate)
+         else
             return insertcast(exp,typ,speculative)
         end
         --notes:
