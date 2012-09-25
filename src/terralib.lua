@@ -740,11 +740,45 @@ do  --constructor functions for terra functions and variables
         return unpack(globals)
     end
     
-    function terra.namedstruct(tree,name,env)
-        return terra.types.newnamedstruct(name,manglename(name),tree,env)
+    local function newstructwithlayout(name,tree,env)
+        local function buildstruct(typ,ctx)
+            ctx:push(tree.filename,env(),{})
+            
+            local function addstructentry(v)
+                local resolvedtype = terra.resolvetype(ctx,v.type)
+                if not typ:addentry(v.key,resolvedtype) then
+                    terra.reporterror(ctx,v,"duplicate definition of field ",v.key)
+                end
+            end
+            local function addrecords(records)
+                for i,v in ipairs(records) do
+                    if v.kind == terra.kinds["union"] then
+                        typ:beginunion()
+                        addrecords(v.records)
+                        typ:endunion()
+                    else
+                        addstructentry(v)
+                    end
+                end
+            end
+            addrecords(tree.records)
+            ctx:pop()
+        end
+        
+        local st = terra.types.newstruct(name)
+        st.tree = tree --for debugging purposes, we keep the tree to improve error reporting
+        st:addlayoutfunction(buildstruct)
+        return st 
     end
+    
+    function terra.namedstruct(tree,name,env)
+        return newstructwithlayout(name,tree,env)
+    end
+    
     function terra.anonstruct(tree,env)
-       return terra.types.newanonstruct(tree,env)
+       local st = newstructwithlayout("anon",tree,env)
+        st:setconvertible(true)
+        return st
     end
     
     function terra.newquote(tree,variant,luaenvorfn,varenv) -- kind == "exp" or "stmt"
@@ -781,7 +815,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     
     function types.type:__tostring()
-        return self.displayname or self.name or "<proxy>"
+        return self.displayname or self.name
     end
     types.type.printraw = terra.tree.printraw
     function types.type:isprimitive()
@@ -822,7 +856,7 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.type:iscanonical()
-        return not (self.kind == terra.kinds.proxy or (self:isstruct() and self.incomplete))
+        return not self:isstruct() or not self.incomplete
     end
     
     function types.type:isvector()
@@ -872,7 +906,7 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self:islogical() then
                 self.cachedcstring = "unsigned char"
             elseif self:isstruct() then
-                local nm = uniquetypename((self.isnamed and self.name) or "anonstruct")
+                local nm = uniquetypename(self.name)
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --first make a typedef to the opaque pointer
                 self.cachedcstring = nm -- prevent recursive structs from re-entering this function by having them return the name
                 local str = "struct "..nm.." { "
@@ -954,6 +988,12 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.type:getcanonical(ctx) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
+        if self:isvector() or self:ispointer() or self:isarray() then
+            self.type:getcanonical(ctx)
+        elseif self:isfunction() then
+            self.parameters:map(function(e) e:getcanonical(ctx) end)
+            self.returns   :map(function(e) e:getcanonical(ctx) end)
+        end
         return self
     end
     
@@ -1017,36 +1057,13 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
-    --attempts to create a type with a single type argument
-    --but will create a proxy to delay type construction if the argument is not canonical
-    --used for pointers and arrays that may point to non-canonicalized types
-    local function makewrapper(typ, create)
-        if typ:iscanonical() then
-            return create(typ)
-        else
-            local proxy = mktyp { kind = terra.kinds.proxy }
-            function proxy:getcanonical(ctx) 
-                if self.type then return self.type end
-                self.type = create(typ:getcanonical(ctx)) 
-                return self.type
-            end
-            return proxy
-        end
-    end
-    
-    
-    
     function types.pointer(typ)
         checkistype(typ)
         if typ == types.error then return types.error end
         
-        local function create(typ)
-            return registertype("&"..typ.name, function()
-               return mktyp { kind = terra.kinds.pointer, type = typ }
-            end)
-        end
-        
-        return makewrapper(typ,create)
+        return registertype("&"..typ.name, function()
+            return mktyp { kind = terra.kinds.pointer, type = typ }
+        end)
     end
     
     local function checkarraylike(typ, N_)
@@ -1062,44 +1079,61 @@ do --construct type table that holds the singleton value representing each uniqu
         local N = checkarraylike(typ,N_)
         if typ == types.error then return types.error end
         
-        local function create(typ)
-            local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
-            local name = tname .. "[" .. N .. "]"
-            return registertype(name,function()
-                return mktyp { kind = terra.kinds.array, type = typ, N = N }
-            end)
-        end
-        
-        return makewrapper(typ,create)
+        local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
+        local name = tname .. "[" .. N .. "]"
+        return registertype(name,function()
+            return mktyp { kind = terra.kinds.array, type = typ, N = N }
+        end)
     end
     
     function types.vector(typ,N_)
         local N = checkarraylike(typ,N_)
         if typ == types.error then return types.error end
         
-        local function create(typ)
-            if not typ:isprimitive() then
-                error("vectors must be composed of primitive types (for now...) but found type "..tostring(typ))
-            end
-            local name = "vector("..typ.name..","..N..")"
-            return registertype(name,function()
-                return mktyp { kind = terra.kinds.vector, type = typ, N = N }
-            end)
-        end
         
-        return makewrapper(typ,create)
+        if not typ:isprimitive() then
+            error("vectors must be composed of primitive types (for now...) but found type "..tostring(typ))
+        end
+        local name = "vector("..typ.name..","..N..")"
+        return registertype(name,function()
+            return mktyp { kind = terra.kinds.vector, type = typ, N = N }
+        end)
     end
     
     function types.primitive(name)
         return types.table[name] or types.error
     end
     
-    function types.newemptystruct(typ)
-        local tbl = mktyp { kind = terra.kinds["struct"],entries = terra.newlist(), keytoindex = {}, nextunnamed = 0, nextallocation = 0 }
-        for k,v in pairs(typ) do
-            tbl[k] = v 
+    
+    local definedstructs = {}
+    local function getuniquestructname(displayname)
+        local name = displayname
+        if definedstructs[displayname] then 
+            name = name .. tostring(definedstructs[displayname])
+        else
+            definedstructs[displayname] = 0
         end
+        definedstructs[displayname] = definedstructs[displayname] + 1
+        return name
+    end
+    
+    function types.newstruct(displayname)
+        
+        local name = getuniquestructname(displayname)
+                
+        local tbl = mktyp { kind = terra.kinds["struct"],
+                            name = name, 
+                            displayname = displayname, 
+                            entries = terra.newlist(), 
+                            keytoindex = {}, 
+                            nextunnamed = 0, 
+                            nextallocation = 0,
+                            layoutfunctions = terra.newlist(),
+                            incomplete = true                            
+                          }
+                            
         function tbl:addentry(k,t)
+            assert(self.incomplete)
             local entry = { type = t, key = k, hasname = true, allocation = self.nextallocation, inunion = self.inunion ~= nil }
             if not k then
                 entry.hasname = false
@@ -1120,12 +1154,14 @@ do --construct type table that holds the singleton value representing each uniqu
             return notduplicate
         end
         function tbl:beginunion()
+            assert(self.incomplete)
             if not self.inunion then
                 self.inunion = 0
             end
             self.inunion = self.inunion + 1
         end
         function tbl:endunion()
+            assert(self.incomplete)
             self.inunion = self.inunion - 1
             if self.inunion == 0 then
                 self.inunion = nil
@@ -1136,104 +1172,34 @@ do --construct type table that holds the singleton value representing each uniqu
             end
         end
         
-        return tbl
-    end
-    
-    function types.canonicalanonstruct(prototype)
-        local name = "struct { "
-        for i,v in ipairs(prototype.entries) do
-            local preventry,nextentry = prototype.entries[i-1],prototype.entries[i+1]
-            local prevalloc = preventry and preventry.allocation
-            local nextalloc = nextentry and nextentry.allocation
+        
+        function tbl:getcanonical(ctx)
+        
+            assert(self.incomplete)
             
-            if v.inunion and prevalloc ~= v.allocation then
-                name = name .. "union {"
-            end
-            name = name .. v.key .. " : " .. v.type.name .. "; "
-            if v.inunion and nextalloc ~= v.allocation then
-                name = name .. "}; "
-            end
-        end
-        name = name .. "}"
-        
-        return registertype(name,prototype)
-    end
-    
-    local function buildstruct(ctx,typ,tree,env)
-        ctx:push(tree.filename,env(),{})
-        
-        
-        local function addstructentry(v)
-            local resolvedtype = terra.resolvetype(ctx,v.type)
-            if not v.key and typ.isnamed then
-                terra.reporterror(ctx,v,"elements of a named struct must be named")
-            end
-            if not typ:addentry(v.key,resolvedtype) then
-                terra.reporterror(ctx,v,"duplicate definition of field ",v.key)
-            end
-        end
-        local function addrecords(records)
-            for i,v in ipairs(records) do
-                if v.kind == terra.kinds["union"] then
-                    typ:beginunion()
-                    addrecords(v.records)
-                    typ:endunion()
-                else
-                    addstructentry(v)
-                end
-            end
-        end
-        addrecords(tree.records)
-        ctx:pop()
-    end
-    
-    function types.newanonstruct(tree,env)
-        local proxy = mktyp { kind = terra.kinds.proxy }
-        
-        function proxy:getcanonical(ctx)
-            local typ = types.newemptystruct {}
-            if self.canonicalizing then
-                terra.reporterror(ctx,tree,"anonymous structs cannot be recursive.")
-                return terra.types.error
-            elseif self.type then
-                return self.type
-            else --get the actual unique type for this unamed struct
-                self.canonicalizing = true
-                buildstruct(ctx,typ,tree,env)
-                self.canonicalizing = nil
-                self.type = types.canonicalanonstruct(typ)
-                return self.type
-            end
-        end
-        
-        return proxy
-    end
-    
-    function types.newemptynamedstruct(displayname, name)
-        local typ = types.newemptystruct { name = name, displayname = displayname, isnamed = true }
-        return typ
-    end
-    
-    function types.newnamedstruct(displayname, name,tree,env)
-        local typ = types.newemptynamedstruct(displayname,name)
-        typ.incomplete = true --this causes derived types to create proxies
-                              --an alternative would be to return a proxy type here
-                              --however, that would make it difficult to set methods on this named struct
-                              --and complicate type equality
-        function typ:getcanonical(ctx)
             self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
             
-            buildstruct(ctx,typ,tree,env)
+            for i,layoutfn in ipairs(self.layoutfunctions) do
+                layoutfn(self,ctx)
+            end
+            
             self.incomplete = nil
             
             local function checkrecursion(t)
                 if t == self then
-                    terra.reporterror(ctx,tree,"type recursively contains itself")
+                    if self.tree then
+                        ctx:push(self.tree.filename)
+                        terra.reporterror(ctx,self.tree,"type recursively contains itself")
+                        ctx:pop()
+                    else
+                        --TODO: emit where the user-defined type was first used
+                        error("programmatically defined type contains itself")
+                    end
                 elseif t:isstruct() then
                     for i,v in ipairs(t.entries) do
                         checkrecursion(v.type)
                     end
-                elseif t:isarray() then
+                elseif t:isarray() or t:isvector() then
                     checkrecursion(t.type)
                 end
             end
@@ -1244,8 +1210,20 @@ do --construct type table that holds the singleton value representing each uniqu
             dbprint("Resolved Named Struct To:")
             dbprintraw(self)
             return self
+        
         end
-        return typ
+        
+        function tbl:addlayoutfunction(fn)
+            assert(self.incomplete)
+            self.layoutfunctions:insert(fn)
+        end
+        
+        function tbl:setconvertible(b)
+            assert(self.incomplete)
+            self.isconvertible = b
+        end
+        
+        return tbl
     end
     
     function types.funcpointer(parameters,returns,isvararg)
@@ -1267,22 +1245,6 @@ do --construct type table that holds the singleton value representing each uniqu
             returns = terra.newlist(returns)
         end
         
-        local function create(parameters,returns)
-            local function getname(t) return t.name end
-            local a = terra.list.map(parameters,getname):mkstring("{",",","")
-            if isvararg then
-                a = a .. ",...}"
-            else
-                a = a .. "}"
-            end
-            local r = terra.list.map(returns,getname):mkstring("{",",","}")
-            local name = a.."->"..r
-            return registertype(name,function()
-                local issret = #returns > 1 or (#returns == 1 and returns[1]:ispassedaspointer())
-                return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, issret = issret }
-            end)
-        end
-        
         function checkalltypes(l)
             for i,v in ipairs(l) do
                 checkistype(v)
@@ -1291,35 +1253,19 @@ do --construct type table that holds the singleton value representing each uniqu
         checkalltypes(parameters)
         checkalltypes(returns)
         
-        local function makeproxy()
-            local proxy = mktyp { kind = terra.kinds.proxy, parameters = parameters, returns = returns }
-            function proxy:getcanonical(ctx)
-                if self.type then return self.type end
-                
-                local function mapcanon(l)
-                    local nl = terra.newlist()
-                    for i,v in ipairs(l) do
-                        nl:insert(v:getcanonical(ctx))
-                    end
-                    return nl
-                end
-                self.type = create(mapcanon(parameters),mapcanon(returns))
-                return self.type
-            end
-            return proxy
+        local function getname(t) return t.name end
+        local a = terra.list.map(parameters,getname):mkstring("{",",","")
+        if isvararg then
+            a = a .. ",...}"
+        else
+            a = a .. "}"
         end
-        
-        local function checkcanon(l)
-            for i,v in ipairs(l) do
-                if not v:iscanonical() then
-                    return makeproxy()
-                end
-            end
-            return nil
-        end
-        
-        return checkcanon(parameters) or checkcanon(returns) or create(parameters,returns)
-        
+        local r = terra.list.map(returns,getname):mkstring("{",",","}")
+        local name = a.."->"..r
+        return registertype(name,function()
+            local issret = #returns > 1 or (#returns == 1 and returns[1]:ispassedaspointer())
+            return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, issret = issret }
+        end)
     end
     --a function type that represents lua functions in the type checker
     types.luafunction = registertype("luafunction",
@@ -1557,7 +1503,7 @@ function terra.funcvariant:typecheck(ctx)
                 return cast_exp, true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return cast_exp, true
-            elseif typ:isstruct() and exp.type:isstruct() and not exp.type.isnamed then 
+            elseif typ:isstruct() and exp.type:isstruct() and exp.type.isconvertible then 
                 return structcast(cast_exp,exp,typ,speculative)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 --if we have an rvalue array, it must be converted to lvalue (i.e. placed on the stack) before the cast is valid
@@ -2309,7 +2255,7 @@ function terra.funcvariant:typecheck(ctx)
 
                 local selected = v.value[e.field]
                 if selected == nil then
-                    terra.reporterror(ctx,e,"no field ",e.field," in object")
+                    terra.reporterror(ctx,e,"no field ",e.field," in lua object")
                     return e:copy { type = terra.types.error }
                 end
                 
@@ -2327,7 +2273,7 @@ function terra.funcvariant:typecheck(ctx)
                         if getter then
                             return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
                         else
-                            terra.reporterror(ctx,v,"no field ",e.field," in object")
+                            terra.reporterror(ctx,v,"no field ",e.field," in terra object of type ",v.type)
                             return e:copy { type = terra.types.error }
                         end
                     else
@@ -2442,7 +2388,9 @@ function terra.funcvariant:typecheck(ctx)
             elseif e:is "quote" then
                 return resolvequote(e,e.quotations[1],"exp",checkexp)
             elseif e:is "constructor" then
-                local typ = terra.types.newemptystruct {}
+                local typ = terra.types.newstruct("anon")
+                typ:setconvertible(true)
+                
                 local paramlist = terra.newlist{}
                 
                 for i,f in ipairs(e.records) do
@@ -2473,7 +2421,7 @@ function terra.funcvariant:typecheck(ctx)
                     end
                 end
                 
-                return e:copy { expressions = entries, type = terra.types.canonicalanonstruct(typ) }
+                return e:copy { expressions = entries, type = typ:getcanonical(ctx) }
             end
             e:printraw()
             print(debug.traceback())

@@ -90,10 +90,9 @@ public:
                 std::string name = rd->getName();
                 if(!result->obj(name.c_str(),tt)) {
                     //create new blank struct, fill in with members
-                    PushTypeFunction("newemptynamedstruct");
+                    PushTypeFunction("newstruct");
                     lua_pushstring(L, name.c_str());
-                    lua_pushvalue(L,-1);
-                    lua_call(L,2,1);
+                    lua_call(L,1,1);
                     tt->initFromStack(L,ref_table);
                     tt->push();
                     result->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
