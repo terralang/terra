@@ -166,7 +166,7 @@ function terra.list:flatmap(fn)
     local l = terra.newlist()
     for i,v in ipairs(self) do
         local tmp = fn(v)
-        if #tmp ~= 0 then
+        if terra.islist(tmp) then
             for _,v2 in ipairs(tmp) do
                 l:insert(v2)
             end
@@ -606,21 +606,27 @@ terra.quote.__index = terra.quote
 function terra.isquote(t)
     return getmetatable(t) == terra.quote
 end
-function terra.isquotelist(ql) 
-    if type(ql) == "table" then
-        local sz = #ql
+
+function terra.israwlist(l)
+    if type(l) == "table" then
+        local sz = #l
         local i = 0
-        for k,v in pairs(ql) do
+        for k,v in pairs(l) do
             i = i + 1
         end
-        if i == sz then --table only has integer keys, it is a list
-            for i,v in ipairs(ql) do
-                if not terra.isquote(v) then
-                    return false
-                end
+        return i == sz --table only has integer keys and no other keys, we treat it as a list
+    end
+    return false
+end
+
+function terra.isquotelist(ql) 
+    if terra.israwlist(ql) then
+        for i,v in ipairs(ql) do
+            if not terra.isquote(v) then
+                return false
             end
-            return true
         end
+        return true
     end
     return false
 end
@@ -2059,7 +2065,7 @@ function terra.funcvariant:typecheck(ctx)
             end
             local result = macrocall(ctx,anchor,unpack(macroargs))
             local exps = terra.newlist{}
-            if type(result) == "table" and #result ~= 0 then
+            if terra.israwlist(result) then
                 for i,e in ipairs(result) do
                     exps:insert(createspecial(anchor,e))
                 end
