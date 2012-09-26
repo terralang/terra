@@ -2484,7 +2484,7 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     function resolvequote(anchor,q,variant,checkfn)
-        if q.variant ~= variant then
+        if variant == "exp" and q.variant == "stmt" then
             terra.reporterror(ctx,anchor,"found a quoted ",q.variant, " where a ",variant, " is expected.")
             return anchor:copy { type = terra.types.error }
         end
@@ -2707,8 +2707,14 @@ function terra.funcvariant:typecheck(ctx)
             end
         elseif s:is "quote" then
             local function resolvequotestatement(anchor,q)
-                local function checkstmtlist(tree) --each quoted statement is wrapped in a block tree, which we ignore here and return a list of statements
-                    return tree.statements:flatmap(checkstmt)
+                local function checkstmtlist(tree) 
+                    --each quoted statement is wrapped in a block tree if is has variant "stmt", which we ignore here and return a list of statements
+                    if q.variant == "stmt" then
+                        return tree.statements:flatmap(checkstmt)
+                    else
+                    --an exp is being used a block level, don't try to unwrap it
+                        return terra.newlist {checkstmt(tree)}
+                    end
                 end
                 return resolvequote(anchor,q,"stmt",checkstmtlist)
             end
