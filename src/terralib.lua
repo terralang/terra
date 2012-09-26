@@ -337,6 +337,25 @@ function terra.funcvariant:env()
     self.envfunction = nil --we don't need the closure anymore
     return self.envtbl
 end
+function terra.funcvariant:peektype(ctx) --look at the type but don't compile the function (if possible)
+                                         --this will return success, <type if success == true>
+    if self.type then
+        return true,self.type
+    end
+    
+    if not self.untypedtree.return_types then
+        return false
+    end
+
+    local params = terra.newlist()
+    local function rt(t) return terra.resolvetype(ctx,t) end
+    for _,v in ipairs(self.untypedtree.parameters) do
+        params:insert(rt(v.type))
+    end
+    local rets = terra.resolvetype(ctx,self.untypedtree.return_types,true)
+    self.type = terra.types.functype(params,rets) --for future calls
+    return true, self.type
+end
 function terra.funcvariant:gettype(ctx)
     if self.state == "codegen" then --function is in the same strongly connected component of the call graph as its called, even though it has already been typechecked
         ctx:functioncalls(self)
@@ -344,17 +363,9 @@ function terra.funcvariant:gettype(ctx)
         return self.type
     elseif self.state == "typecheck" then
         ctx:functioncalls(self)
-        if self.type then --already resolved the type in previous recursive call
-            return self.type
-        elseif self.untypedtree.return_types then --we are already compiling this function, but the return types are listed, so we can resolve the type anyway  
-            local params = terra.newlist()
-            local function rt(t) return terra.resolvetype(ctx,t) end
-            for _,v in ipairs(self.untypedtree.parameters) do
-                params:insert(rt(v.type))
-            end
-            local rets = terra.resolvetype(ctx,self.untypedtree.return_types,true)
-            self.type = terra.types.functype(params,rets) --for future calls
-            return self.type
+        local success,typ = self:peektype(ctx) --we are already compiling this function, but if the return types are listed, we can resolve the type anyway 
+        if success then
+            return typ
         else
             return terra.types.error, "recursively called function needs an explicit return type"
         end
@@ -596,7 +607,7 @@ function terra.isquote(t)
     return getmetatable(t) == terra.quote
 end
 function terra.isquotelist(ql) 
-    if type(ql) == "table" and #ql ~= 0 then
+    if type(ql) == "table" then
         local sz = #ql
         local i = 0
         for k,v in pairs(ql) do
@@ -672,7 +683,13 @@ do  --constructor functions for terra functions and variables
             local pointerto = terra.types.pointer
             local addressof = terra.newtree(newtree, { kind = terra.kinds["type"], expression = function() return pointerto(reciever) end })
             local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = "self", type = addressof })
-            table.insert(newtree.parameters,1,implicitparam) --add the implicit parameter to the parameter list
+            
+            --add the implicit parameter to the parameter list
+            local newparameters = terra.newlist{implicitparam}
+            for _,p in ipairs(newtree.parameters) do
+                newparameters:insert(p)
+            end
+            fn.untypedtree = newtree:copy { parameters = newparameters} 
         end
         
         return fn
@@ -1848,7 +1865,10 @@ function terra.funcvariant:typecheck(ctx)
         local exps = terra.newlist()
         local multiret = nil
         
-        local function addelement(elem,islast)
+        local minsize = #params --minsize is either the number of explicitly listed parameters (a,b,c) minsize == 3
+                                --or 1 less than this number if 'c' is a macro/quotelist that has 0 elements
+
+        local function addelement(elem,depth,islast)
             if not islast or elem.truncated then
                 exps:insert(checkrvalue(elem))
             else
@@ -1856,8 +1876,11 @@ function terra.funcvariant:typecheck(ctx)
                 if iscall(elem) then
                     local ismacro, multifunc = checkmethodorcall(elem,true) --must return at least one value
                     if ismacro then --call was a macro, handle the results as if they were in the list
-                       for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional
-                            addelement(e,i == #multifunc)
+                        if #multifunc == 0 and depth == 0 then
+                            minsize = minsize - 1
+                        end
+                        for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional
+                            addelement(e,depth+1,i == #multifunc)
                         end                        
                     else
                         if #multifunc.types == 1 then
@@ -1870,9 +1893,12 @@ function terra.funcvariant:typecheck(ctx)
                         end
                     end
                 elseif elem:is "quote" then
+                    if #elem.quotations == 0 and depth == 0 then
+                        minsize = minsize - 1
+                    end
                     for i,q in ipairs(elem.quotations) do
                         local function doadd(e)
-                            addelement(e,i == #elem.quotations)
+                            addelement(e,depth+1,i == #elem.quotations)
                         end
                         resolvequote(elem,q,"exp",doadd)
                     end
@@ -1883,9 +1909,9 @@ function terra.funcvariant:typecheck(ctx)
         end
         
         for i,v in ipairs(params) do
-            addelement(v, i == #params)
+            addelement(v, 0, i == #params)
         end
-        local minsize = #params
+        
         local maxsize = #exps
         return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, call = multiret })
     end
@@ -2388,6 +2414,10 @@ function terra.funcvariant:typecheck(ctx)
             elseif iscall(e) then
                 return handlemacro(checkmethodorcall(e,true))
             elseif e:is "quote" then
+                if #e.quotations == 0 then
+                    terra.reporterror(ctx,e,"expected at least one element in list of quotations")
+                    return e:copy{ type = terra.types.error }
+                end
                 return resolvequote(e,e.quotations[1],"exp",checkexp)
             elseif e:is "constructor" then
                 local typ = terra.types.newstruct("anon")
