@@ -1,4 +1,5 @@
 
+IO = terralib.includec("stdio.h")
 local Class = {}
 Class.class = {}
 Class.class.__index = Class.class
@@ -78,17 +79,16 @@ function Class.class:member(name,typ)
     return self
 end
 
-function Class.class:createvtable(ctx)
+function Class.class:createvtableentries(ctx)
     if self.vtableentries ~= nil then
         return
     end
 
-    print("CREATE VTABLE: ",self.name)
     self.vtableentries = terralib.newlist{}
     self.vtablemap = {}
 
     if self.parentbuilder then
-        self.parentbuilder:createvtable(ctx)
+        self.parentbuilder:createvtableentries(ctx)
         for _,i in ipairs(self.parentbuilder.vtableentries) do
             local e = {name = i.name, value = i.value}
             self.vtableentries:insert(e)
@@ -108,6 +108,14 @@ function Class.class:createvtable(ctx)
             end
         end
     end
+
+end
+
+function Class.class:createvtable(ctx)
+    if not self.vtableentries then
+        self:createvtableentries(ctx)
+    end
+
     local vtabletype = terralib.types.newstruct(self.name.."_vtable")
     local inits = terralib.newlist()
     for _,e in ipairs(self.vtableentries) do
@@ -116,7 +124,6 @@ function Class.class:createvtable(ctx)
         local variant = e.value:getvariants()[1]
         local success,typ = variant:peektype(ctx)
         assert(success)
-        print(e.name,"->",&typ)
         vtabletype:addentry(e.name,&typ)
         inits:insert(`e.value)
         self.ttype.methods[e.name] = macro(function(ctx,tree,self,...)
@@ -136,13 +143,21 @@ end
 function Class.class:createinterfaces(ctx)
     local interfaceinits = terralib.newlist()
     self.interfacetable = {}
+
+    local function offsetinbytes(structtype,key)
+        local terra offsetcalc() : int
+            var a : &structtype = (0):as(&structtype)
+            return (&terralib.select(a,key)):as(&int8) - a:as(&int8)
+        end
+        return `offsetcalc()
+    end
     local function addinterfaces(cls)
         if cls.parentbuilder then
             addinterfaces(cls.parentbuilder)
         end
         for i,interface in ipairs(cls.interfaces) do
             local iname = "__interface"..i
-            self.interfacetable[iname] = interface:type()
+            self.interfacetable[interface:type()] = iname 
             self.ttype:addentry(iname,interface:type())
             local methods = terralib.newlist()
             for _,m in ipairs(interface.methods) do
@@ -150,10 +165,10 @@ function Class.class:createinterfaces(ctx)
                 assert(methodentry)
                 assert(methodentry.name == m.name)
                 --TODO: check that the types match...
-                local methodliteral = m.value:getvariants()[1]
-                methods:insert(`methodliteral:as(m.type))
+                methods:insert(`methodentry.value:as(m.type))
             end
-            local var interfacevtable : interface.vtabletype = {methods}
+            local offsetofinterface = offsetinbytes(self.ttype,iname)
+            local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
             interfaceinits:insert(interfacevtable)
         end
     end
@@ -163,7 +178,7 @@ function Class.class:createinterfaces(ctx)
         for i,vtable in ipairs(interfaceinits) do
             local name = "__interface"..i
             stmts:insert(quote
-                terralib.select(self,name) = &vtable
+                terralib.select(self,name).__vtable = &vtable
             end)
         end
         return stmts
@@ -171,8 +186,8 @@ function Class.class:createinterfaces(ctx)
 end
 
 function Class.class:implements(interface)
-    self.interfaces:insert(interface)
-
+    self.interfaces:insert(Class.defined[interface])
+    return self
 end
 
 function Class.class:type()
@@ -182,16 +197,19 @@ end
 function Class.defineinterface(name)
     local self = setmetatable({},Class.interface)
     self.methods = terralib.newlist()
-    self.vtabletype = terralib.newstruct(name.."_vtable")
-    self.interfacetype = terralib.newstruct(name)
+    self.vtabletype = terralib.types.newstruct(name.."_vtable")
+    self.vtabletype:addentry("offset",ptrdiff)
+    self.interfacetype = terralib.types.newstruct(name)
     self.interfacetype:addentry("__vtable",&self.vtabletype)
+    Class.defined[self.interfacetype] = self
+    self.interfacetype.methods.__cast = Class.castmethod
     return self
 end
 
 function Class.interface:method(name,typ)
     assert(typ:ispointer() and typ.type:isfunction())
     local returns = typ.type.returns
-    local parameters = terralib.newlist({&int8})
+    local parameters = terralib.newlist({&uint8})
     for _,e in ipairs(typ.type.parameters) do
         parameters:insert(e)
     end
@@ -262,3 +280,82 @@ end
 local test = require("test")
 test.eq(23,foobar())
 
+
+local Doubles
+= Class.defineinterface("Doubles")
+  :method("double",{} -> int)
+  :type()
+
+local Adds
+= Class.defineinterface("Adds")
+  :method("add", int -> int)
+  :type()
+
+local D 
+= Class.define("D")
+  :member("data",int)
+  :implements(Doubles)
+  :implements(Adds)
+  :type()
+
+terra D:double() : int
+    return self.data * 2
+end
+
+terra D:add(a : int) : int
+    return self.data + a
+end
+
+
+terra aDoubles(a : &Doubles)
+    return a:double()
+end
+
+terra aAdds(a : &Adds)
+    return a:add(3)
+end
+
+terra foobar2()
+    var a : D
+    a:init()
+    a.data = 3
+    return aDoubles(&a) + aAdds(&a)
+end
+
+test.eq(12,foobar2())
+
+Animal = Class.define("Animal")
+         :member("data",int)
+         :type()
+terra Animal:speak() : {}
+    IO.printf("... %d\n",self.data)
+end
+
+Dog = Class.define("Dog",Animal)
+      :type()
+terra Dog:speak() : {}
+    IO.printf("woof! %d\n",self.data)
+end
+
+Cat = Class.define("Cat",Animal)
+      :type()
+terra Cat:speak() : {}
+    IO.printf("meow! %d\n",self.data)
+end
+
+terra dospeak(a : &Animal)
+    a:speak()
+end
+
+terra barnyard()
+    var c : Cat
+    var d : Dog
+    c:init()
+    d:init()
+    c.data,d.data = 0,1
+
+    dospeak(&c)
+    dospeak(&d)
+end
+
+barnyard()
