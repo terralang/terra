@@ -28,7 +28,7 @@ function Class.castmethod(ctx,tree,from,to,exp)
         end
         local builder = Class.defined[from.type]
         assert(builder)
-        local ifacename = builder.interfacetable[to.type]
+        local ifacename = builder.interfacetypetoname[to.type]
         if ifacename then
             return true, `&exp[ifacename]
         end
@@ -45,8 +45,39 @@ function Class.define(name,parentclass)
     Class.parentclasstable[c.ttype] = parentclass
     c.parentbuilder = Class.defined[parentclass]
     c.name = name
-    c.interfaces = terralib.newlist()
+    
+    c.interfaces = terralib.newlist() --list of new interfaces added by this class, excluding parent's interfaces
+    c.interfacetypetoname = {} --map from implemented interface types -> the name of the interface in the vtable
+
     c.ttype:addlayoutfunction(function(self,ctx)
+
+        local interfacevtables = {}
+        local function addinterface(interface)
+            local function offsetinbytes(structtype,key)
+                local terra offsetcalc() : int
+                    var a : &structtype = (0):as(&structtype)
+                    return (&a[key]):as(&int8) - a:as(&int8)
+                end
+                return `offsetcalc()
+            end
+            local name = "__interface_"..interface.name
+            if not interfacevtables[name] then
+                self:addentry(name,interface:type())
+                local methods = terralib.newlist()
+                for _,m in ipairs(interface.methods) do
+                    local methodentry = Class.defined[self].vtablemap[m.name]
+                    assert(methodentry)
+                    assert(methodentry.name == m.name)
+                    --TODO: check that the types match...
+                    methods:insert(`methodentry.value:as(m.type))
+                end
+                local offsetofinterface = offsetinbytes(self,name)
+                local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
+                interfacevtables[name] = interfacevtable
+                c.interfacetypetoname[interface:type()] = name
+            end
+        end
+
         local function addmembers(cls)
             local parent = Class.parentclasstable[cls]
             if parent then
@@ -56,13 +87,26 @@ function Class.define(name,parentclass)
             for i,m in ipairs(builder.members) do
                 self:addentry(m.name,m.type)
             end
+            for i,interface in ipairs(builder.interfaces) do
+                addinterface(interface)
+            end
         end
 
         c:createvtable(ctx)
+
         self:addentry("__vtable",&c.vtabletype)
         addmembers(self)
 
-        local initinterfaces = c:createinterfaces(ctx)
+        local initinterfaces = macro(function(ctx,tree,self)
+            local stmts = terralib.newlist()
+            for name,vtable in pairs(interfacevtables) do
+                stmts:insert(quote
+                    self[name].__vtable = &vtable
+                end)
+            end
+            return stmts
+        end)
+
         local vtable = c.vtablevar
         terra self:init()
             self.__vtable = &vtable
@@ -140,51 +184,6 @@ function Class.class:createvtable(ctx)
     self.vtablevar = vtable
 end
 
-function Class.class:createinterfaces(ctx)
-    local interfaceinits = terralib.newlist()
-    self.interfacetable = {}
-
-    local function offsetinbytes(structtype,key)
-        local terra offsetcalc() : int
-            var a : &structtype = (0):as(&structtype)
-            return (&a[key]):as(&int8) - a:as(&int8)
-        end
-        return `offsetcalc()
-    end
-    local function addinterfaces(cls)
-        if cls.parentbuilder then
-            addinterfaces(cls.parentbuilder)
-        end
-        for i,interface in ipairs(cls.interfaces) do
-            local iname = "__interface"..i
-            self.interfacetable[interface:type()] = iname 
-            self.ttype:addentry(iname,interface:type())
-            local methods = terralib.newlist()
-            for _,m in ipairs(interface.methods) do
-                local methodentry = self.vtablemap[m.name]
-                assert(methodentry)
-                assert(methodentry.name == m.name)
-                --TODO: check that the types match...
-                methods:insert(`methodentry.value:as(m.type))
-            end
-            local offsetofinterface = offsetinbytes(self.ttype,iname)
-            local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
-            interfaceinits:insert(interfacevtable)
-        end
-    end
-    addinterfaces(self)
-    return macro(function(ctx,tree,self)
-        local stmts = terralib.newlist()
-        for i,vtable in ipairs(interfaceinits) do
-            local name = "__interface"..i
-            stmts:insert(quote
-                self[name].__vtable = &vtable
-            end)
-        end
-        return stmts
-    end)
-end
-
 function Class.class:implements(interface)
     self.interfaces:insert(Class.defined[interface])
     return self
@@ -196,6 +195,7 @@ end
 
 function Class.defineinterface(name)
     local self = setmetatable({},Class.interface)
+    self.name = name
     self.methods = terralib.newlist()
     self.vtabletype = terralib.types.newstruct(name.."_vtable")
     self.vtabletype:addentry("offset",ptrdiff)
@@ -359,3 +359,59 @@ terra barnyard()
 end
 
 barnyard()
+
+local Add = Class.defineinterface("Add")
+            :method("add",int->int)
+            :type()
+
+local Sub = Class.defineinterface("Sub")
+            :method("sub",int->int)
+            :type()
+
+local P = Class.define("P")
+          :member("data",int)
+          :implements(Add)
+          :type()
+
+local C = Class.define("C",P)
+          :member("data2",int)
+          :implements(Sub)
+          :type()
+
+terra P:add(b : int) : int
+    return self.data + b
+end
+
+terra C:sub(b : int) : int
+    return self.data2 - b
+end
+
+terra doadd(a : &Add)
+    return a:add(1)
+end
+
+terra dopstuff(p : &P)
+    return p:add(2) + doadd(p) 
+end
+
+terra dosubstuff(s : &Sub)
+    return s:sub(1)
+end
+
+terra dotests()
+    var p : P
+    p:init()
+    var c : C
+    c:init()
+    p.data = 1
+    c.data = 1
+    c.data2 = 2
+    return dopstuff(&p) + dopstuff(&c) + dosubstuff(&c)
+end
+
+test.eq(dotests(),11)
+
+
+
+
+
