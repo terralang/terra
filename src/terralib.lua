@@ -2244,32 +2244,6 @@ function terra.funcvariant:typecheck(ctx)
         end
     end
     
-
-    local function insertterraselect(e,v,untypedv,field)
-        if v.type:ispointertostruct() then --allow 1 implicit dereference
-            v = insertdereference(v)
-            untypedv = insertuntypeddereference(untypedv)
-        end
-        if v.type:isstruct() then
-            local ret, success = insertselect(v,field)
-            if not success then
-                --struct has no member e.field, look for a getter __get<field>
-                local getter = v.type.methods["__get"..field]
-                if getter then
-                    local result =  terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
-                    return result,true
-                else
-                    terra.reporterror(ctx,v,"no field ",field," in terra object of type ",v.type)
-                    return e:copy { type = terra.types.error }
-                end
-            else
-                return ret
-            end
-        else
-            terra.reporterror(ctx,v,"expected a structural type")
-            return e:copy { type = terra.types.error }
-        end
-    end
     --takes a tree and resolves references to lua objects that can result from partial evaluation
     --if the tree is not a var or select, it will just be returned
     --if it is a var, it will be resolved to its definition
@@ -2321,7 +2295,28 @@ function terra.funcvariant:typecheck(ctx)
                 
                 return createspecial(e,selected)
             else
-                return insertterraselect(e,v,untypedv,e.field)
+                if v.type:ispointertostruct() then --allow 1 implicit dereference
+                    v = insertdereference(v)
+                    untypedv = insertuntypeddereference(untypedv)
+                end
+                if v.type:isstruct() then
+                    local ret, success = insertselect(v,e.field)
+                    if not success then
+                        --struct has no member e.field, look for a getter __get<field>
+                        local getter = v.type.methods["__get"..e.field]
+                        if getter then
+                            return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
+                        else
+                            terra.reporterror(ctx,v,"no field ",e.field," in terra object of type ",v.type)
+                            return e:copy { type = terra.types.error }
+                        end
+                    else
+                        return ret
+                    end
+                else
+                    terra.reporterror(ctx,v,"expected a structural type")
+                    return e:copy { type = terra.types.error }
+                end
             end
         else
             return e
@@ -2358,14 +2353,7 @@ function terra.funcvariant:typecheck(ctx)
                 local v = checkexp(e.value)
                 local idx = checkrvalue(e.index)
                 local typ,lvalue
-                if idx:is "literal" and idx.type == rawstring and (v.type:isstruct() or v.type:ispointertostruct()) then
-                    local result,isfunctioncall = insertterraselect(e,v,e.value,idx.value)
-                    if isfunctioncall then
-                        return checkexp(result,allowluaobjects)
-                    else
-                        return result
-                    end
-                elseif v.type:ispointer() or v.type:isarray() or v.type:isvector() then
+                if v.type:ispointer() or v.type:isarray() or v.type:isvector() then
                     typ = v.type.type
                     if not idx.type:isintegral() and idx.type ~= terra.types.error then
                         terra.reporterror(ctx,e,"expected integral index but found ",idx.type)
@@ -2883,6 +2871,16 @@ function terra.saveobj(filename,env)
     end
     return terra.saveobjimpl(filename,cleanenv,isexe)
 end
+
+
+terra.select = macro(function(ctx,tree,obj,key)
+    local field = key:asvalue(ctx)
+    if type(field) ~= "string" then
+        ctx:reporterror(tree,"selector is not a string but ",type(field))
+        field = "<error>"
+    end
+    return terra.newtree(tree,{ kind = terra.kinds.select, value = obj.tree, field = field })
+end)
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")

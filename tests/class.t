@@ -30,7 +30,7 @@ function Class.castmethod(ctx,tree,from,to,exp)
         assert(builder)
         local ifacename = builder.interfacetypetoname[to.type]
         if ifacename then
-            return true, `&exp[ifacename]
+            return true, `&terralib.select(exp,ifacename)
         end
     end
     return false
@@ -56,7 +56,7 @@ function Class.define(name,parentclass)
             local function offsetinbytes(structtype,key)
                 local terra offsetcalc() : int
                     var a : &structtype = (0):as(&structtype)
-                    return (&a[key]):as(&int8) - a:as(&int8)
+                    return (&terralib.select(a,key)):as(&int8) - a:as(&int8)
                 end
                 return `offsetcalc()
             end
@@ -101,7 +101,7 @@ function Class.define(name,parentclass)
             local stmts = terralib.newlist()
             for name,vtable in pairs(interfacevtables) do
                 stmts:insert(quote
-                    self[name].__vtable = &vtable
+                    terralib.select(self,name).__vtable = &vtable
                 end)
             end
             return stmts
@@ -175,7 +175,7 @@ function Class.class:createvtable(ctx)
             --this is wrong: it evaluates self twice, we need a new expression:  let x = <exp> in <exp> end 
             --to easily handle this case.
             --another way to do this would be to generate a stub function forward the arguments
-            return `(self.__vtable[e.name])(&self,arguments)
+            return `(terralib.select(self.__vtable,e.name))(&self,arguments)
         end)
     end
 

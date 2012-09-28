@@ -9,7 +9,7 @@ function offsetinbytes(structtype,key)
     
     local terra offsetcalc() : int
         var a : &structtype = (0):as(&structtype)
-        return (&a[key]):as(&int8) - a:as(&int8)
+        return (&terralib.select(a,key)):as(&int8) - a:as(&int8)
     end
     
     local result = offsetcalc()
