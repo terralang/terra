@@ -80,7 +80,8 @@ _(quote, "quote") \
 _(vector, "vector") \
 _(vectorconstructor,"vectorconstructor") \
 _(arrayconstructor,"arrayconstructor") \
-_(typedexpression,"typeexpression")
+_(typedexpression,"typeexpression") \
+_(luaexpression,"luaexpression")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

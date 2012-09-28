@@ -1233,13 +1233,13 @@ static void expr (LexState *ls, expdesc *v) {
 }
 
 
-struct TypeReaderData {
+struct ExprReaderData {
     int step;
     const char * data;
     int N;
 };
-const char * type_reader(lua_State * L, void * data, size_t * size) {
-    TypeReaderData * d = (TypeReaderData *) data;
+const char * expr_reader(lua_State * L, void * data, size_t * size) {
+    ExprReaderData * d = (ExprReaderData *) data;
     if(d->step == 0) {
         const char * ret = "return ";
         *size = strlen(ret);
@@ -1255,14 +1255,15 @@ const char * type_reader(lua_State * L, void * data, size_t * size) {
     }
 }
 
-static void terratype(LexState * ls) {
+
+static void luaexpr(LexState * ls) {
     assert(ls->in_terra);
     expdesc v;
     
     //terra types are lua expressions.
     //to resolve them we stop processing terra code and start processing lua code
     //we capture the string of lua code and then evaluate it later to get the actual type
-    int tbl = new_table(ls, T_type);
+    int tbl = new_table(ls, T_luaexpression);
     Token begintoken = ls->t;
     int in_terra = ls->in_terra;
     ls->in_terra = 0;
@@ -1271,11 +1272,11 @@ static void terratype(LexState * ls) {
     const char * output;
     int N;
     
-    TypeReaderData data;
+    ExprReaderData data;
     data.step = 0;
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     
-    if(lua_load(ls->L, type_reader, &data, "type") != 0) {
+    if(lua_load(ls->L, expr_reader, &data, "expr") != 0) {
         //we already parsed this buffer, so this should rarely cause an error
         //we need to find the line number in the error string, add it to where we began this line,
         //and then report the error with the correct line number
@@ -1290,6 +1291,10 @@ static void terratype(LexState * ls) {
     
     add_field(ls, tbl, "expression");
     
+}
+
+static void terratype(LexState * ls) {
+  luaexpr(ls);
 }
 
 /* }==================================================================== */

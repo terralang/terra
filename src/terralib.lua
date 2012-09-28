@@ -636,7 +636,7 @@ function terra.quote:astype(ctx)
     if not success then
         return terra.types.error
     else
-        local typtree = terra.newtree(self.tree, { kind = terra.kinds.type, expression = fn })
+        local typtree = terra.newtree(self.tree, { kind = terra.kinds.luaexpression, expression = fn })
         return terra.resolvetype(ctx,typtree)
     end
 end
@@ -687,7 +687,7 @@ do  --constructor functions for terra functions and variables
         --handle desugaring of methods defintions by adding an implicit self argument
         if reciever ~= nil then
             local pointerto = terra.types.pointer
-            local addressof = terra.newtree(newtree, { kind = terra.kinds["type"], expression = function() return pointerto(reciever) end })
+            local addressof = terra.newtree(newtree, { kind = terra.kinds.luaexpression, expression = function() return pointerto(reciever) end })
             local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = "self", type = addressof })
             
             --add the implicit parameter to the parameter list
@@ -1344,7 +1344,7 @@ function terra.resolvetype(ctx,t,returnlist)
         return wrap(t:getcanonical(ctx))
     end
     
-    if not terra.istree(t) or not t:is "type" then
+    if not terra.istree(t) or not t:is "luaexpression" then
         print(debug.traceback())
         t:printraw()
         error("not a type?")
