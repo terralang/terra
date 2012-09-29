@@ -209,48 +209,72 @@ end
 -- CONTEXT
 terra.context = {}
 terra.context.__index = terra.context
-function terra.context:push(filename, luaenv, varenv)
+function terra.context:enterdef(luaenv)
+    
+    local definition = { 
+        scopes = {} --each time we enter a different quotation the scope changes
+    } 
+    table.insert(self.definitions,definition)
+
+    self:enterquote(luaenv,{})
+
+end
+
+function terra.context:definition()
+    return self.definitions[#self.definitions]
+end
+
+function terra.context:scope()
+    local defn = self:definition()
+    return defn.scopes[#defn.scopes]
+end
+
+function terra.context:enterquote(luaenv,varenv)
 
     local combinedenv = { __index = function(_,idx) 
         return varenv[idx] or luaenv[idx] 
     end }
-    
     setmetatable(combinedenv,combinedenv)
-    
-    local tbl = { filename = filename, varenv = varenv, luaenv = luaenv, combinedenv = combinedenv } 
-        
-    table.insert(self.stack,tbl)
+
+    local scope = {
+        varenv = varenv,
+        luaenv = luaenv,
+        combinedenv = combinedenv
+    }
+    table.insert(self:definition().scopes,scope)
+end
+
+function terra.context:leavequote()
+    table.remove(self:definition().scopes)
+end
+
+function terra.context:leavedef()
+    table.remove(self.definitions)
 end
 
 function terra.context:enterblock()
-    self.stack[#self.stack].varenv = setmetatable({},{ __index = self:varenv() })
+    self:scope().varenv = setmetatable({},{ __index = self:varenv() })
 end
 
 function terra.context:leaveblock()
-    self.stack[#self.stack].varenv = getmetatable(self:varenv()).__index
+   self:scope().varenv = getmetatable(self:varenv()).__index
 end
 
-function terra.context:pop()
-    local tbl = table.remove(self.stack)
-    if tbl.filehandle then
-        terra.closesourcefile(tbl.filehandle)
-        tbl.filehandle = nil
-    end
-end
+
 function terra.context:luaenv()
-    return self.stack[#self.stack].luaenv
+    return self:scope().luaenv
 end
 function terra.context:varenv()
-    return self.stack[#self.stack].varenv
+    return self:scope().varenv
 end
 function terra.context:combinedenv()
-    return self.stack[#self.stack].combinedenv
+    return self:scope().combinedenv
 end
 
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
 function terra.context:printsource(anchor)
-    local top = self.stack[#self.stack]
+    local top = self.fileinfo[#self.fileinfo]
     if not top.filehandle then
         top.filehandle = terra.opensourcefile(top.filename)
     end
@@ -260,7 +284,7 @@ function terra.context:printsource(anchor)
 end
 function terra.context:reporterror(anchor,...)
     self.has_errors = true
-    local top = self.stack[#self.stack]
+    local top = self.fileinfo[#self.fileinfo]
     io.write(top.filename..":"..anchor.linenumber..": ")
     for _,v in ipairs({...}) do
         io.write(tostring(v))
@@ -268,8 +292,20 @@ function terra.context:reporterror(anchor,...)
     io.write("\n")
     self:printsource(anchor)
 end
+function terra.context:enterfile(filename)
+    table.insert(self.fileinfo,{ filename = filename })
+end
+
+function terra.context:leavefile(filename)
+    local tbl = table.remove(self.fileinfo)
+    if tbl.filehandle then
+        terra.closesourcefile(tbl.filehandle)
+        tbl.filehandle = nil
+    end
+end
+
 function terra.context:isempty()
-    return #self.stack == 0
+    return #self.definitions == 0
 end
 
 
@@ -319,7 +355,7 @@ function terra.context:functioncalls(func)
 end
 
 function terra.newcontext()
-    return setmetatable({stack = {}, functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
+    return setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
 end
 
 -- END CONTEXT
@@ -556,9 +592,9 @@ function terra.globalvar:compile(ctx)
     --this will happen when function referring to this GV is in the same strongly connected component as the global variables initializer
     if globalinit.initfn.state ~= "initialized" then 
         local tree = globalinit.initfn.untypedtree
-        ctx:push(tree.filename)
+        ctx:enterfile(tree.filename)
         ctx:reporterror(tree,"global variable recursively used by its own initializer")
-        ctx:pop()
+        ctx:leavefile()
     end
     
     if not ctx.has_errors then
@@ -661,11 +697,6 @@ function terra.quote:env()
         self.luaenvfunction = nil
     end
     return self.luaenv,self.varenv
-end
-
-function terra.quote:ref(str)
-    local tree = terra.newtree(self.tree, { kind = terra.kinds["var"], name = str, filename = self.tree.filename})
-    return terra.newquote(tree,"exp",{},self.varenv)
 end
 
 -- END QUOTE
@@ -791,7 +822,8 @@ do  --constructor functions for terra functions and variables
     
     local function newstructwithlayout(name,tree,env)
         local function buildstruct(typ,ctx)
-            ctx:push(tree.filename,env(),{})
+            ctx:enterfile(tree.filename)
+            ctx:enterdef(env())
             
             local function addstructentry(v)
                 local resolvedtype = terra.resolvetype(ctx,v.type)
@@ -811,7 +843,8 @@ do  --constructor functions for terra functions and variables
                 end
             end
             addrecords(tree.records)
-            ctx:pop()
+            ctx:leavedef()
+            ctx:leavefile()
         end
         
         local st = terra.types.newstruct(name)
@@ -1241,9 +1274,9 @@ do --construct type table that holds the singleton value representing each uniqu
             local function checkrecursion(t)
                 if t == self then
                     if self.tree then
-                        ctx:push(self.tree.filename)
+                        ctx:enterfile(self.tree.filename)
                         terra.reporterror(ctx,self.tree,"type recursively contains itself")
-                        ctx:pop()
+                        ctx:leavefile()
                     else
                         --TODO: emit where the user-defined type was first used
                         error("programmatically defined type contains itself")
@@ -1454,7 +1487,8 @@ function terra.funcvariant:typecheck(ctx)
     
     
     --initialization
-    ctx:push(self.filename,self:env(),{})
+    ctx:enterfile(self.filename)
+    ctx:enterdef(self:env())
     
     
     local ftree = self.untypedtree
@@ -2566,9 +2600,11 @@ function terra.funcvariant:typecheck(ctx)
             terra.reporterror(ctx,anchor,"found a quoted ",q.variant, " where a ",variant, " is expected.")
             return anchor:copy { type = terra.types.error }
         end
-        ctx:push(q.tree.filename,q:env()) --q:env() returns both the luaenv and varenv here
+        ctx:enterfile(q.tree.filename)
+        ctx:enterquote(q:env()) --q:env() returns both the luaenv and varenv here
         local r = checkfn(q.tree)
-        ctx:pop()
+        ctx:leavequote()
+        ctx:leavefile()
         return r
     end
     
@@ -2879,7 +2915,8 @@ function terra.funcvariant:typecheck(ctx)
     dbprint("TypedTree")
     dbprintraw(typedtree)
     
-    ctx:pop()
+    ctx:leavedef()
+    ctx:leavefile()
     
     return typedtree
 end
