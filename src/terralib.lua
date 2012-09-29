@@ -1332,6 +1332,15 @@ function terra.parseerror(startline, errmsg)
     return startline + tonumber(line) - 1, err
 end
 
+function terra.resolveluaexpression(ctx,e)
+    if not terra.istree(e) or not e:is "luaexpression" then
+        print(debug.traceback())
+        e:printraw()
+        error("not a lua expression?")
+    end
+    return terra.treeeval(ctx,e,e.expression)
+end
+
 function terra.resolvetype(ctx,t,returnlist)
     local function wrap(r)
         if returnlist then
@@ -1343,14 +1352,8 @@ function terra.resolvetype(ctx,t,returnlist)
     if terra.types.istype(t) then --if the AST contains a direct reference to a type, then accept that, otherwise try to evaluate the type
         return wrap(t:getcanonical(ctx))
     end
-    
-    if not terra.istree(t) or not t:is "luaexpression" then
-        print(debug.traceback())
-        t:printraw()
-        error("not a type?")
-    end
-    
-    local success,typ = terra.treeeval(ctx,t,t.expression)
+        
+    local success,typ = terra.resolveluaexpression(ctx,t)
     
     if not success then
         return wrap(terra.types.error)
@@ -1437,7 +1440,7 @@ function terra.funcvariant:typecheck(ctx)
     --declarations of local functions used in type checking
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
           checkexp,checkstmt, checkrvalue,resolvequote,
-          checkparameterlist, checkcall,checkmethodorcall, createspecial, resolveluaspecial,
+          checkparameterlist, checkcall,checkmethodorcall, createspecial, createspecialslist, resolveluaspecial,
           insertdereference, insertuntypeddereference, insertaddressof
           
           
@@ -1866,6 +1869,13 @@ function terra.funcvariant:typecheck(ctx)
     local function canreturnmultiple(t)
         return iscall(t) or t.kind == terra.kinds.var or t.kind == terra.kinds.select
     end
+
+    local function checkluaexpression(e)
+        local success, value = terra.resolveluaexpression(ctx,e)
+        return (success and createspecialslist(e,value))
+               or terra.newlist()
+    end
+
     function checkparameterlist(anchor,params) --individual params may be already typechecked (e.g. if they were a method call receiver) 
                                                --in this case they are treated as single expressions
         local exps = terra.newlist()
@@ -1875,6 +1885,11 @@ function terra.funcvariant:typecheck(ctx)
                                 --or 1 less than this number if 'c' is a macro/quotelist that has 0 elements
 
         local function addelement(elem,depth,islast)
+            local function adjustminsize(elems)
+                if #elems == 0 and depth == 0 then
+                    minsize = minsize - 1
+                end
+            end
             if not islast or elem.truncated then
                 exps:insert(checkrvalue(elem))
             else
@@ -1882,9 +1897,7 @@ function terra.funcvariant:typecheck(ctx)
                 if iscall(elem) then
                     local ismacro, multifunc = checkmethodorcall(elem,true) --must return at least one value
                     if ismacro then --call was a macro, handle the results as if they were in the list
-                        if #multifunc == 0 and depth == 0 then
-                            minsize = minsize - 1
-                        end
+                        adjustminsize(multifunc)
                         for i,e in ipairs(multifunc) do --multiple returns, are added to the list, like function calls these are optional
                             addelement(e,depth+1,i == #multifunc)
                         end                        
@@ -1899,15 +1912,19 @@ function terra.funcvariant:typecheck(ctx)
                         end
                     end
                 elseif elem:is "quote" then
-                    if #elem.quotations == 0 and depth == 0 then
-                        minsize = minsize - 1
-                    end
+                    adjustminsize(elem.quotations)
                     for i,q in ipairs(elem.quotations) do
                         local function doadd(e)
                             addelement(e,depth+1,i == #elem.quotations)
                         end
                         resolvequote(elem,q,"exp",doadd)
                     end
+                elseif elem:is "luaexpression" then
+                    local results = checkluaexpression(elem)
+                    adjustminsize(results)
+                    for i,e in ipairs(results) do --multiple returns, are added to the list, like function calls these are optional
+                        addelement(e,depth+1,i == #results)
+                    end 
                 else
                     exps:insert(checkrvalue(elem))
                 end
@@ -2054,6 +2071,18 @@ function terra.funcvariant:typecheck(ctx)
         
     end
     
+    function createspecialslist(anchor,result)
+        local exps = terra.newlist{}
+        if terra.israwlist(result) then
+            for i,e in ipairs(result) do
+                exps:insert(createspecial(anchor,e))
+            end
+        else
+            exps:insert(createspecial(anchor,result))
+        end
+        return exps
+    end
+
     function checkcall(anchor, fn, arguments, untypedarguments, recievers, mustreturnatleast1) --mustreturnatleast1 means we must return at least one value because the function was used in an expression, otherwise it was used as a statement and can return none
                                                                      --returns true, <macro exp list> if call was a macro
                                                                      --returns false, <typed tree> otherwise
@@ -2064,15 +2093,7 @@ function terra.funcvariant:typecheck(ctx)
                 macroargs[i] = terra.newquote(v,"exp",ctx:luaenv(),ctx:varenv())
             end
             local result = macrocall(ctx,anchor,unpack(macroargs))
-            local exps = terra.newlist{}
-            if terra.israwlist(result) then
-                for i,e in ipairs(result) do
-                    exps:insert(createspecial(anchor,e))
-                end
-            else
-                exps:insert(createspecial(anchor,result))
-            end
-            return exps
+            return createspecialslist(anchor,result)
         end
         
         local function getparametertypes(fntyp,paramlist) --get the expected types for parameters to the call (this extends the function type to the length of the parameters if the function is vararg)
@@ -2419,6 +2440,14 @@ function terra.funcvariant:typecheck(ctx)
                 
             elseif iscall(e) then
                 return handlemacro(checkmethodorcall(e,true))
+            elseif e:is "luaexpression" then
+                local results = checkluaexpression(e)
+                if #results == 0 then
+                    terra.reporterror(ctx,e,"expected lua expression to return at least 1 object")
+                    return e:copy { type = terra.types.error }
+                else
+                    return checkexp(results[1],allowluaobjects)
+                end
             elseif e:is "quote" then
                 if #e.quotations == 0 then
                     terra.reporterror(ctx,e,"expected at least one element in list of quotations")
@@ -2705,6 +2734,9 @@ function terra.funcvariant:typecheck(ctx)
             else
                 return c
             end
+        elseif s:is "luaexpression" then
+            local results = checkluaexpression(s)
+            return results:flatmap(checkstmt)
         elseif s:is "quote" then
             local function resolvequotestatement(anchor,q)
                 local function checkstmtlist(tree) 

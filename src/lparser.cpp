@@ -216,6 +216,7 @@ static void check_terra(LexState * ls, const char * thing) {
 static int statement (LexState *ls);
 static void expr (LexState *ls, expdesc *v);
 static void terratype(LexState * ls);
+static void luaexpr(LexState * ls);
 
 /* semantic error */
 static l_noret semerror (LexState *ls, const char *msg) {
@@ -312,6 +313,24 @@ static TString * singlevar (LexState *ls, expdesc *var, int register_as_local = 
   return varname;
 }
 
+//tries to parse a symbol "NAME | '['' lua expression '']'"
+//returns true if a name was parsed and sets str to that name
+//otherwise, str is not modified
+static bool checksymbol(LexState * ls, TString ** str) {
+  int tbl = new_table(ls,T_symbol);
+  int line = ls->linenumber;
+  if(ls->in_terra && testnext(ls,'[')) {
+    RETURNS_1(luaexpr(ls));
+    add_field(ls, tbl, "expression");
+    check_match(ls, ']', '[', line);
+  }
+  TString * nm = str_checkname(ls);
+  if(str)
+    *str = nm;
+  push_string(ls,nm);
+  add_field(ls,tbl,"name");
+  return true;
+}
 
 static void enterlevel (LexState *ls) {
   terra_State *L = ls->LP;
@@ -849,6 +868,14 @@ static void prefixexp (LexState *ls, expdesc *v) {
       }
       check_match(ls, ')', '(', line);
       //luaK_dischargevars(ls->fs, v);
+      return;
+    }
+    case '[': {
+      check_terra(ls, "antiquotation");
+      int line = ls->linenumber;
+      luaX_next(ls);
+      RETURNS_1(luaexpr(ls));
+      check_match(ls, ']', '[', line);
       return;
     }
     case TK_NAME: {
