@@ -57,13 +57,13 @@ function terra.tree:printraw()
             parents[t] = true
             depth = depth + 1
             for k,v in pairs(t) do
-                if type(k) == "table" then
+                if type(k) == "table" and not terra.issymbol(k) then
                     print("this table:")
                     terra.tree.printraw(k)
                     error("table is key?")
                 end
                 if k ~= "kind" and k ~= "offset" --[[and k ~= "linenumber"]] then
-                    local prefix = spacing..k..": "
+                    local prefix = spacing..tostring(k)..": "
                     if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
                         print(prefix..tostring(v))
                     else
@@ -670,6 +670,32 @@ end
 
 -- END QUOTE
 
+-- SYMBOL
+terra.symbol = {}
+terra.symbol.__index = terra.symbol
+function terra.issymbol(s)
+    return getmetatable(s) == terra.symbol
+end
+terra.symbol.count = 0
+
+function terra.newsymbol(typ)
+    if typ and not terra.istype(typ) then
+        error("argument is not a type")
+    end
+    local self = setmetatable({
+        id = terra.symbol.count,
+        type = typ
+    },terra.symbol)
+    terra.symbol.count = terra.symbol.count + 1
+    return self
+end
+
+function terra.symbol:__tostring()
+    return "symbol ("..(self.displayname or tostring(self.id))..")"
+end
+
+_G["symbol"] = terra.newsymbol 
+
 -- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
     local name_count = 0
@@ -942,7 +968,11 @@ do --construct type table that holds the singleton value representing each uniqu
                         str = str .. " union { "
                     end
                     
-                    str = str..v.type:cstring().." "..v.key.."; "
+                    local keystr = v.key
+                    if terra.issymbol(keystr) then
+                        keystr = "__symbol"..tostring(keystr.id)
+                    end
+                    str = str..v.type:cstring().." "..keystr.."; "
                     
                     if v.inunion and nextalloc ~= v.allocation then
                         str = str .. " }; "
@@ -1885,8 +1915,8 @@ function terra.funcvariant:typecheck(ctx)
             if not success then 
                 return "<error>"
             end
-            if type(value) ~= "string" then
-                terra.reporterror(ctx,sym,"expected a string for selector but found ",type(value))
+            if type(value) ~= "string" and not terra.issymbol(value) then
+                terra.reporterror(ctx,sym,"expected a string or symbol for selector but found ",type(value))
                 return "<error>"
             end
             return value
@@ -2061,7 +2091,7 @@ function terra.funcvariant:typecheck(ctx)
             
             if not fnobj then
                 terra.reporterror(ctx,exp,"no such method ",methodname," defined for type ",reciever.type)
-                return exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
+                return false, exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
             end
             
             local untypedarguments = terra.newlist { untypedreciever }
