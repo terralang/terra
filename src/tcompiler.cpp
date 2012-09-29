@@ -1132,7 +1132,7 @@ if(baseT->isIntegerTy()) { \
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
         BasicBlock * bb = (BasicBlock *) lbl->ud("basicblock");
         if(!bb) {
-            bb = createBB(lbl->string("value"));
+            bb = createBB(lbl->string("labelname"));
             lua_pushlightuserdata(L,bb);
             lbl->setfield("basicblock");
         }

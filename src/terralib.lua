@@ -2615,26 +2615,31 @@ function terra.funcvariant:typecheck(ctx)
             return_stmts:insert( rstmt )
             return rstmt
         elseif s:is "label" then
-            local lbls = labels[s.value] or terra.newlist()
+            local ss = s:copy {}
+            local label = checksymbol(ss.value)
+            ss.labelname = tostring(label)
+            local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
                 terra.reporterror(ctx,s,"label defined twice")
                 terra.reporterror(ctx,lbls,"previous definition here")
             else
                 for _,v in ipairs(lbls) do
-                    v.definition = s
+                    v.definition = ss
                 end
             end
-            labels[s.value] = s
-            return s
+            labels[label] = ss
+            return ss
         elseif s:is "goto" then
-            local lbls = labels[s.label] or terra.newlist()
+            local ss = s:copy{}
+            local label = checksymbol(ss.label)
+            local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
-                s.definition = lbls
+                ss.definition = lbls
             else
-                lbls:insert(s)
+                lbls:insert(ss)
             end
-            labels[s.label] = lbls
-            return s 
+            labels[label] = lbls
+            return ss
         elseif s:is "break" then
             local ss = s:copy({})
             if #loopstmts == 0 then

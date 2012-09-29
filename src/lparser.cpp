@@ -1408,9 +1408,10 @@ static void gotostat (LexState *ls) {
   int g;
   if (testnext(ls, TK_GOTO)) {
     int tbl = new_table(ls,T_goto);
-    label = str_checkname(ls);
-    push_string(ls,label);
+    
+    checksymbol(ls,NULL);
     add_field(ls,tbl,"label");
+
   } else {
     int tbl = new_table(ls,T_break);
     luaX_next(ls);  /* skip break */
@@ -1419,15 +1420,15 @@ static void gotostat (LexState *ls) {
 
 }
 
-static void labelstat (LexState *ls, TString *label, int line) {
+static void labelstat (LexState *ls) {
   check_terra(ls,"goto labels");
   /* label -> '::' NAME '::' */
-  FuncState *fs = ls->fs;
   int tbl = new_table(ls,T_label);
+  RETURNS_1(checksymbol(ls,NULL));
+  FuncState *fs = ls->fs;
   checknext(ls, TK_DBCOLON);  /* skip double colon */
   /* create new entry for this label */
   /* skip other no-op statements */
-  push_string(ls,getstr(label));
   add_field(ls,tbl,"value");
   while (ls->t.token == ';' /*|| ls->t.token == TK_DBCOLON*/) { //why does lua skip double labels?
     statement(ls);
@@ -1966,7 +1967,7 @@ static int statement (LexState *ls) {
     case TK_DBCOLON: {  /* stat -> label */
       
       luaX_next(ls);  /* skip double colon */
-      RETURNS_1(labelstat(ls, str_checkname(ls), line));
+      RETURNS_1(labelstat(ls));
       break;
     }
     case TK_RETURN: {  /* stat -> retstat */
