@@ -735,7 +735,7 @@ do  --constructor functions for terra functions and variables
             local function nm(t) 
                 if t.kind == terra.kinds.var then
                     return t.name
-                elseif t.kind == terra.kinds.select then
+                elseif t.kind == terra.kinds.selectconst then
                     return nm(t.value) .. "_" .. t.field
                 else
                     error("not a variable name?")
@@ -1876,6 +1876,23 @@ function terra.funcvariant:typecheck(ctx)
                or terra.newlist()
     end
 
+    local function checksymbol(sym)
+        if sym.name then
+            return sym.name
+        else
+            assert(sym.expression)
+            local success, value = terra.resolveluaexpression(ctx,sym.expression)
+            if not success then 
+                return "<error>"
+            end
+            if type(value) ~= "string" then
+                terra.reporterror(ctx,sym,"expected a string for selector but found ",type(value))
+                return "<error>"
+            end
+            return value
+        end
+    end
+
     function checkparameterlist(anchor,params) --individual params may be already typechecked (e.g. if they were a method call receiver) 
                                                --in this case they are treated as single expressions
         local exps = terra.newlist()
@@ -2060,7 +2077,8 @@ function terra.funcvariant:typecheck(ctx)
         
         if exp:is "method" then --desugar method a:b(c,d) call by first adding a to the arglist (a,c,d) and typechecking it
                                 --then extract a's type from the parameter list and look in the method table for "b" 
-            return checkmethod(checkrvalue(exp.value),exp.value,exp.name)
+            local methodname = checksymbol(exp.name)
+            return checkmethod(checkrvalue(exp.value),exp.value,methodname)
         else
             local fn = exp.fn or checkexp(exp.value,true) --node may be either untyped checked (exp.fn == nil) or the function may already have been typed (e.g. in the select operator)
             if fn.type and (fn.type:isstruct() or fn.type:ispointertostruct()) then
@@ -2302,15 +2320,16 @@ function terra.funcvariant:typecheck(ctx)
         elseif e:is "select" then
             local untypedv = e.value
             local v = checkexp(untypedv,true)
+            local field = checksymbol(e.field)
             if v:is "luaobject" then
                 if type(v.value) ~= "table" then
                     terra.reporterror(ctx,e,"expected a table but found ", type(v.value))
                     return e:copy{ type = terra.types.error }
                 end
 
-                local selected = v.value[e.field]
+                local selected = v.value[field]
                 if selected == nil then
-                    terra.reporterror(ctx,e,"no field ",e.field," in lua object")
+                    terra.reporterror(ctx,e,"no field ",field," in lua object")
                     return e:copy { type = terra.types.error }
                 end
                 
@@ -2321,14 +2340,14 @@ function terra.funcvariant:typecheck(ctx)
                     untypedv = insertuntypeddereference(untypedv)
                 end
                 if v.type:isstruct() then
-                    local ret, success = insertselect(v,e.field)
+                    local ret, success = insertselect(v,field)
                     if not success then
-                        --struct has no member e.field, look for a getter __get<field>
-                        local getter = v.type.methods["__get"..e.field]
+                        --struct has no member field, look for a getter __get<field>
+                        local getter = v.type.methods["__get"..field]
                         if getter then
                             return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
                         else
-                            terra.reporterror(ctx,v,"no field ",e.field," in terra object of type ",v.type)
+                            terra.reporterror(ctx,v,"no field ",field," in terra object of type ",v.type)
                             return e:copy { type = terra.types.error }
                         end
                     else
@@ -2903,16 +2922,6 @@ function terra.saveobj(filename,env)
     end
     return terra.saveobjimpl(filename,cleanenv,isexe)
 end
-
-
-terra.select = macro(function(ctx,tree,obj,key)
-    local field = key:asvalue(ctx)
-    if type(field) ~= "string" then
-        ctx:reporterror(tree,"selector is not a string but ",type(field))
-        field = "<error>"
-    end
-    return terra.newtree(tree,{ kind = terra.kinds.select, value = obj.tree, field = field })
-end)
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")

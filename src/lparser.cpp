@@ -323,6 +323,7 @@ static bool checksymbol(LexState * ls, TString ** str) {
     RETURNS_1(luaexpr(ls));
     add_field(ls, tbl, "expression");
     check_match(ls, ']', '[', line);
+    return false;
   }
   TString * nm = str_checkname(ls);
   if(str)
@@ -450,7 +451,7 @@ static void fieldsel (LexState *ls, expdesc *v) {
   expdesc key;
   //luaK_exp2anyregup(fs, v);
   luaX_next(ls);  /* skip the dot or colon */
-  int tbl = new_table_before(ls,T_select, true);
+  int tbl = new_table_before(ls,T_selectconst, true);
   add_field(ls,tbl,"value");
   checkname(ls, &key);
   add_field(ls,tbl,"field");
@@ -898,7 +899,11 @@ static void primaryexp (LexState *ls, expdesc *v) {
   for (;;) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
-        RETURNS_0(fieldsel(ls, v));
+        luaX_next(ls);
+        int tbl = new_table_before(ls,T_select, true);
+        add_field(ls,tbl,"value");
+        checksymbol(ls,NULL);
+        add_field(ls,tbl,"field");
         break;
       }
       case '[': {  /* `[' exp1 `]' */
@@ -917,7 +922,7 @@ static void primaryexp (LexState *ls, expdesc *v) {
         luaX_next(ls);
         int tbl = new_table_before(ls,T_method,true);
         add_field(ls,tbl,"value");
-        RETURNS_1(checkname(ls, &key));
+        RETURNS_1(checksymbol(ls,NULL));
         add_field(ls,tbl,"name");
         RETURNS_1(funcargs(ls, v, line));
         add_field(ls,tbl,"arguments");

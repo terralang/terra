@@ -82,7 +82,8 @@ _(vectorconstructor,"vectorconstructor") \
 _(arrayconstructor,"arrayconstructor") \
 _(typedexpression,"typeexpression") \
 _(luaexpression,"luaexpression") \
-_(symbol, "symbol")
+_(symbol, "symbol") \
+_(selectconst, "selectconst")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
