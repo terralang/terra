@@ -691,20 +691,23 @@ static void parlist (LexState *ls) {
     do {
       switch (ls->t.token) {
         case TK_NAME: {  /* param -> NAME */
-          TString * nm = str_checkname(ls);
           
-          fs->bl->local_variables.push_back(nm);
           
           if(ls->in_terra) {
             expdesc e;
             int entry = new_table(ls,T_entry);
-            push_string(ls,nm);
+            bool wasstring = checksymbol(ls,NULL);
             add_field(ls,entry,"name");
-          
-            checknext(ls,':');
-            RETURNS_1(terratype(ls));
-            add_field(ls,entry,"type");
+
+            if( wasstring || ls->t.token == ':') {
+              checknext(ls,':');
+              RETURNS_1(terratype(ls));
+              add_field(ls,entry,"type");
+            }
             add_entry(ls,tbl);
+          } else {
+            TString * nm = str_checkname(ls);
+            fs->bl->local_variables.push_back(nm);
           }
           
           nparams++;
@@ -1499,8 +1502,7 @@ static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   FuncState *fs = ls->fs;
-  int tbl = new_table(ls,T_fornum);
-  push_string(ls,varname);
+  int tbl = new_table_before(ls,T_fornum);
   add_field(ls,tbl,"varname");
   checknext(ls, '=');
   expdesc a,b,c;
@@ -1517,7 +1519,8 @@ static void fornum (LexState *ls, TString *varname, int line) {
   }
   add_field(ls,tbl,"step");
   BlockCnt bl;
-  bl.local_variables.push_back(varname);
+  if(varname)
+    bl.local_variables.push_back(varname);
   RETURNS_1(forbody(ls, line, 1, 1, &bl));
   add_field(ls,tbl,"body");
 }
@@ -1529,19 +1532,20 @@ static void forlist (LexState *ls, TString *indexname) {
   expdesc e;
   int nvars = 4;  /* gen, state, control, plus at least one declared var */
   int line;
-  int tbl = new_table(ls,T_forlist);
-  int vars = new_list(ls);
-  push_string(ls,indexname);
+  int tbl = new_table_before(ls,T_forlist);
+  int vars = new_list_before(ls);
   add_entry(ls,vars);
   /* create declared variables */
   BlockCnt bl;
-  bl.local_variables.push_back(indexname);
+  if(indexname)
+    bl.local_variables.push_back(indexname);
   
   while (testnext(ls, ',')) {
-    TString * name = str_checkname(ls);
-    push_string(ls,name);
+    TString * name = NULL;
+    checksymbol(ls,&name);
     add_entry(ls,vars);
-    bl.local_variables.push_back(name);
+    if(name)
+      bl.local_variables.push_back(name);
     nvars++;
   }
   add_field(ls,tbl,"variables");
@@ -1556,14 +1560,14 @@ static void forlist (LexState *ls, TString *indexname) {
 static void forstat (LexState *ls, int line) {
   /* forstat -> FOR (fornum | forlist) END */
   FuncState *fs = ls->fs;
-  TString *varname;
+  TString *varname = NULL;
   BlockCnt bl;
   enterblock(fs, &bl, 1);  /* scope for loop and control variables */
   luaX_next(ls);  /* skip `for' */
-  varname = str_checkname(ls);  /* first variable name */
+  checksymbol(ls,&varname);
   switch (ls->t.token) {
-    case '=': RETURNS_1(fornum(ls, varname, line)); break;
-    case ',': case TK_IN: RETURNS_1(forlist(ls, varname)); break;
+    case '=': RETURNS_0(fornum(ls, varname, line)); break;
+    case ',': case TK_IN: RETURNS_0(forlist(ls, varname)); break;
     default: luaX_syntaxerror(ls, LUA_QL("=") " or " LUA_QL("in") " expected");
   }
   check_match(ls, TK_END, TK_FOR, line);
@@ -1764,18 +1768,21 @@ static void localstat (LexState *ls) {
   int tbl = new_table(ls,T_defvar);
   int vars = new_list(ls);
   do {
-    int entry = new_table(ls,T_entry);
-    TString * name = str_checkname(ls);
-    if(!ls->in_terra)
+    
+    if(!ls->in_terra) {
+        TString * name = str_checkname(ls);
         ls->fs->bl->local_variables.push_back(name);
-    nvars++;
-    push_string(ls,name);
-    add_field(ls,entry,"name");
-    if(ls->in_terra && testnext(ls,':')) {
+    } else {
+      int entry = new_table(ls,T_entry);
+      RETURNS_1(checksymbol(ls,NULL));
+      add_field(ls,entry,"name");
+      if(testnext(ls,':')) {
         RETURNS_1(terratype(ls));
         add_field(ls,entry,"type");
+      }
+      add_entry(ls,vars);
     }
-    add_entry(ls,vars);
+    nvars++;
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {

@@ -212,7 +212,8 @@ terra.context.__index = terra.context
 function terra.context:enterdef(luaenv)
     
     local definition = { 
-        scopes = {} --each time we enter a different quotation the scope changes
+        scopes = {}, --each time we enter a different quotation the scope changes
+        symenv = {} --environment for dynamically created symbols, these have different scoping rules so they are stored in their own environment
     } 
     table.insert(self.definitions,definition)
 
@@ -254,10 +255,12 @@ end
 
 function terra.context:enterblock()
     self:scope().varenv = setmetatable({},{ __index = self:varenv() })
+    self:definition().symenv = setmetatable({},{ __index = self:symenv() })
 end
 
 function terra.context:leaveblock()
    self:scope().varenv = getmetatable(self:varenv()).__index
+   self:definition().symenv = getmetatable(self:symenv()).__index
 end
 
 
@@ -269,6 +272,9 @@ function terra.context:varenv()
 end
 function terra.context:combinedenv()
     return self:scope().combinedenv
+end
+function terra.context:symenv()
+    return self:definition().symenv
 end
 
 --terra.printlocation
@@ -745,7 +751,8 @@ do  --constructor functions for terra functions and variables
         if reciever ~= nil then
             local pointerto = terra.types.pointer
             local addressof = terra.newtree(newtree, { kind = terra.kinds.luaexpression, expression = function() return pointerto(reciever) end })
-            local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = "self", type = addressof })
+            local sym = terra.newtree(newtree, { kind = terra.kinds.symbol, name = "self"})
+            local implicitparam = terra.newtree(newtree, { kind = terra.kinds.entry, name = sym, type = addressof })
             
             --add the implicit parameter to the parameter list
             local newparameters = terra.newlist{implicitparam}
@@ -800,8 +807,8 @@ do  --constructor functions for terra functions and variables
             end
             local n = nm(v.name) .. "_" .. name_count
             name_count = name_count + 1
-            
-            local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = n, type = v.type })
+            local sym = terra.newtree(v, {kind = terra.kinds.symbol, name = n})
+            local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = sym, type = v.type })
             varentries:insert(varentry)
             
             local gv = setmetatable({initializer = globalinit},terra.globalvar)
@@ -1721,19 +1728,36 @@ function terra.funcvariant:typecheck(ctx)
         local inputtype = typemeet(op,lstmt.type,rstmt.type)
         return inputtype, insertcast(lstmt,inputtype), insertcast(rstmt,inputtype)
     end
-    
-    -- 1. generate types for parameters, if return types exists generate a types for them as well
-    local typed_parameters = terra.newlist()
-    local parameter_types = terra.newlist() --just the types, used to create the function type
-    for _,v in ipairs(ftree.parameters) do
-        local typ = resolvetype(v.type)
-        local tv = v:copy({ type = typ })
-        typed_parameters:insert( tv )
-        parameter_types:insert( typ )
-        if ctx:varenv()[tv.name] then
-            terra.reporterror(ctx,v,"duplicate definition of parameter ",tv.name)
+
+    local function createformalparameterlist(paramlist)
+        local result = terra.newlist()
+        for i,p in ipairs(paramlist) do
+            if i == #paramlist or p.type or p.name.name then
+                local entry = p:copy{ type = p.type and resolvetype(p.type), 
+                                      name = checksymbol(p.name,true)}
+                result:insert(entry)
+            else
+                assert(p.name.expression)
+                local success, value = terra.resolveluaexpression(ctx,p.sym.expression)
+                if success then
+                    local symlist = (terra.israwlist(value) and value) or terra.newlist{ value }
+                    for i,sym in ipairs(symlist) do
+                        if terra.issymbol(sym) then
+                            result:insert(p:copy { name = sym })
+                        else
+                            terra.reporterror(ctx,p,"expected a symbol but found ",type(sym))
+                        end
+                    end
+                end
+            end
         end
-        ctx:varenv()[tv.name] = tv
+        for i,entry in ipairs(result) do
+            if terra.issymbol(entry.name) and not entry.type then --if the symbol was given a type but the parameter didn't have one
+                                                                  --it takes the type of the symbol
+                entry.type = entry.name.type and entry.name.type:getcanonical(ctx)
+            end
+        end
+        return result
     end
 
     local function checkunary(ee,operands,property)
@@ -1940,18 +1964,20 @@ function terra.funcvariant:typecheck(ctx)
                or terra.newlist()
     end
 
-    local function checksymbol(sym)
+    function checksymbol(sym,requiresymbol)
         if sym.name then
             return sym.name
         else
-            assert(sym.expression)
             local success, value = terra.resolveluaexpression(ctx,sym.expression)
             if not success then 
                 return "<error>"
             end
             if type(value) ~= "string" and not terra.issymbol(value) then
-                terra.reporterror(ctx,sym,"expected a string or symbol for selector but found ",type(value))
+                terra.reporterror(ctx,sym,"expected a string or symbol but found ",type(value))
                 return "<error>"
+            end
+            if requiresymbol and type(value) == "string" then
+               terra.reporterror(ctx,sym,"expected a symbol but found string") 
             end
             return value
         end
@@ -2319,6 +2345,13 @@ function terra.funcvariant:typecheck(ctx)
                 terra.reporterror(ctx,anchor," error resolving global variable. ",errstr)
                 return anchor:copy{type = terra.types.error}
             end
+        elseif terra.issymbol(v) then
+            local definition = ctx:symenv()[v]
+            if not definition then
+                terra.reporterror(ctx,e,"variable '"..tostring(v).."' not found")
+                return anchor:copy{type = terra.types.error}
+            end
+            return insertvar(anchor,definition.type,tostring(v),definition)
         elseif terra.isfunction(v) then
             local variants = v:getvariants()
             if #variants == 1 then
@@ -2375,6 +2408,7 @@ function terra.funcvariant:typecheck(ctx)
             v = ctx:luaenv()[e.name]  
             
             if v == nil then
+                terra.tree.printraw(e.name)
                 terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
                 return e:copy { type = terra.types.error }
             end
@@ -2703,36 +2737,32 @@ function terra.funcvariant:typecheck(ctx)
             leaveloop()
             return s:copy { body = new_blk, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
-            local lhs = terra.newlist()
             local res
+            
+            local lhs = createformalparameterlist(s.variables)
+
             if s.initializers then
                 local params = checkparameterlist(s,s.initializers)
                 
                 local vtypes = terra.newlist()
-                for i,v in ipairs(s.variables) do
-                    local typ = "passthrough"
-                    if v.type then
-                        typ = resolvetype(v.type)
-                    end
-                    vtypes:insert(typ)
+                for i,v in ipairs(lhs) do
+                    vtypes:insert(v.type or "passthrough")
                 end
                 
                 insertcasts(vtypes,params)
                 
-                for i,v in ipairs(s.variables) do
-                    lhs:insert(v:copy { type = (params.parameters[i] and params.parameters[i].type) or terra.types.error }) 
+                for i,v in ipairs(lhs) do
+                    v.type = (params.parameters[i] and params.parameters[i].type) or terra.types.error
                 end
                 
                 res = s:copy { variables = lhs, initializers = params }
             else
-                for i,v in ipairs(s.variables) do
+                for i,v in ipairs(lhs) do
                     local typ = terra.types.error
                     if not v.type then
                         terra.reporterror(ctx,v,"type must be specified for uninitialized variables")
-                    else
-                        typ = resolvetype(v.type)
+                        v.type = terra.types.error
                     end
-                    lhs:insert(v:copy { type = typ })
                 end
                 res = s:copy { variables = lhs }
             end     
@@ -2740,7 +2770,11 @@ function terra.funcvariant:typecheck(ctx)
             --unless they are global variables (which are resolved through lua's env)
             if not s.isglobal then
                 for i,v in ipairs(lhs) do
-                    ctx:varenv()[v.name] = v
+                    if terra.issymbol(v.name) then
+                        ctx:symenv()[v.name] = v
+                    else 
+                        ctx:varenv()[v.name] = v
+                    end
                 end
             end
             return res
@@ -2763,12 +2797,14 @@ function terra.funcvariant:typecheck(ctx)
             function mkdefs(...)
                 local lst = terra.newlist()
                 for i,v in pairs({...}) do
-                    lst:insert( terra.newtree(s,{ kind = terra.kinds.entry, name = v }) )
+                    local sym = terra.newtree(s,{ kind = terra.kinds.symbol, name = v})
+                    lst:insert( terra.newtree(s,{ kind = terra.kinds.entry, name = sym }) )
                 end
                 return lst
             end
             
             function mkvar(a)
+                assert(type(a) == "string")
                 return terra.newtree(s,{ kind = terra.kinds["var"], name = a })
             end
             
@@ -2782,21 +2818,28 @@ function terra.funcvariant:typecheck(ctx)
 
             local dv = terra.newtree(s, { 
                 kind = terra.kinds.defvar;
-                variables = mkdefs(s.varname,"<limit>","<step>");
+                variables = mkdefs("<i>","<limit>","<step>");
                 initializers = terra.newlist({s.initial,s.limit,s.step})
             })
             
-            local lt = mkop("<",s.varname,"<limit>")
+            local lt = mkop("<","<i>","<limit>")
             
             local newstmts = terra.newlist()
+
+            local newvaras = terra.newtree(s, { 
+                kind = terra.kinds.defvar;
+                variables = terra.newlist{ terra.newtree(s, { kind = terra.kinds.entry, name = s.varname }) };
+                initializers = terra.newlist{mkvar("<i>")}
+            })
+            newstmts:insert(newvaras)
             for _,v in pairs(s.body.statements) do
                 newstmts:insert(v)
             end
             
-            local p1 = mkop("+",s.varname,"<step>")
+            local p1 = mkop("+","<i>","<step>")
             local as = terra.newtree(s, {
                 kind = terra.kinds.assignment;
-                lhs = terra.newlist({mkvar(s.varname)});
+                lhs = terra.newlist({mkvar("<i>")});
                 rhs = terra.newlist({p1});
             })
             
@@ -2855,7 +2898,23 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     -- actual implementation begins here
-    
+    --  generate types for parameters, if return types exists generate a types for them as well
+    local typed_parameters = createformalparameterlist(ftree.parameters)
+    local parameter_types = terra.newlist() --just the types, used to create the function type
+    for _,v in ipairs(typed_parameters) do
+        local typ = v.type
+        if not typ then
+            terra.reporterror(ctx,v,"symbol representing a parameter must have a type")
+            typ = terra.types.error
+        end
+        parameter_types:insert( typ )
+        local env = (terra.issymbol(v.name) and ctx:symenv()) or ctx:varenv()
+        if env[v.name] then
+            terra.reporterror(ctx,v,"duplicate definition of parameter ",v.name)
+        end
+        env[v.name] = v
+    end
+
     local result = checkstmt(ftree.body)
     for _,v in pairs(labels) do
         if not terra.istree(v) then

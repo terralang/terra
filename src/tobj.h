@@ -64,6 +64,15 @@ struct Obj {
         pop(2);
         return r;
     }
+    const char * asstring(const char * field) {
+        push();
+        lua_getfield(L, LUA_GLOBALSINDEX, "tostring");
+        lua_getfield(L,-2,field);
+        lua_call(L,1,1);
+        const char * r = luaL_checkstring(L,-1);
+        pop(2);
+        return r;
+    }
     bool obj(const char * field, Obj * r) {
         push();
         lua_getfield(L,-1,field);

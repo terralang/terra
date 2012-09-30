@@ -420,7 +420,7 @@ struct TerraCompiler {
         return getType(&t);
     }
     GlobalVariable * allocGlobal(Obj * v) {
-        const char * name = v->string("name");
+        const char * name = v->asstring("name");
         Type * typ = typeOfValue(v)->type;
         GlobalVariable * gv = new GlobalVariable(*C->m, typ, false, GlobalValue::ExternalLinkage, UndefValue::get(typ), name);
         lua_pushlightuserdata(L, gv);
@@ -431,7 +431,7 @@ struct TerraCompiler {
         IRBuilder<> TmpB(&func->getEntryBlock(),
                           func->getEntryBlock().begin()); //make sure alloca are at the beginning of the function
                                                           //TODO: is this really needed? this is what llvm example code does...
-        AllocaInst * a = TmpB.CreateAlloca(typeOfValue(v)->type,0,v->string("name"));
+        AllocaInst * a = TmpB.CreateAlloca(typeOfValue(v)->type,0,v->asstring("name"));
         lua_pushlightuserdata(L,a);
         v->setfield("value");
         return a;
