@@ -716,7 +716,7 @@ end
 terra.symbol.count = 0
 
 function terra.newsymbol(typ)
-    if typ and not terra.istype(typ) then
+    if typ and not terra.types.istype(typ) then
         error("argument is not a type")
     end
     local self = setmetatable({
@@ -1732,13 +1732,13 @@ function terra.funcvariant:typecheck(ctx)
     local function createformalparameterlist(paramlist)
         local result = terra.newlist()
         for i,p in ipairs(paramlist) do
-            if i == #paramlist or p.type or p.name.name then
+            if i ~= #paramlist or p.type or p.name.name then
                 local entry = p:copy{ type = p.type and resolvetype(p.type), 
                                       name = checksymbol(p.name,true)}
                 result:insert(entry)
             else
                 assert(p.name.expression)
-                local success, value = terra.resolveluaexpression(ctx,p.sym.expression)
+                local success, value = terra.resolveluaexpression(ctx,p.name.expression)
                 if success then
                     local symlist = (terra.israwlist(value) and value) or terra.newlist{ value }
                     for i,sym in ipairs(symlist) do
