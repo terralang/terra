@@ -690,7 +690,7 @@ static void parlist (LexState *ls) {
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
     do {
       switch (ls->t.token) {
-        case TK_NAME: {  /* param -> NAME */
+        case TK_NAME: case '[': {  /* param -> NAME */
           
           
           if(ls->in_terra) {

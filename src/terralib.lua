@@ -2408,7 +2408,6 @@ function terra.funcvariant:typecheck(ctx)
             v = ctx:luaenv()[e.name]  
             
             if v == nil then
-                terra.tree.printraw(e.name)
                 terra.reporterror(ctx,e,"variable '"..e.name.."' not found")
                 return e:copy { type = terra.types.error }
             end
