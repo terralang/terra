@@ -2348,8 +2348,8 @@ function terra.funcvariant:typecheck(ctx)
         elseif terra.issymbol(v) then
             local definition = ctx:symenv()[v]
             if not definition then
-                terra.reporterror(ctx,e,"variable '"..tostring(v).."' not found")
-                return anchor:copy{type = terra.types.error}
+                terra.reporterror(ctx,anchor,"variable '"..tostring(v).."' not found")
+                return insertvar(anchor,terra.types.error,tostring(v),nil)
             end
             return insertvar(anchor,definition.type,tostring(v),definition)
         elseif terra.isfunction(v) then

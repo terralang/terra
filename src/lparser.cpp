@@ -1768,7 +1768,6 @@ static void localstat (LexState *ls) {
   int tbl = new_table(ls,T_defvar);
   int vars = new_list(ls);
   do {
-    
     if(!ls->in_terra) {
         TString * name = str_checkname(ls);
         ls->fs->bl->local_variables.push_back(name);
