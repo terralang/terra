@@ -170,13 +170,24 @@ function Class.class:createvtable(ctx)
         assert(success)
         vtabletype:addentry(e.name,&typ)
         inits:insert(`e.value)
-        self.ttype.methods[e.name] = macro(function(ctx,tree,self,...)
-            local arguments = {...}
-            --this is wrong: it evaluates self twice, we need a new expression:  let x = <exp> in <exp> end 
-            --to easily handle this case.
-            --another way to do this would be to generate a stub function forward the arguments
-            return `(self.__vtable.[e.name])(&self,arguments)
-        end)
+        local arguments = typ.parameters:map(symbol)
+        local obj = arguments[1]
+        local stub
+        if #typ.returns > 0 then --TODO: should we allow return and other multistatements to result in 0 values?
+                                 --TODO: you should be able to write arguments in expression, but 
+                                 -- the way luaexpression and quotations are handled doesn't work that way
+                                 -- we need to add a generic "list of specials" expression that 
+                                 -- replaces luaexpression and quote in checkparameter list
+                                 -- this will also fix some bugs with how checkspecial works with lists
+            stub = terra([arguments])
+                return obj.__vtable.[e.name]([arguments])
+            end
+        else
+            stub = terra([arguments])
+               obj.__vtable.[e.name]([arguments])
+            end
+        end
+        self.ttype.methods[e.name] = stub 
     end
 
     local var vtable : vtabletype = {inits}
@@ -210,16 +221,24 @@ function Class.interface:method(name,typ)
     assert(typ:ispointer() and typ.type:isfunction())
     local returns = typ.type.returns
     local parameters = terralib.newlist({&uint8})
+    local arguments = terralib.newlist()
     for _,e in ipairs(typ.type.parameters) do
         parameters:insert(e)
+        arguments:insert(symbol(e))
     end
     local interfacetype = parameters -> returns
     self.methods:insert({name = name, type = interfacetype})
     self.vtabletype:addentry(name,interfacetype)
-    self.interfacetype.methods[name] = macro(function(ctx,tree,self,...)
-        local arguments = terralib.newlist{...}
-        return `(self.__vtable.[name])((&self):as(&uint8) - self.__vtable.offset,arguments)
-    end)
+    
+    local obj = symbol(&self.interfacetype)
+    local call = `(obj.__vtable.[name])((obj):as(&uint8) - obj.__vtable.offset,[arguments])
+    if #returns > 0 then
+        stub = terra([obj],[arguments]) return call end
+    else
+        stub = terra([obj],[arguments]) call end
+    end
+    self.interfacetype.methods[name] = stub
+
     return self
 end
 
