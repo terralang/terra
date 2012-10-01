@@ -83,7 +83,8 @@ _(arrayconstructor,"arrayconstructor") \
 _(typedexpression,"typeexpression") \
 _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
-_(selectconst, "selectconst")
+_(selectconst, "selectconst") \
+_(speciallist, "speciallist")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
