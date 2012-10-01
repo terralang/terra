@@ -1549,13 +1549,15 @@ static char * copyName(const StringRef & name) {
     return strdup(name.str().c_str());
 }
 static int terra_saveobjimpl(lua_State * L) {
-    const char * filename = luaL_checkstring(L, -3);
-    int tbl = lua_gettop(L) - 1;
-    bool isexe = luaL_checkint(L, -1);
+    const char * filename = luaL_checkstring(L, -4);
+    int tbl = lua_gettop(L) - 2;
+    bool isexe = luaL_checkint(L, -2);
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
     int ref_table = lobj_newreftable(T->L);
     
+
+
     char tmpnamebuf[20];
     const char * objname = NULL;
     
@@ -1570,7 +1572,10 @@ static int terra_saveobjimpl(lua_State * L) {
     }
     
     {
-        
+        lua_pushvalue(L,-2);
+        Obj arguments;
+        arguments.initFromStack(L,ref_table);
+
         //TODO: copy the module with CloneModule so that we don't mess stuff up when internalizing things
         ValueToValueMapTy VMap;
         Module * M = CloneModule(T->C->m, VMap);
@@ -1642,7 +1647,23 @@ static int terra_saveobjimpl(lua_State * L) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: Failed to find gcc");
             }
-            const char * args[] = { gcc.c_str(), objname, "-o", filename, 0};
+            
+            std::vector<const char *> args;
+            args.push_back(gcc.c_str());
+            args.push_back(objname);
+            args.push_back("-o");
+            args.push_back(filename);
+            
+            int N = arguments.size();
+            for(int i = 0; i < N; i++) {
+                Obj arg;
+                arguments.objAt(i,&arg);
+                arg.push();
+                args.push_back(luaL_checkstring(L,-1));
+                lua_pop(L,1);
+            }
+
+            args.push_back(NULL);
             int c = sys::Program::ExecuteAndWait(gcc, &args[0], 0, 0, 0, 0, &err);
             if(0 != c) {
                 unlink(objname);

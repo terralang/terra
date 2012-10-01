@@ -524,16 +524,11 @@ int include_c(lua_State * L) {
     int N = lua_objlen(L, -1);
     std::vector<const char *> args;
     
-    #ifdef __linux__
-    
     args.push_back("-I");
     args.push_back("/usr/include");
     
     args.push_back("-I");
     args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
-    
-    #endif
-    
     
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);

@@ -650,7 +650,9 @@ function terra.isquote(t)
 end
 
 function terra.israwlist(l)
-    if type(l) == "table" then
+    if terralib.islist(l) then
+        return true
+    elseif type(l) == "table" and not getmetatable(l) then
         local sz = #l
         local i = 0
         for k,v in pairs(l) do
@@ -2931,7 +2933,7 @@ end
 -- INCLUDEC
 
 function terra.includecstring(code)
-    return terra.registercfile(code,{"-I",".","-O3","-w"})
+    return terra.registercfile(code,{"-I",".","-O3"})
 end
 function terra.includec(fname)
     return terra.includecstring("#include \""..fname.."\"\n")
@@ -2979,7 +2981,7 @@ function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
     afn(cdataobj,assignresult)
 end
 
-function terra.saveobj(filename,env)
+function terra.saveobj(filename,env,arguments)
     local cleanenv = {}
     for k,v in pairs(env) do
         if terra.isfunction(v) then
@@ -2997,7 +2999,10 @@ function terra.saveobj(filename,env)
     else
         isexe = 1
     end
-    return terra.saveobjimpl(filename,cleanenv,isexe)
+    if not arguments then
+        arguments = {}
+    end
+    return terra.saveobjimpl(filename,cleanenv,isexe,arguments)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
