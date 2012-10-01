@@ -747,6 +747,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   new_fs.f.linedefined = line;
   checknext(ls, '(');
   if (ismethod) {
+    bl.local_variables.push_back(luaS_new(ls->LP,"self"));
   }
   int tbl = new_table(ls,T_function);
   RETURNS_1(parlist(ls));
