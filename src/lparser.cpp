@@ -1905,13 +1905,13 @@ static void retstat (LexState *ls) {
   expdesc e;
   int tbl = new_table(ls,T_return);
   int first, nret;  /* registers with returned values */
-  if (block_follow(ls, 1) || ls->t.token == ';')
+  if (block_follow(ls, 1) || ls->t.token == ';') {
     first = nret = 0;  /* return no values */
-  else {
+    new_list(ls);
+  } else {
     RETURNS_1(nret = explist(ls, &e,0));  /* optional return values */
-    add_field(ls,tbl,"expressions");
   }
-  
+  add_field(ls,tbl,"expressions");
   testnext(ls, ';');  /* skip optional semicolon */
 }
 
