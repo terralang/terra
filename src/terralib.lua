@@ -1989,7 +1989,7 @@ function terra.funcvariant:typecheck(ctx)
             else
                 elem = resolveluaspecial(elem)
                 if iscall(elem) then
-                    local ismacro, multifunc = checkmethodorcall(elem,true) --must return at least one value
+                    local ismacro, multifunc = checkmethodorcall(elem,false)
                     if ismacro then --call was a macro, handle the results as if they were in the list
                         addelement(multifunc, depth, islast) --multiple returns, are added to the list, like function calls these are optional                        
                     else
@@ -1997,6 +1997,9 @@ function terra.funcvariant:typecheck(ctx)
                             exps:insert(multifunc) --just insert it as a normal single-return function
                         else --remember the multireturn function and insert extract nodes into the expression list
                             multiret = multifunc
+                            if #multifunc.types == 0 and depth == 1 then
+                                minsize = minsize - 1
+                            end
                             for i,t in ipairs(multifunc.types) do
                                 exps:insert(createextractreturn(multiret, i - 1, t))
                             end

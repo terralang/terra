@@ -171,23 +171,10 @@ function Class.class:createvtable(ctx)
         vtabletype:addentry(e.name,&typ)
         inits:insert(`e.value)
         local arguments = typ.parameters:map(symbol)
-        local obj = arguments[1]
-        local stub
-        if #typ.returns > 0 then --TODO: should we allow return and other multistatements to result in 0 values?
-                                 --TODO: you should be able to write arguments in expression, but 
-                                 -- the way luaexpression and quotations are handled doesn't work that way
-                                 -- we need to add a generic "list of specials" expression that 
-                                 -- replaces luaexpression and quote in checkparameter list
-                                 -- this will also fix some bugs with how checkspecial works with lists
-            stub = terra([arguments])
-                return obj.__vtable.[e.name]([arguments])
-            end
-        else
-            stub = terra([arguments])
-               obj.__vtable.[e.name]([arguments])
-            end
+        local obj = arguments[1] 
+        self.ttype.methods[e.name] = terra([arguments])
+            return obj.__vtable.[e.name]([arguments])
         end
-        self.ttype.methods[e.name] = stub 
     end
 
     local var vtable : vtabletype = {inits}
@@ -231,14 +218,9 @@ function Class.interface:method(name,typ)
     self.vtabletype:addentry(name,interfacetype)
     
     local obj = symbol(&self.interfacetype)
-    local call = `(obj.__vtable.[name])((obj):as(&uint8) - obj.__vtable.offset,[arguments])
-    if #returns > 0 then
-        stub = terra([obj],[arguments]) return call end
-    else
-        stub = terra([obj],[arguments]) call end
+    self.interfacetype.methods[name] = terra([obj],[arguments]) 
+        return (obj.__vtable.[name])((obj):as(&uint8) - obj.__vtable.offset,[arguments]) 
     end
-    self.interfacetype.methods[name] = stub
-
     return self
 end
 

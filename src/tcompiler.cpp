@@ -1212,10 +1212,12 @@ if(baseT->isIntegerTy()) { \
     }
     void emitMultiReturnCall(Obj * call) {
         Value * rvalues = emitCall(call,false);
-        Obj result;
-        call->obj("result",&result);
-        lua_pushlightuserdata(L, rvalues);
-        result.setfield("struct");
+        if(rvalues) {
+            Obj result;
+            call->obj("result",&result);
+            lua_pushlightuserdata(L, rvalues);
+            result.setfield("struct");
+        }
     }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results, std::vector<TType*> * types) {
         
@@ -1225,28 +1227,27 @@ if(baseT->isIntegerTy()) { \
         
         int minN = paramlist->number("minsize");
         int sizeN = paramlist->number("size");
-        if(minN != 0) {
-            //emit arguments before possible function call
-            for(int i = 0; i < minN - 1; i++) {
-                Obj v;
-                params.objAt(i,&v);
-                results->push_back(emitExp(&v));
-                if(types)
-                    types->push_back(typeOfValue(&v));
-            }
-            Obj call;
-            //if there is a function call, emit it now
-            if(paramlist->obj("call",&call)) {
-                emitMultiReturnCall(&call);
-            }
-            //emit last argument, or (if there was a call) the list of extractors from the function call
-            for(int i = minN - 1; i < sizeN; i++) {
-                Obj v;
-                params.objAt(i,&v);
-                results->push_back(emitExp(&v));
-                if(types)
-                    types->push_back(typeOfValue(&v));
-            }
+
+        //emit arguments before possible function call
+        for(int i = 0; minN != 0 && i < minN - 1; i++) {
+            Obj v;
+            params.objAt(i,&v);
+            results->push_back(emitExp(&v));
+            if(types)
+                types->push_back(typeOfValue(&v));
+        }
+        Obj call;
+        //if there is a function call, emit it now
+        if(paramlist->obj("call",&call)) {
+            emitMultiReturnCall(&call);
+        }
+        //emit last argument, or (if there was a call) the list of extractors from the function call
+        for(int i = minN - 1; minN != 0 && i < sizeN; i++) {
+            Obj v;
+            params.objAt(i,&v);
+            results->push_back(emitExp(&v));
+            if(types)
+                types->push_back(typeOfValue(&v));
         }
         
     }
