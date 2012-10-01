@@ -509,11 +509,26 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
   int tbl = new_table(ls,T_recfield);
   if (ls->t.token == TK_NAME) {
     checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
-    RETURNS_1(checkname(ls, &key));
-    push_literal(ls,"rawstring");
+    RETURNS_1(checksymbol(ls, NULL));
   }
-  else  /* ls->t.token == '[' */
-    RETURNS_1(yindex(ls, &key));
+  else  { /* ls->t.token == '[' */
+    if(!ls->in_terra) {
+      yindex(ls, &key);
+    } else {
+      checksymbol(ls,NULL);
+      if(ls->t.token != '=') {
+        /* oops! this wasn't a recfield, but a listfield with an antiquote 
+           this is a somewhat unfortunate corner case of terra's parsing rules: we need to fix the AST now */
+        lua_getfield(ls->L,-1,"expression");
+        lua_remove(ls->L,-2); //remove the T_symbol, now we have { kind = recfield }, luaexpression
+        add_field(ls,tbl,"value");
+        //replace T_recfield with T_listfield
+        push_integer(ls,T_listfield);
+        add_field(ls,tbl,"kind");
+        return;        
+      }
+    }
+  }
   add_field(ls,tbl,"key");
   cc->nh++;
   checknext(ls, '=');

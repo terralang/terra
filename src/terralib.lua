@@ -2553,13 +2553,7 @@ function terra.funcvariant:typecheck(ctx)
                     local rawkey = e.records[i] and e.records[i].key
                     local k = nil
                     if rawkey then
-                        local kexp = checkexp(rawkey,true)
-                        if kexp:is "literal" and kexp.type == rawstring then
-                            k = kexp.value
-                        else
-                            terra.reporterror(ctx,e,"expected string literal but found ",terra.kinds[kexp.kind])
-                            k = "<error>"
-                        end
+                        k = checksymbol(rawkey)
                     end
                     if not typ:addentry(k,v.type) then
                         terra.reporterror(ctx,v,"duplicate definition of field ",k)
