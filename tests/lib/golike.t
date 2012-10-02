@@ -1,0 +1,88 @@
+
+local std = terralib.includec("stdlib.h")
+
+local Interface = {}
+
+Interface.interface = {}
+Interface.interface.__index = Interface.interface
+Interface.defined = {}
+
+function Interface.castmethod(ctx,tree,from,to,exp)
+	if to:isstruct() and from:ispointertostruct() then
+		local self = Interface.defined[to]
+		if not self then return false end
+
+		return true, self:createcast(ctx,from.type,exp)
+	end
+	return false
+end
+function Interface.create(methods)
+	local self = setmetatable({},Interface.interface)
+	struct self.type {
+		data : uint64
+	}
+	Interface.defined[self.type] = self
+	self.type.methods.__cast = Interface.castmethod
+
+	self.nextid = 0
+	self.allocatedsize = 256
+	self.implementedtypes = {} 
+	
+	self.methods = terralib.newlist()
+	self.vtabletype = terralib.types.newstruct("vtable")
+	for k,v in pairs(methods) do
+		print(k," = ",v)
+		assert(v:ispointer() and v.type:isfunction())
+		local params,rets = terralib.newlist{&uint8}, v.type.returns
+		local syms = terralib.newlist()
+		for i,p in ipairs(v.type.parameters) do
+			params:insert(p)
+			syms:insert(symbol(p))
+		end
+		local typ = params -> rets
+		self.methods:insert({name = k, type = typ, syms = syms})
+		self.vtabletype:addentry(k,typ)
+	end
+	var self.vtables : &self.vtabletype = std.malloc(self.allocatedsize * sizeof(self.vtabletype)):as(&self.vtabletype)
+	self.vtables:compile()
+
+	local thevtables = self.vtables
+	for _,m in ipairs(self.methods) do
+		self.type.methods[m.name] = terra(self : &self.type, [m.syms])
+			var id = self.data >> 48
+			var mask = (1ULL << 48) - 1
+			var obj = (mask and self.data):as(&uint8)
+			return thevtables[id].[m.name](obj,[m.syms])
+		end
+	end
+
+	return self.type
+end
+
+function Interface.interface:createcast(ctx,from,exp)
+	if not self.implementedtypes[from] then
+		local instance = {}
+		instance.id = self.nextid
+
+		assert(instance.id < self.allocatedsize) --TODO: handle resize
+		self.nextid = self.nextid + 1
+
+		local instancemethods = terralib.newlist()
+		for _,m in ipairs(self.methods) do
+			local fn = from.methods[m.name]
+			assert(fn and terralib.isfunction(fn))
+			--TODO: check the types match here
+			instancemethods:insert(`fn:as(m.type))
+		end
+		local terra initfn()
+			self.vtables[instance.id:as(int)] = {instancemethods}
+		end
+		initfn()
+		self.implementedtypes[from] = instance
+	end
+
+	local id = self.implementedtypes[from].id
+	return `self.type { exp:as(uint64) or ((id):as(uint64) << 48) }
+end
+
+return Interface

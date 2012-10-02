@@ -3005,5 +3005,19 @@ function terra.saveobj(filename,env,arguments)
     return terra.saveobjimpl(filename,cleanenv,isexe,arguments)
 end
 
+terra.packages = {} --table of packages loaded using terralib.require()
+
+function terra.require(name)
+    if not terra.packages[name] then
+        local file = name .. ".t"
+        local fn, err = terra.loadfile(file)
+        if not fn then
+            error(err)
+        end
+        terra.packages[name] = { results = {fn()} }    
+    end
+    return unpack(terra.packages[name].results)
+end
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")
