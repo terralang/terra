@@ -133,6 +133,61 @@ static int closesourcefile(lua_State * L) {
     return 0;
 }
 
+//implementations of lua functions load, loadfile, loadstring
+
+static const char *reader_luaload(lua_State *L, void *ud, size_t *size) {
+    size_t fnvalue = (size_t)ud;
+    lua_pushvalue(L,fnvalue);
+    lua_call(L,0,1);
+    if(lua_isnil(L,-1)) {
+        lua_pop(L,1);
+        return NULL;
+    }
+    const char * str = lua_tolstring(L,-1,size);
+    lua_pop(L,1);
+    return str;
+}
+
+int terra_luaload(lua_State * L) {
+    const char * chunkname = "=(load)";
+    size_t fnvalue;
+    if(lua_gettop(L) == 2) {
+        chunkname = luaL_checkstring(L,-1);
+        fnvalue = lua_gettop(L) - 1;
+    } else {
+        fnvalue = lua_gettop(L);
+    }
+
+    if(terra_load(L,reader_luaload,(void*)fnvalue,chunkname)) {
+        lua_pushnil(L);
+        lua_pushvalue(L,-2);
+        lua_remove(L,-3);
+        return 2;
+    }
+    return 1;
+}
+
+int terra_lualoadfile(lua_State * L) {
+    const char * file = luaL_checkstring(L,-1);
+    if(terra_loadfile(L,file)) {
+        lua_pushnil(L);
+        lua_pushvalue(L,-2);
+        lua_remove(L,-3);
+        return 2;
+    }
+    return 1;
+}
+
+int terra_lualoadstring(lua_State * L) {
+    const char * string = luaL_checkstring(L,-1);
+    if(terra_loadstring(L,string)) {
+        lua_pushnil(L);
+        lua_pushvalue(L,-2);
+        lua_remove(L,-3);
+        return 2;
+    }
+    return 1;
+}
 
 //defines terralib bytecodes
 #include "terralib.h"
@@ -169,6 +224,13 @@ int terra_init(lua_State * L) {
     lua_setfield(T->L,-2,"closesourcefile");
     lua_pushcfunction(T->L,printlocation);
     lua_setfield(T->L,-2,"printlocation");
+
+    lua_pushcfunction(T->L,terra_luaload);
+    lua_setfield(T->L,-2,"load");
+    lua_pushcfunction(T->L,terra_lualoadstring);
+    lua_setfield(T->L,-2,"loadstring");
+    lua_pushcfunction(T->L,terra_lualoadfile);
+    lua_setfield(T->L,-2,"loadfile");
     
     lua_newtable(T->L);
     lua_setfield(T->L,-2,"_trees"); //to hold parser generated trees
