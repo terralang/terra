@@ -295,11 +295,11 @@ pre {
 <div id="allstuff">
 <p><h1>Getting Started with Terra</h1>
 
-<p><em>Zach DeVito <a href="&#x6D;&#x61;&#x69;&#108;&#116;&#x6F;:zdevi&#116;&#x6F;&#64;&#115;&#116;&#97;&#x6E;&#102;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;">zdevi&#116;&#x6F;&#64;&#115;&#116;&#97;&#x6E;&#102;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#109;a&#105;&#x6C;&#116;&#111;:&#122;&#x64;&#101;&#x76;&#105;&#116;o&#64;&#115;&#116;&#97;&#x6E;&#x66;&#x6F;&#114;&#x64;&#x2E;&#x65;&#x64;&#117;">&#122;&#x64;&#101;&#x76;&#105;&#116;o&#64;&#115;&#116;&#97;&#x6E;&#x66;&#x6F;&#114;&#x64;&#x2E;&#x65;&#x64;&#117;</a></em></p>
 
 <p>Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua). </p>
 
-<p>Furthermore, you can use Lua to meta-program Terra code.  The Lua meta-program handles details like conditional compilation, namespaces, and templating in Terra code that are normally special constructs in low-level languages.  This coupling additionally enables more powerful features like function specialization, lisp-style macros, and manually controlled JIT compilation. Since Terra's compiler is also available at runtime, it makes it for libraries or embedded languages to generate low-level code dynamically.</p>
+<p>Furthermore, you can use Lua to meta-program Terra code.  The Lua meta-program handles details like conditional compilation, namespaces, and templating in Terra code that are normally special constructs in low-level languages.  This coupling additionally enables more powerful features like function specialization, lisp-style macros, and manually controlled JIT compilation. Since Terra's compiler is also available at runtime, it makes it easy for libraries or embedded languages to generate low-level code dynamically.</p>
 
 <p>This guide serves as an introduction for programming in Terra. A general understanding of the Lua language is very helpful, but not strictly required.</p>
 
@@ -1166,7 +1166,7 @@ terra doit()
 end
 </code></pre>
 
-<h2>Macros</h2>
+<h2>Macros and Meta-programming</h2>
 
 <p>By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a <em>macro</em> since it behaves similarly to macros found in Lisp and other languages.  You can create macro using the function <code>macro</code> which takes a normal Lua function and returns a macro:</p>
 
@@ -1243,7 +1243,75 @@ end
 -- prints 3 4
 </code></pre>
 
-<p>The above code will print <code>3 4</code> not <code>3 3</code> even though <code>a</code> is passed into a macro which defines another <code>a</code>.  This occurs because Terra code quotations are <em>hygienic</em>. Variables obey lexical scoping rules.</p>
+<p>The above code will print <code>3 4</code> not <code>3 3</code> even though <code>a</code> is passed into a macro which defines another <code>a</code>.  This occurs because Terra code quotations are <em>hygienic</em>. Variables always obey lexical scoping rules.</p>
+
+<h3>Symbols</h3>
+
+<p>Occationally you may want to violate lexical scoping rules in your macros.  For instance, you may want one macro to introduce a local variable, and another seperate macro to refer to it. Terra provides a controlled way of violating lexical scoping using the <code>symbol()</code> function, which returns a unique variable name each time it is called (this is the terra equivalent of Common Lisp's <code>gensym</code>).  Here is an example that creates a new symbol, defines the symbol in one macro, and then uses it in another.</p>
+
+<pre><code>local a = symbol()
+
+defineA = macro(function(ctx,tree)
+    return quote
+        var [a] = 3
+    end
+end)
+
+twiceA = macro(function(ctx,tree)
+    return `2*a
+end)
+
+terra doit()
+    defineA()
+    return twiceA() -- 6
+end
+</code></pre>
+
+<p>The symbol function can also take a type as an argument <code>symbol(int)</code>. This has the same effect as when you write <code>var a : int</code> in a declaration. It is optional when the type of the definition can be inferred (e.g. when it is local variable with an initializer), but required when it cannot be inferred (e.g. when it is a parameter to a function).  </p>
+
+<h3>Anti-quotations</h3>
+
+<p>Notice that the declaration of the symbol uses <code>[a]</code> in place of <code>a</code>. Using just <code>a</code> would make a local variable with name <code>a</code> that is inaccessible outside of that macro. The bracketed notation <code>[a]</code> is an <em>anti-quotation</em>. It instructs the terra compiler to parse that part as a lua expression, evaluate it, and drop the result in place. In this case, the result of evaluation <code>a</code> as lua is the symbol generated by the <code>symbol()</code> function.  Anti-quotations can be used in terra code in place of almost any part of code.</p>
+
+<p>As expressions:</p>
+
+<pre><code>local a = 2
+terra doit()
+    return [2*a + 3] -- 7, evaluated at compile time
+end
+</code></pre>
+
+<p>As statements:</p>
+
+<pre><code>local debug = true
+
+terra doit()
+    [debug and quote c.printf("entered doit\n") end or {}] 
+    --compiles with/without the print statementn depending on debug
+end
+</code></pre>
+
+<p>As parameters:</p>
+
+<pre><code>local rest = {symbol(int),symbol(int)}
+
+terra doit(first : int, [rest])
+    return first + [rest[1]] + [rest[2]]
+end
+</code></pre>
+
+<p>As symbols:</p>
+
+<pre><code>struct A {
+    data : int
+}
+local datastring = "data"
+
+terra doit()
+    var a : A = {3}
+    return a.[datastring] --evaluates to a.data
+end
+</code></pre>
 
 <h2>More Information</h2>
 
