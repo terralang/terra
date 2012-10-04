@@ -291,6 +291,10 @@ end
 function terra.context:reporterror(anchor,...)
     self.has_errors = true
     local top = self.fileinfo[#self.fileinfo]
+    if not anchor then
+        print(debug.traceback())
+        error("nil anchor")
+    end
     io.write(top.filename..":"..anchor.linenumber..": ")
     for _,v in ipairs({...}) do
         io.write(tostring(v))
@@ -1881,6 +1885,23 @@ function terra.funcvariant:typecheck(ctx)
         return ee:copy { type = typ, operands = terra.newlist{a,b} }
     end
     
+    function checkifelse(ee,operands)
+        local cond = operands[1]
+        local t,l,r = typematch(ee,operands[2],operands[3])
+        if cond.type ~= terra.types.error and t ~= terra.types.error then
+            if cond.type:isvector() and cond.type.type == bool then
+                if not t:isvector() or t.N ~= cond.type.N then
+                    print(ee)
+                    terra.reporterror(ctx,ee,"conditional in select is not the same shape as ",cond.type)
+                end
+            elseif cond.type ~= bool then
+                print(ee)
+                terra.reporterror(ctx,ee,"expected a boolean or vector of booleans but found ",cond.type)   
+            end
+        end
+        return ee:copy { type = t, operands = terra.newlist{cond,l,r}}
+    end
+
     local operator_table = {
         ["-"] = { checkarithpointer, "__sub" };
         ["+"] = { checkarithpointer, "__add" };
@@ -1899,6 +1920,7 @@ function terra.funcvariant:typecheck(ctx)
         ["^"] =  { checkintegralarith, "__xor" };
         ["<<"] = { checkshift, "__lshift" };
         [">>"] = { checkshift, "__rshift" };
+        ["select"] = { checkifelse, "__select"}
     }
     
     local function checkoperator(ee)
@@ -2973,7 +2995,11 @@ end)
 _G["arrayof"] = macro(function(ctx,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(ctx), expressions = exps })
-end)    
+end)
+
+terra.select = macro(function(ctx,tree,guard,a,b)
+    return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
+end)
 -- END GLOBAL MACROS
 
 function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)

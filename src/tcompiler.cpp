@@ -823,6 +823,15 @@ if(baseT->isIntegerTy()) { \
         
         return addr;
     }
+    Value * emitIfElse(Obj * cond, Obj * a, Obj * b) {
+        Value * condExp = emitExp(cond);
+        Value * aExp = emitExp(a);
+        Value * bExp = emitExp(b);
+        if(!condExp->getType()->isVectorTy()) {
+            condExp = emitCond(condExp); //convert to i1
+        }
+        return B->CreateSelect(condExp, aExp, bExp);
+    }
     Value * emitExp(Obj * exp) {
         switch(exp->kind("kind")) {
             case T_var:  {
@@ -861,7 +870,15 @@ if(baseT->isIntegerTy()) { \
                     exps.objAt(1,&b);
                     return emitBinary(exp,&a,&b);
                 } else {
-                    assert(!"NYI - greater than 2 operands?");
+                    T_Kind op = exp->kind("operator");
+                    if(op == T_select) {
+                        Obj a,b,c;
+                        exps.objAt(0,&a);
+                        exps.objAt(1,&b);
+                        exps.objAt(2,&c);
+                        return emitIfElse(&a,&b,&c);
+                    }
+                    assert(!"NYI - unimplemented operator?");
                     return NULL;
                 }
                 switch(exp->kind("operator")) {
@@ -1071,6 +1088,9 @@ if(baseT->isIntegerTy()) { \
                 Value * vec = UndefValue::get(vecType->type);
                 Type * intType = Type::getInt32Ty(*C->ctx);
                 for(size_t i = 0; i < values.size(); i++) {
+                    if(vecType->islogical) {
+                        values[i] = emitCond(values[i]);
+                    }
                     vec = B->CreateInsertElement(vec, values[i], ConstantInt::get(intType, i));
                 }
                 return vec;
