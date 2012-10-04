@@ -72,6 +72,7 @@ static int get_global(LexState * ls, TA_Globals k) {
 typedef struct BlockCnt {
   struct BlockCnt *previous;  /* chain */
   std::vector<TString *> local_variables;
+  int laststatementwassplitapply;
 } BlockCnt;
 
 
@@ -343,6 +344,7 @@ static void enterlevel (LexState *ls) {
 
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
+  bl->laststatementwassplitapply = 0;
   fs->bl = bl;
   //printf("entering block %lld\n", (long long int)bl);
   //printf("previous is %lld\n", (long long int)bl->previous);
@@ -914,7 +916,8 @@ static void primaryexp (LexState *ls, expdesc *v) {
         prefixexp { `.' NAME | `[' exp `]' | `:' NAME funcargs | funcargs } */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-  RETURNS_1(prefixexp(ls, v));
+
+  RETURNS_1(prefixexp(ls, v));  
   for (;;) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
@@ -926,6 +929,8 @@ static void primaryexp (LexState *ls, expdesc *v) {
         break;
       }
       case '[': {  /* `[' exp1 `]' */
+        if(line != ls->linenumber) /* potential for [a]\n[b] = ... ambiguity, mark it so we can report a helpful error */
+          fs->bl->laststatementwassplitapply = 1;
         expdesc key;
         //luaK_exp2anyregup(fs, v);
         
@@ -949,6 +954,8 @@ static void primaryexp (LexState *ls, expdesc *v) {
         break;
       }
       case '(': case TK_STRING: case '{': {  /* funcargs */
+        if(line != ls->linenumber) /* potential for [a]\n[b] = ... ambiguity, mark it so we can report a helpful error */
+          fs->bl->laststatementwassplitapply = 1;
         //luaK_exp2nextreg(fs, v);
         int tbl = new_table_before(ls,T_apply,true);
         add_field(ls,tbl,"value");
@@ -1919,6 +1926,9 @@ static void retstat (LexState *ls) {
 
 static int statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
+  int laststatementwassplitapply = ls->fs->bl->laststatementwassplitapply;
+  ls->fs->bl->laststatementwassplitapply = 0;
+
   enterlevel(ls);
   
   switch (ls->t.token) {
@@ -2002,6 +2012,10 @@ static int statement (LexState *ls) {
       RETURNS_1(gotostat(ls));
       break;
     }
+    case '=': case ',': /* the user probably wrote  a + b\n(c)(d) =, give an error that suggests adding a ; */
+      if(laststatementwassplitapply)
+        luaX_syntaxerror(ls, "unexpected " LUA_QL(",") " or " LUA_QL("=") " at the beginning of a statement. a " LUA_QL(";") " may be needed on the previous line.");
+      /*otherwise, fallthrough to the normal error message.*/
     default: {  /* stat -> func | assignment */
       RETURNS_1(exprstat(ls));
       break;
