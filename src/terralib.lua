@@ -472,7 +472,9 @@ function terra.funcvariant:compile(ctx)
     
     ctx:functionbegin(self)
     self.state = "typecheck"
+    local start = terra.currenttimeinseconds()
     self.typedtree = self:typecheck(ctx)
+    self.stats.typec = terra.currenttimeinseconds() - start
     self.type = self.typedtree.type
     
     self.state = "codegen"
@@ -570,6 +572,16 @@ end
 
 function terra.func:getvariants()
     return self.variants
+end
+
+function terra.func:printstats()
+    self:compile()
+    for i,v in ipairs(self.variants) do
+        print("variant ", v.type)
+        for k,v in pairs(v.stats) do
+            print("",k,v)
+        end
+    end
 end
 
 function terra.isfunction(obj)
@@ -739,7 +751,7 @@ do  --constructor functions for terra functions and variables
     function terra.newfunctionvariant(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
-        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname, state = "uninitializedterra" }
+        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname, state = "uninitializedterra", stats = {} }
         local fn = setmetatable(obj,terra.funcvariant)
         
         --handle desugaring of methods defintions by adding an implicit self argument

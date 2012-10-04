@@ -14,7 +14,7 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include<llvm-c/Disassembler.h>
-
+#include <sys/time.h>
 
 using namespace llvm;
 
@@ -68,6 +68,24 @@ struct DisassembleFunctionListener : public JITEventListener {
         }
     }
 };
+static double CurrentTimeInSeconds() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec + tv.tv_usec / 1000000.0;
+}
+static int terra_CurrentTimeInSeconds(lua_State * L) {
+    lua_pushnumber(L, CurrentTimeInSeconds());
+    return 1;
+}
+
+static void RecordTime(Obj * obj, const char * name, double begin) {
+    lua_State * L = obj->getState();
+    Obj stats;
+    obj->obj("stats",&stats);
+    double end = CurrentTimeInSeconds();
+    lua_pushnumber(L, end - begin);
+    stats.setfield(name);
+}
 
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
@@ -86,6 +104,9 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_saveobjimpl,1);
     lua_setfield(T->L,-2,"saveobjimpl");
+    
+    lua_pushcfunction(T->L, terra_CurrentTimeInSeconds);
+    lua_setfield(T->L,-2,"currenttimeinseconds");
     
     lua_pop(T->L,1); //remove terra from stack
     
@@ -199,6 +220,7 @@ static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi)
     fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
     fpm->add(createInstructionCombiningPass());  // Clean up after everything.
 }
+
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
     Type * type;
@@ -454,6 +476,7 @@ struct TerraCompiler {
         *rfn = fn;
     }
     void run(terra_State * _T, int ref_table) {
+        double begin = CurrentTimeInSeconds();
         T = _T;
         L = T->L;
         C = T->C;
@@ -504,6 +527,7 @@ struct TerraCompiler {
         }
         verifyFunction(*func);
         
+        RecordTime(&funcobj, "llvmgen", begin);
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
         delete B;
@@ -1453,6 +1477,7 @@ if(baseT->isIntegerTy()) { \
     }
 };
 
+
 static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
@@ -1512,13 +1537,17 @@ static int terra_jit(lua_State * L) {
                 std::string s = func->getName();
                 printf("jitting %s\n",s.c_str());
             }
-            
+            double begin = CurrentTimeInSeconds();
             T->C->fpm->run(*func);
+            RecordTime(&funcobj,"opt",begin);
+            
             DEBUG_ONLY(T) {
                 func->dump();
             }
             
+            begin = CurrentTimeInSeconds();
             void * ptr = T->C->ee->getPointerToFunction(func);
+            RecordTime(&funcobj,"gen",begin);
             
             lua_pushlightuserdata(L, ptr);
             funcobj.setfield("fptr");
