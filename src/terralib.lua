@@ -554,7 +554,7 @@ function terra.func:__call(...)
     for i,v in ipairs(self.variants) do
         --TODO: this is very inefficient, we should have a routine which
         --figures out which function to call based on argument types
-        results = {pcall(v.__call,...)}
+        results = {pcall(v.__call,v,...)}
         if results[1] == true then
             table.remove(results,1)
             return unpack(results)
