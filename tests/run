@@ -19,7 +19,7 @@ for line in io.popen("find . -name '*.t'"):lines() do
             e.v = "pass"
             passed = passed + 1
         end
-    else
+    elseif string.sub(file,1,4) ~= "lib/" then
         if os.execute("../terra "..file) ~= 0 then
             e.v = "FAIL"
             failed = failed + 1

@@ -2058,7 +2058,13 @@ function terra.funcvariant:typecheck(ctx)
         local maxsize = #exps
         return terra.newtree(anchor, { kind = terra.kinds.parameterlist, parameters = exps, minsize = minsize, maxsize = maxsize, call = multiret })
     end
-    
+    local function insertvarargpromotions(param)
+        if param.type == float then
+            return insertcast(param,double)
+        end
+        --TODO: do we need promotions for integral data types or does llvm already do that?
+        return param
+    end
     local function tryinsertcasts(typelists,paramlist)
         
         local function trylist(typelist, speculate)
@@ -2086,7 +2092,7 @@ function terra.funcvariant:typecheck(ctx)
                 elseif paramlist.recievers == "all" or (i == 1 and paramlist.recievers == "first") then
                     result,valid = insertrecievercast(param,typ,speculate)
                 elseif typ == "vararg" then
-                    result,valid = param,true
+                    result,valid = insertvarargpromotions(param),true
                 else
                     result,valid = insertcast(param,typ,speculate)
                 end
