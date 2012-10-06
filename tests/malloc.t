@@ -21,3 +21,6 @@ end
 
 local test = require("test")
 test.eq(foo(),N*(1 + N)/2)
+
+
+foo:printpretty()

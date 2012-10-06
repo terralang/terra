@@ -525,7 +525,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
         lua_remove(ls->L,-2); //remove the T_symbol, now we have { kind = recfield }, luaexpression
         add_field(ls,tbl,"value");
         //replace T_recfield with T_listfield
-        push_integer(ls,T_listfield);
+        push_double(ls,T_listfield);
         add_field(ls,tbl,"kind");
         return;        
       }
@@ -1030,9 +1030,12 @@ static void simpleexp (LexState *ls, expdesc *v) {
         push_integer(ls,ls->t.seminfo.i);
         const char * sign = (flags & SemInfo::F_ISUNSIGNED) ? "u" : "";
         const char * sz = (flags & SemInfo::F_IS8BYTES) ? "64" : "";
-        char buf[8];
+        char buf[128];
         sprintf(buf,"%sint%s",sign,sz);
         push_literal(ls,buf);
+        sprintf(buf,"%lld",ls->t.seminfo.i);
+        push_string(ls,buf);
+        add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
         push_double(ls,ls->t.seminfo.r);
         if(flags & SemInfo::F_IS8BYTES)

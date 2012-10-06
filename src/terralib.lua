@@ -772,13 +772,13 @@ do  --constructor functions for terra functions and variables
         return fn
     end
     
-    local function mkfunction()
-        return setmetatable({variants = terra.newlist()},terra.func)
+    local function mkfunction(name)
+        return setmetatable({variants = terra.newlist(), name = name},terra.func)
     end
     
     function terra.newfunction(olddef,newtree,name,env,reciever)
         if not olddef then
-            olddef = mkfunction()
+            olddef = mkfunction(name)
         end
         
         olddef:addvariant(terra.newfunctionvariant(newtree,name,env,reciever))
@@ -790,7 +790,7 @@ do  --constructor functions for terra functions and variables
         local obj = { name = name, type = typ, state = "uninitializedc" }
         setmetatable(obj,terra.funcvariant)
         
-        local fn = mkfunction()
+        local fn = mkfunction(name)
         fn:addvariant(obj)
         
         return fn
@@ -3019,6 +3019,249 @@ terra.select = macro(function(ctx,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
 end)
 -- END GLOBAL MACROS
+
+-- DEBUG
+
+function terra.printf(s,...)
+    local function toformat(x)
+        if type(x) ~= "number" and type(x) ~= "string" then
+            return tostring(x) 
+        else
+            return x
+        end
+    end
+    local strs = terra.newlist({...}):map(toformat)
+    return io.write(tostring(s):format(unpack(strs)))
+end
+
+function terra.func:printpretty()
+    for i,v in ipairs(self.variants) do
+        v:compile()
+        terra.printf("%s = ",v.name,v.type)
+        v:printpretty()
+    end
+end
+function terra.funcvariant:printpretty()
+    self:compile()
+    if not self.typedtree then
+        terra.printf("<extern : %s>\n",self.type)
+        return
+    end
+    local indent = 0
+    local function enterblock()
+        indent = indent + 1
+    end
+    local function leaveblock()
+        indent = indent - 1
+    end
+    local function emit(...) terra.printf(...) end
+    local function begin(...)
+        for i = 1,indent do
+            io.write("    ")
+        end
+        emit(...)
+    end
+
+    local function emitList(lst,begin,sep,finish,fn)
+        emit(begin)
+        if not fn then
+            fn = function(e) emit(e) end
+        end
+        for i,k in ipairs(lst) do
+            fn(k)
+            if i ~= #lst then
+                emit(sep)
+            end
+        end
+        emit(finish)
+    end
+
+    local function emitType(t)
+        emit(t)
+    end
+
+    local function emitParam(p)
+        emit("%s : %s",p.name,p.type)
+    end
+    local emitStat, emitExp,emitParamList
+
+    function emitStmt(s)
+        if s:is "block" then
+            enterblock()
+            local function emitStatList(lst) --nested statements (e.g. from quotes need "do" appended)
+                for i,ss in ipairs(lst) do
+                    if ss:is "block" then
+                        begin("do\n")
+                        enterblock()
+                        emitStatList(ss.statements)
+                        leaveblock()
+                        begin("end\n")
+                    else
+                        emitStmt(ss)
+                    end
+                end
+            end
+            emitStatList(s.statements)
+            leaveblock()
+        elseif s:is "return" then
+            begin("return ")
+            emitParamList(s.expressions)
+            emit("\n")
+        elseif s:is "label" then
+            begin("::%s::\n",s.labelname)
+        elseif s:is "goto" then
+            begin("goto %s\n",s.definition.labelname)
+        elseif s:is "break" then
+            begin("break\n")
+        elseif s:is "while" then
+            begin("while ")
+            emitExp(s.condition)
+            emit(" do\n")
+            emitStmt(s.body)
+            begin("end\n")
+        elseif s:is "if" then
+            for i,b in ipairs(s.branches) do
+                if i == 1 then
+                    begin("if ")
+                else
+                    begin("elseif ")
+                end
+                emitExp(b.condition)
+                emit(" then\n")
+                emitStmt(b.body)
+            end
+            begin("else\n")
+            emitStmt(s.orelse)
+            begin("end\n")
+        elseif s:is "repeat" then
+            begin("repeat\n")
+            emitStmt(s.body)
+            begin("until ")
+            emitExp(s.condition)
+            emit("\n")
+        elseif s:is "defvar" then
+            begin("var ")
+            if s.isglobal then
+                emit("{global} ")
+            end
+            emitList(s.variables,"",", "," = ",emitParam)
+            emitParamList(s.initializers)
+            emit("\n")
+        elseif s:is "assignment" then
+            begin("")
+            emitList(s.lhs,"",", ","",emitExp)
+            emit(" = ")
+            emitParamList(s.rhs)
+            emit("\n")
+        else
+            begin("<??stmt??>\n")
+        end
+    end
+    
+    local function makeprectable(...)
+        local lst = {...}
+        local sz = #lst
+        local tbl = {}
+        for i = 1,#lst,2 do
+            tbl[lst[i]] = lst[i+1]
+        end
+        return tbl
+    end
+
+    local prectable = makeprectable(
+     "+",7,"-",7,"*",7,"/",8,"%",8,
+     "^",11,"..",6,"<<",4,">>",4,
+     "==",3,"<",3,"<=",3,
+     "~=",3,">",3,">=",3,
+     "and",2,"or",1,
+     "@",9,"-",9,"&",9,"not",9)
+    
+    local function getprec(e)
+        if e:is "operator" then
+            return prectable[terra.kinds[e.operator]]
+        else
+            return 12
+        end
+    end
+    local function doparens(ref,e)
+        if getprec(ref) > getprec(e) then
+            emit("(")
+            emitExp(e)
+            emit(")")
+        else
+            emitExp(e)
+        end
+    end
+
+    function emitExp(e)
+        if e:is "var" then
+            emit(e.name)
+        elseif e:is "ltor" or e:is "rtol" then
+            emitExp(e.expression)
+        elseif e:is "operator" then
+            local op = terra.kinds[e.operator]
+            local function emitOperand(o)
+                doparens(e,o)
+            end
+            if #e.operands == 1 then
+                emit(op)
+                emitOperand(e.operands[1])
+            elseif #e.operands == 2 then
+                emitOperand(e.operands[1])
+                emit(" %s ",op)
+                emitOperand(e.operands[2])
+            elseif e.operator:is "select" then
+                emit("terralib.select")
+                emitList(e.operands,"(",", ",")",emitExp)
+            else
+                emit("<??operator??>")
+            end
+        elseif e:is "index" then
+            doparens(e,e.value)
+            emit("[")
+            emitExp(e.index)
+            emit("]")
+        elseif e:is "literal" then
+            if e.type:ispointer() and e.type.type:isfunction() then
+                print(e.value.name)
+            elseif e.type:isintegral() then
+                emit(e.stringvalue or "<int>")
+            else
+                emit(e.value)
+            end
+        elseif e:is "cast" then
+            doparens(e,e.expression)
+            emit(":as(")
+            emitType(e.to)
+            emit(")")
+        elseif e:is "apply" then
+            doparens(e,e.value)
+            emit("(")
+            emitParamList(e.arguments)
+            emit(")")
+        else
+            emit("<exp>")
+        end
+    end
+
+    function emitParamList(pl)
+        emitList(pl.parameters,"",", ","",emitExp)
+        if pl.call then
+            emit(" {")
+            emitExp(pl.call)
+            emit("}")
+        end
+    end
+
+    emit("terra")
+    emitList(self.typedtree.parameters,"(",",",") : ",emitParam)
+    emitList(self.type.returns,"{",", ","}",emitType)
+    emit("\n")
+    emitStmt(self.typedtree.body)
+    emit("end\n")
+end
+
+-- END DEBUG
 
 function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
     local afn = ffi.cast("void (*)(void *,void**)",assignfn)
