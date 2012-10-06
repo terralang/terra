@@ -735,7 +735,7 @@ function terra.newsymbol(typ)
 end
 
 function terra.symbol:__tostring()
-    return "symbol ("..(self.displayname or tostring(self.id))..")"
+    return "$sym"..(self.displayname or tostring(self.id))
 end
 
 _G["symbol"] = terra.newsymbol 
@@ -3210,7 +3210,7 @@ function terra.funcvariant:printpretty()
                 emitOperand(e.operands[1])
                 emit(" %s ",op)
                 emitOperand(e.operands[2])
-            elseif e.operator:is "select" then
+            elseif op == "select" then
                 emit("terralib.select")
                 emitList(e.operands,"(",", ",")",emitExp)
             else
@@ -3223,7 +3223,7 @@ function terra.funcvariant:printpretty()
             emit("]")
         elseif e:is "literal" then
             if e.type:ispointer() and e.type.type:isfunction() then
-                print(e.value.name)
+                emit(e.value.name)
             elseif e.type:isintegral() then
                 emit(e.stringvalue or "<int>")
             else

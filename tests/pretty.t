@@ -30,6 +30,7 @@ terra foo()
 	var d = array(1,2,3)
 	b = (&a)[1]
 	var e : int = a
+	var g = terralib.select(true,0,1)
 	return 3,4,bar(1)
 end
 
