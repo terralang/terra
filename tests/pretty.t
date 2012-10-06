@@ -3,14 +3,22 @@
 terra bar(a : int)
 	return 4,5
 end
-
+terra baz()
+end
+function whatwhat()
+end
+struct A { data : int }
 terra foo()
+	var aa : A
+
+	baz()
+	whatwhat()
 	do
 	end
 	::what::
 	goto what
 	while 4 < 3 do
-		return 3,4,bar(1)
+		return 3,4,bar(aa.data)
 	end
 	var a = 0.0
 	if a < 3 then
@@ -31,7 +39,9 @@ terra foo()
 	b = (&a)[1]
 	var e : int = a
 	var g = terralib.select(true,0,1)
-	return 3,4,bar(1)
+	var ee = sizeof(int)
+	var more = { a = 5, c = 4, 3}
+	return 3,4,ee,bar(1)
 end
 
 foo:compile()

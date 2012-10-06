@@ -3031,6 +3031,7 @@ function terra.printf(s,...)
         end
     end
     local strs = terra.newlist({...}):map(toformat)
+    --print(debug.traceback())
     return io.write(tostring(s):format(unpack(strs)))
 end
 
@@ -3068,7 +3069,7 @@ function terra.funcvariant:printpretty()
             fn = function(e) emit(e) end
         end
         for i,k in ipairs(lst) do
-            fn(k)
+            fn(k,i)
             if i ~= #lst then
                 emit(sep)
             end
@@ -3144,8 +3145,11 @@ function terra.funcvariant:printpretty()
             if s.isglobal then
                 emit("{global} ")
             end
-            emitList(s.variables,"",", "," = ",emitParam)
-            emitParamList(s.initializers)
+            emitList(s.variables,"",", ","",emitParam)
+            if s.initializers then
+                emit(" = ")
+                emitParamList(s.initializers)
+            end
             emit("\n")
         elseif s:is "assignment" then
             begin("")
@@ -3154,7 +3158,9 @@ function terra.funcvariant:printpretty()
             emitParamList(s.rhs)
             emit("\n")
         else
-            begin("<??stmt??>\n")
+            begin("")
+            emitExp(s)
+            emit("\n")
         end
     end
     
@@ -3227,25 +3233,56 @@ function terra.funcvariant:printpretty()
             elseif e.type:isintegral() then
                 emit(e.stringvalue or "<int>")
             else
-                emit(e.value)
+                emit("%q",e.value)
             end
+        elseif e:is "luafunction" then
+            emit("<luafunction>")
         elseif e:is "cast" then
             doparens(e,e.expression)
             emit(":as(")
             emitType(e.to)
             emit(")")
+        elseif e:is "sizeof" then
+            emit("sizeof(%s)",e.oftype)
         elseif e:is "apply" then
             doparens(e,e.value)
             emit("(")
             emitParamList(e.arguments)
             emit(")")
+        elseif e:is "extractreturn" then
+            emit("<extract%d>",e.index)
+        elseif e:is "select" then
+            doparens(e,e.value)
+            emit(".")
+            emit(e.field)
+        elseif e:is "vectorconstructor" then
+            emit("vector(")
+            emitParamList(e.expressions)
+            emit(")")
+        elseif e:is "arrayconstructor" then
+            emit("array(")
+            emitParamList(e.expressions)
+            emit(")")
+        elseif e:is "constructor" then
+            emit("{")
+            local anon = 0
+            local keys = e.type.entries:map(function(e) return e.key end)
+            emitParamList(e.expressions,keys)
+            emit("}")
         else
-            emit("<exp>")
+            emit("<??tree??>")
         end
     end
 
-    function emitParamList(pl)
-        emitList(pl.parameters,"",", ","",emitExp)
+    function emitParamList(pl,keys)
+        local function emitE(e,i)
+            if keys and keys[i] then
+                emit(keys[i])
+                emit(" = ")
+            end
+            emitExp(e)
+        end
+        emitList(pl.parameters,"",", ","",emitE)
         if pl.call then
             emit(" {")
             emitExp(pl.call)
