@@ -14,6 +14,7 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include<llvm-c/Disassembler.h>
+#include<llvm/Support/ManagedStatic.h>
 #include <sys/time.h>
 
 using namespace llvm;
@@ -23,6 +24,9 @@ static int terra_jit(lua_State * L);  //entry point from lua into compiler to ac
 
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
+
+
+static llvm_shutdown_obj llvmshutdownobj;
 
 struct OptInfo {
     int OptLevel;
@@ -112,6 +116,9 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
     memset(T->C, 0, sizeof(terra_CompilerState));
+    
+    llvm::TimePassesIsEnabled = true;
+
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
