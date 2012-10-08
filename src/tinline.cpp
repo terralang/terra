@@ -52,11 +52,11 @@ STATISTIC(NumMergedAllocas, "Number of allocas merged together");
 STATISTIC(NumCallerCallersAnalyzed, "Number of caller-callers analyzed");
 
 static cl::opt<int>
-InlineLimit("inline-threshold", cl::Hidden, cl::init(225), cl::ZeroOrMore,
+InlineLimit("inline-threshold-scc", cl::Hidden, cl::init(225), cl::ZeroOrMore,
         cl::desc("Control the amount of inlining to perform (default = 225)"));
 
 static cl::opt<int>
-HintThreshold("inlinehint-threshold", cl::Hidden, cl::init(325),
+HintThreshold("inlinehint-threshold-scc", cl::Hidden, cl::init(325),
               cl::desc("Threshold for inlining functions with inline hint"));
 
 // Threshold to use when optsize is specified (and there is no -inline-limit).

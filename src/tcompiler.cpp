@@ -26,7 +26,9 @@ static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doe
 static int terra_saveobjimpl(lua_State * L);
 
 
+#ifdef PRINT_LLVM_TIMING_STATS
 static llvm_shutdown_obj llvmshutdownobj;
+#endif
 
 struct OptInfo {
     int OptLevel;
@@ -117,7 +119,11 @@ int terra_compilerinit(struct terra_State * T) {
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
     memset(T->C, 0, sizeof(terra_CompilerState));
     
-    llvm::TimePassesIsEnabled = true;
+#ifdef PRINT_LLVM_TIMING_STATS
+    int argc = 2;
+    const char * argv[] = {"terra", "-time-passes"};
+    cl::ParseCommandLineOptions(argc,argv,"terra");
+#endif
 
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
