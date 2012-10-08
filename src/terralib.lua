@@ -2231,7 +2231,19 @@ function terra.funcvariant:typecheck(ctx)
         local function generatenativewrapper(fn,paramlist)
             local paramtypes = paramlist.parameters:map(function(p) return p.type end)
             local castedtype = terra.types.funcpointer(paramtypes,{})
-            local cb = ffi.cast(castedtype:cstring(),fn)
+            
+            local fncache = terra.__wrappedluafunctions[fn]
+
+            if not fncache then
+                fncache = {}
+                terra.__wrappedluafunctions[fn] = fncache
+            end
+            local cb = fncache[castedtype]
+            if not cb then
+                cb = ffi.cast(castedtype:cstring(),fn)
+                fncache[castedtype] = cb
+            end
+
             local fptr = terra.pointertolightuserdata(cb)
             return terra.newtree(anchor, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
         end
@@ -2967,6 +2979,8 @@ function terra.funcvariant:typecheck(ctx)
     
     return typedtree
 end
+--cache for lua functions called by terra, to prevent making multiple callback functions
+terra.__wrappedluafunctions = {}
 
 -- END TYPECHECKER
 
