@@ -1224,9 +1224,9 @@ if(baseT->isIntegerTy()) { \
         int returnsN = returns.size();
         
         Value * sret = NULL;
+        FunctionType * castft = (FunctionType*) ftyp->type;
         if(ftyp->issretfunc) {
             //create struct to hold the list
-            FunctionType * castft = (FunctionType*) ftyp->type;
             PointerType * pt = cast<PointerType>(castft->getParamType(0));
             sret = B->CreateAlloca(pt->getElementType());
             params.push_back(sret);
@@ -1242,7 +1242,18 @@ if(baseT->isIntegerTy()) { \
                 params[i] = p;
             }
         }
-        Value * result = B->CreateCall(fn, params);
+        
+        CallInst * result = B->CreateCall(fn, params);
+        
+        //Attempt to make obj-c happy by passing structs to varargs on the stack, rather than as a pointer
+        //TODO: this should be removed when we match the C calling convension
+        if(castft->isVarArg()) {
+            for(int i = castft->getNumParams(); i < params.size(); i++) {
+                if(types[i]->ispassedaspointer) {
+                     result->addAttribute(1 + i, Attribute::ByVal); /* 1 + to skip return argument */
+                }
+            }
+        }
         
         if(returnsN == 0) {
             return NULL;
