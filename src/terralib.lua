@@ -2394,6 +2394,7 @@ function terra.funcvariant:typecheck(ctx)
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else
+            print(debug.traceback())
             terra.reporterror(ctx,anchor,"lua object of type ", type(v), " not understood by terra code.")
             return anchor:copy { type = terra.types.error }
         end
@@ -3246,8 +3247,10 @@ function terra.funcvariant:printpretty()
                 emit(e.value.name)
             elseif e.type:isintegral() then
                 emit(e.stringvalue or "<int>")
-            else
+            elseif type(e.value) == "string" then
                 emit("%q",e.value)
+            else
+                emit("%s",e.value)
             end
         elseif e:is "luafunction" then
             emit("<luafunction>")

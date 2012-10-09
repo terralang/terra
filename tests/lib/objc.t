@@ -19,6 +19,9 @@ setmetatable(ID.methods,{
 		if df then
 			return df
 		end
+		if string.sub(idx,1,2) == "__" then --ignore metamethods
+			return nil
+		end
 		return macro(function(ctx,tree,obj,...)
 			local args = {...}
 			local idx = idx:gsub("_",":")
