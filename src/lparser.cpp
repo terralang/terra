@@ -785,12 +785,12 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
 void exprwithstring(LexState * ls, expdesc *v) {
     Token begintoken = ls->t;
     if(ls->in_terra)
-        ls->in_terra_arglist = 1;
+        ls->in_terra_arglist++;
     expr(ls,v);
     if(ls->in_terra) {
         const char * data;
         int N;
-        ls->in_terra_arglist = 0;
+        ls->in_terra_arglist--;
         luaX_getoutput(ls, &begintoken, &data, &N);
         lua_pushlstring(ls->L, data, N);
         add_field(ls, -2, "expressionstring");

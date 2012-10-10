@@ -90,10 +90,12 @@ void testsize(int M, int K, int N) {
 
 
 	double begin = CurrentTimeInSeconds();
+	for(int i = 0; i < 3; i++)
 	cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
 	double begin2 = CurrentTimeInSeconds();
-	naive_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
+	//naive_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
 	double begin3 = CurrentTimeInSeconds();
+	for(int i = 0; i < 3; i++)
 	my_sgemm(M,N,K,1.f,A,K,B,N,0.f,C3,N);
 	double finish = CurrentTimeInSeconds();
 
@@ -112,7 +114,7 @@ void testsize(int M, int K, int N) {
 		printf("\n");
 	}*/
 
-	asserteq(C,C2,M,N);
+	//asserteq(C,C2,M,N);
 	asserteq(C,C3,M,N);
 
 	free(C);
@@ -120,12 +122,12 @@ void testsize(int M, int K, int N) {
 	free(C3);
 	free(A);
 	free(B);
-	printf("%d %d %d %f %f %f\n",M,K,N,begin2 - begin, begin3 - begin2, finish - begin3);
+	printf("%d %d %d %f %f %f %f\n",M,K,N,begin2 - begin, begin3 - begin2, finish - begin3, (finish - begin3)/ (begin2 - begin));
 }
 
 int main() {
 
-	for(int i = 100; i < 1000; i += 100) {
+	for(int i = 64; i < 1024; i += 64) {
 		testsize(i,i,i);
 	}
 

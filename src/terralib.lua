@@ -1152,7 +1152,6 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local function checkistype(typ)
         if not types.istype(typ) then 
-            print(debug.traceback())
             error("expected a type but found "..type(typ))
         end
     end
@@ -2386,7 +2385,11 @@ function terra.funcvariant:typecheck(ctx)
             --if this is a raw tree, we just drop it in place and hope the user knew what they were doing
             return v
         elseif type(v) == "number" then
-            return terra.newtree(anchor, { kind = terra.kinds.literal, value = v, type = double })
+            local r = terra.newtree(anchor, { kind = terra.kinds.literal, value = v, type = double })
+            if math.floor(v) == v then
+                r = terra.newtree(anchor,{ kind = terra.kinds.explicitcast, totype = int, value = r })
+            end
+            return r
         elseif type(v) == "boolean" then
             return terra.newtree(anchor, { kind = terra.kinds.literal, value = v, type = bool })
         elseif type(v) == "string" then

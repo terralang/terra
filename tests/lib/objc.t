@@ -7,6 +7,7 @@ local struct ID {
 	dummy : &uint8	
 }
 local OC = {}
+OC.ID = ID
 setmetatable(OC, {
 	 __index = function(self,idx)
 	 	return `C.objc_getClass(idx):as(&ID)
