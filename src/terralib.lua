@@ -1919,6 +1919,14 @@ function terra.funcvariant:typecheck(ctx)
         return ee:copy { type = t, operands = terra.newlist{cond,l,r}}
     end
 
+    local function gettreeattribute(tree,attrname,typ)
+        local attr = tree.attributes and tree.attributes[attrname]
+        if attr and typ ~= type(attr) then
+            terra.reporterror(ctx,tree,attrname," requires type ", typ " but found ", type(attr))
+            return nil
+        end
+        return attr
+    end
     local operator_table = {
         ["-"] = { checkarithpointer, "__sub" };
         ["+"] = { checkarithpointer, "__add" };
@@ -1946,7 +1954,9 @@ function terra.funcvariant:typecheck(ctx)
         --check non-overloadable operators first
         if op_string == "@" then
             local e = checkrvalue(ee.operands[1])
-            return false, insertdereference(e)
+            local dr = insertdereference(e)
+            dr.alignment = gettreeattribute(ee,"align","number")
+            return false, dr 
         elseif op_string == "&" then
             local e = checklvalue(ee.operands[1])
             local ty = terra.types.pointer(e.type)
@@ -2541,7 +2551,7 @@ function terra.funcvariant:typecheck(ctx)
                         terra.reporterror(ctx,e,"expected an array or pointer but found ",v.type)
                     end
                 end
-                return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
+                return e:copy { type = typ, lvalue = lvalue, value = v, index = idx, alignment = gettreeattribute(e,"align","number") }
             elseif e:is "explicitcast" then
                 return insertexplicitcast(checkrvalue(e.value),e.totype)
             elseif e:is "sizeof" then
@@ -3039,9 +3049,20 @@ _G["arrayof"] = macro(function(ctx,tree,typ,...)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(ctx), expressions = exps })
 end)
 
+_G["attribute"] = macro(function(ctx,tree,arg,attributes)
+    local attrs = attributes:asvalue(ctx)
+    if type(attrs) ~= "table" then
+        ctx:reporterror(tree,"expected a table of attributes but found ", type(attrs))
+    else
+        arg.tree.attributes = attrs
+    end
+    return arg.tree
+end)
+
 terra.select = macro(function(ctx,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
 end)
+
 -- END GLOBAL MACROS
 
 -- DEBUG

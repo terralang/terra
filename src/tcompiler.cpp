@@ -59,6 +59,7 @@ struct DisassembleFunctionListener : public JITEventListener {
         DEBUG_ONLY(T) {
         //for some reason linux version of llvm doesn't link correctly if we use LLVMCreateDisasm
         #ifndef __linux__
+            printf("assembly for function at address %p\n",data);
             LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
             assert(disasm != NULL);
             char buf[1024];
@@ -883,7 +884,12 @@ if(baseT->isIntegerTy()) { \
                 Obj e;
                 exp->obj("expression",&e);
                 Value * v = emitExp(&e);
-                return B->CreateLoad(v);
+                LoadInst * l = B->CreateLoad(v);
+                if(e.hasfield("alignment")) {
+                    int alignment = e.number("alignment");
+                    l->setAlignment(alignment);
+                }
+                return l;
             } break;
             case T_rtol: {
                 Obj e;
@@ -1492,7 +1498,11 @@ if(baseT->isIntegerTy()) { \
                     Obj lhs;
                     lhss.objAt(i,&lhs);
                     Value * lhsexp = emitExp(&lhs);
-                    B->CreateStore(rhsexps[i],lhsexp);
+                    StoreInst * store = B->CreateStore(rhsexps[i],lhsexp);
+                    if(lhs.hasfield("alignment")) {
+                        int alignment = lhs.number("alignment");
+                        store->setAlignment(alignment);
+                    }
                 }
             } break;
             default: {
