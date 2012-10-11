@@ -151,7 +151,7 @@ int terra_compilerinit(struct terra_State * T) {
     }
     TargetOptions options;
     CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
-    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "", options,Reloc::Default,CodeModel::Default,OL);
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "+avx", options,Reloc::Default,CodeModel::Default,OL);
     
     T->C->tm = TM;
     
@@ -191,6 +191,7 @@ static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi)
     fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
     if (!oi->DisableSimplifyLibCalls)
         fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
+    
     fpm->add(createJumpThreadingPass());         // Thread jumps.
     fpm->add(createCorrelatedValuePropagationPass()); // Propagate conditionals
     fpm->add(createCFGSimplificationPass());     // Merge & remove BBs

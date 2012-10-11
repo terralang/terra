@@ -49,7 +49,7 @@ void naive_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 }
 
 extern "C"
-void my_sgemm(const int M, const int N,
+void my_sgemm(double (*gettime)(), const int M, const int N,
                  const int K, const float alpha, const float *A,
                  const int lda, const float *B, const int ldb,
                  const float beta, float *C, const int ldc);
@@ -58,6 +58,20 @@ static double CurrentTimeInSeconds() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec + tv.tv_usec / 1000000.0;
+}
+
+bool CalcTime(int * times, double * start) {
+	if(*times == 0) {
+		*start = CurrentTimeInSeconds();
+	} else {
+		double elapsed = CurrentTimeInSeconds() - *start;
+		if(elapsed > 0.1f && *times >= 3) {
+			*start = elapsed / *times;
+			return false;
+		}
+	}
+	(*times)++;
+	return true;
 }
 
 //calculates C = alpha * AB + beta * C 
@@ -89,16 +103,19 @@ void testsize(int M, int K, int N) {
 		C[i] = C2[i] = C3[i] = 0.f;
 
 
-	double begin = CurrentTimeInSeconds();
-	for(int i = 0; i < 3; i++)
-	cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
-	double begin2 = CurrentTimeInSeconds();
+	int times = 0;
+	double blastime;
+	while(CalcTime(&times,&blastime))
+		cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
+	
+	//double begin2 = CurrentTimeInSeconds();
 	//naive_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
-	double begin3 = CurrentTimeInSeconds();
-	for(int i = 0; i < 3; i++)
-	my_sgemm(M,N,K,1.f,A,K,B,N,0.f,C3,N);
-	double finish = CurrentTimeInSeconds();
-
+	
+	double mytime;
+	times = 0;
+	while(CalcTime(&times,&mytime))
+		my_sgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
+	
 	/*
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
@@ -122,12 +139,12 @@ void testsize(int M, int K, int N) {
 	free(C3);
 	free(A);
 	free(B);
-	printf("%d %d %d %f %f %f %f\n",M,K,N,begin2 - begin, begin3 - begin2, finish - begin3, (finish - begin3)/ (begin2 - begin));
+	printf("%d %d %d %f %f %f\n",M,K,N,blastime,mytime, mytime/ blastime);
 }
 
 int main() {
 
-	for(int i = 64; i < 1024; i += 64) {
+	for(int i = 72; i < 1024; i += 72) {
 		testsize(i,i,i);
 	}
 

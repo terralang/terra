@@ -722,13 +722,19 @@ function terra.issymbol(s)
 end
 terra.symbol.count = 0
 
-function terra.newsymbol(typ)
+function terra.newsymbol(typ,displayname)
     if typ and not terra.types.istype(typ) then
-        error("argument is not a type")
+        if type(typ) == "string" and displayname == nil then
+            displayname = typ
+            typ = nil
+        else
+            error("argument is not a type")
+        end
     end
     local self = setmetatable({
         id = terra.symbol.count,
-        type = typ
+        type = typ,
+        displayname = displayname
     },terra.symbol)
     terra.symbol.count = terra.symbol.count + 1
     return self
