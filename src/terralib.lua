@@ -221,6 +221,10 @@ function terra.context:enterdef(luaenv)
 
 end
 
+function terra.iscontext(ctx)
+    return getmetatable(ctx) == terra.context
+end
+
 function terra.context:definition()
     return self.definitions[#self.definitions]
 end
@@ -344,7 +348,7 @@ function terra.context:functionend()
         until tocompile == func
         
         if not self.has_errors then
-            terra.jit(scc)
+            terra.jit({ functions = scc, flags = self.compileflags })
         end
         
         for i,f in ipairs(scc) do
@@ -364,8 +368,8 @@ function terra.context:functioncalls(func)
     end
 end
 
-function terra.newcontext()
-    return setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
+function terra.newcontext(flags)
+    return setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
 end
 
 -- END CONTEXT
@@ -461,7 +465,7 @@ function terra.funcvariant:compile(ctx)
         error("attempting to compile a function that is already in the process of being compiled.",2)
     end
     
-    local ctx = ctx or terra.newcontext() -- if this is a top level compile, create a new compilation context
+    local ctx = (terra.iscontext(ctx) and ctx) or terra.newcontext(ctx) -- if this is a top level compile, create a new compilation context
     
     dbprint("compiling function:")
     dbprintraw(self.untypedtree)

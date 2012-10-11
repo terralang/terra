@@ -13,9 +13,10 @@ extern "C" {
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 #include "tinline.h"
-#include<llvm-c/Disassembler.h>
-#include<llvm/Support/ManagedStatic.h>
+#include "llvm-c/Disassembler.h"
+#include "llvm/Support/ManagedStatic.h"
 #include <sys/time.h>
+#include "llvm/ExecutionEngine/MCJIT.h"
 
 using namespace llvm;
 
@@ -158,8 +159,8 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C->mi = createManualFunctionInliningPass(T->C->ee->getTargetData());
     T->C->mi->doInitialization();
-    
-    T->C->ee->RegisterJITEventListener(new DisassembleFunctionListener(T));
+    T->C->jiteventlistener = new DisassembleFunctionListener(T);
+    T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
     
     return 0;
 }
@@ -1550,9 +1551,13 @@ static int terra_jit(lua_State * L) {
     int ref_table = lobj_newreftable(T->L);
     
     {
-        Obj funclist;
+        Obj jitobj;
         lua_pushvalue(L,-2); //original argument
-        funclist.initFromStack(L, ref_table);
+        jitobj.initFromStack(L, ref_table);
+        Obj funclist;
+        Obj flags;
+        jitobj.obj("functions", &funclist);
+        jitobj.obj("flags",&flags);
         std::vector<Function *> scc;
         int N = funclist.size();
         DEBUG_ONLY(T) {
@@ -1575,6 +1580,32 @@ static int terra_jit(lua_State * L) {
         
         T->C->mi->runOnSCC(scc);
         
+        ExecutionEngine * ee = T->C->ee;
+        
+        if(flags.hasfield("usemcjit")) {
+            //THIS IS AN ENOURMOUS HACK.
+            //the execution engine will leak after this function
+            //eventually llvm will fix MCJIT so it can handle Modules that add functions later
+            //for now if we need it, we deal with the hacks...
+            LLVMLinkInJIT();
+            LLVMLinkInMCJIT();
+            std::vector<std::string> attr;
+            attr.push_back("+avx");
+            std::string err;
+            ee = EngineBuilder(T->C->m)
+                 .setUseMCJIT(true)
+                 .setMAttrs(attr)
+                 .setErrorStr(&err)
+                 .setEngineKind(EngineKind::JIT)
+                 .create(T->C->tm);
+            if (!ee) {
+                printf("llvm: %s\n",err.c_str());
+                abort();
+            }
+            ee->RegisterJITEventListener(T->C->jiteventlistener);
+
+        }
+        
         for(int i = 0; i < N; i++) {
             Obj funcobj;
             funclist.objAt(i,&funcobj);
@@ -1594,7 +1625,7 @@ static int terra_jit(lua_State * L) {
             }
             
             begin = CurrentTimeInSeconds();
-            void * ptr = T->C->ee->getPointerToFunction(func);
+            void * ptr = ee->getPointerToFunction(func);
             RecordTime(&funcobj,"gen",begin);
             
             lua_pushlightuserdata(L, ptr);

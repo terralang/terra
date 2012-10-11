@@ -31,7 +31,9 @@ for line in io.popen("find . -name '*.t'"):lines() do
 end
 
 for i,e in ipairs(results) do
-    print(i,e.v,e.k)
+    if e.v then
+        print(i,e.v,e.k)
+    end
 end
 print()
 print(tostring(passed).." tests passed. "..tostring(failed).." tests failed.")

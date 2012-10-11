@@ -8,6 +8,7 @@ struct terra_CompilerState {
     llvm::Module * m;
     llvm::LLVMContext * ctx;
     llvm::ExecutionEngine * ee;
+    llvm::JITEventListener * jiteventlistener;
     llvm::FunctionPassManager * fpm;
     llvm::TargetMachine * tm;
     llvm::ManualInliner * mi;
