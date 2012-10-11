@@ -1139,6 +1139,19 @@ if(baseT->isIntegerTy()) { \
                 }
                 return vec;
             } break;
+            case T_instrinsic: {
+                Obj arguments;
+                exp->obj("arguments",&arguments);
+                std::vector<Value *> values;
+                emitParameterList(&arguments,&values,NULL);
+                Obj itypeObj;
+                exp->obj("intrinsictype",&itypeObj);
+                TType * itype = getType(&itypeObj);
+                const char * name = exp->string("name");
+                FunctionType * fntype = cast<FunctionType>(cast<PointerType>(itype->type)->getElementType());
+                Value * fn = C->m->getOrInsertFunction(name, fntype);
+                return B->CreateCall(fn, values);
+            }
             default: {
                 assert(!"NYI - exp");
             } break;

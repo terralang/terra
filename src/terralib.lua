@@ -746,6 +746,25 @@ end
 
 _G["symbol"] = terra.newsymbol 
 
+-- INTRINSIC
+
+function terra.intrinsic(str, typ)
+    local typefn
+    if typ == nil and type(str) == "function" then
+        typefn = str
+    elseif type(str) == "string" and terra.types.istype(typ) then
+        typefn = function() return str,typ end
+    else
+        error("expected a name and type or a function providing a name and type but found "..tostring(str) .. ", " .. tostring(typ))
+    end
+    local function instrinsiccall(ctx,tree,...)
+        local args = terra.newlist({...}):map(function(e) return e.tree end)
+        return terra.newtree(tree, { kind = terra.kinds.intrinsic, typefn = typefn, arguments = args } )
+    end
+    return macro(instrinsiccall)
+end
+    
+
 -- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
     local name_count = 0
@@ -952,6 +971,9 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     function types.type:ispointertostruct()
         return self:ispointer() and self.type:isstruct()
+    end
+    function types.type:ispointertofunction()
+        return self:ispointer() and self.type:isfunction()
     end
     function types.type:ispassedaspointer() --warning: if you update this, you also need to update the behavior in tcompiler.cpp's getType function to set the ispassedaspointer flag
         return self:isstruct() or self:isarray()
@@ -2502,6 +2524,31 @@ function terra.funcvariant:typecheck(ctx)
         error("unresolved special?")
     end
     
+    local function checkintrinsic(e,mustreturnatleast1)
+        local params = checkparameterlist(e,e.arguments)
+        local paramtypes = terra.newlist()
+        for i,p in ipairs(params.parameters) do
+            paramtypes:insert(p.type)
+        end
+        local name,intrinsictype = e.typefn(paramtypes,params.minsize)
+        if type(name) ~= "string" then
+            terra.reporterror(ctx,e,"expected an intrinsic name but found ",tostring(name))
+            return e:copy { type = terra.types.error }
+        elseif intrinsictype == terra.types.error then
+            terra.reporterror(ctx,e,"instrinsic ",name," does not support arguments: ",unpack(paramtypes))
+            return e:copy { type = terra.types.error }
+        elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
+            terra.reporterror(ctx,e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
+            return e:copy { type = terra.types.error }
+        elseif (#intrinsictype.type.returns == 0 and mustreturnatleast1) or (#intrinsictype.type.returns > 1) then
+            terra.reporterror(ctx,e,"instrinsic used in an expression must return 1 argument")
+            return e:copy { type = terra.types.error }
+        end
+        
+        insertcasts(intrinsictype.type.parameters,params)
+        
+        return e:copy { type = intrinsictype.type.returns[1], name = name, arguments = params, intrinsictype = intrinsictype }
+    end
     
     function checkexp(e_,allowluaobjects) --if allowluaobjects is true, then checkexp can return trees with kind luaobject (e.g. for partial eval)
         local function handlemacro(ismacro,exp)
@@ -2638,6 +2685,8 @@ function terra.funcvariant:typecheck(ctx)
                 end
                 
                 return e:copy { expressions = entries, type = typ:getcanonical(ctx) }
+            elseif e:is "intrinsic" then
+                return checkintrinsic(e,true)
             end
             e:printraw()
             print(debug.traceback())
@@ -2912,6 +2961,8 @@ function terra.funcvariant:typecheck(ctx)
                 end
             end
             return resolvequote(anchor,s.quote,"stmt",checkquote)
+        elseif s:is "instrinsic" then
+            return checkintrinsic(s,false)
         else
             return checkexp(s)
         end
