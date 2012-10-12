@@ -12,6 +12,14 @@ terra vecload(data : &float, idx : int)
 	return @addr:as(&vector(float,V))
 end
 
+haddavx = terralib.intrinsic("llvm.x86.avx.hadd.ps.256", { vector(float,8), vector(float,8) } -> vector(float,8))
+terra hadd(v : vector(float,8))
+	var v1 = haddavx(v,v)
+	var v2 = haddavx(v1,v1)
+	return v2[0] + v2[4]
+end
+
+
 local AR = 3
 local BR = 3
 local KR = 3
@@ -104,7 +112,12 @@ blockregisters = macro(function(ctx,tree,C,A,B,K,lda,ldc,m,n,kk)
 					return `lhs + rhs
 				end
 			end
-			local sum = getsum(0,V)
+			local sum
+			if V == 8 then
+				sum = `hadd([cs[i][j]])
+			else
+				sum = getsum(0,V)
+			end
 			stmts:insert(quote
 				var r = sum
 				if kk == 0 then
