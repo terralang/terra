@@ -115,6 +115,14 @@ int terra_compilerinit(struct terra_State * T) {
     
     lua_pushcfunction(T->L, terra_CurrentTimeInSeconds);
     lua_setfield(T->L,-2,"currenttimeinseconds");
+
+#ifdef LLVM_3_2
+    lua_pushstring(T->L,"3.2");
+#else
+    lua_pushstring(T->L,"3.1");
+#endif
+
+    lua_setfield(T->L,-2, "llvmversion");
     
     lua_pop(T->L,1); //remove terra from stack
     
@@ -140,7 +148,7 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
     }
     T->C->fpm = new FunctionPassManager(T->C->m);
-    T->C->fpm->add(new TargetData(*T->C->ee->getTargetData()));
+    T->C->fpm->add(new TARGETDATA()(*T->C->ee->TARGETDATA(get)()));
     OptInfo info; //TODO: make configurable from terra
     addoptimizationpasses(T->C->fpm,&info);
     
@@ -157,7 +165,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C->tm = TM;
     
-    T->C->mi = createManualFunctionInliningPass(T->C->ee->getTargetData());
+    T->C->mi = createManualFunctionInliningPass(T->C->ee->TARGETDATA(get)());
     T->C->mi->doInitialization();
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
@@ -276,7 +284,7 @@ struct TerraCompiler {
             Type * fieldtype = getType(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
-                const TargetData * td = C->ee->getTargetData();
+                const TARGETDATA() * td = C->ee->TARGETDATA(get)();
                 unsigned align = td->getABITypeAlignment(fieldtype);
                 if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
                     unionAlign = align;
@@ -484,7 +492,15 @@ struct TerraCompiler {
             const char * name = funcobj->string("name");
             fn = Function::Create(cast<FunctionType>((*rtyp)->type), Function::ExternalLinkage,name, C->m);
             if ((*rtyp)->issretfunc) {
-                fn->arg_begin()->addAttr(Attribute::StructRet | Attribute::NoAlias);
+                
+                #ifdef LLVM_3_2
+                    Attributes::Builder builder;
+                    builder.addAttribute(Attributes::StructRet);
+                    builder.addAttribute(Attributes::NoAlias);
+                    fn->arg_begin()->addAttr(Attributes::get(builder));
+                #else
+                    fn->arg_begin()->addAttr(Attributes(Attribute::StructRet | Attribute::NoAlias));
+                #endif
             } 
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
@@ -1076,7 +1092,7 @@ if(baseT->isIntegerTy()) { \
                 Obj typ;
                 exp->obj("oftype",&typ);
                 TType * tt = getType(&typ);
-                const TargetData * td = C->ee->getTargetData();
+                const TARGETDATA() * td = C->ee->TARGETDATA(get)();
                 return ConstantInt::get(Type::getInt64Ty(*C->ctx),td->getTypeAllocSize(tt->type));
             } break;
             case T_apply: {
@@ -1271,7 +1287,13 @@ if(baseT->isIntegerTy()) { \
         if(castft->isVarArg()) {
             for(int i = castft->getNumParams(); i < params.size(); i++) {
                 if(types[i]->ispassedaspointer) {
-                     result->addAttribute(1 + i, Attribute::ByVal); /* 1 + to skip return argument */
+                    #ifdef LLVM_3_2
+                        Attributes::Builder b;
+                        b.addAttribute(Attributes::ByVal);
+                        result->addAttribute(1 + i, Attributes::get(b));
+                    #else
+                        result->addAttribute(1 + i, Attribute::ByVal); /* 1 + to skip return argument */
+                    #endif
                 }
             }
         }
@@ -1645,13 +1667,13 @@ static bool EmitObjFile(Module * Mod, TargetMachine * TM, const char * Filename,
     
     PassManager pass;
 
-    const TargetData* td = TM->getTargetData();
+    const TARGETDATA()* td = TM->TARGETDATA(get)();
 
     if (!td) {
         *ErrorMessage = "No TargetData in TargetMachine";
         return true;
     }
-    pass.add(new TargetData(*td));
+    pass.add(new TARGETDATA()(*td));
 
     TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
     
@@ -1708,7 +1730,7 @@ static int terra_saveobjimpl(lua_State * L) {
         ValueToValueMapTy VMap;
         Module * M = CloneModule(T->C->m, VMap);
         PassManager * MPM = new PassManager();
-        MPM->add(new TargetData(*T->C->ee->getTargetData())); //TODO: do I have to free the targetdata?
+        MPM->add(new TARGETDATA()(*T->C->ee->TARGETDATA(get)())); //TODO: do I have to free the targetdata?
         
         std::vector<const char *> names;
         //iterate over the key value pairs in the table

@@ -1,13 +1,15 @@
 # point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-#LLVM_CONFIG=$(shell which llvm-config)
+LLVM_CONFIG=$(shell which llvm-config)
+#LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
 
-LLVM_CONFIG=/usr/local/bin/llvm-config
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:
 UNAME := $(shell uname)
 
-CXX = $(LLVM_PREFIX)/bin/clang++
-CC = $(LLVM_PREFIX)/bin/clang
+LLVM_COMPILER_PREFIX=/usr/local
+
+CXX = $(LLVM_COMPILER_PREFIX)/bin/clang++
+CC = $(LLVM_COMPILER_PREFIX)/bin/clang
 AR = ar
 FLAGS = -g $(INCLUDE_PATH)
 LFLAGS = -g
@@ -25,6 +27,11 @@ INCLUDE_PATH += -I$(LUAJIT_DIR)/src
 
 FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
+
+LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
+LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -e s/\\./_/)
+
+FLAGS += -D$(LLVM_VERSION)
 # LLVM LIBS (STATIC, slow to link against but built by default)
 
 LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir)
@@ -124,8 +131,11 @@ LFLAGS_MANUAL += \
 -lLLVMSupport
 
 
-#LFLAGS += $(shell $(LLVM_CONFIG) --libs)
+ifeq ($(LLVM_VERSION), LLVM_3_1)
 LFLAGS += $(LFLAGS_MANUAL)
+else
+LFLAGS += $(shell $(LLVM_CONFIG) --libs)
+endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
 # LFLAGS += -lLLVM-3.1
@@ -144,10 +154,10 @@ LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 #so header include paths can be correctly configured on linux
-FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/3.1/include\""
+FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
 
-LIBSRC = tinline.cpp tcwrapper.cpp tkind.cpp tcompiler.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+LIBSRC = tkind.cpp tcompiler.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 EXESRC = main.cpp linenoise.cpp
 
 LIBOBJS = $(LIBSRC:.cpp=.o)

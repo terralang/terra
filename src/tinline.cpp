@@ -23,12 +23,13 @@
 #include "llvm/Support/Debug.h"
 #endif
 
+#include "llvmheaders.h"
 #include "llvm/Module.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/InlineCost.h"
-#include "llvm/Target/TargetData.h"
+
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Support/CallSite.h"
@@ -62,10 +63,10 @@ HintThreshold("inlinehint-threshold-scc", cl::Hidden, cl::init(325),
 // Threshold to use when optsize is specified (and there is no -inline-limit).
 const int OptSizeThreshold = 75;
 
-ManualInliner::ManualInliner(const TargetData * td) 
+ManualInliner::ManualInliner(const TARGETDATA() * td) 
   : TD(td), InlineThreshold(InlineLimit), InsertLifetime(true) {}
 
-ManualInliner::ManualInliner(const TargetData * td,int Threshold, bool InsertLifetime)
+ManualInliner::ManualInliner(const TARGETDATA() * td,int Threshold, bool InsertLifetime)
   : TD(td), InlineThreshold(InlineLimit.getNumOccurrences() > 0 ?
                                           InlineLimit : Threshold),
     InsertLifetime(InsertLifetime) {}
@@ -95,11 +96,11 @@ static bool InlineCallIfPossible(CallSite CS, InlineFunctionInfo &IFI,
 
   // If the inlined function had a higher stack protection level than the
   // calling function, then bump up the caller's stack protection level.
-  if (Callee->hasFnAttr(Attribute::StackProtectReq))
-    Caller->addFnAttr(Attribute::StackProtectReq);
-  else if (Callee->hasFnAttr(Attribute::StackProtect) &&
-           !Caller->hasFnAttr(Attribute::StackProtectReq))
-    Caller->addFnAttr(Attribute::StackProtect);
+  if (Callee->HASFNATTR(StackProtectReq))
+    Caller->ADDFNATTR(StackProtectReq);
+  else if (Callee->HASFNATTR(StackProtect) &&
+           !Caller->HASFNATTR(StackProtectReq))
+    Caller->ADDFNATTR(StackProtect);
 
   // Look at all of the allocas that we inlined through this call site.  If we
   // have already inlined other allocas through other calls into this function,
@@ -209,14 +210,14 @@ unsigned ManualInliner::getInlineThreshold(CallSite CS) const {
   // Listen to optsize when -inline-limit is not given.
   Function *Caller = CS.getCaller();
   if (Caller && !Caller->isDeclaration() &&
-      Caller->hasFnAttr(Attribute::OptimizeForSize) &&
+      Caller->HASFNATTR(OptimizeForSize) &&
       InlineLimit.getNumOccurrences() == 0)
     thres = OptSizeThreshold;
 
   // Listen to inlinehint when it would increase the threshold.
   Function *Callee = CS.getCalledFunction();
   if (HintThreshold > thres && Callee && !Callee->isDeclaration() &&
-      Callee->hasFnAttr(Attribute::InlineHint))
+      Callee->HASFNATTR(InlineHint))
     thres = HintThreshold;
 
   return thres;
@@ -516,7 +517,7 @@ bool ManualInliner::removeDeadFunctions(ArrayRef<Function*> & Funcs, bool Always
     // Handle the case when this function is called and we only want to care
     // about always-inline functions. This is a bit of a hack to share code
     // between here and the InlineAlways pass.
-    if (AlwaysInlineOnly && !F->hasFnAttr(Attribute::AlwaysInline))
+    if (AlwaysInlineOnly && !F->HASFNATTR(AlwaysInline))
       continue;
 
     // If the only remaining users of the function are dead constants, remove
@@ -560,9 +561,9 @@ namespace {
   class SimpleManualInliner : public ManualInliner {
     InlineCostAnalyzer CA;
   public:
-    SimpleManualInliner(const TargetData * td) : TD(td), ManualInliner(td) {
+    SimpleManualInliner(const TARGETDATA() * td) : TD(td), ManualInliner(td) {
     }
-    SimpleManualInliner(const TargetData * td, int Threshold) : TD(td), ManualInliner(td,Threshold,
+    SimpleManualInliner(const TARGETDATA() * td, int Threshold) : TD(td), ManualInliner(td,Threshold,
                                            /*InsertLifetime*/true) {
     }
     InlineCost getInlineCost(CallSite CS) {
@@ -570,20 +571,20 @@ namespace {
     }
     virtual bool doInitialization();
   private:
-    const TargetData * TD;
+    const TARGETDATA() * TD;
   };
 }
 
 
-ManualInliner * createManualFunctionInliningPass(const TargetData * td) { return new SimpleManualInliner(td); }
+ManualInliner * createManualFunctionInliningPass(const TARGETDATA() * td) { return new SimpleManualInliner(td); }
 
-ManualInliner * createManualFunctionInliningPass(const TargetData * td, int Threshold) {
+ManualInliner * createManualFunctionInliningPass(const TARGETDATA() * td, int Threshold) {
   return new SimpleManualInliner(td,Threshold);
 }
 
 // doInitialization - Initializes the vector of functions that have been
 // annotated with the noinline attribute.
 bool SimpleManualInliner::doInitialization() {
-  CA.setTargetData(TD);
+  CA.TARGETDATA(set)(TD);
   return false;
 }

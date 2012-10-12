@@ -20,7 +20,7 @@
 
 namespace llvm {
   class CallSite;
-  class TargetData;
+  class TARGETDATA();
   class InlineCost;
   template<class PtrType, unsigned SmallSize>
   class SmallPtrSet;
@@ -29,8 +29,8 @@ namespace llvm {
 /// perform the inlining operations that do not depend on the policy.
 ///
 struct ManualInliner {
-  explicit ManualInliner(const TargetData * td);
-  explicit ManualInliner(const TargetData * td, int Threshold, bool InsertLifetime);
+  explicit ManualInliner(const TARGETDATA() * td);
+  explicit ManualInliner(const TARGETDATA() * td, int Threshold, bool InsertLifetime);
 
   // Main run interface method, this implements the interface required by the
   // Pass class.
@@ -75,7 +75,7 @@ private:
 
   // InsertLifetime - Insert @llvm.lifetime intrinsics.
   bool InsertLifetime;
-  const TargetData * TD;
+  const TARGETDATA() * TD;
 
   /// shouldInline - Return true if the inliner should attempt to
   /// inline at the given CallSite.
@@ -84,8 +84,8 @@ private:
 
 } // End llvm namespace
 
-llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TargetData * td);
+llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TARGETDATA() * td);
 
-llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TargetData * td, int Threshold);
+llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TARGETDATA() * td, int Threshold);
 
 #endif
