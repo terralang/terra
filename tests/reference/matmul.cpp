@@ -19,11 +19,16 @@ void cblas_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 
 
 void asserteq(float * A, float * B, int M, int N) {
-	for(int i = 0; i < M*N; i++)
-		if(A[i] != B[i]) {
-			printf("%d: %f ~= %f\n",i,A[i],B[i]);
-			assert(false);
+	int i = 0;
+	for(int m = 0; m < M; m++) {
+		for(int n = 0; n < N; n++) {
+			if(A[i] != B[i]) {
+				printf("%d %d: %f ~= %f\n",m,n,A[i],B[i]);
+				assert(false);
+			}
+			i++;
 		}
+	}
 }
 
 void naive_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
@@ -100,7 +105,7 @@ void testsize(int M, int K, int N) {
 	}
 
 	for(int i = 0; i < M *N; i++) 
-		C[i] = C2[i] = C3[i] = 0.f;
+		C[i] = C2[i] = C3[i] = -1.f;
 
 
 	int times = 0;
@@ -144,7 +149,7 @@ void testsize(int M, int K, int N) {
 
 int main() {
 
-	for(int i = 72; i < 1024; i += 72) {
+	for(int i = 72-16; i < 1024; i += 16) {
 		testsize(i,i,i);
 	}
 
