@@ -2,13 +2,15 @@
 
 local ffi = require("ffi")
 
-local function dbprint(...) 
-    if terra.isverbose then
+terra.isverbose = 0 --set by C api
+
+local function dbprint(level,...) 
+    if terra.isverbose > level then
         print(...)
     end
 end
-local function dbprintraw(obj)
-    if terra.isverbose then
+local function dbprintraw(level,obj)
+    if terra.isverbose > level then
         obj:printraw()
     end
 end
@@ -16,7 +18,7 @@ end
 --debug wrapper around cdef function to print out all the things being defined
 local oldcdef = ffi.cdef
 ffi.cdef = function(...)
-    dbprint(...)
+    dbprint(2,...)
     return oldcdef(...)
 end
 
@@ -430,7 +432,7 @@ function terra.funcvariant:makewrapper()
     local success,cfntyp,returnname = pcall(fntyp.cstring,fntyp)
     
     if not success then
-        dbprint("cstring error: ",cfntyp)
+        dbprint(1,"cstring error: ",cfntyp)
         self.ffiwrapper = function()
             error("function not callable directly from lua")
         end
@@ -467,11 +469,11 @@ function terra.funcvariant:compile(ctx)
     
     local ctx = (terra.iscontext(ctx) and ctx) or terra.newcontext(ctx) -- if this is a top level compile, create a new compilation context
     
-    dbprint("compiling function:")
-    dbprintraw(self.untypedtree)
-    dbprint("with local environment:")
+    dbprint(2,"compiling function:")
+    dbprintraw(2,self.untypedtree)
+    dbprint(2,"with local environment:")
     for k,v in pairs(self:env()) do
-        dbprint("  ",k)
+        dbprint(2,"  ",k)
     end
     
     ctx:functionbegin(self)
@@ -1338,8 +1340,8 @@ do --construct type table that holds the singleton value representing each uniqu
                 checkrecursion(v.type)
             end
             
-            dbprint("Resolved Named Struct To:")
-            dbprintraw(self)
+            dbprint(2,"Resolved Named Struct To:")
+            dbprintraw(2,self)
             return self
         
         end
@@ -2998,7 +3000,7 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     
-    dbprint("Return Stmts:")
+    dbprint(2,"Return Stmts:")
     
     
     local return_types
@@ -3046,8 +3048,8 @@ function terra.funcvariant:typecheck(ctx)
     
     local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
     
-    dbprint("TypedTree")
-    dbprintraw(typedtree)
+    dbprint(2,"TypedTree")
+    dbprintraw(2,typedtree)
     
     ctx:leavedef()
     ctx:leavefile()
@@ -3280,7 +3282,7 @@ function terra.funcvariant:printpretty()
      "==",3,"<",3,"<=",3,
      "~=",3,">",3,">=",3,
      "and",2,"or",1,
-     "@",9,"-",9,"&",9,"not",9)
+     "@",9,"-",9,"&",9,"not",9,"select",12)
     
     local function getprec(e)
         if e:is "operator" then

@@ -6,9 +6,9 @@ FLAGS = -O3
 
 LIBS = -framework Accelerate
 
-matmul:	matmul.cpp ../sgemm.t
-	../../terra ../sgemm.t
-	$(CXX) $(FLAGS) $(LIBS) -o matmul matmul.cpp my_sgemm.o
+matmul:	matmul.cpp ../dgemm.t
+	../../terra ../dgemm.t
+	$(CXX) $(FLAGS) $(LIBS) -o matmul matmul.cpp my_dgemm.o
 
 %:	%.cpp
 	$(CXX) $(FLAGS) $(LIBS) -o $@ $<

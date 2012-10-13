@@ -3,11 +3,11 @@
 #include<assert.h>
 #include<sys/time.h>
 /*
-void cblas_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+void cblas_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
                  const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
-                 const int K, const float alpha, const float *A,
-                 const int lda, const float *B, const int ldb,
-                 const float beta, float *C, const int ldc)
+                 const int K, const double alpha, const double *A,
+                 const int lda, const double *B, const int ldb,
+                 const double beta, double *C, const int ldc)
 */
 // A is a matrix of dim M x K
 // B is a matrix of dim K x N
@@ -18,24 +18,38 @@ void cblas_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 
 
 
-void asserteq(float * A, float * B, int M, int N) {
+void asserteq(double * A, double * B, int M, int N) {
 	int i = 0;
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
 			if(A[i] != B[i]) {
-				printf("%d %d: %f ~= %f\n",m,n,A[i],B[i]);
-				assert(false);
+				goto printerr;
 			}
 			i++;
 		}
 	}
+	return;
+printerr:
+	i = 0;
+	for(int m = 0; m < M; m++) {
+		for(int n = 0; n < N; n++) {
+			if(A[i] != B[i]) {
+				putchar('X');
+			} else {
+				putchar('*');
+			}
+			i++;
+		}
+		printf("\n");
+	}
+	assert(false);
 }
 
-void naive_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
+void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
                  const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
-                 const int K, const float alpha, const float *A,
-                 const int lda, const float *B, const int ldb,
-                 const float beta, float *C, const int ldc) {
+                 const int K, const double alpha, const double *A,
+                 const int lda, const double *B, const int ldb,
+                 const double beta, double *C, const int ldc) {
 	assert(Order == CblasRowMajor);
 	assert(TransA == CblasNoTrans);
 	assert(TransB == CblasNoTrans);
@@ -44,7 +58,7 @@ void naive_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
-			float v = 0.f;
+			double v = 0.f;
 			for(int k = 0; k < K; k++) {
 				v += A[m*lda + k] * B[k*ldb + n]; 
 			}
@@ -54,10 +68,10 @@ void naive_sgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 }
 
 extern "C"
-void my_sgemm(double (*gettime)(), const int M, const int N,
-                 const int K, const float alpha, const float *A,
-                 const int lda, const float *B, const int ldb,
-                 const float beta, float *C, const int ldc);
+void my_dgemm(double (*gettime)(), const int M, const int N,
+                 const int K, const double alpha, const double *A,
+                 const int lda, const double *B, const int ldb,
+                 const double beta, double *C, const int ldc);
 
 static double CurrentTimeInSeconds() {
     struct timeval tv;
@@ -82,25 +96,22 @@ bool CalcTime(int * times, double * start) {
 //calculates C = alpha * AB + beta * C 
 void testsize(int M, int K, int N) {
 
-	float * A = (float*) malloc(sizeof(float) * M * K);
-	float * B = (float*) malloc(sizeof(float) * K * N);
-	float * C = (float*) malloc(sizeof(float) * M * N);
-	float * C2 = (float*) malloc(sizeof(float) * M * N);
-	float * C3 = (float*) malloc(sizeof(float) * M * N);
+	double * A = (double*) malloc(sizeof(double) * M * K);
+	double * B = (double*) malloc(sizeof(double) * K * N);
+	double * C = (double*) malloc(sizeof(double) * M * N);
+	double * C2 = (double*) malloc(sizeof(double) * M * N);
+	double * C3 = (double*) malloc(sizeof(double) * M * N);
 
 
 	for(int m = 0; m < M; m++) {
 		for(int k = 0; k < K; k++) {
-			if(m == k)
-				A[m*K + k] = 1.f;
-			else
-				A[m*K + k] = 0.f;
+			A[m*K + k] = rand() % 10;
 		}
 	}
 	int i = 0;
 	for(int k = 0; k < K; k++) {
 		for(int n = 0; n < N; n++) {
-			B[k*N + n] = i++;
+			B[k*N + n] = rand() % 10;
 		}
 	}
 
@@ -111,15 +122,15 @@ void testsize(int M, int K, int N) {
 	int times = 0;
 	double blastime;
 	while(CalcTime(&times,&blastime))
-		cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
+		cblas_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
 	
 	//double begin2 = CurrentTimeInSeconds();
-	//naive_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
+	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
 	
 	double mytime;
 	times = 0;
 	while(CalcTime(&times,&mytime))
-		my_sgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
+		my_dgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
 	
 	/*
 	for(int m = 0; m < M; m++) {
@@ -144,14 +155,16 @@ void testsize(int M, int K, int N) {
 	free(C3);
 	free(A);
 	free(B);
-	printf("%d %d %d %f %f %f\n",M,K,N,blastime,mytime, mytime/ blastime);
+	printf("%d %d %d %f %f %f\n",M,K,N,M*N*K*2.0*1e-9/blastime,M*N*K*2.0*1e-9/mytime, mytime/ blastime);
 }
 
 int main() {
 
-	for(int i = 72-16; i < 1024; i += 16) {
+	int NB = 40;
+	for(int i = NB; i < 1024; i += NB) {
 		testsize(i,i,i);
 	}
+	testsize(5000,5000,5000);
 
 	return 0;
 }
