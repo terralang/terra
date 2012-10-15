@@ -17,7 +17,7 @@ extern "C" {
 #include "llvm/Support/ManagedStatic.h"
 #include <sys/time.h>
 #include "llvm/ExecutionEngine/MCJIT.h"
-
+#include "llvm/Bitcode/ReaderWriter.h"
 using namespace llvm;
 
 static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function
@@ -1647,7 +1647,7 @@ static int terra_jit(lua_State * L) {
             }
             
             begin = CurrentTimeInSeconds();
-            void * ptr = ee->getPointerToFunction(func);
+            void * ptr = NULL;//ee->getPointerToFunction(func);
             RecordTime(&funcobj,"gen",begin);
             
             lua_pushlightuserdata(L, ptr);
@@ -1661,10 +1661,47 @@ static int terra_jit(lua_State * L) {
 }
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
-static bool EmitObjFile(Module * Mod, TargetMachine * TM, const char * Filename, std::string * ErrorMessage) {
-
+static bool EmitObjFile(terra_State * T, Module * Mod, TargetMachine * TM, const char * Filename, std::string * ErrorMessage) {
+    char tmpnamebuf[20];
+    const char * tmp = "/tmp/terraXXXX.bc";
+    strcpy(tmpnamebuf, tmp);
+    int fd = mkstemps(tmpnamebuf,3);
+    close(fd);
+    
+    Mod->setTargetTriple(llvm::sys::getDefaultTargetTriple().c_str());
+    Mod->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128");
+    std::string err;
+    raw_fd_ostream dest(tmpnamebuf,err);
+    assert(dest.has_error() == false);
+    llvm::WriteBitcodeToFile(Mod,dest);
+    dest.close();
+    
+    
+    std::string clang = TERRA_CLANG_RESOURCE_DIRECTORY"/../../../../bin/clang";
+    //if (clang.isEmpty()) {
+    //   unlink(tmpnamebuf);
+    //    terra_reporterror(T,"llvm: Failed to find clang");
+    //}
+    
+    std::vector<const char *> args;
+    args.push_back(clang.c_str());
+    args.push_back("-O3");
+    args.push_back("-mavx");
+    args.push_back("-c");
+    args.push_back(tmpnamebuf);
+    args.push_back("-o");
+    args.push_back(Filename);
+    args.push_back(NULL);
+    
+    int c = sys::Program::ExecuteAndWait(sys::Path(clang), &args[0], 0, 0, 0, 0, &err);
+    if(0 != c) {
+        unlink(tmpnamebuf);
+        terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);
+    }
+    unlink(tmpnamebuf);
 
     
+    #if 0
     PassManager pass;
 
     const TARGETDATA()* td = TM->TARGETDATA(get)();
@@ -1692,6 +1729,10 @@ static bool EmitObjFile(Module * Mod, TargetMachine * TM, const char * Filename,
 
     destf.flush();
     dest.flush();
+    #endif
+
+    
+
     return false;
 }
 
@@ -1781,7 +1822,7 @@ static int terra_saveobjimpl(lua_State * L) {
         
         //printf("saving %s\n",objname);
         std::string err = "";
-        if(EmitObjFile(M,T->C->tm,objname,&err)) {
+        if(EmitObjFile(T,M,T->C->tm,objname,&err)) {
             if(isexe)
                 unlink(objname);
             delete M;

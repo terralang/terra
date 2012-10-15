@@ -30,7 +30,7 @@ function symmat(name,I,...)
 end
 
 
-function genl1matmul(NB, NK, RM, RN, V)
+function genl1matmul(NB, NK, RM, RN, V,prefetch)
 	
 	assert(isinteger(NB / (RN*V)))
 	assert(isinteger(NB / RM))
@@ -73,16 +73,23 @@ function genl1matmul(NB, NK, RM, RN, V)
 		end
 		for v = 0, V-1 do
 			local k = kbV+v
-			for n = 0, RN-1 do
-				calcc:insert(quote
-					var [b[k][n]] = vecload(B,(kk + k)*ldb + nn + n*V)
-				end)
+			if not prefetch or (v == 0 and kb == 0) then
+				for n = 0, RN-1 do
+					calcc:insert(quote
+						var [b[k][n]] = vecload(B,(kk + k)*ldb + nn + n*V)
+					end)
+				end
 			end
 			for m = 0, RM-1 do 
 				for n = 0, RN-1 do
 					calcc:insert(quote
 						[c[m][n]] = [c[m][n]] + [a[kb][m]][v] * [b[k][n]]
 					end)
+					if prefetch and not (v == V-1 and kb == NK/V-1) and m == RM-1 then --prefetch the next b
+						calcc:insert(quote
+							var [b[k+1][n]] = vecload(B,(kk + k + 1)*ldb + nn + n*V)
+						end)
+					end
 				end
 			end
 		end
@@ -103,12 +110,11 @@ end
 
 
 
-local NB2 = 320
-local NB = 40
-local l1matmul = genl1matmul(NB,4, 2, 2, 4)
+local NB = 48
 
-l1matmul:compile()
-l1matmul:printpretty()
+local NB2 = 8 * NB
+local l1matmul = genl1matmul(NB,4, 3, 2, 4)
+
 
 
 terra min(a : int, b : int)
@@ -135,7 +141,9 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 	end
 end
 
-my_dgemm:compile()
-my_dgemm:printpretty()
+l1matmul:printc()
+my_dgemm:printc()
+
+
 
 terralib.saveobj("my_dgemm.o", {my_dgemm = my_dgemm})

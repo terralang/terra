@@ -10,9 +10,9 @@ extern "C" {
 /*
 void cblas_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
                  const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
-                 const int K, const double alpha, const double *A,
-                 const int lda, const double *B, const int ldb,
-                 const double beta, double *C, const int ldc)
+                 const int K, const float alpha, const float *A,
+                 const int lda, const float *B, const int ldb,
+                 const float beta, float *C, const int ldc)
 */
 // A is a matrix of dim M x K
 // B is a matrix of dim K x N
@@ -23,7 +23,7 @@ void cblas_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 
 
 
-void asserteq(double * A, double * B, int M, int N) {
+void asserteq(float * A, float * B, int M, int N) {
 	int i = 0;
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
@@ -54,9 +54,9 @@ printerr:
 /*
 void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
                  const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
-                 const int K, const double alpha, const double *A,
-                 const int lda, const double *B, const int ldb,
-                 const double beta, double *C, const int ldc) {
+                 const int K, const float alpha, const float *A,
+                 const int lda, const float *B, const int ldb,
+                 const float beta, float *C, const int ldc) {
 	assert(Order == CblasRowMajor);
 	assert(TransA == CblasNoTrans);
 	assert(TransB == CblasNoTrans);
@@ -65,7 +65,7 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
-			double v = 0.f;
+			float v = 0.f;
 			for(int k = 0; k < K; k++) {
 				v += A[m*lda + k] * B[k*ldb + n]; 
 			}
@@ -75,10 +75,10 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 }*/
 
 extern "C"
-void my_dgemm(double (*gettime)(), const int M, const int N,
-                 const int K, const double alpha, const double *A,
-                 const int lda, const double *B, const int ldb,
-                 const double beta, double *C, const int ldc);
+void my_sgemm(double (*gettime)(), const int M, const int N,
+                 const int K, const float alpha, const float *A,
+                 const int lda, const float *B, const int ldb,
+                 const float beta, float *C, const int ldc);
 
 static double CurrentTimeInSeconds() {
     struct timeval tv;
@@ -100,14 +100,19 @@ bool CalcTime(int * times, double * start) {
 	return true;
 }
 
+extern "C"
+void sgemm_ispc_32x32(float* a, float* b, float* c, int dim);
+//extern "C"
+//void sgemm_terra_32x32(float* a, float* b, float* c);
+
 //calculates C = alpha * AB + beta * C 
 void testsize(int M, int K, int N) {
 
-	double * A = (double*) malloc(sizeof(double) * M * K);
-	double * B = (double*) malloc(sizeof(double) * K * N);
-	double * C = (double*) malloc(sizeof(double) * M * N);
-	double * C2 = (double*) malloc(sizeof(double) * M * N);
-	double * C3 = (double*) malloc(sizeof(double) * M * N);
+	float * A = (float*) malloc(sizeof(float) * M * K);
+	float * B = (float*) malloc(sizeof(float) * K * N);
+	float * C = (float*) malloc(sizeof(float) * M * N);
+	float * C2 = (float*) malloc(sizeof(float) * M * N);
+	float * C3 = (float*) malloc(sizeof(float) * M * N);
 
 
 	for(int m = 0; m < M; m++) {
@@ -123,22 +128,25 @@ void testsize(int M, int K, int N) {
 	}
 
 	for(int i = 0; i < M *N; i++) 
-		C[i] = C2[i] = C3[i] = -1.f;
+		C[i] = C2[i] = C3[i] = 0;
 
 
 	int times = 0;
 	double blastime;
 	while(CalcTime(&times,&blastime))
-		cblas_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
+		cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
 	
-	//double begin2 = CurrentTimeInSeconds();
+	//float begin2 = CurrentTimeInSeconds();
 	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
 	
 	double mytime;
 	times = 0;
-	while(CalcTime(&times,&mytime))
-		my_dgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
-	
+	while(CalcTime(&times,&mytime)) {
+		my_sgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
+		//for(int i = 0; i < M*N; i++)
+		//	C3[i] = 0;
+		//sgemm_terra_32x32(A,B,C3);
+	}
 	/*
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
@@ -147,9 +155,10 @@ void testsize(int M, int K, int N) {
 		printf("\n");
 	}
 	printf("\n\n");
+	
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
-			printf("%f ",C2[m*N + n]);
+			printf("%f ",C3[m*N + n]);
 		}
 		printf("\n");
 	}*/
@@ -167,11 +176,11 @@ void testsize(int M, int K, int N) {
 
 int main() {
 
-	int NB = 48;
+	int NB = 64;
 	for(int i = NB; i < 1024; i += NB) {
 		testsize(i,i,i);
 	}
-	testsize(5000,5000,5000);
+	//testsize(5000,5000,5000);
 
 	return 0;
 }
