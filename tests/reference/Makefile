@@ -10,8 +10,8 @@ LIBS = -L/usr/local/atlasgccavx/lib -latlas -lcblas
 
 #LIBS = -L/opt/intel/composer_xe_2013.0.088/mkl/lib -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lm
 
-matmul:	matmul.cpp ../dgemm.t
-	../../terra ../dgemm2.t
+matmul:	matmul.cpp ../dgemm3.t
+	../../terra ../dgemm3.t
 	$(CXX) $(FLAGS) $(LIBS) -o matmul matmul.cpp my_dgemm.o
 
 matmuls:	matmuls.cpp ../sgemmkernel.t
