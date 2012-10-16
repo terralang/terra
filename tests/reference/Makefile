@@ -14,9 +14,9 @@ matmul:	matmul.cpp ../dgemm3.t
 	../../terra ../dgemm3.t
 	$(CXX) $(FLAGS) $(LIBS) -o matmul matmul.cpp my_dgemm.o
 
-matmuls:	matmuls.cpp ../sgemmkernel.t
-	../../terra -v ../sgemmkernel.t
-	$(CXX) $(FLAGS) $(LIBS) -o matmuls matmuls.cpp sgemm_ispc.o my_sgemmkernel.o
+matmuls:	matmuls.cpp ../sgemm3.t
+	../../terra -v ../sgemm3.t
+	$(CXX) $(FLAGS) $(LIBS) -o matmuls matmuls.cpp sgemm_ispc.o my_sgemm.o
 
 
 %:	%.cpp

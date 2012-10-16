@@ -176,7 +176,7 @@ void testsize(int M, int K, int N) {
 
 int main() {
 
-	int NB = 64;
+	int NB = 48;
 	for(int i = NB; i < 1024; i += NB) {
 		testsize(i,i,i);
 	}
