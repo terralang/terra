@@ -11,6 +11,7 @@ struct terra_CompilerState {
     llvm::JITEventListener * jiteventlistener;
     llvm::FunctionPassManager * fpm;
     llvm::TargetMachine * tm;
+    const llvm :: TARGETDATA() * td;
     llvm::ManualInliner * mi;
     size_t next_unused_id; //for creating names for dummy functions
 };

@@ -18,6 +18,7 @@ extern "C" {
 #include <sys/time.h>
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Target/TargetLibraryInfo.h"
 using namespace llvm;
 
 static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function
@@ -50,6 +51,8 @@ struct OptInfo {
 };
 
 static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi);
+
+static void addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * tm);
 
 
 struct DisassembleFunctionListener : public JITEventListener {
@@ -141,31 +144,38 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C->ctx = &getGlobalContext();
     T->C->m = new Module("terra",*T->C->ctx);
+    
+    TargetOptions options;
+    CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
+    std::string Triple = llvm::sys::getDefaultTargetTriple();
     std::string err;
+    const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "+avx", options,Reloc::Default,CodeModel::Default,OL);
+    T->C->td = TM->TARGETDATA(get)();
+    
+    
     T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
     if (!T->C->ee) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
     }
+    
     T->C->fpm = new FunctionPassManager(T->C->m);
-    T->C->fpm->add(new TARGETDATA()(*T->C->ee->TARGETDATA(get)()));
+
+    addtargetspecificpasses(T->C->fpm, TM);
     OptInfo info; //TODO: make configurable from terra
     addoptimizationpasses(T->C->fpm,&info);
     
-    std::string Triple = llvm::sys::getDefaultTargetTriple();
-    std::string Error;
-    const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
+    
+    
     if(!TheTarget) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
     }
-    TargetOptions options;
-    CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
-    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "+avx", options,Reloc::Default,CodeModel::Default,OL);
+    
     
     T->C->tm = TM;
-    
-    T->C->mi = createManualFunctionInliningPass(T->C->ee->TARGETDATA(get)());
+    T->C->mi = createManualFunctionInliningPass(T->C->td);
     T->C->mi->doInitialization();
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
@@ -245,6 +255,12 @@ static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi)
     fpm->add(createInstructionCombiningPass());  // Clean up after everything.
 }
 
+static void addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
+    fpm->add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+    fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
+    fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
+                                     TM->getVectorTargetTransformInfo()));
+}
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
     Type * type;
@@ -284,13 +300,12 @@ struct TerraCompiler {
             Type * fieldtype = getType(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
-                const TARGETDATA() * td = C->ee->TARGETDATA(get)();
-                unsigned align = td->getABITypeAlignment(fieldtype);
+                unsigned align = T->C->td->getABITypeAlignment(fieldtype);
                 if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
                     unionAlign = align;
                     unionType = fieldtype;
                 }
-                size_t allocSize = td->getTypeAllocSize(fieldtype);
+                size_t allocSize = C->td->getTypeAllocSize(fieldtype);
                 if(allocSize > unionSz)
                     unionSz = allocSize;
                 
@@ -302,7 +317,7 @@ struct TerraCompiler {
                     std::vector<Type *> union_types;
                     assert(unionType);
                     union_types.push_back(unionType);
-                    size_t sz = td->getTypeAllocSize(unionType);
+                    size_t sz = T->C->td->getTypeAllocSize(unionType);
                     if(sz < unionSz) { // the type with the largest alignment requirement is not the type with the largest size, pad this struct so that it will fit the largest type
                         size_t diff = unionSz - sz;
                         union_types.push_back(ArrayType::get(Type::getInt8Ty(*C->ctx),diff));
@@ -1092,8 +1107,7 @@ if(baseT->isIntegerTy()) { \
                 Obj typ;
                 exp->obj("oftype",&typ);
                 TType * tt = getType(&typ);
-                const TARGETDATA() * td = C->ee->TARGETDATA(get)();
-                return ConstantInt::get(Type::getInt64Ty(*C->ctx),td->getTypeAllocSize(tt->type));
+                return ConstantInt::get(Type::getInt64Ty(*C->ctx),C->td->getTypeAllocSize(tt->type));
             } break;
             case T_apply: {
                 Value * v = emitCall(exp,true);
@@ -1662,56 +1676,11 @@ static int terra_jit(lua_State * L) {
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 static bool EmitObjFile(terra_State * T, Module * Mod, TargetMachine * TM, const char * Filename, std::string * ErrorMessage) {
-    char tmpnamebuf[20];
-    const char * tmp = "/tmp/terraXXXX.bc";
-    strcpy(tmpnamebuf, tmp);
-    int fd = mkstemps(tmpnamebuf,3);
-    close(fd);
-    
-    Mod->setTargetTriple(llvm::sys::getDefaultTargetTriple().c_str());
-    Mod->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-s0:64:64-f80:128:128-n8:16:32:64-S128");
-    std::string err;
-    raw_fd_ostream dest(tmpnamebuf,err);
-    assert(dest.has_error() == false);
-    llvm::WriteBitcodeToFile(Mod,dest);
-    dest.close();
-    
-    
-    std::string clang = TERRA_CLANG_RESOURCE_DIRECTORY"/../../../../bin/clang";
-    //if (clang.isEmpty()) {
-    //   unlink(tmpnamebuf);
-    //    terra_reporterror(T,"llvm: Failed to find clang");
-    //}
-    
-    std::vector<const char *> args;
-    args.push_back(clang.c_str());
-    args.push_back("-O3");
-    args.push_back("-mavx");
-    args.push_back("-c");
-    args.push_back(tmpnamebuf);
-    args.push_back("-o");
-    args.push_back(Filename);
-    args.push_back(NULL);
-    
-    int c = sys::Program::ExecuteAndWait(sys::Path(clang), &args[0], 0, 0, 0, 0, &err);
-    if(0 != c) {
-        unlink(tmpnamebuf);
-        terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);
-    }
-    unlink(tmpnamebuf);
 
-    
-    #if 0
     PassManager pass;
 
-    const TARGETDATA()* td = TM->TARGETDATA(get)();
-
-    if (!td) {
-        *ErrorMessage = "No TargetData in TargetMachine";
-        return true;
-    }
-    pass.add(new TARGETDATA()(*td));
-
+    addtargetspecificpasses(&pass, TM);
+    
     TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
     
     raw_fd_ostream dest(Filename, *ErrorMessage, raw_fd_ostream::F_Binary);
@@ -1726,12 +1695,8 @@ static bool EmitObjFile(terra_State * T, Module * Mod, TargetMachine * TM, const
     }
 
     pass.run(*Mod);
-
     destf.flush();
     dest.flush();
-    #endif
-
-    
 
     return false;
 }
@@ -1771,7 +1736,8 @@ static int terra_saveobjimpl(lua_State * L) {
         ValueToValueMapTy VMap;
         Module * M = CloneModule(T->C->m, VMap);
         PassManager * MPM = new PassManager();
-        MPM->add(new TARGETDATA()(*T->C->ee->TARGETDATA(get)())); //TODO: do I have to free the targetdata?
+        
+        addtargetspecificpasses(MPM, T->C->tm);
         
         std::vector<const char *> names;
         //iterate over the key value pairs in the table
