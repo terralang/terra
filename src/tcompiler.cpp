@@ -21,7 +21,9 @@ extern "C" {
 #include "llvm/Target/TargetLibraryInfo.h"
 using namespace llvm;
 
-static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function
+static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist
+static int terra_optimize(lua_State * L);  //entry point from lua into compiler to perform optimizations at the function level, passed an entire strongly connected component of functions
+                                           //all callee's of these functions that are not in this scc have already been optimized
 static int terra_jit(lua_State * L);  //entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction
 
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
@@ -104,7 +106,11 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_codegen,1);
     lua_setfield(T->L,-2,"codegen");
-    
+
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_optimize,1);
+    lua_setfield(T->L,-2,"optimize");
+
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_jit,1);
     lua_setfield(T->L,-2,"jit");
@@ -1580,7 +1586,7 @@ static int terra_codegen(lua_State * L) { //entry point into compiler from lua c
     return 0;
 }
 
-static int terra_jit(lua_State * L) {
+static int terra_optimize(lua_State * L) {
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
     
@@ -1597,7 +1603,7 @@ static int terra_jit(lua_State * L) {
         std::vector<Function *> scc;
         int N = funclist.size();
         DEBUG_ONLY(T) {
-            printf("jitting scc containing: ");
+            printf("optimizing scc containing: ");
         }
         for(int i = 0; i < N; i++) {
             Obj funcobj;
@@ -1615,7 +1621,46 @@ static int terra_jit(lua_State * L) {
         }
         
         T->C->mi->runOnSCC(scc);
-        
+    
+        for(int i = 0; i < N; i++) {
+            Obj funcobj;
+            funclist.objAt(i,&funcobj);
+            Function * func = (Function*) funcobj.ud("llvm_function");
+            assert(func);
+            
+            DEBUG_ONLY(T) {
+                std::string s = func->getName();
+                printf("optimizing %s\n",s.c_str());
+            }
+            double begin = CurrentTimeInSeconds();
+            T->C->fpm->run(*func);
+            RecordTime(&funcobj,"opt",begin);
+            
+            DEBUG_ONLY(T) {
+                func->dump();
+            }
+        }
+    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
+    
+    lobj_removereftable(T->L,ref_table);
+    
+    return 0;
+}
+
+static int terra_jit(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    
+    int ref_table = lobj_newreftable(T->L);
+    
+    {
+        Obj jitobj, funcobj, flags;
+        lua_pushvalue(L,-2); //original argument
+        jitobj.initFromStack(L, ref_table);
+        jitobj.obj("func", &funcobj);
+        jitobj.obj("flags",&flags);
+        Function * func = (Function*) funcobj.ud("llvm_function");
+        assert(func);
         ExecutionEngine * ee = T->C->ee;
         
         if(flags.hasfield("usemcjit")) {
@@ -1641,38 +1686,19 @@ static int terra_jit(lua_State * L) {
             ee->RegisterJITEventListener(T->C->jiteventlistener);
 
         }
+        double begin = CurrentTimeInSeconds();
+        void * ptr = ee->getPointerToFunction(func);
+        RecordTime(&funcobj,"gen",begin);
         
-        for(int i = 0; i < N; i++) {
-            Obj funcobj;
-            funclist.objAt(i,&funcobj);
-            Function * func = (Function*) funcobj.ud("llvm_function");
-            assert(func);
-            
-            DEBUG_ONLY(T) {
-                std::string s = func->getName();
-                printf("jitting %s\n",s.c_str());
-            }
-            double begin = CurrentTimeInSeconds();
-            T->C->fpm->run(*func);
-            RecordTime(&funcobj,"opt",begin);
-            
-            DEBUG_ONLY(T) {
-                func->dump();
-            }
-            
-            begin = CurrentTimeInSeconds();
-            void * ptr = NULL;//ee->getPointerToFunction(func);
-            RecordTime(&funcobj,"gen",begin);
-            
-            lua_pushlightuserdata(L, ptr);
-            funcobj.setfield("fptr");
-        }
+        lua_pushlightuserdata(L, ptr);
+        funcobj.setfield("fptr");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);
     
     return 0;
 }
+
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 static bool EmitObjFile(terra_State * T, Module * Mod, TargetMachine * TM, const char * Filename, std::string * ErrorMessage) {

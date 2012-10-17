@@ -141,9 +141,4 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 	end
 end
 
-l1matmul:printc()
-my_dgemm:printc()
-
-
-
 terralib.saveobj("my_dgemm.o", {my_dgemm = my_dgemm})
