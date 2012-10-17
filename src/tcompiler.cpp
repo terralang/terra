@@ -28,6 +28,7 @@ static int terra_jit(lua_State * L);  //entry point from lua into compiler to ac
 
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
+static int terra_deletefunction(lua_State * L);
 
 
 #ifdef PRINT_LLVM_TIMING_STATS
@@ -100,6 +101,17 @@ static void RecordTime(Obj * obj, const char * name, double begin) {
     stats.setfield(name);
 }
 
+//useful for debugging GC problems. You can attach it to 
+static int terra_gcdebug(lua_State * L) {
+    Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function*));
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"llvm_gcdebugmetatable");
+    lua_setmetatable(L,-3);
+    lua_pop(L,1); //the 'terra' table
+    lua_setfield(L,-2,"llvm_gcdebughandle");
+    return 0;
+}
+
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
@@ -117,6 +129,9 @@ int terra_compilerinit(struct terra_State * T) {
     
     lua_pushcfunction(T->L, terra_pointertolightuserdata);
     lua_setfield(T->L,-2,"pointertolightuserdata");
+
+    lua_pushcfunction(T->L, terra_gcdebug);
+    lua_setfield(T->L,-2,"gcdebug");
     
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_saveobjimpl,1);
@@ -160,7 +175,7 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->td = TM->TARGETDATA(get)();
     
     
-    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).create();
+    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).setAllocateGVsWithCode(false).create();
     if (!T->C->ee) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
@@ -527,6 +542,18 @@ struct TerraCompiler {
             } 
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
+
+            //attach a userdata object to the function that will call terra_deletefunction 
+            //when the function variant is GC'd in lua
+            Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
+            *gchandle = fn;
+            if(luaL_newmetatable(L,"terra_gcfuncvariant")) {
+                lua_pushlightuserdata(L,(void*)T);
+                lua_pushcclosure(L,terra_deletefunction,1);
+                lua_setfield(L,-2,"__gc");
+            }
+            lua_setmetatable(L,-2);
+            funcobj->setfield("llvm_gchandle");
         }
         *rfn = fn;
     }
@@ -1698,6 +1725,30 @@ static int terra_jit(lua_State * L) {
     
     lobj_removereftable(T->L,ref_table);
     
+    return 0;
+}
+
+static int terra_deletefunction(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    Function ** fp = (Function**) lua_touserdata(L,-1);
+    assert(fp);
+    Function * func = (Function*) *fp;
+    assert(func);
+    DEBUG_ONLY(T) {
+        printf("deleting function: %s\n",func->getName().str().c_str());
+    }
+    if(T->C->ee->getPointerToGlobalIfAvailable(func)) {
+        DEBUG_ONLY(T) {
+            printf("... and deleting generated code\n");
+        }
+        T->C->ee->freeMachineCodeForFunction(func); 
+    }
+    func->eraseFromParent();
+    DEBUG_ONLY(T) {
+        printf("... finish delete.\n");
+    }
+    *fp = NULL;
     return 0;
 }
 

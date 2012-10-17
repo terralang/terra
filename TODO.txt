@@ -8,7 +8,7 @@ Language Implementation:
 -- returning values from lua functions   
 -- better handling of options to try for overloaded operators
 -- better handling of lua layout of structs with recursion (can we seperate the creation of structs for their layout to simplify the problem) -- test the compiler fo handling jitting of functions previously optimized with nojit = true
-
+-- fix gc issues cleaning up functions: 1. either resolve symbols for quotes and functions once and throw away the env, or 2. trace references to local variables in the parser and construct the environment so that it only captures the referenced variables (this is probably the better solution, but changing the parser to do it may be tricky).
 
 DONE:
 --function pointers

@@ -385,9 +385,9 @@ end
 terra.funcvariant = {} --metatable for all function types
 terra.funcvariant.__index = terra.funcvariant
 function terra.funcvariant:env()
-    self.envtbl = self.envtbl or self.envfunction() --evaluate the environment if needed
-    self.envfunction = nil --we don't need the closure anymore
-    return self.envtbl
+    local e = self.envfunction() --evaluate the environment
+    self.envfunction = nil -- discard the environment function so we don't capture additional references
+    return e
 end
 function terra.funcvariant:hasbeeninstate(state)
     local states = {"uninitializedterra","uninitializedc","typecheck","codegen","optimize","initialized"}
@@ -496,19 +496,12 @@ function terra.funcvariant:compile(ctx)
     if self.state ~= "uninitializedterra" then
         error("attempting to compile a function that is already in the process of being compiled.",2)
     end
-    
-    
-    dbprint(2,"compiling function:")
-    dbprintraw(2,self.untypedtree)
-    dbprint(2,"with local environment:")
-    for k,v in pairs(self:env()) do
-        dbprint(2,"  ",k)
-    end
-    
+
     ctx:functionbegin(self)
     self.state = "typecheck"
     local start = terra.currenttimeinseconds()
     self.typedtree = self:typecheck(ctx)
+    
     self.stats.typec = terra.currenttimeinseconds() - start
     self.type = self.typedtree.type
     
@@ -560,6 +553,9 @@ function terra.funcvariant:__call(...)
     end
 end
 
+terra.llvm_gcdebugmetatable = { __gc = function(obj)
+    print("GC IS CALLED")
+end }
 
 function terra.isfunctionvariant(obj)
     return getmetatable(obj) == terra.funcvariant
@@ -1568,9 +1564,16 @@ function terra.funcvariant:typecheck(ctx)
     
     --initialization
     ctx:enterfile(self.filename)
-    ctx:enterdef(self:env())
+    local origenv = self:env()
+    ctx:enterdef(origenv)
     
-    
+    dbprint(2,"compiling function:")
+    dbprintraw(2,self.untypedtree)
+    dbprint(2,"with local environment:")
+    for k,v in pairs(origenv) do
+        dbprint(2,"  ",k)
+    end
+
     local ftree = self.untypedtree
     
     
@@ -1585,7 +1588,7 @@ function terra.funcvariant:typecheck(ctx)
     local insertcast,structcast, insertvar, insertselect,asrvalue,aslvalue,
           checkexp,checkstmt, checkrvalue,resolvequote,
           checkparameterlist, checkcall,checkmethodorcall, createspecial, resolveluaspecial,
-          insertdereference, insertuntypeddereference, insertaddressof
+          insertdereference, insertuntypeddereference, insertaddressof, checksymbol
           
           
     --cast  handlint functions
@@ -1657,6 +1660,7 @@ function terra.funcvariant:typecheck(ctx)
         return terra.newtree(exp, { kind = terra.kinds.typedexpression, exp = exp})
     end
 
+    
     function insertcast(exp,typ,speculative) --if speculative is true, then an error will not be reported and the caller should check the second return value to see if the cast was valid
         if typ == nil then
             print(debug.traceback())
@@ -1711,6 +1715,7 @@ function terra.funcvariant:typecheck(ctx)
             return cast_exp, false
         end
     end
+
     local function insertexplicitcast(exp,typ) --all implicit casts are allowed plus some additional casts like from int to pointer, pointer to int, and int to int
         if typ == exp.type then
             return exp
@@ -1797,6 +1802,7 @@ function terra.funcvariant:typecheck(ctx)
             return terra.types.error
         end
     end
+
     local function typematch(op,lstmt,rstmt)
         local inputtype = typemeet(op,lstmt.type,rstmt.type)
         return inputtype, insertcast(lstmt,inputtype), insertcast(rstmt,inputtype)
@@ -1963,7 +1969,8 @@ function terra.funcvariant:typecheck(ctx)
         return ee:copy { type = typ, operands = terra.newlist{a,b} }
     end
     
-    function checkifelse(ee,operands)
+    
+    local function checkifelse(ee,operands)
         local cond = operands[1]
         local t,l,r = typematch(ee,operands[2],operands[3])
         if cond.type ~= terra.types.error and t ~= terra.types.error then
@@ -1988,6 +1995,8 @@ function terra.funcvariant:typecheck(ctx)
         end
         return attr
     end
+
+
     local operator_table = {
         ["-"] = { checkarithpointer, "__sub" };
         ["+"] = { checkarithpointer, "__add" };
@@ -2059,6 +2068,7 @@ function terra.funcvariant:typecheck(ctx)
         return iscall(t) or t.kind == terra.kinds.var or t.kind == terra.kinds.select
     end
 
+
     function checksymbol(sym,requiresymbol)
         if sym.name then
             return sym.name
@@ -2077,6 +2087,8 @@ function terra.funcvariant:typecheck(ctx)
             return value
         end
     end
+
+
 
     function checkparameterlist(anchor,params) --individual params may be already typechecked (e.g. if they were a method call receiver) 
                                                --in this case they are treated as single expressions
@@ -3008,6 +3020,8 @@ function terra.funcvariant:typecheck(ctx)
         error("NYI - "..terra.kinds[s.kind],2)
     end
     
+
+
     -- actual implementation begins here
     --  generate types for parameters, if return types exists generate a types for them as well
     local typed_parameters = createformalparameterlist(ftree.parameters)
@@ -3024,6 +3038,7 @@ function terra.funcvariant:typecheck(ctx)
         end
         env[v.name] = v
     end
+
 
     local result = checkstmt(ftree.body)
     for _,v in pairs(labels) do
