@@ -8,11 +8,14 @@ function symmat(name,I,...)
 	return r
 end
 
+llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
+
+
 
 function genkernel(NB, RM, RN, V,alpha)
 
 	local A,B,C,mm,nn,ld = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("ld")
-	local lda,ldb,ldc = ld,ld,ld
+	local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
 	local k = symbol("k")
 	
@@ -51,19 +54,20 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 	
 	
-	return terra([A] : &double, [B] : &double, [C] : &double, [ld] : int64)
+	return terra([A] : &double, [B] : &double, [C] : &double, [lda] : int64,[ldb] : int64,[ldc] : int64)
 		for [mm] = 0, NB, RM do
 			for [nn] = 0, NB,RN*V do
 				[loadc];
 				for [k] = 0, NB do
+					llvmprefetch(B + 4*ldb,0,3,1);
 					[calcc];
 					B = B + ldb
 					A = A + 1
 				end
 				[storec];
 				A = A - NB
-				C = C + RN*V
 				B = B - ldb*NB + RN*V
+				C = C + RN*V
 			end
 			C = C + RM * ldb - NB
 			B = B - NB
@@ -101,11 +105,11 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 							if k == 0 then
 								l1dgemm0(A + (m*lda + k),
 							         	 B + (k*ldb + n),
-							             C + (m*ldc + n),lda)
+							             C + (m*ldc + n),lda,ldb,ldc)
 							else
 								l1dgemm1(A + (m*lda + k),
 							         	 B + (k*ldb + n),
-							             C + (m*ldc + n),lda)
+							             C + (m*ldc + n),lda,ldb,ldc)
 							end
 						end
 					end

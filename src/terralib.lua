@@ -2967,7 +2967,7 @@ function terra.funcvariant:typecheck(ctx)
                 end
             end
             return resolvequote(anchor,s.quote,"stmt",checkquote)
-        elseif s:is "instrinsic" then
+        elseif s:is "intrinsic" then
             return checkintrinsic(s,false)
         else
             return checkexp(s)

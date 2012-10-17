@@ -168,10 +168,15 @@ void testsize(int M, int K, int N) {
 int main() {
 
 	int NB = 40;
-	for(int i = NB; i <= 1024; i += NB) {
-		testsize(i,i,i);
+	for(int i = NB; true; i += NB) {
+		int m = i;
+		int n = i;
+		int k = i;
+		testsize(m,n,k);
+		if(m*n+ m*k+n*k > 3*1024*1024)
+			break;
 	}
-	testsize(5000,5000,5000);
+	//testsize(5000,5000,5000);
 
 	return 0;
 }
