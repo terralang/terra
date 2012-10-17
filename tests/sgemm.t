@@ -99,7 +99,7 @@ function generate(M,N,K,lda,ldb,ldc,AR,BR,KR,V,A,B,C,alpha)
 				end
 			end
 			local sum
-			if V == 8 then
+			if V == 8 and terralib.llvmversion == "3.2" then
 				sum = `hadd([cs[i][j]])
 			else
 				sum = getsum(0,V)

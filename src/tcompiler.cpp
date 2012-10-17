@@ -264,8 +264,10 @@ static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi)
 static void addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
     fpm->add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
     fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
+#ifdef LLVM_3_2
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));
+#endif
 }
 
 struct TType { //contains llvm raw type pointer and any metadata about it we need
