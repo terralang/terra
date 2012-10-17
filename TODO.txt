@@ -1,16 +1,13 @@
 Language Implementation:
 
 
--- creating references to variables found in another quote object despite hygiene
--- vector types
--- overloaded functions
--- overloaded operator behavior
 -- how to save results for later (both Lua state and Terra JIT state)
--- generate TBAA metadata like C will so that we can match perf
--- vectorized load/stores (allow vec(int*) and its loads)
+-- generate TBAA metadata like C will so that we can match perf (do we need?)
+-- gather and scatter for vectors (allow vec(int*) and its loads)
 -- pointer arithmetic on niltype?
 -- returning values from lua functions   
-      
+-- better handling of options to try for overloaded operators
+-- better handling of lua layout of structs with recursion (can we seperate the creation of structs for their layout to simplify the problem) -- test the compiler fo handling jitting of functions previously optimized with nojit = true
 
 
 DONE:
@@ -58,3 +55,7 @@ DONE:
    handle as much as possible in the JIT, and make sure the offline compiler does everything
    make configurable (perhaps a general config mechanism) (look a preconfigured stuff)
 -- write 1 or two language benchmarks in terra to get baseline perf (do this after figuring out -O3)
+-- creating references to variables found in another quote object despite hygiene
+-- vector types
+-- overloaded functions
+-- overloaded operator behavior
