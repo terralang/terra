@@ -8,8 +8,10 @@ function symmat(name,I,...)
 	return r
 end
 
-llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
 
+local function isinteger(x) return math.floor(x) == x end
+
+llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
 
 
 function genkernel(NB, RM, RN, V,alpha)
@@ -76,40 +78,46 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 end
 
-local NB = 40
-local NB2 = 5 * NB
-
-local V = 4
-
-l1dgemm0 = genkernel(NB,4,2,V,0)
-l1dgemm1 = genkernel(NB,4,2,V,1)
-
-terra min(a : int, b : int)
-	return terralib.select(a < b, a, b)
-end
 
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 
-terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
-	           beta : double, C : &double, ldc : int)
-	
 
-	for mm = 0,M,NB2 do
-		for nn = 0,N,NB2 do
-			for kk = 0,K, NB2 do
-				for m = mm,min(mm+NB2,M),NB do
-					for n = nn,min(nn+NB2,N),NB do
-						for k = kk,min(kk+NB2,K),NB do
-							--IO.printf("%d %d starting at %d\n",m,k,m*lda + NB*k)
-							if k == 0 then
-								l1dgemm0(A + (m*lda + k),
-							         	 B + (k*ldb + n),
-							             C + (m*ldc + n),lda,ldb,ldc)
-							else
-								l1dgemm1(A + (m*lda + k),
-							         	 B + (k*ldb + n),
-							             C + (m*ldc + n),lda,ldb,ldc)
+function generatedgemm(NB,NBF,RM,RN,V)
+	
+	if not isinteger(NB/(RN*V)) then
+		return false
+	end
+	if not isinteger(NB/RM) then
+		return false
+	end
+
+	local NB2 = NBF * NB
+	local l1dgemm0 = genkernel(NB,RM,RN,V,0)
+	local l1dgemm1 = genkernel(NB,RM,RN,V,1)
+
+	local terra min(a : int, b : int)
+		return terralib.select(a < b, a, b)
+	end
+
+	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
+		           beta : double, C : &double, ldc : int)
+		for mm = 0,M,NB2 do
+			for nn = 0,N,NB2 do
+				for kk = 0,K, NB2 do
+					for m = mm,min(mm+NB2,M),NB do
+						for n = nn,min(nn+NB2,N),NB do
+							for k = kk,min(kk+NB2,K),NB do
+								--IO.printf("%d %d starting at %d\n",m,k,m*lda + NB*k)
+								if k == 0 then
+									l1dgemm0(A + (m*lda + k),
+								         	 B + (k*ldb + n),
+								             C + (m*ldc + n),lda,ldb,ldc)
+								else
+									l1dgemm1(A + (m*lda + k),
+								         	 B + (k*ldb + n),
+								             C + (m*ldc + n),lda,ldb,ldc)
+								end
 							end
 						end
 					end
@@ -118,5 +126,55 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 		end
 	end
 end
+
+--
+
+local blocksizes = {16,24,32,40,48,56,64}
+local regblocks = {1,2,4}
+local vectors = {1,2,4,8}
+
+local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
+
+
+if false then
+	local harness = terralib.require("lib/matrixtestharness")
+	for _,b in ipairs(blocksizes) do
+		for _,rm in ipairs(regblocks) do
+			for _,rn in ipairs(regblocks) do
+				for _,v in ipairs(vectors) do
+					local my_dgemm = generatedgemm(b,5,rm,rn,v)
+					if my_dgemm then
+						print(b,rm,rn,v)
+						my_dgemm:compile()
+						local step = 1024 / 4
+						step = b * math.floor(step / b)
+						local avg = 0
+						for ii = 0,3 do
+							local i = b + step * ii
+							local s, times = harness.timefunctions("double",i,i,i,function(M,K,N,A,B,C)
+									my_dgemm(nil,M,N,K,1.0,A,K,B,N,0.0,C,N)
+							end)
+							if not s then
+								print("<error>")
+								break
+							end
+							print(i,unpack(times))
+							avg = avg + times[1]
+						end
+						avg = avg / 4
+						if  best.gflops < avg then
+							best = { gflops = avg, b = b, rm = rm, rn = rn, v = v }
+							terralib.tree.printraw(best)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+terralib.tree.printraw(best)
+
+local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 
 terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })
