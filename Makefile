@@ -1,6 +1,6 @@
 # point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-#LLVM_CONFIG=$(shell which llvm-config)
-LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
+LLVM_CONFIG=$(shell which llvm-config)
+#LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
 
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:

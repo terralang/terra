@@ -133,10 +133,11 @@ local blocksizes = {16,24,32,40,48,56,64}
 local regblocks = {1,2,4}
 local vectors = {1,2,4,8}
 
-local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
+local best = { gflops = 0, b = 56, rm = 4, rn = 1, v = 8 }
 
 
-if false then
+if true then
+	local tunefor = 1024
 	local harness = terralib.require("lib/matrixtestharness")
 	for _,b in ipairs(blocksizes) do
 		for _,rm in ipairs(regblocks) do
@@ -146,22 +147,17 @@ if false then
 					if my_dgemm then
 						print(b,rm,rn,v)
 						my_dgemm:compile()
-						local step = 1024 / 4
-						step = b * math.floor(step / b)
+						local i = math.floor(tunefor / b) * b
 						local avg = 0
-						for ii = 0,3 do
-							local i = b + step * ii
-							local s, times = harness.timefunctions("double",i,i,i,function(M,K,N,A,B,C)
-									my_dgemm(nil,M,N,K,1.0,A,K,B,N,0.0,C,N)
-							end)
-							if not s then
-								print("<error>")
-								break
-							end
-							print(i,unpack(times))
-							avg = avg + times[1]
+						local s, times = harness.timefunctions("double",i,i,i,function(M,K,N,A,B,C)
+							my_dgemm(nil,M,N,K,1.0,A,K,B,N,0.0,C,N)
+						end)
+						if not s then
+							print("<error>")
+							break
 						end
-						avg = avg / 4
+						print(i,unpack(times))
+						local avg = times[1]	
 						if  best.gflops < avg then
 							best = { gflops = avg, b = b, rm = rm, rn = rn, v = v }
 							terralib.tree.printraw(best)
