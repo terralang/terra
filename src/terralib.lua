@@ -238,15 +238,9 @@ end
 
 function terra.context:enterquote(luaenv,varenv)
 
-    local combinedenv = { __index = function(_,idx) 
-        return varenv[idx] or luaenv[idx] 
-    end }
-    setmetatable(combinedenv,combinedenv)
-
     local scope = {
         varenv = varenv,
-        luaenv = luaenv,
-        combinedenv = combinedenv
+        luaenv = luaenv
     }
     table.insert(self:definition().scopes,scope)
 end
@@ -277,7 +271,21 @@ function terra.context:varenv()
     return self:scope().varenv
 end
 function terra.context:combinedenv()
-    return self:scope().combinedenv
+    local varenv,luaenv = self:varenv(),self:luaenv()
+    local combinedenv = { __index = function(_,idx)
+        local v = varenv[idx]
+        if v then
+            local vtree = terra.newtree(v, { kind = terra.kinds.var, name = idx })
+            local q = terra.newquote(vtree,"exp",luaenv,varenv)
+            --small hack: allow lua code to look up the type of this variable by setting a .type on the quote object
+            --this won't interfere with typechecking, since it doesn't look for a type on the quote object
+            q.type = v.type
+            return q
+        end
+        return luaenv[idx] 
+    end }
+    setmetatable(combinedenv,combinedenv)
+    return combinedenv
 end
 function terra.context:symenv()
     return self:definition().symenv
@@ -748,10 +756,6 @@ function terra.quote:asvalue(ctx)
 end
 
 function terra.quote:env()
-    if not self.luaenv then
-        self.luaenv = self.luaenvfunction()
-        self.luaenvfunction = nil
-    end
     return self.luaenv,self.varenv
 end
 
@@ -948,7 +952,7 @@ do  --constructor functions for terra functions and variables
     function terra.newquote(tree,variant,luaenvorfn,varenv) -- kind == "exp" or "stmt"
         local obj = { tree = tree, variant = variant, varenv = varenv or {}}
         if type(luaenvorfn) == "function" then
-            obj.luaenvfunction = luaenvorfn
+            obj.luaenv = luaenvorfn()
         else
             obj.luaenv = luaenvorfn
         end

@@ -174,5 +174,5 @@ terralib.tree.printraw(best)
 
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 
-my_dgemm:disas()
+--my_dgemm:disas()
 terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })
