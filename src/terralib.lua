@@ -493,7 +493,7 @@ function terra.funcvariant:compile(ctx)
     local ctx = (terra.iscontext(ctx) and ctx) or terra.newcontext(ctx) -- if this is a top level compile, create a new compilation context
     
     if self.state == "optimize" then
-        if ctx.compileflags.nojit then
+        if ctx.compileflags.nojit or ctx.has_errors then
             return
         end
         self:jitandmakewrapper(ctx.compileflags)

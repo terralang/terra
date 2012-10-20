@@ -1664,9 +1664,10 @@ static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
   TString * name = str_checkname(ls);
+  fs->bl->local_variables.push_back(name);
   body(ls, &b, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
-  fs->bl->local_variables.push_back(name);
+  
 }
 static void localterra (LexState *ls) {
   expdesc b;
