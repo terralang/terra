@@ -13,6 +13,7 @@ struct terra_CompilerState {
     llvm::TargetMachine * tm;
     const llvm :: TARGETDATA() * td;
     llvm::ManualInliner * mi;
+    llvm::DenseMap<const llvm::Function *, size_t> functionsizes;
     size_t next_unused_id; //for creating names for dummy functions
 };
 

@@ -615,6 +615,14 @@ function terra.func:printstats()
     end
 end
 
+function terra.func:disas()
+    self:compile()
+    for i,v in ipairs(self.variants) do
+        print("variant ", v.type)
+        terra.disassemble(v)
+    end
+end
+
 function terra.isfunction(obj)
     return getmetatable(obj) == terra.func
 end

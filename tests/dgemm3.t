@@ -133,10 +133,11 @@ local blocksizes = {16,24,32,40,48,56,64}
 local regblocks = {1,2,4}
 local vectors = {1,2,4,8}
 
-local best = { gflops = 0, b = 56, rm = 4, rn = 1, v = 8 }
+--local best = { gflops = 0, b = 56, rm = 4, rn = 1, v = 8 }
+local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
 
 
-if true then
+if false then
 	local tunefor = 1024
 	local harness = terralib.require("lib/matrixtestharness")
 	for _,b in ipairs(blocksizes) do
@@ -173,4 +174,5 @@ terralib.tree.printraw(best)
 
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 
+my_dgemm:disas()
 terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })

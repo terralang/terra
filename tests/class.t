@@ -154,7 +154,8 @@ local C = Class.define("C",P)
           :type()
 
 terra P:add(b : int) : int
-    return self.data + b
+   self.data = self.data + b
+   return self.data
 end
 
 terra C:sub(b : int) : int
@@ -173,6 +174,8 @@ terra dosubstuff(s : &Sub)
     return s:sub(1)
 end
 
+
+
 terra dotests()
     var p : P
     p:init()
@@ -184,9 +187,43 @@ terra dotests()
     return dopstuff(&p) + dopstuff(&c) + dosubstuff(&c)
 end
 
-test.eq(dotests(),11)
+test.eq(dotests(),15)
 
 
+terra timeadd(a :&P, N : int)
+  IO.printf("%p\n",a)
+  for i = 0, N,10 do
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+    a:add(1)
+  end
+  return a
+end
+
+
+var a : C
+
+terra doinit() : &P
+  a:init()
+  a.data = 0
+  return &a
+end
+
+local v = doinit()
+timeadd:compile()
+
+local b = terralib.currenttimeinseconds()
+timeadd(v,100000000)
+local e = terralib.currenttimeinseconds()
+print(e - b)
+print(v.data)
 
 
 

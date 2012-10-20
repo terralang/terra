@@ -29,7 +29,7 @@ static int terra_jit(lua_State * L);  //entry point from lua into compiler to ac
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
 static int terra_deletefunction(lua_State * L);
-
+static int terra_disassemble(lua_State * L);
 
 #ifdef PRINT_LLVM_TIMING_STATS
 static llvm_shutdown_obj llvmshutdownobj;
@@ -58,30 +58,30 @@ static void addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi)
 static void addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * tm);
 
 
+static void disassemblefunction(void * data, size_t sz) {
+    printf("assembly for function at address %p\n",data);
+    LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
+    assert(disasm != NULL);
+    char buf[1024];
+    buf[0] = '\0';
+    int64_t offset = 0;
+    while(offset < sz) {
+        int64_t inc = LLVMDisasmInstruction(disasm, (uint8_t*)data + offset, sz - offset, 0, buf,1024);
+        printf("%d:\t%s\n",(int)offset,buf);
+        offset += inc;
+    }
+    LLVMDisasmDispose(disasm);
+}
+
 struct DisassembleFunctionListener : public JITEventListener {
     terra_State * T;
     DisassembleFunctionListener(terra_State * T_)
     : T(T_) {}
     virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails &) {
-        DEBUG_ONLY(T) {
-        //for some reason linux version of llvm doesn't link correctly if we use LLVMCreateDisasm
-        #ifndef __linux__
-            printf("assembly for function at address %p\n",data);
-            LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
-            assert(disasm != NULL);
-            char buf[1024];
-            buf[0] = '\0';
-            int64_t offset = 0;
-            while(offset < sz) {
-                int64_t inc = LLVMDisasmInstruction(disasm, (uint8_t*)data + offset, sz - offset, 0, buf,1024);
-                printf("%s\n",buf);
-                offset += inc;
-            }
-            LLVMDisasmDispose(disasm);
-        #endif
-        }
+        T->C->functionsizes[&f] = sz;
     }
 };
+
 static double CurrentTimeInSeconds() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -99,6 +99,18 @@ static void RecordTime(Obj * obj, const char * name, double begin) {
     double end = CurrentTimeInSeconds();
     lua_pushnumber(L, end - begin);
     stats.setfield(name);
+}
+
+static void AddLLVMOptions(int N,...) {
+    va_list ap;
+    va_start(ap, N);
+    std::vector<const char *> ops;
+    ops.push_back("terra");
+    for(int i = 0; i < N; i++) {
+        const char * arg = va_arg(ap, const char *);
+        ops.push_back(arg);
+    }
+    cl::ParseCommandLineOptions(N+1, &ops[0]);
 }
 
 //useful for debugging GC problems. You can attach it to 
@@ -127,6 +139,11 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pushcclosure(T->L,terra_jit,1);
     lua_setfield(T->L,-2,"jit");
     
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_disassemble,1);
+    lua_setfield(T->L,-2,"disassemble");
+
+    
     lua_pushcfunction(T->L, terra_pointertolightuserdata);
     lua_setfield(T->L,-2,"pointertolightuserdata");
 
@@ -154,11 +171,10 @@ int terra_compilerinit(struct terra_State * T) {
     memset(T->C, 0, sizeof(terra_CompilerState));
     
 #ifdef PRINT_LLVM_TIMING_STATS
-    int argc = 2;
-    const char * argv[] = {"terra", "-time-passes"};
-    cl::ParseCommandLineOptions(argc,argv,"terra");
+    AddLLVMOptions(1,"-time-passes");
 #endif
 
+    AddLLVMOptions(1,"-x86-asm-syntax=intel");
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
@@ -1749,6 +1765,19 @@ static int terra_deletefunction(lua_State * L) {
         printf("... finish delete.\n");
     }
     *fp = NULL;
+    return 0;
+}
+static int terra_disassemble(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    lua_getfield(L, -1, "fptr");
+    void * data = lua_touserdata(L, -1);
+    lua_getfield(L,-2,"llvm_function");
+    Function * fn = (Function*) lua_touserdata(L, -1);
+    assert(fn);
+    fn->dump();
+    size_t sz = T->C->functionsizes[fn];
+    disassemblefunction(data, sz);
     return 0;
 }
 
