@@ -775,7 +775,7 @@ function terra.newsymbol(typ,displayname)
             displayname = typ
             typ = nil
         else
-            error("argument is not a type")
+            error("argument is not a type",2)
         end
     end
     local self = setmetatable({

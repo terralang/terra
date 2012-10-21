@@ -14,7 +14,16 @@ local function isinteger(x) return math.floor(x) == x end
 llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
 
 
-function genkernel(NB, RM, RN, V,alpha)
+function genkernel(NB, RM, RN, V,alpha,boundary)
+
+	local M,N,K, boundaryargs
+	if boundary then
+		M,N,K = symbol(int64,"M"),symbol(int64,"N"),symbol(int64,"K")
+		boundaryargs = terralib.newlist({M,N,K})
+	else
+		boundaryargs = terralib.newlist()
+		M,N,K = NB,NB,NB
+	end
 
 	local A,B,C,mm,nn,ld = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("ld")
 	local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
@@ -27,10 +36,10 @@ function genkernel(NB, RM, RN, V,alpha)
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + m*ldc + n*V
-				var [c[m][n]] = alpha * @[caddr[m][n]]:as(&vector(double,V))
+				var [c[m][n]] = alpha * attribute(@[caddr[m][n]]:as(&vector(double,V)),{align=8})
 			end)
 			storec:insert(quote
-				@[caddr[m][n]]:as(&vector(double,V)) = [c[m][n]]
+				attribute(@[caddr[m][n]]:as(&vector(double,V)),{align=8}) = [c[m][n]]
 			end)
 		end
 	end
@@ -39,7 +48,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = @(&B[n*V]):as(&vector(double,V))
+			var [b[n]] = attribute(@(&B[n*V]):as(&vector(double,V)),{align=8})
 		end)
 	end
 	for m = 0, RM-1 do
@@ -56,26 +65,27 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 	
 	
-	return terra([A] : &double, [B] : &double, [C] : &double, [lda] : int64,[ldb] : int64,[ldc] : int64)
-		for [mm] = 0, NB, RM do
-			for [nn] = 0, NB,RN*V do
+	local result = terra([A] : &double, [B] : &double, [C] : &double, [lda] : int64,[ldb] : int64,[ldc] : int64,[boundaryargs])
+		for [mm] = 0, M, RM do
+			for [nn] = 0, N,RN*V do
 				[loadc];
-				for [k] = 0, NB do
+				for [k] = 0, K do
 					llvmprefetch(B + 4*ldb,0,3,1);
 					[calcc];
 					B = B + ldb
 					A = A + 1
 				end
 				[storec];
-				A = A - NB
-				B = B - ldb*NB + RN*V
+				A = A - K
+				B = B - ldb*K + RN*V
 				C = C + RN*V
 			end
-			C = C + RM * ldb - NB
-			B = B - NB
+			C = C + RM * ldb - N
+			B = B - N
 			A = A + lda*RM
 		end
 	end
+	return result
 end
 
 
@@ -93,8 +103,12 @@ function generatedgemm(NB,NBF,RM,RN,V)
 	end
 
 	local NB2 = NBF * NB
-	local l1dgemm0 = genkernel(NB,RM,RN,V,0)
-	local l1dgemm1 = genkernel(NB,RM,RN,V,1)
+	local l1dgemm0 = genkernel(NB,RM,RN,V,0,false)
+	local l1dgemm1 = genkernel(NB,RM,RN,V,1,false)
+
+
+	local l1dgemm0b = genkernel(NB,1,1,1,0,true)
+	local l1dgemm1b = genkernel(NB,1,1,1,1,true)
 
 	local terra min(a : int, b : int)
 		return terralib.select(a < b, a, b)
@@ -109,14 +123,28 @@ function generatedgemm(NB,NBF,RM,RN,V)
 						for n = nn,min(nn+NB2,N),NB do
 							for k = kk,min(kk+NB2,K),NB do
 								--IO.printf("%d %d starting at %d\n",m,k,m*lda + NB*k)
+								var MM,NN,KK = min(M-m,NB),min(N-n,NB),min(K-k,NB)
+								var isboundary = MM < NB or NN < NB or KK < NB
+								var AA,BB,CC = A + (m*lda + k),B + (k*ldb + n),C + (m*ldc + n)
 								if k == 0 then
-									l1dgemm0(A + (m*lda + k),
-								         	 B + (k*ldb + n),
-								             C + (m*ldc + n),lda,ldb,ldc)
+									if isboundary then
+										--IO.printf("b0 %d %d %d\n",MM,NN,KK)
+										l1dgemm0b(AA,BB,CC,lda,ldb,ldc,MM,NN,KK)
+
+										--IO.printf("be %d %d %d\n",MM,NN,KK)
+									else
+										l1dgemm0(AA,BB,CC,lda,ldb,ldc)
+									end
 								else
-									l1dgemm1(A + (m*lda + k),
-								         	 B + (k*ldb + n),
-								             C + (m*ldc + n),lda,ldb,ldc)
+									if isboundary then
+
+										--IO.printf("b %d %d %d\n",MM,NN,KK)
+										l1dgemm1b(AA,BB,CC,lda,ldb,ldc,MM,NN,KK)
+
+										--IO.printf("be %d %d %d\n",MM,NN,KK)
+									else
+										l1dgemm1(AA,BB,CC,lda,ldb,ldc)
+									end
 								end
 							end
 						end
