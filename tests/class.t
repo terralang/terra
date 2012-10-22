@@ -44,17 +44,25 @@ end
 
 terra foobar()
 
-    var a = A {nil, 1 }
-    var b = B {nil, 1, 2 }
-    var c = C {nil, 1, 2, 3.5 }
-    a:init()
-    b:init()
-    c:init()
-    return doubleAnA(&a) + doubleAnA(&b) + doubleAnA(&c) + combineAB(&b) + combineAB(&c)
+    var a = A.alloc()
+    a.a = 1
+    var b = B.alloc()
+    b.a,b.b = 1,2
+
+    var c = C.alloc()
+    c.a,c.b,c.c = 1,2,3.5
+
+    var r = doubleAnA(a) + doubleAnA(b) + doubleAnA(c) + combineAB(b) + combineAB(c)
+
+    a:free()
+    b:free()
+    c:free()
+
+    return r
 end
+
 local test = require("test")
 test.eq(23,foobar())
-
 
 local Doubles
 = Class.defineinterface("Doubles")
@@ -225,5 +233,8 @@ local e = terralib.currenttimeinseconds()
 print(e - b)
 print(v.data)
 
+local Add = Class.defineinterface("Add")
+            :method("add",int->int)
+            :type()
 
 

@@ -2543,12 +2543,18 @@ function terra.funcvariant:typecheck(ctx)
             local v = checkexp(untypedv,true)
             local field = checksymbol(e.field)
             if v:is "luaobject" then
-                if type(v.value) ~= "table" then
-                    terra.reporterror(ctx,e,"expected a table but found ", type(v.value))
+                local value = v.value
+                if type(value) ~= "table" then
+                    terra.reporterror(ctx,e,"expected a table but found ", type(value))
                     return e:copy{ type = terra.types.error }
                 end
 
-                local selected = v.value[field]
+                if terra.types.istype(value) then --class method resolve to method table
+                    value:getcanonical(ctx)
+                    value = value.methods
+                end
+
+                local selected = value[field]
                 if selected == nil then
                     terra.reporterror(ctx,e,"no field ",field," in lua object")
                     return e:copy { type = terra.types.error }

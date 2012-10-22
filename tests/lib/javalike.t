@@ -1,5 +1,6 @@
 
 IO = terralib.includec("stdio.h")
+local std = terralib.includec("stdlib.h")
 local Class = {}
 Class.class = {}
 Class.class.__index = Class.class
@@ -108,9 +109,18 @@ function Class.define(name,parentclass)
         end)
 
         local vtable = c.vtablevar
+        
         terra self:init()
             self.__vtable = &vtable
             initinterfaces(self)
+        end
+        terra self.methods.alloc()
+            var obj = std.malloc(sizeof(self)):as(&self)
+            obj:init()
+            return obj
+        end
+        terra self:free()
+            std.free(self)
         end
 
     end)
