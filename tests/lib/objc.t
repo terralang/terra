@@ -3,18 +3,15 @@ local C = terralib.includecstring [[
 	#include <objc/message.h>
 	#include <stdio.h>
 ]]
-local struct ID {
-	dummy : &uint8	
-}
 local OC = {}
-OC.ID = ID
 setmetatable(OC, {
 	 __index = function(self,idx)
-	 	return `C.objc_getClass(idx):as(&ID)
+	 	return `C.objc_getClass(idx):as(C.id)
 	end
 })
-setmetatable(ID.methods,{
-	defaulttable = getmetatable(ID.methods);
+OC.ID = &C.objc_object
+setmetatable(C.objc_object.methods,{
+	defaulttable = getmetatable(C.objc_object.methods);
 	__index = function(self,idx)
 		local df = getmetatable(self).defaulttable[idx]
 		if df then
@@ -29,8 +26,9 @@ setmetatable(ID.methods,{
 			if #args >= 1 then
 				idx = idx .. ":"
 			end
-			return `C.objc_msgSend((&obj):as(C.id),C.sel_registerName(idx),args):as(&ID)
+			return `C.objc_msgSend(&obj,C.sel_registerName(idx),args)
 		end)
 	end
 })
+
 return OC
