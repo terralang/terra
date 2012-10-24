@@ -274,6 +274,9 @@ end
 
 function terra.context:leavedef()
     table.remove(self.definitions)
+    if self:isempty() then
+        terra.globalcompilecontext = nil
+    end
 end
 
 function terra.context:enterblock()
@@ -390,8 +393,9 @@ function terra.context:functionend()
                 f:jitandmakewrapper(self.compileflags)
             end
         end
+        return true
     end
-    
+    return false
 end
 
 function terra.context:functioncalls(func)
@@ -402,7 +406,10 @@ function terra.context:functioncalls(func)
 end
 
 function terra.newcontext(flags)
-    return setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
+    if not terra.globalcompilecontext then
+        terra.globalcompilecontext = setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
+    end
+    return terra.globalcompilecontext
 end
 
 -- END CONTEXT
@@ -501,6 +508,7 @@ end
 
 function terra.funcvariant:compile(ctx)
     
+    local freshcall = ctx == nil --was this a call to the compiler from within the compiler? or was it a fresh call to the compiler?
     if self.state == "initialized" then
         return
     end
@@ -547,7 +555,9 @@ function terra.funcvariant:compile(ctx)
         terra.codegen(self)
     end
     
-    ctx:functionend(self)
+    if not ctx:functionend(self) and freshcall then
+        error("attempting to compile function within another function that requires it.",2)
+    end
     
 end
 
