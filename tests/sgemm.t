@@ -212,7 +212,6 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float,
 		          C + mm*ldc + nn,
 		          lda,ldb,ldc)
 	end
-	var Mrem = M % NB
 	--IO.printf("Mrem %d\n",Mrem)
 	var mm = M - Mrem
 	l1matmul0(Mrem,N,K,

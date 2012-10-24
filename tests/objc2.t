@@ -18,11 +18,11 @@ terra main()
 	var rec = Rect {0,0,200,200}
 	var window = OC.NSWindow:alloc():initWithContentRect_styleMask_backing_defer(rec,1,2,false)
 	window:makeKeyAndOrderFront(nil)
-	var img = OC.NSImage:alloc():initByReferencingFile(str("objc2.jpg"))
+	--[[var img = OC.NSImage:alloc():initByReferencingFile(str("objc2.jpg"))
 	var imgView = OC.NSImageView:alloc():initWithFrame(rec)
 	imgView:setImage(img)
 	window:setContentView(imgView)
-	IO.printf("entering run loop\n")
+	IO.printf("entering run loop\n")--]]
 	app:run()
 end
 

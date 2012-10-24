@@ -237,12 +237,35 @@ function terra.context:scope()
 end
 
 function terra.context:enterquote(luaenv,varenv)
-
+    
+    local function checkvarenvisvalid()
+        local isempty = true
+        for k,v in pairs(varenv) do
+            isempty = false
+            break
+        end
+        if not isempty then
+            local defn = self:definition()
+            for scopeidx = #defn.scopes, 1, -1 do
+                local scope = defn.scopes[scopeidx]
+                local env = scope.varenv
+                repeat
+                    if env == varenv then 
+                        return true 
+                    end
+                    env = getmetatable(env) and getmetatable(env).__index
+                until env == nil
+            end
+            return false
+        else return true end
+    end
+    local isvalid = checkvarenvisvalid()
     local scope = {
         varenv = varenv,
         luaenv = luaenv
     }
     table.insert(self:definition().scopes,scope)
+    return isvalid
 end
 
 function terra.context:leavequote()
@@ -2785,7 +2808,9 @@ function terra.funcvariant:typecheck(ctx)
             return anchor:copy { type = terra.types.error }
         end
         ctx:enterfile(q.tree.filename)
-        ctx:enterquote(q:env()) --q:env() returns both the luaenv and varenv here
+        if not ctx:enterquote(q:env()) then --q:env() returns both the luaenv and varenv here
+            terra.reporterror(ctx,anchor,"quoted statement is not in scope in this function")
+        end
         local r = checkfn(q.tree)
         ctx:leavequote()
         ctx:leavefile()
@@ -2920,11 +2945,12 @@ function terra.funcvariant:typecheck(ctx)
             --unless they are global variables (which are resolved through lua's env)
             if not s.isglobal then
                 for i,v in ipairs(lhs) do
-                    if terra.issymbol(v.name) then
-                        ctx:symenv()[v.name] = v
-                    else 
-                        ctx:varenv()[v.name] = v
+                    local env = (terra.issymbol(v.name) and ctx:symenv()) or ctx:varenv()
+                    if rawget(env,v.name) then
+                        terra.reporterror(ctx,v,"duplicate definition of variable ",v.name)
+                        terra.reporterror(ctx,env[v.name],"... is the previous definition")
                     end
+                    env[v.name] = v
                 end
             end
             return res
