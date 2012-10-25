@@ -1452,7 +1452,7 @@ do --construct type table that holds the singleton value representing each uniqu
             returns = terra.newlist(returns)
         end
         
-        function checkalltypes(l)
+        local function checkalltypes(l)
             for i,v in ipairs(l) do
                 checkistype(v)
             end
@@ -2980,7 +2980,7 @@ function terra.funcvariant:typecheck(ctx)
             
             return s:copy { lhs = lhs, rhs = params }
         elseif s:is "fornum" then
-            function mkdefs(...)
+            local function mkdefs(...)
                 local lst = terra.newlist()
                 for i,v in pairs({...}) do
                     local sym = terra.newtree(s,{ kind = terra.kinds.symbol, name = v})
@@ -2989,12 +2989,12 @@ function terra.funcvariant:typecheck(ctx)
                 return lst
             end
             
-            function mkvar(a)
+            local function mkvar(a)
                 assert(type(a) == "string")
                 return terra.newtree(s,{ kind = terra.kinds["var"], name = a })
             end
             
-            function mkop(op,a,b)
+            local function mkop(op,a,b)
                return terra.newtree(s, {
                 kind = terra.kinds.operator;
                 operator = terra.kinds[op];
@@ -3065,7 +3065,7 @@ function terra.funcvariant:typecheck(ctx)
                     return terra.newlist {checkstmt(tree)}
                 end
             end
-            return resolvequote(anchor,s.quote,"stmt",checkquote)
+            return resolvequote(s,s.quote,"stmt",checkquote)
         elseif s:is "intrinsic" then
             return checkintrinsic(s,false)
         else
