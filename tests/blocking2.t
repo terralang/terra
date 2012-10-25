@@ -46,7 +46,7 @@ main()
 
 
 function Image(Spectrum)
-	struct ImageImpl {
+	local struct ImageImpl {
 		data : &Spectrum,
 		N : int
 	}

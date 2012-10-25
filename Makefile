@@ -1,6 +1,6 @@
 # point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-#LLVM_CONFIG=$(shell which llvm-config)
-LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
+LLVM_CONFIG=$(shell which llvm-config)
+#LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
 
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:
@@ -209,9 +209,12 @@ $(BIN2C):	src/bin2c.c
 build/terralib.h:	src/terralib.lua $(PACKAGE_DEPS)
 	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 
+build/strict.h:	src/strict.lua $(PACKAGE_DEPS)
+	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/strict.lua build/strict.h
+
 
 clean:
-	rm -rf build/*.o build/*.d build/terralib.h build/llvmheaders.h.pch
+	rm -rf build/*.o build/*.d build/terralib.h build/strict.h build/llvmheaders.h.pch
 	rm -rf $(EXECUTABLE) $(LIBRARY)
 
 purge:	clean
@@ -225,7 +228,7 @@ package:
 	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
-build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h
+build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h build/strict.h
 	@g++ $(FLAGS)  -MM -MT '$@ $(@:.d=.o)' $< -o $@
 	
 -include $(DEPENDENCIES)

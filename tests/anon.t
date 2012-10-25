@@ -13,7 +13,7 @@ terra(a : Num) : Num
 end
 
 function fib2(a) 
-    i,c,p = 0,1,1
+    local i,c,p = 0,1,1
     while i < a do
         c,p = c + p,c
         i = i + 1

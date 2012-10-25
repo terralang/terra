@@ -191,8 +191,13 @@ int terra_lualoadstring(lua_State * L) {
 
 //defines terralib bytecodes
 #include "terralib.h"
+//defines strict.lua bytecodes
+#include "strict.h"
 
-
+static int loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name) {
+    return luaL_loadbuffer(L, bytecodes, size, name) 
+           || lua_pcall(L,0,LUA_MULTRET,0);
+}
 int terra_init(lua_State * L) {
     terra_State * T = (terra_State*) malloc(sizeof(terra_State));
     assert(T);
@@ -207,8 +212,10 @@ int terra_init(lua_State * L) {
     lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
     
-    int err = luaL_loadbuffer(T->L, luaJIT_BC_terralib, luaJIT_BC_terralib_SIZE, "terralib.lua") 
-              || lua_pcall(T->L,0,LUA_MULTRET,0);
+
+
+    int err =    loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
+              || loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
               
     if(err) {
         free(T);

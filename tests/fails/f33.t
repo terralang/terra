@@ -3,7 +3,7 @@ terra bar()
 end
 
 bar:compile()
-local what = bar.fptr
+local what = bar.variants[1].fptr
 
 terra foo()
    var a  = what

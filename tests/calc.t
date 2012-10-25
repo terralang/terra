@@ -21,7 +21,7 @@ function makecalcfn(inst)
     
     local result = table.remove(stk)
     
-    terra wrapper()
+    local terra wrapper()
         return result
     end
     

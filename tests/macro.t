@@ -19,7 +19,7 @@ terra up(v : &int)
 end
 
 local bar4 = macro(function()
-    terra myfn()
+    local terra myfn()
         return 42
     end
     return { a_fn = myfn }
@@ -28,7 +28,7 @@ end)
 var moo : int = 3
 
 local bar4 = macro(function()
-    terra myfn()
+    local terra myfn()
         return 42
     end
     return { a_fn = myfn }

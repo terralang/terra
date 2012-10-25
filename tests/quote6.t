@@ -5,7 +5,6 @@ mymacro = macro(mymacro)
 
 local exps = {`2,`3, `mymacro()}
 
-local stmts2 = {stmts,stmts}
 terra doit()
     return exps
 end

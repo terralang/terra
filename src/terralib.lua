@@ -101,7 +101,7 @@ function terra.treeload(ctx,self)
     if not self.expressionstring then
         error("tree was not an argument to a macro, I don't know what to do")
     else
-        fn, err = loadstring("return " .. self.expressionstring)
+        local fn, err = loadstring("return " .. self.expressionstring)
         if err then
             local ln,err = terra.parseerror(self.linenumber,err)
             self.linenumber = ln
@@ -1452,7 +1452,7 @@ do --construct type table that holds the singleton value representing each uniqu
             returns = terra.newlist(returns)
         end
         
-        function checkalltypes(l)
+        local function checkalltypes(l)
             for i,v in ipairs(l) do
                 checkistype(v)
             end
@@ -1786,7 +1786,7 @@ function terra.funcvariant:typecheck(ctx)
              return insertaddressof(exp), true
          elseif typ:ispointer() and not exp.type:ispointer() then
              --implicit address of allowed for recievers
-             return insertcast(insertaddressof(exp),typ,speculate)
+             return insertcast(insertaddressof(exp),typ,speculative)
          else
             return insertcast(exp,typ,speculative)
         end
@@ -2531,7 +2531,7 @@ function terra.funcvariant:typecheck(ctx)
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else
-            print(debug.traceback())
+            --print(debug.traceback())
             terra.reporterror(ctx,anchor,"lua object of type ", type(v), " not understood by terra code.")
             return anchor:copy { type = terra.types.error }
         end
@@ -2980,7 +2980,7 @@ function terra.funcvariant:typecheck(ctx)
             
             return s:copy { lhs = lhs, rhs = params }
         elseif s:is "fornum" then
-            function mkdefs(...)
+            local function mkdefs(...)
                 local lst = terra.newlist()
                 for i,v in pairs({...}) do
                     local sym = terra.newtree(s,{ kind = terra.kinds.symbol, name = v})
@@ -2989,12 +2989,12 @@ function terra.funcvariant:typecheck(ctx)
                 return lst
             end
             
-            function mkvar(a)
+            local function mkvar(a)
                 assert(type(a) == "string")
                 return terra.newtree(s,{ kind = terra.kinds["var"], name = a })
             end
             
-            function mkop(op,a,b)
+            local function mkop(op,a,b)
                return terra.newtree(s, {
                 kind = terra.kinds.operator;
                 operator = terra.kinds[op];
@@ -3065,7 +3065,7 @@ function terra.funcvariant:typecheck(ctx)
                     return terra.newlist {checkstmt(tree)}
                 end
             end
-            return resolvequote(anchor,s.quote,"stmt",checkquote)
+            return resolvequote(s,s.quote,"stmt",checkquote)
         elseif s:is "intrinsic" then
             return checkintrinsic(s,false)
         else
@@ -3288,7 +3288,7 @@ function terra.funcvariant:printpretty()
     local function emitParam(p)
         emit("%s : %s",p.name,p.type)
     end
-    local emitStat, emitExp,emitParamList
+    local emitStmt, emitExp,emitParamList
 
     function emitStmt(s)
         if s:is "block" then
@@ -3548,6 +3548,12 @@ function terra.require(name)
     end
     return unpack(terra.packages[name].results)
 end
-
+function terra.makeenvunstrict(env)
+    if getmetatable(env) and getmetatable(env).__Idle_declared then
+        return function(self,idx)
+            return (Strict.isDeclared(idx,env) and env[idx]) or nil 
+        end
+    else return env end
+end
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")

@@ -1,5 +1,6 @@
 
 
+q = nil
 
 foo = macro(function(ctx,tree,a)
 	q = a
