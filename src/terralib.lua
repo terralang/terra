@@ -423,8 +423,8 @@ end
 terra.funcvariant = {} --metatable for all function types
 terra.funcvariant.__index = terra.funcvariant
 function terra.funcvariant:env()
-    local e = self.envfunction() --evaluate the environment
-    self.envfunction = nil -- discard the environment function so we don't capture additional references
+    local e = self.environment
+    self.environment = nil -- discard the environment function so we don't capture additional references
     return e
 end
 function terra.funcvariant:hasbeeninstate(state)
@@ -856,7 +856,7 @@ do  --constructor functions for terra functions and variables
     function terra.newfunctionvariant(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
-        local obj = { untypedtree = newtree, filename = newtree.filename, envfunction = env, name = fname, state = "uninitializedterra", stats = {} }
+        local obj = { untypedtree = newtree, filename = newtree.filename, environment = env, name = fname, state = "uninitializedterra", stats = {} }
         local fn = setmetatable(obj,terra.funcvariant)
         
         --handle desugaring of methods defintions by adding an implicit self argument
@@ -881,14 +881,25 @@ do  --constructor functions for terra functions and variables
         return setmetatable({variants = terra.newlist(), name = name},terra.func)
     end
     
-    function terra.newfunction(olddef,newtree,name,env,reciever)
+    function terra.newfunction(olddef,newtree,name,envfn,reciever)
         if not olddef then
             olddef = mkfunction(name)
         end
         
-        olddef:addvariant(terra.newfunctionvariant(newtree,name,env,reciever))
+        olddef:addvariant(terra.newfunctionvariant(newtree,name,envfn(),reciever))
         
         return olddef
+    end
+    function terra.newlocalfunctions(trees,names,envfn)
+        local env = envfn()
+        local results = {}
+        for i,tree in ipairs(trees) do
+            local fn = mkfunction(names[i])
+            env[names[i]] = fn
+            fn:addvariant(terra.newfunctionvariant(tree,names[i],env,nil))
+            results[i] = fn
+        end
+        return unpack(results)
     end
     
     function terra.newcfunction(name,typ)
@@ -901,7 +912,7 @@ do  --constructor functions for terra functions and variables
         return fn
     end
     
-    function terra.newvariables(tree,env)
+    function terra.newvariables(tree,envfn)
         local globals = terra.newlist()
         local varentries = terra.newlist()
         
@@ -933,7 +944,7 @@ do  --constructor functions for terra functions and variables
         local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
                                               is_varargs = false, filename = tree.filename, body = body})
         
-        globalinit.initfn = terra.newfunctionvariant(ftree,nil,env)
+        globalinit.initfn = terra.newfunctionvariant(ftree,nil,envfn())
         globalinit.globals = globals
 
         return unpack(globals)
@@ -942,7 +953,7 @@ do  --constructor functions for terra functions and variables
     local function newstructwithlayout(name,tree,env)
         local function buildstruct(typ,ctx)
             ctx:enterfile(tree.filename)
-            ctx:enterdef(env())
+            ctx:enterdef(env)
             
             local function addstructentry(v)
                 local resolvedtype = terra.resolvetype(ctx,v.type)
@@ -972,12 +983,22 @@ do  --constructor functions for terra functions and variables
         return st 
     end
     
-    function terra.namedstruct(tree,name,env)
-        return newstructwithlayout(name,tree,env)
+    function terra.namedstruct(tree,name,envfn)
+        return newstructwithlayout(name,tree,envfn())
+    end
+
+    function terra.localnamedstructs(trees,names,envfn)
+        local env = envfn()
+        local results = {}
+        for i,tree in ipairs(trees) do
+            results[i] = newstructwithlayout(names[i],tree,env)
+            env[names[i]] = results[i]
+        end
+        return unpack(results) 
     end
     
-    function terra.anonstruct(tree,env)
-       local st = newstructwithlayout("anon",tree,env)
+    function terra.anonstruct(tree,envfn)
+       local st = newstructwithlayout("anon",tree,envfn())
         st:setconvertible(true)
         return st
     end
