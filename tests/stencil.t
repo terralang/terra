@@ -40,9 +40,8 @@ local IO = terralib.includec("stdio.h")
 
 
 
-NI,NJ = 1,1
-V = 16
-
+NI,NJ = 1,4
+V = 8
 terra uload(d : &float)
 	return attribute(@d:as(&vector(float,V)),{align = 4})
 end
@@ -51,6 +50,8 @@ terra ustore(d : &float, v : vector(float,V))
 end
 
 terra runit(N : int, input : &float, output : &float)
+	input = input + N*NI + V*NJ
+	output = output + N*NI + V*NJ
 	for i = NI, N-NI,NI do
 		for j = V*NJ, N-V*NJ,V*NJ do
 			[(function()
@@ -65,21 +66,27 @@ terra runit(N : int, input : &float, output : &float)
 				for ii = -1,1 do
 					for jj = -1,1 do
 						for iii = 0,NI-1 do for jjj = 0,NJ-1 do
-							stmts:insert(quote
-								var d = uload(input + N * (i + ii + iii) + j + jj + V*jjj);
-								[C[iii][jjj]] = [C[iii][jjj]] + d*d
-							end)
+							if math.abs(ii) + math.abs(jj) ~= 2 then
+								stmts:insert(quote
+									var d = uload(input + N * (ii + iii) + jj + V*jjj);
+									[C[iii][jjj]] = [C[iii][jjj]] + d
+								end)
+							end
 						end end
 					end
 				end
 				for iii = 0,NI-1 do for jjj = 0,NJ-1 do 
 					stmts:insert(quote 
-						ustore(output + N * (i + iii) + j + V*jjj, [C[iii][jjj]])
+						ustore(output + N * (iii) + V*jjj, [C[iii][jjj]])
 					end) 
 				end end
 				return stmts
 			end)()]
+			input = input + V*NJ
+			output = output + V*NJ
 		end
+		input = input + 2*V*NJ
+		output = output + 2*V*NJ
 	end
 end
 
@@ -103,7 +110,7 @@ terra doit()
 	C.printf("times = %d\n",times)
 	for i = NI, N-NI do
 		for j = V*NJ, N-V*NJ do
-			if img2[i*N+j] ~= 9 then
+			if img2[i*N+j] ~= 5 then
 				C.printf("wrong! %d %d %f\n",i,j,img2[i*N+j])
 				goto out
 			end
@@ -112,7 +119,7 @@ terra doit()
 	::out::
 	var togiga = 1.0/(1024*1024*1024)
 	var pixels = (N-NI)*(N-V*NJ)
-	C.printf("%f %f %f\n", mytime, pixels*4*2 *togiga / mytime, 18*pixels * togiga / mytime)
+	C.printf("%f %f %f\n", mytime, pixels*4*2 *togiga / mytime, 5*pixels * togiga / mytime)
 
 end
 doit()

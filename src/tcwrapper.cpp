@@ -236,7 +236,22 @@ public:
             }
           } break;
           case Type::ExtVector:
-          case Type::Vector:
+          case Type::Vector: {
+                //printf("making a vector!\n");
+                const VectorType *VT = cast<VectorType>(T);
+                Obj at;
+                if(GetType(VT->getElementType(),&at)) {
+                    int n = VT->getNumElements();
+                    PushTypeFunction("vector");
+                    at.push();
+                    lua_pushinteger(L,n);
+                    lua_call(L,2,1);
+                    tt->initFromStack(L, ref_table);
+                    return true;
+                } else {
+                    return false;
+                }
+          } break;
           case Type::FunctionNoProto:
                 break;
           case Type::FunctionProto: {
@@ -259,7 +274,7 @@ public:
             break;
         }
         std::stringstream ss;
-        ss << "type not understood: " << T.getAsString().c_str();
+        ss << "type not understood: " << T.getAsString().c_str() << " " << Ty->getTypeClass();
         return ImportError(ss.str().c_str());
     }
     void SetErrorReport(const char * field) {
@@ -267,7 +282,7 @@ public:
         error_table.setfield(field);
     }
     bool VisitTypedefDecl(TypedefDecl * TD) {
-        if(TD == TD->getCanonicalDecl()) {
+        if(TD == TD->getCanonicalDecl() && TD->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
             llvm::StringRef name = TD->getName();
             QualType QT = Context->getCanonicalType(TD->getUnderlyingType());
             Obj typ;
