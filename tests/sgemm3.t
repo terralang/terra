@@ -9,6 +9,10 @@ function symmat(name,I,...)
 end
 
 
+llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
+
+
+
 function genkernel(NB, RM, RN, V,alpha)
 
 	local A,B,C,mm,nn,ld = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("ld")
@@ -56,6 +60,7 @@ function genkernel(NB, RM, RN, V,alpha)
 			for [nn] = 0, NB,RN*V do
 				[loadc];
 				for [k] = 0, NB do
+					llvmprefetch(B + 4*ldb,0,3,1);
 					[calcc];
 					B = B + ldb
 					A = A + 1

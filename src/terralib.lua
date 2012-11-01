@@ -1185,6 +1185,11 @@ do --construct type table that holds the singleton value representing each uniqu
                 local function getcstring(t)
                     if t:ispassedaspointer() then
                         return types.pointer(t):cstring()
+                    elseif t == rawstring then
+                        --hack to make it possible to pass strings to terra functions
+                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
+                        --so it should be removed when we have a better solution
+                        return "const char *"
                     else
                         return t:cstring()
                     end
