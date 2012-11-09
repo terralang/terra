@@ -1351,7 +1351,9 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     function types.newstruct(displayname)
-        
+        if not displayname then
+            displayname = "anon"
+        end
         local name = getuniquestructname(displayname)
                 
         local tbl = mktyp { kind = terra.kinds["struct"],
