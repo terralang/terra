@@ -2,12 +2,12 @@
 IO = terralib.includec("stdio.h")
 local std = terralib.includec("stdlib.h")
 local Class = {}
-Class.class = {}
-Class.class.__index = Class.class
+Class.Class = {}
+Class.Class.__index = Class.Class
 Class.defined = {}
 
-Class.interface = {}
-Class.interface.__index = Class.interface
+Class.Interface = {}
+Class.Interface.__index = Class.Interface
 
 Class.parentclasstable = {}
 function Class.issubclass(c,t)
@@ -22,31 +22,46 @@ function Class.issubclass(c,t)
     return false
 end
 
-function Class.castmethod(ctx,tree,from,to,exp)
-    if from:ispointer() and to:ispointer() then
-        if Class.issubclass(from.type,to.type) then
-            return true, `exp:as(to)
-        end
-        local builder = Class.defined[from.type]
-        assert(builder)
-        local ifacename = builder.interfacetypetoname[to.type]
-        if ifacename then
-            return true, `&exp.[ifacename]
-        end
-    end
-    return false
+local J = Class
+
+function J.implementsiface(from,to)
+    local builder = Class.defined[from]
+    assert(builder)
+    local ifacename = builder.interfacetypetoname[to]
+    return ifacename ~= nil
 end
 
-function Class.define(name,parentclass)
-    local c = setmetatable({},Class.class)
-    c.ttype = terralib.types.newstruct(name)
+function J.ifacename(from,to)
+    local builder = Class.defined[from]
+    assert(builder)
+    local ifacename = builder.interfacetypetoname[to]
+    return ifacename
+end
+
+function Class.castmethod(ctx,tree,from,to,exp)
+  if from:ispointer() and to:ispointer() then
+    if J.issubclass(from.type,to.type) then
+      return true, `exp:as(to) --force cast
+    elseif J.implementsiface(from.type,to.type) then
+      --extract subobject with interface vtable:
+      return true, `&exp.[J.ifacename(from.type,to.type)]
+    else return false end --cast not valid
+  end
+end
+
+function Class.Class:extends(parentclass)
+    Class.parentclasstable[self.ttype] = parentclass
+    self.parentbuilder = Class.defined[parentclass]
+    return self
+end
+
+function Class.class(parentclass)
+    local c = setmetatable({},Class.Class)
+    c.ttype = terralib.types.newstruct("class")
     c.ttype.methods.__cast = Class.castmethod
     Class.defined[c.ttype] = c
     c.members = terralib.newlist()
-    Class.parentclasstable[c.ttype] = parentclass
-    c.parentbuilder = Class.defined[parentclass]
-    c.name = name
-    
+
     c.interfaces = terralib.newlist() --list of new interfaces added by this class, excluding parent's interfaces
     c.interfacetypetoname = {} --map from implemented interface types -> the name of the interface in the vtable
 
@@ -128,12 +143,12 @@ function Class.define(name,parentclass)
     return c
 end
 
-function Class.class:member(name,typ)
+function Class.Class:member(name,typ)
     self.members:insert( { name = name, type = typ })
     return self
 end
 
-function Class.class:createvtableentries(ctx)
+function Class.Class:createvtableentries(ctx)
     if self.vtableentries ~= nil then
         return
     end
@@ -165,12 +180,12 @@ function Class.class:createvtableentries(ctx)
 
 end
 
-function Class.class:createvtable(ctx)
+function Class.Class:createvtable(ctx)
     if not self.vtableentries then
         self:createvtableentries(ctx)
     end
 
-    local vtabletype = terralib.types.newstruct(self.name.."_vtable")
+    local vtabletype = terralib.types.newstruct("vtable")
     local inits = terralib.newlist()
     for _,e in ipairs(self.vtableentries) do
         assert(terralib.isfunction(e.value))
@@ -192,17 +207,20 @@ function Class.class:createvtable(ctx)
     self.vtablevar = vtable
 end
 
-function Class.class:implements(interface)
+function Class.Class:implements(interface)
     self.interfaces:insert(Class.defined[interface])
     return self
 end
 
-function Class.class:type()
+function Class.Class:type()
     return self.ttype
 end
 
-function Class.defineinterface(name)
-    local self = setmetatable({},Class.interface)
+local interfaceid = 0
+function Class.interface()
+    local name = "interface_"..interfaceid
+    interfaceid = interfaceid + 1
+    local self = setmetatable({},Class.Interface)
     self.name = name
     self.methods = terralib.newlist()
     self.vtabletype = terralib.types.newstruct(name.."_vtable")
@@ -214,7 +232,7 @@ function Class.defineinterface(name)
     return self
 end
 
-function Class.interface:method(name,typ)
+function Class.Interface:method(name,typ)
     assert(typ:ispointer() and typ.type:isfunction())
     local returns = typ.type.returns
     local parameters = terralib.newlist({&uint8})
@@ -234,7 +252,7 @@ function Class.interface:method(name,typ)
     return self
 end
 
-function Class.interface:type()
+function Class.Interface:type()
     return self.interfacetype
 end
 

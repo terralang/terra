@@ -2,7 +2,7 @@
 IO = terralib.includec("stdio.h")
 local Class = terralib.require("lib/javalike")
 
-A = Class.define("A")
+A = Class.class()
     :member("a",int)
     :type()
     
@@ -10,7 +10,8 @@ terra A:double() : int
     return self.a*2
 end
     
-B = Class.define("B",A)
+B = Class.class()
+    :extends(A)
     :member("b",int)
     :type()
     
@@ -18,7 +19,8 @@ terra B:combine(a : int) : int
     return self.b + self.a + a
 end
     
-C = Class.define("C",B)
+C = Class.class()
+    :extends(B)
     :member("c",double)
     :type()
     
@@ -65,17 +67,17 @@ local test = require("test")
 test.eq(23,foobar())
 
 local Doubles
-= Class.defineinterface("Doubles")
+= Class.interface()
   :method("double",{} -> int)
   :type()
 
 local Adds
-= Class.defineinterface("Adds")
+= Class.interface()
   :method("add", int -> int)
   :type()
 
 local D 
-= Class.define("D")
+= Class.class()
   :member("data",int)
   :implements(Doubles)
   :implements(Adds)
@@ -107,20 +109,22 @@ end
 
 test.eq(12,foobar2())
 
-Animal = Class.define("Animal")
+Animal = Class.class()
          :member("data",int)
          :type()
 terra Animal:speak() : {}
     IO.printf("... %d\n",self.data)
 end
 
-Dog = Class.define("Dog",Animal)
+Dog = Class.class()
+      :extends(Animal)
       :type()
 terra Dog:speak() : {}
     IO.printf("woof! %d\n",self.data)
 end
 
-Cat = Class.define("Cat",Animal)
+Cat = Class.class()
+      :extends(Animal)
       :type()
 terra Cat:speak() : {}
     IO.printf("meow! %d\n",self.data)
@@ -143,20 +147,21 @@ end
 
 barnyard()
 
-local Add = Class.defineinterface("Add")
+local Add = Class.interface()
             :method("add",int->int)
             :type()
 
-local Sub = Class.defineinterface("Sub")
+local Sub = Class.interface()
             :method("sub",int->int)
             :type()
 
-local P = Class.define("P")
+local P = Class.class()
           :member("data",int)
           :implements(Add)
           :type()
 
-local C = Class.define("C",P)
+local C = Class.class()
+          :extends(P)
           :member("data2",int)
           :implements(Sub)
           :type()
@@ -232,9 +237,4 @@ timeadd(v,100000000)
 local e = terralib.currenttimeinseconds()
 print(e - b)
 print(v.data)
-
-local Add = Class.defineinterface("Add")
-            :method("add",int->int)
-            :type()
-
 
