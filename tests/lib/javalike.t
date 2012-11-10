@@ -52,70 +52,17 @@ end
 function Class.Class:extends(parentclass)
     Class.parentclasstable[self.ttype] = parentclass
     self.parentbuilder = Class.defined[parentclass]
+    self.parent = self.parentbuilder
     return self
 end
 
-function Class.class(parentclass)
-    local c = setmetatable({},Class.Class)
-    c.ttype = terralib.types.newstruct("class")
-    c.ttype.methods.__cast = Class.castmethod
-    Class.defined[c.ttype] = c
-    c.members = terralib.newlist()
 
-    c.interfaces = terralib.newlist() --list of new interfaces added by this class, excluding parent's interfaces
-    c.interfacetypetoname = {} --map from implemented interface types -> the name of the interface in the vtable
 
-    c.ttype:addlayoutfunction(function(self,ctx)
 
-        local interfacevtables = {}
-        local function addinterface(interface)
-            local function offsetinbytes(structtype,key)
-                local terra offsetcalc() : int
-                    var a : &structtype = (0):as(&structtype)
-                    return (&a.[key]):as(&int8) - a:as(&int8)
-                end
-                return `offsetcalc()
-            end
-            local name = "__interface_"..interface.name
-            if not interfacevtables[name] then
-                self:addentry(name,interface:type())
-                local methods = terralib.newlist()
-                for _,m in ipairs(interface.methods) do
-                    local methodentry = Class.defined[self].vtablemap[m.name]
-                    assert(methodentry)
-                    assert(methodentry.name == m.name)
-                    --TODO: check that the types match...
-                    methods:insert(`methodentry.value:as(m.type))
-                end
-                local offsetofinterface = offsetinbytes(self,name)
-                local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
-                interfacevtables[name] = interfacevtable
-                c.interfacetypetoname[interface:type()] = name
-            end
-        end
-
-        local function addmembers(cls)
-            local parent = Class.parentclasstable[cls]
-            if parent then
-                addmembers(parent)
-            end
-            local builder = Class.defined[cls]
-            for i,m in ipairs(builder.members) do
-                self:addentry(m.name,m.type)
-            end
-            for i,interface in ipairs(builder.interfaces) do
-                addinterface(interface)
-            end
-        end
-
-        c:createvtable(ctx)
-
-        self:addentry("__vtable",&c.vtabletype)
-        addmembers(self)
-
+function generatestubs(c,self)
         local initinterfaces = macro(function(ctx,tree,self)
             local stmts = terralib.newlist()
-            for name,vtable in pairs(interfacevtables) do
+            for name,vtable in pairs(c.interfacevtables) do
                 stmts:insert(quote
                     self.[name].__vtable = &vtable
                 end)
@@ -138,8 +85,74 @@ function Class.class(parentclass)
             std.free(self)
         end
 
-    end)
-    
+end
+
+function createvtable(c,self,ctx)
+    c:createvtable(ctx)
+    self:addentry("__vtable",&c.vtabletype)
+end
+
+function addinterfacevtable(c,self,interface)
+    local function offsetinbytes(structtype,key)
+        local terra offsetcalc() : int
+            var a : &structtype = (0):as(&structtype)
+            return (&a.[key]):as(&int8) - a:as(&int8)
+        end
+        return `offsetcalc()
+    end
+    local name = "__interface_"..interface.name
+    if not c.interfacevtables[name] then
+        self:addentry(name,interface:type())
+        local methods = terralib.newlist()
+        for _,m in ipairs(interface.methods) do
+            local methodentry = Class.defined[self].vtablemap[m.name]
+            assert(methodentry)
+            assert(methodentry.name == m.name)
+            --TODO: check that the types match...
+            methods:insert(`methodentry.value:as(m.type))
+        end
+        local offsetofinterface = offsetinbytes(self,name)
+        local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
+        c.interfacevtables[name] = interfacevtable
+        c.interfacetypetoname[interface:type()] = name
+    end 
+end
+
+function createclass(factory)
+  local newtype = terralib.types.newstruct()
+  local function callback(self,ctx)
+    local function layoutclass(cls)
+      if cls.parent ~= nil then
+        layoutclass(cls.parent)
+      end
+      for _,m in ipairs(cls.members) do
+          newtype:addentry(m.name,m.type)
+      end
+      for _,iface in ipairs(cls.interfaces) do
+        addinterfacevtable(factory,newtype,iface)
+      end
+    end
+    createvtable(factory,newtype,ctx)
+    layoutclass(factory)
+    generatestubs(factory,newtype)
+  end
+  newtype:addlayoutfunction(callback)
+  return newtype
+end
+
+
+function Class.class(parentclass)
+    local c = setmetatable({},Class.Class)
+    c.ttype = createclass(c)
+    c.ttype.methods.__cast = Class.castmethod
+    Class.defined[c.ttype] = c
+    c.members = terralib.newlist()
+
+    c.interfaces = terralib.newlist() --list of new interfaces added by this class, excluding parent's interfaces
+    c.interfacetypetoname = {} --map from implemented interface types -> the name of the interface in the vtable
+
+    c.interfacevtables = {}
+
     return c
 end
 
