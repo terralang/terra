@@ -80,10 +80,10 @@ end
 local NB = 48
 local NB2 = 5 * NB
 
-local V = 8
+local V = 1
 
-l1dgemm0 = genkernel(NB,4,2,V,0)
-l1dgemm1 = genkernel(NB,4,2,V,1)
+l1dgemm0 = genkernel(NB,1,1,V,0)
+l1dgemm1 = genkernel(NB,1,1,V,1)
 
 terra min(a : int, b : int)
 	return terralib.select(a < b, a, b)

@@ -64,7 +64,6 @@ terra laplace(img: &GreyscaleImage,
   out:init(newN);
     [blockedloop(newN,{4,2,1}, function(i,j)
     return quote
-      C.printf("%d %d\n",i,j)
       var v = img:get(i+0,j+1) + img:get(i+2,j+1)
             + img:get(i+1,j+2) + img:get(i+1,j+0)
             - 4 * img:get(i+1,j+1)

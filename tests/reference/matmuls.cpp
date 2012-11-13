@@ -3,7 +3,7 @@ extern "C" {
 #include "cblas.h"
 }
 //#include "mkl_cblas.h"
-
+#include <math.h>
 #include<stdio.h>
 #include<assert.h>
 #include<sys/time.h>
@@ -51,17 +51,12 @@ printerr:
 }
 
 
-/*
-void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
-                 const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
+
+void naive_dgemm( const int M, const int N,
                  const int K, const float alpha, const float *A,
                  const int lda, const float *B, const int ldb,
                  const float beta, float *C, const int ldc) {
-	assert(Order == CblasRowMajor);
-	assert(TransA == CblasNoTrans);
-	assert(TransB == CblasNoTrans);
-	assert(alpha == 1.f);
-	assert(beta == 0.f);
+
 
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
@@ -72,7 +67,7 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 			C[m*ldc + n] = v;
 		}
 	}
-}*/
+}
 
 extern "C"
 void my_sgemm(double (*gettime)(), const int M, const int N,
@@ -135,7 +130,7 @@ void testsize(int M, int K, int N) {
 	double blastime;
 	while(CalcTime(&times,&blastime))
 		cblas_sgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
-	
+		//naive_dgemm(M,N,K,1.f,A,K,B,N,0.f,C,N);
 	//float begin2 = CurrentTimeInSeconds();
 	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
 	
@@ -171,13 +166,15 @@ void testsize(int M, int K, int N) {
 	free(C3);
 	free(A);
 	free(B);
-	printf("%d %d %d %f %f %f\n",M,K,N,M*N*K*2.0*1e-9/blastime,M*N*K*2.0*1e-9/mytime, mytime/ blastime);
+	double logblastime = log(M) + log(N) + log(K) + log(2) + log(1e-9) - log(blastime);
+	double logmytime = log(M) + log(N) + log(K) + log(2) + log(1e-9) - log(mytime);
+	printf("%d %d %d %f %f %f\n",M,K,N,exp(logblastime),exp(logmytime), mytime/ blastime);
 }
 
 int main() {
 
 	int NB = 48;
-	for(int i = NB; i < 1024; i += NB) {
+	for(int i = NB; i < 3000; i += 3*NB) {
 		testsize(i,i,i);
 	}
 	//testsize(5000,5000,5000);

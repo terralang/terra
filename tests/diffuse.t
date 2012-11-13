@@ -24,9 +24,15 @@ int CalcTime(int * times, double * start) {
 }
 ]]
 
+var alignedloads = 0
+var loads = 0
 NI,NJ = 1,1
-V = 8
+V = 4
 terra uload(d : &float)
+	--if d:as(uint64) % 16 == 0 then
+	--	alignedloads = alignedloads + 1
+	--end
+	--loads = loads + 1
 	return attribute(@d:as(&vector(float,V)),{align = 4})
 end
 terra ustore(d : &float, v : vector(float,V))
@@ -69,6 +75,9 @@ terra diffuse(output : &float, N : int, M : int, stride : int, x : &float, x0 : 
 			+  uload(x - 1)
 			+  uload(x + 1) )*a) * invD
 			--C.printf("%d %d\n",i,j)
+			--llvmprefetch(x + 4 * stride,0,3,1)
+			--llvmprefetch(x0 + 3 * stride,0,3,1)
+			
 			ustore(output,r)
 			x0 = x0 + V
 			x = x + V
@@ -82,6 +91,7 @@ terra diffuse(output : &float, N : int, M : int, stride : int, x : &float, x0 : 
 
 end
 
+llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
 
 terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 : &float, a : float,xi : &float)
 	var invD = 1.f / (1 + 4.f*a)
@@ -99,6 +109,7 @@ terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 :
 				+  uload(x - 1)
 				+  uload(x + 1) )*a) * invD
 				--C.printf("%d %d\n",i,j)
+				--llvmprefetch(x + 2 * stride,0,3,1)
 				ustore(xi,r)
 				x0 = x0 + V
 				x = x + V
@@ -141,19 +152,20 @@ end
 
 terra doit(thea : float)
 	var enlarge = 1
-	var N = 256
-	var M = 2048*8
+	var N = 1024/8
+	var M = 1024*8
 	var N1 = (N + 2*enlarge)
 	var M1 = (M + 2*enlarge)
 
-	var x = C.malloc(N1*M1*sizeof(float)):as(&float)
-	var x0 = C.malloc(N1*M1*sizeof(float)):as(&float)
+	var NA = N1
+	var x = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var x0 = C.malloc(NA*M1*sizeof(float)):as(&float)
 
-	var ro1 = C.malloc(N1*M1*sizeof(float)):as(&float)
-	var ro2 = C.malloc(N1*M1*sizeof(float)):as(&float)
+	var ro1 = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var ro2 = C.malloc(NA*M1*sizeof(float)):as(&float)
 
-	var to1 = C.malloc(N1*M1*sizeof(float)):as(&float)
-	var to2 = C.malloc(N1*M1*sizeof(float)):as(&float)
+	var to1 = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var to2 = C.malloc(NA*M1*sizeof(float)):as(&float)
 
 	
 	for i = 0, N1 do
@@ -166,11 +178,11 @@ terra doit(thea : float)
 			to2[i*N1+j] = -45
 		end
 	end
-	
-	var start = N1 + 1
+	var stride = N1
+	var start = enlarge*stride + enlarge
 
-	diffuse_reference(ro1 + start,N,M,N1,x + start,x0 + start,thea)
-	diffuse_reference(ro2 + start,N,M,N1,ro1 + start,x0 + start,thea)
+	diffuse_reference(ro1 + start,N,M,stride,x + start,x0 + start,thea)
+	diffuse_reference(ro2 + start,N,M,stride,ro1 + start,x0 + start,thea)
 
 
 	
@@ -180,18 +192,18 @@ terra doit(thea : float)
 	var fuse = true
 	while C.CalcTime(&times,&mytime) ~= 0 do
 		if not fuse then
-			diffuse(to1 + start,N,M,N1,x + start,x0 + start,thea)
-			diffuse(to2 + start,N,M,N1,to1 + start,x0 + start,thea)
+			diffuse(to1 + start,N,M,stride,x + start,x0 + start,thea)
+			diffuse(to2 + start,N,M,stride,to1 + start,x0 + start,thea)
 		else
-			diffuse2(to2 + start,N,M,N1,x + start,x0 + start,thea,to1 + start)
+			diffuse2(to2 + start,N,M,stride,x + start,x0 + start,thea,to1 + start)
 		end
 	end
 
 	C.printf("times = %d\n",times)
 	for i = enlarge+1, M1-enlarge-1 do
 		for j = enlarge+1,N1-enlarge-1 do
-			if ro2[i*N1+j] ~= to2[i*N1+j] then
-				C.printf("wrong! %d %d %f %f\n",i,j,ro2[i*N1+j],to2[i*N1+j])
+			if ro2[i*stride+j] ~= to2[i*stride+j] then
+				C.printf("wrong! %d %d %f %f\n",i,j,ro2[i*stride+j],to2[i*stride+j])
 				goto out
 			else
 				--C.printf("right! %d %d %f %f\n",i,j,ro1[i*N1+j],to1[i*N1+j])
@@ -204,6 +216,14 @@ terra doit(thea : float)
 	C.printf("%f %f %f\n", mytime, 2*pixels*4*3 *togiga / mytime, 2*6*pixels * togiga / mytime)
 
 end
+
+terra getloads()
+	return alignedloads,loads
+end
+
 doit(1)
 diffuse:disas()
 doit(1)
+
+local al,loads = getloads()
+print(al/loads)

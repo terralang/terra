@@ -2,6 +2,7 @@
 extern "C" {
 #include "cblas.h"
 }
+#include<math.h>
 //#include "mkl_cblas.h"
 
 #include<stdio.h>
@@ -51,7 +52,7 @@ printerr:
 }
 
 
-/*
+
 void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA,
                  const enum CBLAS_TRANSPOSE TransB, const int M, const int N,
                  const int K, const double alpha, const double *A,
@@ -72,7 +73,7 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 			C[m*ldc + n] = v;
 		}
 	}
-}*/
+}
 
 extern "C"
 void my_dgemm(double (*gettime)(), const int M, const int N,
@@ -91,7 +92,7 @@ bool CalcTime(int * times, double * start) {
 		*start = CurrentTimeInSeconds();
 	} else {
 		double elapsed = CurrentTimeInSeconds() - *start;
-		if(elapsed > 0.1f && *times >= 3) {
+		if(elapsed > 0.1f) {
 			*start = elapsed / *times;
 			return false;
 		}
@@ -129,8 +130,9 @@ void testsize(int M, int K, int N) {
 	int times = 0;
 	double blastime;
 	while(CalcTime(&times,&blastime))
-		cblas_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
-	
+		//cblas_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
+		naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C,N);
+
 	//double begin2 = CurrentTimeInSeconds();
 	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
 	
@@ -162,18 +164,20 @@ void testsize(int M, int K, int N) {
 	free(C3);
 	free(A);
 	free(B);
-	printf("%d %d %d %f %f %f\n",M,K,N,M*N*K*2.0*1e-9/blastime,M*N*K*2.0*1e-9/mytime, mytime/ blastime);
+	double logblastime = log(M) + log(N) + log(K) + log(2) + log(1e-9) - log(blastime);
+	double logmytime = log(M) + log(N) + log(K) + log(2) + log(1e-9) - log(mytime);
+	printf("%d %d %d %f %f %f\n",M,K,N,exp(logblastime),exp(logmytime), mytime/ blastime);
 }
 
 int main() {
 
 	int NB = 40;
-	for(int i = NB; true; i += NB) {
+	for(int i = NB; true; i += 3*NB) {
 		int m = i;
 		int n = i;
 		int k = i;
 		testsize(m,n,k);
-		if(m*n+ m*k+n*k > 3*1024*1024)
+		if(m*n+ m*k+n*k > 3*2048*2048)
 			break;
 	}
 	//testsize(5000,5000,5000);

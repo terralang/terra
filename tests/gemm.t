@@ -166,7 +166,8 @@ local regblocks = {1,2,4}
 local vectors = {1,2,4,8,16}
 
 --local best = { gflops = 0, b = 56, rm = 4, rn = 1, v = 8 }
-local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
+--local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
+local best = { gflops = 0, b = 40, rm = 1, rn = 1, v = 1 }
 
 
 if dotune then

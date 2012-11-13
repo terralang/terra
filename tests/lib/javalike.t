@@ -118,23 +118,29 @@ function addinterfacevtable(c,self,interface)
     end 
 end
 
+
+function layoutstruct(factory,newstruct,ctx)
+  local function layoutbody(cls)
+    if cls.parent ~= nil then
+      layoutbody(cls.parent)
+    end
+    for _,m in ipairs(cls.members) do
+        newstruct:addentry(m.name,m.type)
+    end
+    for _,iface in ipairs(cls.interfaces) do
+      addinterfacevtable(factory,newstruct,iface)
+    end
+  end
+  createvtable(factory,newstruct,ctx)
+  layoutbody(factory)
+  generatestubs(factory,newstruct)
+end
+
+
 function createclass(factory)
   local newtype = terralib.types.newstruct()
   local function callback(self,ctx)
-    local function layoutclass(cls)
-      if cls.parent ~= nil then
-        layoutclass(cls.parent)
-      end
-      for _,m in ipairs(cls.members) do
-          newtype:addentry(m.name,m.type)
-      end
-      for _,iface in ipairs(cls.interfaces) do
-        addinterfacevtable(factory,newtype,iface)
-      end
-    end
-    createvtable(factory,newtype,ctx)
-    layoutclass(factory)
-    generatestubs(factory,newtype)
+    layoutstruct(factory,newtype,ctx)
   end
   newtype:addlayoutfunction(callback)
   return newtype
