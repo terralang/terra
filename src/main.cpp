@@ -20,10 +20,17 @@ int main(int argc, char ** argv) {
     
     parse_args(L,&argc,&argv,&interactive);
     
+    // store the command line arguments in global 'arg'
+    lua_newtable(L);
     for(int i = 0; i < argc; i++) {
-        if(terra_dofile(L,argv[i]))
-            doerror(L);
+      lua_pushnumber(L, i);
+      lua_pushstring(L,argv[i]);
+      lua_rawset(L, -3); 
     }
+    lua_setglobal(L, "arg");
+
+    if(terra_dofile(L,argv[0]))
+        doerror(L);
     
     if(isatty(0) && (interactive || argc == 0)) {
         progname = NULL;
