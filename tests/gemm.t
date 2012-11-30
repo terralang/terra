@@ -1,4 +1,3 @@
-
 local number = double
 local alignment = 8
 local dotune = false
@@ -12,11 +11,9 @@ function symmat(name,I,...)
 	return r
 end
 
-
 local function isinteger(x) return math.floor(x) == x end
 
 llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
-
 
 function genkernel(NB, RM, RN, V,alpha,boundary)
 
@@ -68,7 +65,6 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 		end
 	end
 	
-	
 	local result = terra([A] : &number, [B] : &number, [C] : &number, [lda] : int64,[ldb] : int64,[ldc] : int64,[boundaryargs])
 		for [mm] = 0, M, RM do
 			for [nn] = 0, N,RN*V do
@@ -92,10 +88,8 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	return result
 end
 
-
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
-
 
 function generatedgemm(NB,NBF,RM,RN,V)
 	
@@ -159,16 +153,12 @@ function generatedgemm(NB,NBF,RM,RN,V)
 	end
 end
 
---
-
 local blocksizes = {16,24,32,40,48,56,64}
 local regblocks = {1,2,4}
 local vectors = {1,2,4,8,16}
-
 --local best = { gflops = 0, b = 56, rm = 4, rn = 1, v = 8 }
 --local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
 local best = { gflops = 0, b = 40, rm = 1, rn = 1, v = 1 }
-
 
 if dotune then
 	local tunefor = 1024
@@ -203,11 +193,8 @@ if dotune then
 		end
 	end
 end
-
 terralib.tree.printraw(best)
-
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
-
 if number == double then
 	terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })
 else

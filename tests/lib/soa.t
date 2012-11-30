@@ -121,7 +121,7 @@ end
 --foo()
 
 Mesh = Collection({x = float, y = float, z = float,
-                   nx = float, ny = float, nz = float},"soa")
+                   nx = float, ny = float, nz = float},"aos")
 
 struct Tri {
 	a : int;
@@ -155,7 +155,7 @@ terra main()
 		tris[i].a = a - 1
 		tris[i].b = b - 1
 		tris[i].c = c - 1
-		
+		IO.printf("%d %d %d\n",tris[i].a,tris[i].b,tris[i].c)
 	end
 
 	var times = 0
@@ -181,9 +181,9 @@ terra main()
 		    a:setny(a:getny() + ny)
 		    a:setnz(a:getnz() + nz)
 
-		    b:setnx(c:getnx() + nx)
-		    b:setny(c:getny() + ny)
-		    b:setnz(c:getnz() + nz)
+		    b:setnx(b:getnx() + nx)
+		    b:setny(b:getny() + ny)
+		    b:setnz(b:getnz() + nz)
 
 		    c:setnx(c:getnx() + nx)
 		    c:setny(c:getny() + ny)
