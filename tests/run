@@ -1,4 +1,4 @@
-#!../build/LuaJIT-2.0.0-beta10/src/luajit
+#!../build/LuaJIT-2.0.0/src/luajit
 local results = {}
 local failed,passed = 0,0
 for line in io.popen("find . -name '*.t'"):lines() do

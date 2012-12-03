@@ -15,7 +15,7 @@ FLAGS = -g $(INCLUDE_PATH)
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
-LUAJIT_VERSION=LuaJIT-2.0.0-beta10
+LUAJIT_VERSION=LuaJIT-2.0.0
 LUAJIT_URL=http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR=$(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR=build/$(LUAJIT_VERSION)
@@ -194,8 +194,7 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make)
 	cp $(LUAJIT_DIR)/src/libluajit.a build/libluajit.a
-	ln -s $(LUAJIT_VERSION)/lib build/jit
-
+	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
 	$(AR) -cq $@ $^
@@ -207,10 +206,10 @@ $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
 
 build/terralib.h:	src/terralib.lua $(PACKAGE_DEPS)
-	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
+	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 
 build/strict.h:	src/strict.lua $(PACKAGE_DEPS)
-	LUA_PATH=build/?.lua $(LUAJIT_DIR)/src/luajit -bg src/strict.lua build/strict.h
+	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg src/strict.lua build/strict.h
 
 
 clean:
