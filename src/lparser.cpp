@@ -827,13 +827,10 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
 //"expressionstring" will hold the string from arguments to function calls
 void exprwithstring(LexState * ls, expdesc *v) {
     Token begintoken = ls->t;
-    if(ls->in_terra)
-        ls->in_terra_arglist++;
     expr(ls,v);
     if(ls->in_terra) {
         const char * data;
         int N;
-        ls->in_terra_arglist--;
         luaX_getoutput(ls, &begintoken, &data, &N);
         lua_pushlstring(ls->L, data, N);
         add_field(ls, -2, "expressionstring");
@@ -1281,7 +1278,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     add_entry(ls,exps);
     add_field(ls,tbl,"operands");
     
-    if( (!ls->in_terra || ls->in_terra_arglist) && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
+    if( !ls->in_terra && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
         const char * expstring = luaX_saveoutput(ls, &beginexp);
         luaX_patchbegin(ls, &begintoken);
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
@@ -1294,7 +1291,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   
   op = getbinopr(ls->t.token);
   const char * lhs_string = NULL;
-  if( (!ls->in_terra || ls->in_terra_arglist) && op == OPR_FUNC_PTR) {
+  if( !ls->in_terra && op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
   }
   check_lua_operator(ls,ls->t.token);
@@ -2133,7 +2130,6 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;
-  lexstate.in_terra_arglist = 0;
   lexstate.record_names = 0;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
