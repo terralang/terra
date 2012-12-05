@@ -919,16 +919,7 @@ do  --constructor functions for terra functions and variables
         local globalinit = {} --table to hold initialization information for this group of variables
         
         for i,v in ipairs(tree.variables) do
-            local function nm(t) 
-                if t.kind == terra.kinds.var then
-                    return t.name
-                elseif t.kind == terra.kinds.selectconst then
-                    return nm(t.value) .. "_" .. t.field
-                else
-                    error("not a variable name?")
-                end
-            end
-            local n = nm(v.name) .. "_" .. name_count
+            local n = v.name:concat("_") .. "_" .. name_count
             name_count = name_count + 1
             local sym = terra.newtree(v, {kind = terra.kinds.symbol, name = n})
             local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = sym, type = v.type })

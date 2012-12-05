@@ -131,9 +131,6 @@ typedef struct LexState {
   char decpoint;  /* locale decimal point */
 
   int in_terra;
-  int record_names;
-  std::vector<TString *> variable_names; //for patching the [local] terra a.b.c.d, and [local] var a.b.c.d sugar
-  std::vector<int> variable_seperators;  //in name lists with multiple names, points to beginnings of new names
   OutputBuffer output_buffer;
 
   struct {
