@@ -29,6 +29,7 @@
 #include "tkind.h"
 #include <vector>
 #include <set>
+#include "llvm/ADT/SmallSet.h"
 
 enum TA_Globals {
     TA_TERRA_OBJECT = 1,
@@ -38,6 +39,7 @@ enum TA_Globals {
     TA_KINDS_TABLE,
     TA_LAST_GLOBAL
 };
+
 static void dump_stack(lua_State * L, int elem);
 static int get_global(LexState * ls, TA_Globals k) {
     return ls->stacktop + k;
@@ -66,12 +68,15 @@ static int get_global(LexState * ls, TA_Globals k) {
 
 #define hasmultret(k)       ((k) == VCALL || (k) == VVARARG)
 
+typedef llvm::SmallSet<TString*,16> StringSet;
+
 /*
 ** nodes for block list (list of active blocks)
 */
 typedef struct BlockCnt {
   struct BlockCnt *previous;  /* chain */
-  std::vector<TString *> local_variables;
+  StringSet defined;
+  int isterra; /* does this scope describe a terra scope or a lua scope?*/
   int laststatementwassplitapply;
 } BlockCnt;
 
@@ -219,6 +224,10 @@ static void expr (LexState *ls, expdesc *v);
 static void terratype(LexState * ls);
 static void luaexpr(LexState * ls);
 
+static void definevariable(LexState * ls, TString * varname) {
+    ls->fs->bl->defined.insert(varname);
+}
+
 /* semantic error */
 static l_noret semerror (LexState *ls, const char *msg) {
   ls->t.token = 0;  /* remove 'near to' from final message */
@@ -339,6 +348,7 @@ static void enterlevel (LexState *ls) {
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
   bl->laststatementwassplitapply = 0;
+  bl->isterra = fs->ls->in_terra;
   fs->bl = bl;
   //printf("entering block %lld\n", (long long int)bl);
   //printf("previous is %lld\n", (long long int)bl->previous);
@@ -731,7 +741,7 @@ static void localterrastruct(LexState * ls) {
     luaX_patchend(ls,&begin);
     
     for(size_t i = 0; i < names.size(); i++) {
-      ls->fs->bl->local_variables.push_back(names[i]);
+      definevariable(ls, names[i]);
     }
     
 
@@ -750,25 +760,19 @@ static void parlist (LexState *ls) {
     do {
       switch (ls->t.token) {
         case TK_NAME: case '[': {  /* param -> NAME */
-          
-          
-          if(ls->in_terra) {
-            expdesc e;
-            int entry = new_table(ls,T_entry);
-            bool wasstring = checksymbol(ls,NULL);
-            add_field(ls,entry,"name");
-
-            if( wasstring || ls->t.token == ':') {
-              checknext(ls,':');
-              RETURNS_1(terratype(ls));
-              add_field(ls,entry,"type");
-            }
-            add_entry(ls,tbl);
-          } else {
-            TString * nm = str_checkname(ls);
-            fs->bl->local_variables.push_back(nm);
+          expdesc e;
+          int entry = new_table(ls,T_entry);
+          TString * vname;
+          bool wasstring = checksymbol(ls,&vname);
+          add_field(ls,entry,"name");
+          if(wasstring)
+              definevariable(ls, vname);
+          if(ls->in_terra && (wasstring || ls->t.token == ':')) {
+            checknext(ls,':');
+            RETURNS_1(terratype(ls));
+            add_field(ls,entry,"type");
           }
-          
+          add_entry(ls,tbl);
           nparams++;
           break;
         }
@@ -791,7 +795,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   new_fs.f.linedefined = line;
   checknext(ls, '(');
   if (ismethod) {
-    bl.local_variables.push_back(luaS_new(ls->LP,"self"));
+    definevariable(ls, luaS_new(ls->LP,"self"));
   }
   int tbl = new_table(ls,T_function);
   RETURNS_1(parlist(ls));
@@ -1009,17 +1013,21 @@ static void primaryexp (LexState *ls, expdesc *v) {
 
 //TODO: eventually we should record the set of possibly used symbols, and only quote the ones appearing in it
 static void print_captured_locals(LexState * ls) {
-    std::set<TString *> variables;
+    StringSet variables;
     FuncState * fs = ls->fs;
     for(BlockCnt * bl = fs->bl; bl != NULL; bl = bl->previous) {
-        for(unsigned int i = 0; i < bl->local_variables.size(); i++) {
-            variables.insert(bl->local_variables[i]);
+        if(!bl->isterra) {
+            for(StringSet::iterator it = bl->defined.begin(), end = bl->defined.end();
+                it != end;
+                ++it) {
+                variables.insert(*it);
+            }
         }
     }
     OutputBuffer_printf(&ls->output_buffer,"function() return setmetatable({ ");
-    for(std::set<TString *>::iterator i = variables.begin(), end = variables.end();
+    for(StringSet::iterator i = variables.begin(), end = variables.end();
         i != end;
-        i++) {
+        ++i) {
         TString * iv = *i;
         const char * str = getstr(iv);
         /*OutputBuffer_puts(&ls->output_buffer, strlen(str), str);
@@ -1585,7 +1593,7 @@ static void fornum (LexState *ls, TString *varname, int line) {
   add_field(ls,tbl,"step");
   BlockCnt bl;
   if(varname)
-    bl.local_variables.push_back(varname);
+    definevariable(ls, varname);
   RETURNS_1(forbody(ls, line, 1, 1, &bl));
   add_field(ls,tbl,"body");
 }
@@ -1603,14 +1611,14 @@ static void forlist (LexState *ls, TString *indexname) {
   /* create declared variables */
   BlockCnt bl;
   if(indexname)
-    bl.local_variables.push_back(indexname);
+    definevariable(ls, indexname);
   
   while (testnext(ls, ',')) {
     TString * name = NULL;
     checksymbol(ls,&name);
     add_entry(ls,vars);
     if(name)
-      bl.local_variables.push_back(name);
+      definevariable(ls,name);
     nvars++;
   }
   add_field(ls,tbl,"variables");
@@ -1703,7 +1711,7 @@ static void localfunc (LexState *ls) {
   expdesc b;
   FuncState *fs = ls->fs;
   TString * name = str_checkname(ls);
-  fs->bl->local_variables.push_back(name);
+  definevariable(ls, name);
   body(ls, &b, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
   
@@ -1737,7 +1745,7 @@ static void localterra (LexState *ls) {
   luaX_patchend(ls,&begin);
   
   for(size_t i = 0; i < names.size(); i++) {
-    fs->bl->local_variables.push_back(names[i]);
+    definevariable(ls, names[i]);
   }
   /* debug information will only see the variable after this point! */
   ls->in_terra--;
@@ -1817,7 +1825,7 @@ static void terravar(LexState * ls, int islocal) {
     ls->in_terra--;
     
     for(size_t i = 0; islocal && i < definednames.variable_names.size(); i++) {
-      ls->fs->bl->local_variables.push_back(definednames.variable_names[i]);
+      definevariable(ls, definednames.variable_names[i]);
     }
 }
 
@@ -1830,19 +1838,17 @@ static void localstat (LexState *ls) {
   int vars = new_list(ls);
   std::vector<TString *> declarednames;
   do {
-    if(!ls->in_terra) {
-        TString * name = str_checkname(ls);
-        declarednames.push_back(name);
-    } else {
-      int entry = new_table(ls,T_entry);
-      RETURNS_1(checksymbol(ls,NULL));
-      add_field(ls,entry,"name");
-      if(testnext(ls,':')) {
-        RETURNS_1(terratype(ls));
-        add_field(ls,entry,"type");
-      }
-      add_entry(ls,vars);
+    int entry = new_table(ls,T_entry);
+    TString * vname = NULL;
+    RETURNS_1(checksymbol(ls,&vname));
+    if(vname)
+      declarednames.push_back(vname);
+    add_field(ls,entry,"name");
+    if(ls->in_terra && testnext(ls,':')) {
+      RETURNS_1(terratype(ls));
+      add_field(ls,entry,"type");
     }
+    add_entry(ls,vars);
     nvars++;
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
@@ -1854,7 +1860,7 @@ static void localstat (LexState *ls) {
     nexps = 0;
   }
   for(size_t i = 0; i < declarednames.size(); i++) {
-    ls->fs->bl->local_variables.push_back(declarednames[i]);
+    definevariable(ls, declarednames[i]);
   }
   
 }
