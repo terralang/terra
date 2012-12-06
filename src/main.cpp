@@ -29,8 +29,10 @@ int main(int argc, char ** argv) {
     }
     lua_setglobal(L, "arg");
 
-    if(terra_dofile(L,argv[0]))
+    if(argc > 0) {
+      if(terra_dofile(L,argv[0]))
         doerror(L);
+    }
     
     if(isatty(0) && (interactive || argc == 0)) {
         progname = NULL;
@@ -43,7 +45,7 @@ int main(int argc, char ** argv) {
 static void print_welcome();
 void usage() {
     print_welcome();
-    printf("terra [OPTIONS] source-files\n"
+    printf("terra [OPTIONS] [source-files]\n"
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n");
