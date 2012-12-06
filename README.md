@@ -189,7 +189,7 @@ Assignments have a similar form:
         -- a has value 4.5, b has value 3.0 
     end
 
-As in Lua, the right-hand size is executed before the assignments are performed, so the above example will swap the values of the two variables.
+As in Lua, the right-hand side is executed before the assignments are performed, so the above example will swap the values of the two variables.
 
 Variables can be declared outside `terra` functions as well:
 
