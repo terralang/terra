@@ -671,18 +671,20 @@ static void structconstructor(LexState * ls, T_Kind kind) {
     add_field(ls,tbl,"filename");
 }
 
-struct Names {
-    std::vector<TString *> variable_names; //for patching the [local] terra a.b.c.d, and [local] var a.b.c.d sugar
-    std::vector<int> variable_seperators;  //in name lists with multiple names, points to beginnings of new names
+struct Name {
+    std::vector<TString *> data; //for patching the [local] terra a.b.c.d, and [local] var a.b.c.d sugar
 };
 
-static void Names_add(Names * names, TString * string) {
-    names->variable_names.push_back(string);
+static void Name_add(Name * name, TString * string) {
+    name->data.push_back(string);
 }
-static void Names_next(Names * names) {
-    names->variable_seperators.push_back(names->variable_names.size());
+static void Name_print(Name * name, LexState * ls) {
+    for(size_t i = 0; i < name->data.size(); i++) {
+        OutputBuffer_printf(&ls->output_buffer,"%s",getstr(name->data[i]));
+        if(i + 1 < name->data.size())
+             OutputBuffer_putc(&ls->output_buffer, '.');
+    }
 }
-static void Names_print(Names * names, LexState * ls);
 
 static void print_captured_locals(LexState * ls, TerraCnt * tc);
 
@@ -693,12 +695,12 @@ static void terrastruct(LexState * ls) {
     luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
     
     
-    Names names;
+    Name name;
     TString * vname = str_checkname(ls);
-    Names_add(&names,vname);
+    Name_add(&name,vname);
     refvariable(ls, vname);
     while (testnext(ls,'.')) {
-      Names_add(&names,str_checkname(ls));
+      Name_add(&name,str_checkname(ls));
     }
     TerraCnt tc;
     enterterra(ls, &tc);
@@ -706,9 +708,9 @@ static void terrastruct(LexState * ls) {
     
     int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     luaX_patchbegin(ls,&begin);
-    Names_print(&names, ls);
+    Name_print(&name, ls);
     OutputBuffer_printf(&ls->output_buffer," = terra.namedstruct(_G.terra._trees[%d],\"",id);
-    Names_print(&names, ls);
+    Name_print(&name, ls);
     OutputBuffer_printf(&ls->output_buffer,"\",");
     print_captured_locals(ls,&tc);
     OutputBuffer_printf(&ls->output_buffer,")");
@@ -1781,40 +1783,23 @@ static void localterra (LexState *ls) {
   /* debug information will only see the variable after this point! */
 }
 
-static void Names_print( Names * names, LexState * ls) {
-    if(names->variable_seperators.size() == 0)
-        Names_next(names);
-    int sep_idx = 0;
-    OutputBuffer_printf(&ls->output_buffer,"%s",getstr(names->variable_names[0]));
-    for(unsigned int i = 1; i < names->variable_names.size(); i++) {
-        if(names->variable_seperators[sep_idx] == i) {
-            OutputBuffer_putc(&ls->output_buffer, ',');
-            sep_idx++;
-        } else {
-            OutputBuffer_putc(&ls->output_buffer, '.'); 
-        }
-        OutputBuffer_printf(&ls->output_buffer,"%s",getstr(names->variable_names[i]));
-    }
-}
-
-
-static TString * varappendname(LexState * ls, int nametable, Names * names) {
+static TString * varappendname(LexState * ls, int nametable, Name * name) {
   TString * vname = str_checkname(ls);
-  Names_add(names,vname);
+  Name_add(name,vname);
   push_string(ls, vname);
   add_entry(ls, nametable);
   return vname;
 }
 
 //terra variables appearing at global scope
-static void varname (LexState *ls, expdesc *v, int islocal, Names * names) {
+static void varname (LexState *ls, expdesc *v, int islocal, Name * name) {
   /* funcname -> NAME {fieldsel} */
   int nametable = new_list(ls);
   
-  TString * vname = varappendname(ls,nametable,names);
+  TString * vname = varappendname(ls,nametable,name);
   refvariable(ls, vname);
   while(!islocal && testnext(ls, '.'))
-    varappendname(ls, nametable, names);
+    varappendname(ls, nametable, name);
     
   int tbl = new_table_before(ls, T_entry);
   add_field(ls,tbl,"name");
@@ -1824,7 +1809,6 @@ static void varname (LexState *ls, expdesc *v, int islocal, Names * names) {
     add_field(ls,tbl,"type");
   }
 
-  Names_next(names);
 }
 
 static void terravar(LexState * ls, int islocal) {
@@ -1840,11 +1824,13 @@ static void terravar(LexState * ls, int islocal) {
     expdesc v;
     int varexp = new_table(ls, T_globalvar);
     int names = new_list(ls);
-    Names definednames;
-    RETURNS_1(varname(ls,&v,islocal,&definednames));
+    std::vector<Name> definednames;
+    definednames.push_back(Name());
+    RETURNS_1(varname(ls,&v,islocal,&definednames.back()));
     add_entry(ls, names);
     while(testnext(ls,',')) {
-        RETURNS_1(varname(ls,&v,islocal,&definednames));
+        definednames.push_back(Name());
+        RETURNS_1(varname(ls,&v,islocal,&definednames.back()));
         add_entry(ls,names);
     }
     add_field(ls,varexp,"variables");
@@ -1857,15 +1843,20 @@ static void terravar(LexState * ls, int islocal) {
     int id = add_entry(ls,get_global(ls,TA_FUNCTION_TABLE));
     
     luaX_patchbegin(ls,&begin);
-    Names_print(&definednames, ls);
+    for(size_t i = 0; i < definednames.size(); i++) {
+        Name_print(&definednames[i], ls);
+        if(i + 1 < definednames.size())
+            OutputBuffer_putc(&ls->output_buffer, ',');
+    }
     OutputBuffer_printf(&ls->output_buffer," = terra.newvariables(_G.terra._trees[%d],",id);
     print_captured_locals(ls,&tc);
     OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
     leaveterra(ls);
     
-    for(size_t i = 0; islocal && i < definednames.variable_names.size(); i++) {
-      definevariable(ls, definednames.variable_names[i]);
+    for(size_t i = 0; islocal && i < definednames.size(); i++) {
+      assert(definednames[i].data.size() == 1);
+      definevariable(ls, definednames[i].data[0]);
     }
 }
 
@@ -1905,27 +1896,27 @@ static void localstat (LexState *ls) {
   
 }
 
-static int funcname (LexState *ls, Names * names) {
+static int funcname (LexState *ls, Name * name) {
   /* funcname -> NAME {fieldsel} [`:' NAME] */
   int ismethod = 0;
   
   TString * vname = str_checkname(ls);
-  if(names)
-    Names_add(names,vname);
+  if(name)
+    Name_add(name,vname);
   refvariable(ls, vname);
   
   while(testnext(ls,'.')) {
     TString * vname = str_checkname(ls);
-    if(names)
-      Names_add(names,vname);
+    if(name)
+      Name_add(name,vname);
   }
   
   if (testnext(ls,':')) {
     ismethod = 1;
     TString * vname = str_checkname(ls);
-    if(names) {
-        Names_add(names, luaS_new(ls->LP,"methods"));
-        Names_add(names,vname);
+    if(name) {
+        Name_add(name, luaS_new(ls->LP,"methods"));
+        Name_add(name,vname);
     }
   }
   return ismethod;
@@ -1956,11 +1947,11 @@ static void funcstat (LexState *ls, int line) {
 static void terrastat(LexState * ls, int line) {
     Token begin = ls->t;
     int ismethod;
-    Names names;
+    Name name;
     TerraCnt tc;
     
     luaX_next(ls);  /* skip TERRA */
-    RETURNS_0(ismethod = funcname(ls, &names));
+    RETURNS_0(ismethod = funcname(ls, &name));
     enterterra(ls, &tc);
     expdesc b;
     body(ls, &b, ismethod, line);
@@ -1968,21 +1959,21 @@ static void terrastat(LexState * ls, int line) {
     leaveterra(ls);
     
     luaX_patchbegin(ls,&begin);
-    Names_print(&names, ls); //a.b.c.d
+    Name_print(&name, ls); //a.b.c.d
     
-    OutputBuffer_printf(&ls->output_buffer," = terra.newfunction( (Strict.isDeclared(\"%s\") and ",getstr(names.variable_names[0]));
-    Names_print(&names,ls);
+    OutputBuffer_printf(&ls->output_buffer," = terra.newfunction( (Strict.isDeclared(\"%s\") and ",getstr(name.data[0]));
+    Name_print(&name,ls);
     
     OutputBuffer_printf(&ls->output_buffer,") or nil");
     OutputBuffer_printf(&ls->output_buffer,", _G.terra._trees[%d],\"",n);
-    Names_print(&names,ls);
+    Name_print(&name,ls);
     OutputBuffer_printf(&ls->output_buffer,"\",");
     print_captured_locals(ls,&tc);
     if(ismethod) {
         OutputBuffer_printf(&ls->output_buffer,",");
-        names.variable_names.pop_back();  //remove .methodname
-        names.variable_names.pop_back();  //remove .methods
-        Names_print(&names, ls); //just the type object: a.b.c.d (no .methods, this is used to calculate the self argument type)
+        name.data.pop_back();  //remove .methodname
+        name.data.pop_back();  //remove .methods
+        Name_print(&name, ls); //just the type object: a.b.c.d (no .methods, this is used to calculate the self argument type)
     }
     OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
