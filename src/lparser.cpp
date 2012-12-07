@@ -80,6 +80,11 @@ typedef struct BlockCnt {
   int laststatementwassplitapply;
 } BlockCnt;
 
+struct TerraCnt {
+    StringSet capturedlocals; /*list of all local variables that this terra block captures from the immediately enclosing lua block */
+    TerraCnt * previous;
+};
+
 
 static int new_table(LexState * ls) {
     if(ls->in_terra) {
@@ -227,6 +232,8 @@ static void luaexpr(LexState * ls);
 static void definevariable(LexState * ls, TString * varname) {
     ls->fs->bl->defined.insert(varname);
 }
+static void refvariable(LexState * ls, TString * varname) {
+}
 
 /* semantic error */
 static l_noret semerror (LexState *ls, const char *msg) {
@@ -304,16 +311,12 @@ static TString *str_checkname (LexState *ls) {
   return ts;
 }
 
-static void checkname (LexState *ls) {
-    TString * str = str_checkname(ls);
-    push_string(ls,str);
-}
-
 static TString * singlevar (LexState *ls) {
   int tbl = new_table(ls,T_var); 
   TString *varname = str_checkname(ls);
   push_string(ls,varname);
   add_field(ls,tbl,"name");
+  refvariable(ls, varname);
   return varname;
 }
 
@@ -367,6 +370,19 @@ static void leaveblock (FuncState *fs) {
   //for(int i = 0; i < bl->local_variables.size(); i++) {
   //      printf("v[%d] = %s\n",i,getstr(bl->local_variables[i]));
   //}
+}
+
+static void enterterra(LexState * ls, TerraCnt * current) {
+    current->previous = ls->terracnt;
+    ls->terracnt = current;
+    ls->in_terra++;
+}
+
+static void leaveterra(LexState * ls) {
+    assert(ls->in_terra);
+    assert(ls->terracnt);
+    ls->terracnt = ls->terracnt->previous;
+    ls->in_terra--;
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
@@ -458,7 +474,7 @@ static void fieldsel (LexState *ls) {
   luaX_next(ls);  /* skip the dot or colon */
   int tbl = new_table_before(ls,T_selectconst, true);
   add_field(ls,tbl,"value");
-  checkname(ls);
+  push_string(ls,str_checkname(ls));
   add_field(ls,tbl,"field");
 }
 
@@ -598,7 +614,7 @@ static void structconstructor(LexState * ls, T_Kind kind);
 
 static void recstruct (LexState *ls) {
   int tbl = new_table(ls,T_structentry);
-  RETURNS_1(checkname(ls));
+  push_string(ls,str_checkname(ls));
   add_field(ls,tbl,"key");
   checknext(ls, ':');
   RETURNS_1(terratype(ls));
@@ -677,7 +693,9 @@ static void terrastruct(LexState * ls) {
     
     
     Names names;
-    Names_add(&names,str_checkname(ls));
+    TString * vname = str_checkname(ls);
+    Names_add(&names,vname);
+    refvariable(ls, vname);
     while (testnext(ls,'.')) {
       Names_add(&names,str_checkname(ls));
     }
@@ -1767,18 +1785,25 @@ static void Names_print( Names * names, LexState * ls) {
     }
 }
 
+
+static TString * varappendname(LexState * ls, int nametable, Names * names) {
+  TString * vname = str_checkname(ls);
+  Names_add(names,vname);
+  push_string(ls, vname);
+  add_entry(ls, nametable);
+  return vname;
+}
+
 //terra variables appearing at global scope
 static void varname (LexState *ls, expdesc *v, int islocal, Names * names) {
   /* funcname -> NAME {fieldsel} */
   int nametable = new_list(ls);
   
-  do {
-    TString * vname = str_checkname(ls);
-    Names_add(names,vname);
-    push_string(ls, vname);
-    add_entry(ls, nametable);
-  } while( !islocal && testnext(ls,'.') );
-
+  TString * vname = varappendname(ls,nametable,names);
+  refvariable(ls, vname);
+  while(!islocal && testnext(ls, '.'))
+    varappendname(ls, nametable, names);
+    
   int tbl = new_table_before(ls, T_entry);
   add_field(ls,tbl,"name");
 
@@ -1869,11 +1894,16 @@ static int funcname (LexState *ls, Names * names) {
   /* funcname -> NAME {fieldsel} [`:' NAME] */
   int ismethod = 0;
   
-  do {
+  TString * vname = str_checkname(ls);
+  if(names)
+    Names_add(names,vname);
+  refvariable(ls, vname);
+  
+  while(testnext(ls,'.')) {
     TString * vname = str_checkname(ls);
     if(names)
       Names_add(names,vname);
-  } while(testnext(ls,'.'));
+  }
   
   if (testnext(ls,':')) {
     ismethod = 1;
