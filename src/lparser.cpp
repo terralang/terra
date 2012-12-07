@@ -234,6 +234,21 @@ static void definevariable(LexState * ls, TString * varname) {
     ls->fs->bl->defined.insert(varname);
 }
 static void refvariable(LexState * ls, TString * varname) {
+  if(ls->terracnt == NULL)
+    return; /* no need to search for variables if we are not in a terra scope at all */
+    
+  TerraCnt * cur = NULL;
+  for(BlockCnt * bl = ls->fs->bl; bl != NULL; bl = bl->previous) {
+    if(bl->defined.count(varname)) {
+        if(cur && !bl->isterra)
+          cur->capturedlocals.insert(varname);
+        break;
+    }
+    if(bl->isterra && bl->previous && !bl->previous->isterra) {
+      cur = (cur) ? cur->previous : ls->terracnt;
+      assert(cur != NULL);
+    }
+  }
 }
 
 /* semantic error */
@@ -778,6 +793,7 @@ static void parlist (LexState *ls) {
   int tbl = new_list(ls);
   int nparams = 0;
   f->is_vararg = 0;
+  std::vector<TString *> vnames;
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
     do {
       switch (ls->t.token) {
@@ -785,10 +801,10 @@ static void parlist (LexState *ls) {
           expdesc e;
           int entry = new_table(ls,T_entry);
           TString * vname;
-          bool wasstring = checksymbol(ls,&vname);
+          int wasstring = checksymbol(ls,&vname);
           add_field(ls,entry,"name");
-          if(wasstring)
-              definevariable(ls, vname);
+          if(vname)
+            vnames.push_back(vname);
           if(ls->in_terra && (wasstring || ls->t.token == ':')) {
             checknext(ls,':');
             RETURNS_1(terratype(ls));
@@ -807,6 +823,8 @@ static void parlist (LexState *ls) {
       }
     } while (!f->is_vararg && testnext(ls, ','));
   }
+  for(size_t i = 0; i < vnames.size(); i++)
+    definevariable(ls, vnames[i]);
 }
 
 static void body (LexState *ls, expdesc *e, int ismethod, int line) {
@@ -816,11 +834,11 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   open_func(ls, &new_fs, &bl);
   new_fs.f.linedefined = line;
   checknext(ls, '(');
+  int tbl = new_table(ls,T_function);
+  RETURNS_1(parlist(ls));
   if (ismethod) {
     definevariable(ls, luaS_new(ls->LP,"self"));
   }
-  int tbl = new_table(ls,T_function);
-  RETURNS_1(parlist(ls));
   add_field(ls,tbl,"parameters");
   push_boolean(ls,new_fs.f.is_vararg);
   add_field(ls,tbl,"is_varargs");
@@ -1035,19 +1053,8 @@ static void primaryexp (LexState *ls, expdesc *v) {
 
 //TODO: eventually we should record the set of possibly used symbols, and only quote the ones appearing in it
 static void print_captured_locals(LexState * ls, TerraCnt * tc) {
-    StringSet variables;
-    FuncState * fs = ls->fs;
-    for(BlockCnt * bl = fs->bl; bl != NULL; bl = bl->previous) {
-        if(!bl->isterra) {
-            for(StringSet::iterator it = bl->defined.begin(), end = bl->defined.end();
-                it != end;
-                ++it) {
-                variables.insert(*it);
-            }
-        }
-    }
     OutputBuffer_printf(&ls->output_buffer,"function() return setmetatable({ ");
-    for(StringSet::iterator i = variables.begin(), end = variables.end();
+    for(StringSet::iterator i = tc->capturedlocals.begin(), end = tc->capturedlocals.end();
         i != end;
         ++i) {
         TString * iv = *i;
@@ -1797,7 +1804,6 @@ static void varname (LexState *ls, expdesc *v, int islocal, Name * name) {
   int nametable = new_list(ls);
   
   TString * vname = varappendname(ls,nametable,name);
-  refvariable(ls, vname);
   while(!islocal && testnext(ls, '.'))
     varappendname(ls, nametable, name);
     
@@ -1854,9 +1860,12 @@ static void terravar(LexState * ls, int islocal) {
     luaX_patchend(ls,&begin);
     leaveterra(ls);
     
-    for(size_t i = 0; islocal && i < definednames.size(); i++) {
-      assert(definednames[i].data.size() == 1);
-      definevariable(ls, definednames[i].data[0]);
+    for(size_t i = 0; i < definednames.size(); i++) {
+      TString * vname = definednames[i].data[0];
+      if(islocal)
+        definevariable(ls, vname);
+      else
+        refvariable(ls, vname);
     }
 }
 
