@@ -236,9 +236,10 @@ static void definevariable(LexState * ls, TString * varname) {
 static void refvariable(LexState * ls, TString * varname) {
   if(ls->terracnt == NULL)
     return; /* no need to search for variables if we are not in a terra scope at all */
-    
+  //printf("searching %s\n",getstr(varname));
   TerraCnt * cur = NULL;
   for(BlockCnt * bl = ls->fs->bl; bl != NULL; bl = bl->previous) {
+    //printf("ctx %d\n",bl->isterra);
     if(bl->defined.count(varname)) {
         if(cur && !bl->isterra)
           cur->capturedlocals.insert(varname);
@@ -1410,9 +1411,15 @@ static void luaexpr(LexState * ls) {
     int tbl = new_table(ls, T_luaexpression);
     Token begintoken = ls->t;
     int in_terra = ls->in_terra;
+    
     ls->in_terra = 0;
+    FuncState * fs = ls->fs;
+    BlockCnt bl;
+    enterblock(ls->fs, &bl, 0);
     RETURNS_1(expr(ls,&v));
+    leaveblock(fs);
     ls->in_terra = in_terra;
+    
     const char * output;
     int N;
     
@@ -2158,6 +2165,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_State * L = T->L;
   lexstate.L = L;
   lexstate.in_terra = 0;
+  lexstate.terracnt = NULL;
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
   lexstate.n_lua_objects = 0;
