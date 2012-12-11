@@ -272,7 +272,7 @@ Functions Revisited
 
 We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
-    terra sort2(a : int, b : int, c : int) : {int,int} --the return type is optional
+    terra sort2(a : int, b : int) : {int,int} --the return type is optional
         if a < b then   
             return a, b
         else
@@ -282,7 +282,7 @@ We've already seen some simple function definitions. In addition to taking multi
     
     terra doit()
         var a,b = sort2(4,3)
-        --now a == 4, b == 3
+        --now a == 3, b == 4
     end
     doit()
    
