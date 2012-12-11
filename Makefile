@@ -1,12 +1,15 @@
-# point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-LLVM_CONFIG=$(shell which llvm-config)
-#LLVM_CONFIG=/Users/zdevito/llvm-dev-home/bin/llvm-config
+LLVM_CONFIG := $(shell which llvm-config)
+LLVM_COMPILER_PREFIX := /usr/local
+
+# if the defaults for LLVM_CONFIG are not right for your installation
+# create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution 
+-include Makefile.inc
 
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:
 UNAME := $(shell uname)
 
-LLVM_COMPILER_PREFIX=/usr/local
+
 
 CXX = $(LLVM_COMPILER_PREFIX)/bin/clang++
 CC = $(LLVM_COMPILER_PREFIX)/bin/clang
@@ -170,6 +173,9 @@ EXECUTABLE = terra
 LIBRARY = build/libterra.a
 
 BIN2C = build/bin2c
+
+#put any install-specific stuff in here
+-include Makefile.inc
 
 .PHONY:	all clean purge test docs package
 all:	$(EXECUTABLE)

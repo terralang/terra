@@ -111,6 +111,7 @@ static inline void OutputBuffer_puts(OutputBuffer * buf, int N, const char * str
     memcpy(buf->data + buf->N,str,N);
     buf->N += N;
 }
+struct TerraCnt;
 /* state of the lexer plus state of the parser when shared by all
    functions */
 typedef struct LexState {
@@ -121,6 +122,7 @@ typedef struct LexState {
   Token t;  /* current token */
   Token lookahead;  /* look ahead token */
   struct FuncState *fs;  /* current function (parser) */
+  TerraCnt * terracnt;
   lua_State *L;
   int n_lua_objects; /*number of lua objects already in table of lua asts*/
   terra_State *LP;
