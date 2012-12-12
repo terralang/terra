@@ -315,6 +315,15 @@ int terra_loadfile(lua_State * L, const char * file) {
        terra_pusherror(T,"failed to open file %s",file);
        return LUA_ERRFILE;
     }
+    /*peek to see if we have a POSIX comment '#', which we repect on the first like for #! */
+    int c = fgetc(ctx.fp);
+    ungetc(c,ctx.fp);
+    if(c == '#') { /* skip the POSIX comment */
+        do {
+            c = fgetc(ctx.fp);   
+        } while(c != '\n' && c != EOF);
+    }
+
     int r = terra_load(L,reader_file,&ctx,file);
     fclose(ctx.fp);
     return r;

@@ -1,0 +1,2 @@
+#!../terra 
+print("FOO")
