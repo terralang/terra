@@ -48,7 +48,8 @@ void usage() {
     printf("terra [OPTIONS] [source-files]\n"
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
-           "    -i enter the REPL after processing source files\n");
+           "    -i enter the REPL after processing source files\n"
+           "    -l <language_file> specify a module that defines a language extension (can be repeated)\n");
 }
 
 void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
@@ -57,12 +58,13 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
         { "help",      0,     NULL,           'h' },
         { "verbose",   0,     NULL,           'v' },
         { "interactive",     0,     NULL,     'i' },
+        { "language", 1, NULL,                'l' },
         { NULL,        0,     NULL,            0 }
     };
 
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(*argc, *argv, "hvi", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(*argc, *argv, "hvil:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'h':
                 usage();
@@ -73,6 +75,10 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
                 break;
             case 'i':
                 *interactive = true;
+                break;
+            case 'l':
+                if(terra_loadfile(L,optarg) || lua_pcall(L,0,1,0) || terra_loadlanguage(L))
+                  doerror(L);
                 break;
             default:
                 break;

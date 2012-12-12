@@ -27,7 +27,7 @@ enum RESERVED {
   TK_RETURN, TK_THEN, TK_TRUE, TK_UNTIL, TK_WHILE, TK_TERRA, TK_VAR, TK_STRUCT, TK_UNION, TK_QUOTE, /* WARNING: if you add a new last terminal, make sure to update NUM_RESERVED below to be the last terminal */
   /* other terminal symbols */
   TK_CONCAT, TK_DOTS, TK_EQ, TK_GE, TK_LE, TK_NE, TK_DBCOLON, TK_FUNC_PTR, TK_LSHIFT, TK_RSHIFT, TK_EOS,
-  TK_NUMBER, TK_NAME, TK_STRING
+  TK_NUMBER, TK_NAME, TK_STRING, TK_SPECIAL
 };
 
 /* number of reserved words */
@@ -143,6 +143,8 @@ typedef struct LexState {
   
   sigjmp_buf error_dest; /* where to jump when a parse error occurs */
   int stacktop; /* top of lua stack when we start this function */
+
+  int languageextensionstable; /* table defining the language extension tokens, 0 if extensions are off */
 } LexState;
 
 

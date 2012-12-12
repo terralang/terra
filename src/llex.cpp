@@ -49,7 +49,7 @@ static const char *const luaX_tokens [] = {
     "in", "local", "nil", "not", "or", "repeat",
     "return", "then", "true", "until", "while", "terra", "var","struct","union","quote",
     "..", "...", "==", ">=", "<=", "~=", "::", "->", "<<", ">>", "<eof>",
-    "<number>", "<name>", "<string>"
+    "<number>", "<name>", "<string>", "<special>"
 };
 
 
@@ -158,6 +158,8 @@ static const char *txtToken (LexState *ls, int token) {
     case TK_NUMBER:
       save(ls, '\0');
       return luaS_cstringf(ls->LP,LUA_QS,luaZ_buffer(ls->buff));
+    case TK_SPECIAL:
+      return luaS_cstringf(ls->LP, "%s", luaZ_buffer(ls->buff));
     default:
       return luaX_token2str(ls, token);
   }
@@ -560,6 +562,16 @@ static void read_string (LexState *ls, int del, SemInfo *seminfo) {
                                    luaZ_bufflen(ls->buff) - 2);
 }
 
+static void dump_stack(lua_State * L, int elem) {
+    lua_pushvalue(L,elem);
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"tree");
+    lua_getfield(L,-1,"printraw");
+    lua_pushvalue(L,-4);
+    lua_call(L, 1, 0);
+        
+    lua_pop(L,3);
+}
 
 static int llex (LexState *ls, SemInfo *seminfo) {
   luaZ_resetbuffer(ls->buff);
@@ -669,6 +681,13 @@ static int llex (LexState *ls, SemInfo *seminfo) {
                if (ts->reserved > 0)  /* reserved word? */
                  return ts->reserved - 1 + FIRST_RESERVED;
                else {
+                 if(ls->languageextensionstable) {
+                    lua_getfield(ls->L,ls->languageextensionstable,getstr(ts));
+                    int special = lua_istable(ls->L,-1);
+                    lua_pop(ls->L,1);
+                    if(special)
+                        return TK_SPECIAL;
+                 }
                  return TK_NAME;
                }
              }

@@ -338,3 +338,12 @@ int terra_setverbose(lua_State * L, int v) {
     lua_pop(L,1);
     return 0;
 }
+
+int terra_loadlanguage(lua_State * L) {
+    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(L,-1,"loadlanguage");
+    lua_remove(L,-2); /* remove terra table */
+    lua_pushvalue(L,-2); /* push original argument */
+    lua_remove(L,-3); /* stack is now [loadlanguage(argument)] */
+    return lua_pcall(L,1,1,0);
+}

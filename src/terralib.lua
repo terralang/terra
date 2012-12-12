@@ -3574,5 +3574,38 @@ function terra.makeenvunstrict(env)
         end
     else return env end
 end
+
+
+terra.languageextension = {
+    languages = terra.newlist();
+    entrypoints = {}; --table mapping entry pointing tokens to the language that handles them
+}
+
+function terra.loadlanguage(lang)
+    local E = terra.languageextension
+    if not lang or type(lang) ~= "table" then error("expected a table to define language") end
+    lang.name = lang.name or "anonymous"
+    local function haslist(field,typ)
+        if not lang[field] then 
+            error(field .. " expected to be list of "..typ)
+        end
+        for i,k in ipairs(lang[field]) do
+            if type(k) ~= typ then
+                error(field .. " expected to be list of "..typ.." but found "..type(k))
+            end
+        end
+    end
+    haslist("keywords","string")
+    haslist("entrypoints","string")
+    
+    for i,e in ipairs(lang.entrypoints) do
+        if E.entrypoints[e] then
+            error(("language %s uses entrypoint %s already defined by language %s"):format(lang.name,e,E.entrypoints[e].name))
+        end
+        E.entrypoints[e] = lang
+    end
+    E.languages:insert(lang)
+end
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")

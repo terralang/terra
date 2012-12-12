@@ -37,6 +37,7 @@ enum TA_Globals {
     TA_TREE_METATABLE,
     TA_LIST_METATABLE,
     TA_KINDS_TABLE,
+    TA_ENTRY_POINT_TABLE,
     TA_LAST_GLOBAL
 };
 
@@ -437,14 +438,14 @@ static void open_mainfunc (LexState *ls, FuncState *fs, BlockCnt *bl) {
 }
 
 static void dump_stack(lua_State * L, int elem) {
+    lua_pushvalue(L,elem);
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"tree");
-        
     lua_getfield(L,-1,"printraw");
-    lua_pushvalue(L, -3 + elem);
+    lua_pushvalue(L,-4);
     lua_call(L, 1, 0);
         
-    lua_pop(L,2);
+    lua_pop(L,3);
 }
 
 
@@ -2188,6 +2189,15 @@ int luaY_parser (terra_State *T, ZIO *z,
   assert(lua_gettop(L) == lexstate.stacktop + TA_LIST_METATABLE);
   lua_getfield(L,to,"kinds");
   assert(lua_gettop(L) ==  lexstate.stacktop + TA_KINDS_TABLE);
+  
+  lua_getfield(L,to,"languageextension");
+  lua_getfield(L,-1,"languages");
+  int extensionsenabled = lua_objlen(L,-1) > 0;
+  lua_pop(L,1);
+  lua_getfield(L,-1,"entrypoints");
+  lua_remove(L,-2); /*remove language extension table*/
+  lexstate.languageextensionstable = extensionsenabled ? lua_gettop(L) : 0;
+  assert(lua_gettop(L) == lexstate.stacktop + TA_ENTRY_POINT_TABLE);
   
   int err = sigsetjmp(lexstate.error_dest,0);
   if(!err) {
