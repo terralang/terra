@@ -111,6 +111,7 @@ static inline void OutputBuffer_puts(OutputBuffer * buf, int N, const char * str
     memcpy(buf->data + buf->N,str,N);
     buf->N += N;
 }
+
 struct TerraCnt;
 /* state of the lexer plus state of the parser when shared by all
    functions */
@@ -165,4 +166,20 @@ const char * luaX_token2rawstr(LexState * ls, int token);
 void luaX_pushtstringtable(terra_State * L);
 void luaX_poptstringtable(terra_State * L);
 l_noret luaX_reporterror(LexState * ls, const char * err);
+
+
+enum TA_Globals {
+    TA_TERRA_OBJECT = 1,
+    TA_FUNCTION_TABLE,
+    TA_TREE_METATABLE,
+    TA_LIST_METATABLE,
+    TA_KINDS_TABLE,
+    TA_ENTRY_POINT_TABLE,
+    TA_LAST_GLOBAL
+};
+//accessors for lua state assocated with the Terra lexer
+void luaX_globalpush(LexState * ls, TA_Globals k);
+void luaX_globalgettable(LexState * ls, TA_Globals k);
+void luaX_globalgetfield(LexState * ls, TA_Globals k, const char * field);
+
 #endif

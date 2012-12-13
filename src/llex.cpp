@@ -722,3 +722,18 @@ int luaX_lookahead (LexState *ls) {
   return ls->lookahead.token;
 }
 
+void luaX_globalpush(LexState * ls, TA_Globals k) {
+    lua_pushvalue(ls->L,ls->stacktop + k);
+}
+void luaX_globalgettable(LexState * ls, TA_Globals k) {
+    luaX_globalpush(ls, k);
+    lua_insert(ls->L,-2);
+    lua_gettable(ls->L,-2);
+    lua_remove(ls->L,-2); /*remove the global table*/
+}
+void luaX_globalgetfield(LexState * ls, TA_Globals k, const char * field) {
+    luaX_globalpush(ls,k);
+    lua_getfield(ls->L,-1,field);
+    lua_remove(ls->L,-2);
+}
+
