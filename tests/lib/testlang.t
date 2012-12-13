@@ -1,3 +1,5 @@
+
+
 return {
 	keywords = {"akeyword"};
 	entrypoints = {"image"};
@@ -8,7 +10,7 @@ return {
 		local ts =	terralib.newlist({lex:cur()})
 		lex:next()
 
-		while lex:testnext(",") do
+		while lex:nextif(",") do
 			ts:insert(lex:cur())
 			lex:next()
 		end

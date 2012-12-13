@@ -3632,20 +3632,20 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         self._cur,self._lookahead = nil,nil
         next()
     end
-    function lex:expect(typ)
-        if self:cur().type ~= typ then
-            error("(TODO) expected X but found Y")
-        end
-        local r = self:cur()
-        lex:next()
-        return r
-    end
-    function lex:testnext(typ)
+
+    function lex:nextif(typ)
         if self:cur().type == typ then
             local r = self:cur()
             self:next()
             return r
         else return false end
+    end
+    function lex:expect(typ)
+        local n = self:nextif(typ)
+        if not n then
+            error("(TODO) expected X but found Y")
+        end
+        return n
     end
     function lex:matches(typ)
         return self:cur().type == typ
