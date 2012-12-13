@@ -144,8 +144,8 @@ typedef struct LexState {
   
   sigjmp_buf error_dest; /* where to jump when a parse error occurs */
   int stacktop; /* top of lua stack when we start this function */
-
-  int languageextensionsenabled; /* table defining the language extension tokens, 0 if extensions are off */
+  int languageextensionsenabled; /* 0 if extensions are off */
+  char lextable; /* &lextable is the registry key for lua state associated with the LexState object*/
 } LexState;
 
 
@@ -181,5 +181,6 @@ enum TA_Globals {
 void luaX_globalpush(LexState * ls, TA_Globals k);
 void luaX_globalgettable(LexState * ls, TA_Globals k);
 void luaX_globalgetfield(LexState * ls, TA_Globals k, const char * field);
+void luaX_globalset(LexState * ls, TA_Globals k);
 
 #endif

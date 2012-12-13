@@ -2298,8 +2298,8 @@ static void cleanup(LexState * ls) {
         ls->patchinfo.space = 0;
     }
     
-    //clear the registry index entry for our language extensions table
-    lua_pushlightuserdata(ls->L,&ls->languageextensionsenabled);
+    //clear the registry index entry for our state
+    lua_pushlightuserdata(ls->L,&ls->lextable);
     lua_pushnil(ls->L);
     lua_rawset(ls->L,LUA_REGISTRYINDEX);
 }
@@ -2330,20 +2330,30 @@ int luaY_parser (terra_State *T, ZIO *z,
       abort();
   }
   lexstate.stacktop = lua_gettop(L);
+  
+  
+  lua_pushlightuserdata(L,&lexstate.lextable);
+  lua_newtable(L); /* lua state for lexer */
+  lua_rawset(L,LUA_REGISTRYINDEX);
+  
   lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
-  assert(lua_gettop(L) == lexstate.stacktop + TA_TERRA_OBJECT);
   int to = lua_gettop(L);
   
+  lua_pushvalue(L,-1);
+  luaX_globalset(&lexstate, TA_TERRA_OBJECT);
+  
   lua_getfield(L,to,"_trees");
-  assert(lua_gettop(L) == lexstate.stacktop + TA_FUNCTION_TABLE);
+  luaX_globalset(&lexstate, TA_FUNCTION_TABLE);
+  
   
   lua_getfield(L,to,"tree");
-  assert(lua_gettop(L) == lexstate.stacktop + TA_TREE_METATABLE);
+  luaX_globalset(&lexstate, TA_TREE_METATABLE);
   
   lua_getfield(L,to,"list");
-  assert(lua_gettop(L) == lexstate.stacktop + TA_LIST_METATABLE);
+  luaX_globalset(&lexstate, TA_LIST_METATABLE);
+  
   lua_getfield(L,to,"kinds");
-  assert(lua_gettop(L) ==  lexstate.stacktop + TA_KINDS_TABLE);
+  luaX_globalset(&lexstate, TA_KINDS_TABLE);
   
   lua_getfield(L,to,"languageextension");
   lua_getfield(L,-1,"languages");
@@ -2351,16 +2361,11 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_pop(L,1);
   lua_getfield(L,-1,"entrypoints");
   lua_remove(L,-2); /*remove language extension table*/
+  luaX_globalset(&lexstate, TA_ENTRY_POINT_TABLE);
   
-  assert(lua_gettop(L) == lexstate.stacktop + TA_ENTRY_POINT_TABLE);
+  lua_pop(L,1); /* remove gs and terra object from stack */
   
-  //we need to get to the entrypoint table even when our local stack is not visible, so we store it in the registry
-  lua_pushlightuserdata(L,&lexstate.languageextensionsenabled);
-  lua_pushvalue(L,-2);
-  lua_rawset(L,LUA_REGISTRYINDEX);
-  
-  assert(lua_gettop(L) == lexstate.stacktop + TA_ENTRY_POINT_TABLE);
-  
+  assert(lua_gettop(L) == lexstate.stacktop);
   
   int err = sigsetjmp(lexstate.error_dest,0);
   if(!err) {
@@ -2377,8 +2382,6 @@ int luaY_parser (terra_State *T, ZIO *z,
     lua_settop(L, lexstate.stacktop + 1); //reset the stack to just 1 above where it orignally (holding the error message)
     return err;
   }
-  
-  lua_pop(L,TA_LAST_GLOBAL - 1);
 
   assert(lua_gettop(L) == lexstate.stacktop);
   

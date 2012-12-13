@@ -683,11 +683,9 @@ static int llex (LexState *ls, SemInfo *seminfo) {
                  return ts->reserved - 1 + FIRST_RESERVED;
                else {
                  if(ls->languageextensionsenabled) {
-                    lua_pushlightuserdata(ls->L,&ls->languageextensionsenabled);
-                    lua_rawget(ls->L,LUA_REGISTRYINDEX);
-                    lua_getfield(ls->L,-1,getstr(ts));
+                    luaX_globalgetfield(ls, TA_ENTRY_POINT_TABLE, getstr(ts));
                     int special = lua_istable(ls->L,-1);
-                    lua_pop(ls->L,2); /* remove lookup value and the entrypoint table */
+                    lua_pop(ls->L,1); /* remove lookup value */
                     if(special)
                         return TK_SPECIAL;
                  }
@@ -723,7 +721,10 @@ int luaX_lookahead (LexState *ls) {
 }
 
 void luaX_globalpush(LexState * ls, TA_Globals k) {
-    lua_pushvalue(ls->L,ls->stacktop + k);
+    lua_pushlightuserdata(ls->L,&ls->lextable);
+    lua_rawget(ls->L,LUA_REGISTRYINDEX);
+    lua_rawgeti(ls->L,-1,k);
+    lua_remove(ls->L,-2); /*remove lexstate table*/
 }
 void luaX_globalgettable(LexState * ls, TA_Globals k) {
     luaX_globalpush(ls, k);
@@ -735,5 +736,12 @@ void luaX_globalgetfield(LexState * ls, TA_Globals k, const char * field) {
     luaX_globalpush(ls,k);
     lua_getfield(ls->L,-1,field);
     lua_remove(ls->L,-2);
+}
+void luaX_globalset(LexState * ls, TA_Globals k) {
+    lua_pushlightuserdata(ls->L,&ls->lextable);
+    lua_rawget(ls->L,LUA_REGISTRYINDEX);
+    lua_insert(ls->L,-2);
+    lua_rawseti(ls->L,-2,k);
+    lua_pop(ls->L,1);
 }
 
