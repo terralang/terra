@@ -3653,6 +3653,9 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     function lex:lookaheadmatches(typ)
         return self:lookahead().type == typ
     end
+    function lex:error(msg)
+        error(msg)
+    end
 
 
     local constructor,names
