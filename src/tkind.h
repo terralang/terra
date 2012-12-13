@@ -89,6 +89,7 @@ _(instrinsic, "intrinsic") \
 _(nametoken, "nametoken") \
 _(numbertoken, "numbertoken") \
 _(stringtoken, "stringtoken") \
+_(eostoken, "eostoken") 
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

@@ -2183,6 +2183,10 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"type");
         break;
+    case TK_EOS:
+        lua_pushnumber(ls->L,T_eostoken);
+        lua_setfield(ls->L,-2,"type");
+        break;
     default:
         lua_pushstring(ls->L,luaX_token2rawstr(ls,t->token));
         lua_setfield(ls->L,-2,"type");

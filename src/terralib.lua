@@ -3618,6 +3618,7 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     lex.name = terra.kinds.nametoken
     lex.string = terra.kinds.stringtoken
     lex.number = terra.kinds.numbertoken
+    lex.eos = terra.kinds.eostoken
     --todo: pimp the lexer interface
     function lex:cur()
         self._cur = self._cur or cur()
@@ -3631,7 +3632,29 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         self._cur,self._lookahead = nil,nil
         next()
     end
-    
+    function lex:expect(typ)
+        if self:cur().type ~= typ then
+            error("(TODO) expected X but found Y")
+        end
+        local r = self:cur()
+        lex:next()
+        return r
+    end
+    function lex:testnext(typ)
+        if self:cur().type == typ then
+            local r = self:cur()
+            self:next()
+            return r
+        else return false end
+    end
+    function lex:matches(typ)
+        return self:cur().type == typ
+    end
+    function lex:lookaheadmatches(typ)
+        return self:lookahead().type == typ
+    end
+
+
     local constructor,names
     if isstatement and islocal then
         constructor,names = lang:localstatement(lex)
