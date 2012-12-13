@@ -3604,7 +3604,53 @@ function terra.loadlanguage(lang)
         end
         E.entrypoints[e] = lang
     end
+    lang.keywordtable = {} --keyword => true
+    for i,k in ipairs(lang.keywords) do
+        lang.keywordtable[k] = true
+    end
+    for i,k in ipairs(lang.entrypoints) do
+        lang.keywordtable[k] = true
+    end
     E.languages:insert(lang)
+end
+function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
+    local lex = {}
+    lex.name = terra.kinds.nametoken
+    lex.string = terra.kinds.stringtoken
+    lex.number = terra.kinds.numbertoken
+    --todo: pimp the lexer interface
+    function lex:cur()
+        self._cur = self._cur or cur()
+        return self._cur
+    end
+    function lex:lookahead()
+        self._lookahead = self._lookahead or lookahead()
+        return self._lookahead
+    end
+    function lex:next()
+        self._cur,self._lookahead = nil,nil
+        next()
+    end
+    
+    local constructor,names
+    if isstatement and islocal then
+        constructor,names = lang:localstatement(lex)
+        --TODO: fixup and check names
+    elseif isstatement and lang.statement then
+        constructor,names = lang:statement(lex)
+        --TODO: fixup and check names
+    else
+        constructor = lang:expression(lex)
+    end
+    
+    if not constructor or type(constructor) ~= "function" then
+        error("expected language to return a constructo function")
+    end
+    if not names then
+        names = {}
+    end
+
+    return constructor,names
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword

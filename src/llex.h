@@ -144,7 +144,7 @@ typedef struct LexState {
   sigjmp_buf error_dest; /* where to jump when a parse error occurs */
   int stacktop; /* top of lua stack when we start this function */
 
-  int languageextensionstable; /* table defining the language extension tokens, 0 if extensions are off */
+  int languageextensionsenabled; /* table defining the language extension tokens, 0 if extensions are off */
 } LexState;
 
 

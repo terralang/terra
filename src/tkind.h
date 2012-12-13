@@ -85,7 +85,10 @@ _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
 _(selectconst, "selectconst") \
 _(speciallist, "speciallist") \
-_(instrinsic, "intrinsic")
+_(instrinsic, "intrinsic") \
+_(nametoken, "nametoken") \
+_(numbertoken, "numbertoken") \
+_(stringtoken, "stringtoken") \
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

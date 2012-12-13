@@ -159,6 +159,7 @@ static const char *txtToken (LexState *ls, int token) {
       save(ls, '\0');
       return luaS_cstringf(ls->LP,LUA_QS,luaZ_buffer(ls->buff));
     case TK_SPECIAL:
+      save(ls, '\0');
       return luaS_cstringf(ls->LP, "%s", luaZ_buffer(ls->buff));
     default:
       return luaX_token2str(ls, token);
@@ -681,10 +682,12 @@ static int llex (LexState *ls, SemInfo *seminfo) {
                if (ts->reserved > 0)  /* reserved word? */
                  return ts->reserved - 1 + FIRST_RESERVED;
                else {
-                 if(ls->languageextensionstable) {
-                    lua_getfield(ls->L,ls->languageextensionstable,getstr(ts));
+                 if(ls->languageextensionsenabled) {
+                    lua_pushlightuserdata(ls->L,&ls->languageextensionsenabled);
+                    lua_rawget(ls->L,LUA_REGISTRYINDEX);
+                    lua_getfield(ls->L,-1,getstr(ts));
                     int special = lua_istable(ls->L,-1);
-                    lua_pop(ls->L,1);
+                    lua_pop(ls->L,2); /* remove lookup value and the entrypoint table */
                     if(special)
                         return TK_SPECIAL;
                  }
