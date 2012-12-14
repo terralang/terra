@@ -3619,7 +3619,7 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     lex.string = terra.kinds["<string>"]
     lex.number = terra.kinds["<number>"]
     lex.eof = terra.kinds["<eof>"]
-    
+    lex._references = terra.newlist()
     function lex:cur()
         self._cur = self._cur or cur()
         return self._cur
@@ -3631,6 +3631,13 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     function lex:next()
         self._cur,self._lookahead = nil,nil
         next()
+    end
+
+    function lex:ref(name)
+        if type(name) ~= "string" then
+            error("references must be identifiers")
+        end
+        self._references:insert(name)
     end
 
     function lex:typetostring(name)
@@ -3729,7 +3736,7 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         end
     end
 
-    return constructor,names
+    return constructor,names,lex._references
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword

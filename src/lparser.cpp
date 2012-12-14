@@ -2237,10 +2237,21 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     lua_pushboolean(ls->L,isstatement);
     lua_pushboolean(ls->L,islocal);
     
-    if(lua_pcall(ls->L,6,2,0)) {
+    if(lua_pcall(ls->L,6,3,0)) {
         const char * str = luaL_checkstring(ls->L,-1);
         luaX_syntaxerror(ls, str);
     }
+    
+    /* register all references from user code */
+    lua_pushnil(L);
+    while (lua_next(L,-2) != 0) {
+        size_t len;
+        const char * str = lua_tolstring(L,-1,&len);
+        refvariable(ls, luaS_newlstr(ls->LP,str,len));
+        lua_pop(L,1);
+    }
+    
+    lua_pop(L,1); /* remove _references list */
     
     //put names returned into names object
     

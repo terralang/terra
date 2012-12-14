@@ -29,12 +29,19 @@ return {
 		local r = terralib.newlist()
 		if not lex:matches("}")  then
 			repeat
-				r:insert(lex:expect(lex.name))
+				local t = lex:expect(lex.name)
+				r:insert(t.value)
+				lex:ref(t.value)
 			until not lex:nextif(",")
 		end
 		lex:expectmatch("}","{",begin)
-		return function(env)
-			return unpack(r)
+		return function(envfn)
+			local env = envfn()
+			local rr = {}
+			for i,k in ipairs(r) do
+				rr[i] = env[k]
+			end
+			return unpack(rr)
 		end
 	end;
 	statement = function(self,lex)
