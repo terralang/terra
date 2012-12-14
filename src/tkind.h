@@ -86,10 +86,10 @@ _(symbol, "symbol") \
 _(selectconst, "selectconst") \
 _(speciallist, "speciallist") \
 _(instrinsic, "intrinsic") \
-_(nametoken, "nametoken") \
-_(numbertoken, "numbertoken") \
-_(stringtoken, "stringtoken") \
-_(eostoken, "eostoken") 
+_(nametoken, "<name>") \
+_(numbertoken, "<number>") \
+_(stringtoken, "<string>") \
+_(eostoken, "<eof>") 
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

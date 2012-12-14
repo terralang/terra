@@ -3615,11 +3615,11 @@ function terra.loadlanguage(lang)
 end
 function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     local lex = {}
-    lex.name = terra.kinds.nametoken
-    lex.string = terra.kinds.stringtoken
-    lex.number = terra.kinds.numbertoken
-    lex.eos = terra.kinds.eostoken
-    --todo: pimp the lexer interface
+    lex.name = terra.kinds["<name>"]
+    lex.string = terra.kinds["<string>"]
+    lex.number = terra.kinds["<number>"]
+    lex.eof = terra.kinds["<eof>"]
+    
     function lex:cur()
         self._cur = self._cur or cur()
         return self._cur
@@ -3633,6 +3633,14 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         next()
     end
 
+    function lex:typetostring(name)
+        if type(name) == "string" then
+            return name
+        else
+            return terra.kinds[name]
+        end
+    end
+    
     function lex:nextif(typ)
         if self:cur().type == typ then
             local r = self:cur()
@@ -3643,7 +3651,7 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     function lex:expect(typ)
         local n = self:nextif(typ)
         if not n then
-            error("(TODO) expected X but found Y")
+            self:errorexpected(self:typetostring(typ))
         end
         return n
     end
@@ -3656,6 +3664,20 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     function lex:error(msg)
         error(msg)
     end
+    function lex:errorexpected(what)
+        self:error(what.." expected")
+    end
+    function lex:expectmatch(typ,openingtokentype,linenumber)
+       local n = self:nextif(typ)
+        if not n then
+            if self:cur().linenumber == linenumber then
+                lex:errorexpected(self:typetostring(typ))
+            else
+                lex:error(string.format("%s expected (to close %s at line %d)",self:typetostring(typ),self:typetostring(openingtokentype),linenumber))
+            end
+        end
+        return n
+    end
 
     local constructor,names
     if isstatement and islocal then
@@ -3667,7 +3689,7 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     end
     
     if not constructor or type(constructor) ~= "function" then
-        error("expected language to return a constructo function")
+        error("expected language to return a construction function")
     end
 
     local function isidentifier(str)

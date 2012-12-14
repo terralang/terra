@@ -2,9 +2,12 @@
 
 return {
 	keywords = {"akeyword"};
-	entrypoints = {"image"};
+	entrypoints = {"image", "foolist"};
 	expression = function(self,lex,noskip)
 		if not noskip then
+			if lex:nextif("foolist") then
+				return self:foolist(lex)
+			end
 			lex:next()
 		end
 		local ts =	terralib.newlist({lex:cur()})
@@ -20,6 +23,19 @@ return {
 			return ts
 		end
 
+	end;
+	foolist = function(self,lex)
+		local begin = lex:expect("{").linenumber
+		local r = terralib.newlist()
+		if not lex:matches("}")  then
+			repeat
+				r:insert(lex:expect(lex.name))
+			until not lex:nextif(",")
+		end
+		lex:expectmatch("}","{",begin)
+		return function(env)
+			return unpack(r)
+		end
 	end;
 	statement = function(self,lex)
 		lex:expect("image")
@@ -37,8 +53,9 @@ return {
 		lex:expect("image")
 		local n = lex:expect(lex.name).value
 		local v = lex:expect(lex.number).value
+		local v2 = lex:expect(lex.number).value
 		return function(env)
-			return v
+			return v + v2
 		end, { n }
 
 	end

@@ -11,7 +11,8 @@ print(a)
 image bar 3
 print(bar,bar1)
 
-local image what 4
+local image what 4 3
 print(what)
+print(foolist { a, b})
 --test eos token
 image

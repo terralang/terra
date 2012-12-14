@@ -2274,7 +2274,7 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     
     OutputBuffer_printf(&ls->output_buffer,"_G.terra._trees[%d](",n);
     print_captured_locals(ls,&tc);
-    OutputBuffer_printf(&ls->output_buffer,");");
+    OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
     
     assert(lua_gettop(L) == top);
@@ -2378,8 +2378,13 @@ int luaY_parser (terra_State *T, ZIO *z,
     assert(!funcstate.prev && !lexstate.fs);
   } else {
     cleanup(&lexstate);
-    lua_replace(L,lexstate.stacktop + 1); //put the error message at the new top of stack
-    lua_settop(L, lexstate.stacktop + 1); //reset the stack to just 1 above where it orignally (holding the error message)
+    assert(lua_gettop(L) > lexstate.stacktop);
+    if(lua_gettop(L) > lexstate.stacktop + 1) {
+        lua_replace(L,lexstate.stacktop + 1); //put the error message at the new top of stack
+        lua_settop(L, lexstate.stacktop + 1); //reset the stack to just 1 above where it orignally (holding the error message)
+    }
+    assert(lua_gettop(L) == lexstate.stacktop + 1);
+    
     return err;
   }
 
