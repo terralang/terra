@@ -233,7 +233,7 @@ local v = doinit()
 timeadd:compile()
 
 local b = terralib.currenttimeinseconds()
-timeadd(v,100000000)
+--timeadd(v,100000000)
 local e = terralib.currenttimeinseconds()
 print(e - b)
 print(v.data)

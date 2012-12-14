@@ -3657,14 +3657,11 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         error(msg)
     end
 
-
     local constructor,names
     if isstatement and islocal then
         constructor,names = lang:localstatement(lex)
-        --TODO: fixup and check names
     elseif isstatement and lang.statement then
         constructor,names = lang:statement(lex)
-        --TODO: fixup and check names
     else
         constructor = lang:expression(lex)
     end
@@ -3672,8 +3669,42 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     if not constructor or type(constructor) ~= "function" then
         error("expected language to return a constructo function")
     end
-    if not names then
+
+    local function isidentifier(str)
+        local b,e = string.find(str,"%a[%a%d]*")
+        return b == 1 and e == string.len(str)
+    end
+
+    --fixup names    
+
+    if not names then 
         names = {}
+    end
+
+    if type(names) ~= "table" then
+        error("names returned from constructor must be a table")
+    end
+
+    if islocal and #names == 0 then
+        error("local statements must define at least one name")
+    end
+
+    for i = 1,#names do
+        if type(names[i]) ~= "table" then
+            names[i] = { names[i] }
+        end
+        local name = names[i]
+        if #name == 0 then
+            error("name must contain at least one element")
+        end
+        for i,c in ipairs(name) do
+            if type(c) ~= "string" or not isidentifier(c) then
+                error("name component must be an identifier")
+            end
+            if islocal and i > 1 then
+                error("local names must have exactly one element")
+            end
+        end
     end
 
     return constructor,names
