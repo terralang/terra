@@ -3613,13 +3613,14 @@ function terra.loadlanguage(lang)
     end
     E.languages:insert(lang)
 end
-function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
+function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,islocal)
     local lex = {}
     lex.name = terra.kinds["<name>"]
     lex.string = terra.kinds["<string>"]
     lex.number = terra.kinds["<number>"]
     lex.eof = terra.kinds["<eof>"]
     lex._references = terra.newlist()
+    lex.source = source
     function lex:cur()
         self._cur = self._cur or cur()
         return self._cur
@@ -3631,6 +3632,10 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
     function lex:next()
         self._cur,self._lookahead = nil,nil
         next()
+    end
+    function lex:luaexpr()
+        self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
+        return luaexpr()
     end
 
     function lex:ref(name)
@@ -3669,7 +3674,8 @@ function terra.runlanguage(lang,cur,lookahead,next,isstatement,islocal)
         return self:lookahead().type == typ
     end
     function lex:error(msg)
-        error(msg)
+        error(msg,0) --,0 suppresses the addition of line number information, which we do not want here since
+                     --this is a user-caused errors
     end
     function lex:errorexpected(what)
         self:error(what.." expected")

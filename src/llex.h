@@ -142,9 +142,11 @@ typedef struct LexState {
       int space;
   } patchinfo; //data to fix up output stream when we insert terra information
   
-  sigjmp_buf error_dest; /* where to jump when a parse error occurs */
+  sigjmp_buf * error_dest; /* where to jump when a parse error occurs */
   int stacktop; /* top of lua stack when we start this function */
   int languageextensionsenabled; /* 0 if extensions are off */
+  int rethrow; /* set to 1 when le_luaexpr needs to re-report an error message, used to suppress the duplicate
+                  addition of context information */
   char lextable; /* &lextable is the registry key for lua state associated with the LexState object*/
 } LexState;
 

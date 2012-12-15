@@ -2207,6 +2207,30 @@ static int le_lookahead(lua_State * L) {
     return 1;
 }
 
+static int le_luaexpr(lua_State * L) {
+  LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
+  
+  sigjmp_buf * old_dest = ls->error_dest;
+  sigjmp_buf error_dest;
+  int err = sigsetjmp(error_dest, 0);
+  if(!err) {
+    ls->error_dest = &error_dest;
+    luaexpr(ls);
+  } else {
+    /* there was an error, it is on the top of the stack
+       we need to call lua's error handler to rethrow the error. */
+    ls->error_dest = old_dest;
+    ls->rethrow = 1; /* prevent languageextension from adding the context again */
+    lua_error(ls->L); /* does not return */
+  }
+  //reset to previous error handler
+  ls->error_dest = old_dest;
+  //TODO: catch and re-throw the error
+  lua_getfield(ls->L,-1,"expression");
+  lua_remove(ls->L,-2); /* remove original object, we just want to return the function */
+  return 1;
+}
+
 static void languageextension(LexState * ls, int isstatement, int islocal) {
     lua_State * L = ls->L;
     Token begin = ls->t;
@@ -2232,14 +2256,21 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     
     lua_pushlightuserdata(ls->L,(void*)ls);
     lua_pushcclosure(ls->L,le_next,1);
+
+    lua_pushlightuserdata(ls->L,(void*)ls);
+    lua_pushcclosure(ls->L,le_luaexpr,1);
     
-    
+    lua_pushstring(ls->L,getstr(ls->source));
     lua_pushboolean(ls->L,isstatement);
     lua_pushboolean(ls->L,islocal);
     
-    if(lua_pcall(ls->L,6,3,0)) {
+    if(lua_pcall(ls->L,8,3,0)) {
         const char * str = luaL_checkstring(ls->L,-1);
-        luaX_syntaxerror(ls, str);
+        printf("SYNTAX ERROR\n");
+        if(ls->rethrow)
+            luaX_reporterror(ls, str);
+        else /* add line information */
+            luaX_syntaxerror(ls, str);
     }
     
     /* register all references from user code */
@@ -2336,6 +2367,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   TString *tname = luaS_new(T, name);
   lexstate.buff = buff;
   lexstate.n_lua_objects = 0;
+  lexstate.rethrow = 0;
   OutputBuffer_init(&lexstate.output_buffer);
   if(!lua_checkstack(L,1 + LUAI_MAXCCALLS)) {
       abort();
@@ -2377,9 +2409,10 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_pop(L,1); /* remove gs and terra object from stack */
   
   assert(lua_gettop(L) == lexstate.stacktop);
-  
-  int err = sigsetjmp(lexstate.error_dest,0);
+  sigjmp_buf error_dest;
+  int err = sigsetjmp(error_dest,0);
   if(!err) {
+    lexstate.error_dest = &error_dest;
     luaX_setinput(T, &lexstate, z, tname, firstchar);
     open_mainfunc(&lexstate, &funcstate, &bl);
     luaX_next(&lexstate);  /* read first token */

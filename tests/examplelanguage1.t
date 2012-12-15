@@ -1,0 +1,7 @@
+#!../terra -v -l lib/examplelanguage.t
+
+local a,b = 1,2
+c = 3
+local d = sum a,b,c done
+
+print(d)
