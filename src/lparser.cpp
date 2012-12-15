@@ -1328,7 +1328,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
     add_entry(ls,exps);
     add_field(ls,tbl,"operands");
     
-    if( !ls->in_terra && uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
+    if(uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
         const char * expstring = luaX_saveoutput(ls, &beginexp);
         luaX_patchbegin(ls, &begintoken);
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
@@ -1341,7 +1341,7 @@ static BinOpr subexpr (LexState *ls, expdesc *v, int limit) {
   
   op = getbinopr(ls->t.token);
   const char * lhs_string = NULL;
-  if( !ls->in_terra && op == OPR_FUNC_PTR) {
+  if(op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
   }
   check_lua_operator(ls,ls->t.token);

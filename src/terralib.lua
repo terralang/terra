@@ -101,7 +101,7 @@ function terra.treeload(ctx,self)
     if not self.expressionstring then
         error("tree was not an argument to a macro, I don't know what to do")
     else
-        local fn, err = terra.loadstring("return " .. self.expressionstring)
+        local fn, err = loadstring("return " .. self.expressionstring)
         if err then
             local ln,err = terra.parseerror(self.linenumber,err)
             self.linenumber = ln
