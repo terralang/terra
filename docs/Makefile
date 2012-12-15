@@ -1,2 +1,3 @@
-../README.html:	../README.md style.html Markdown.pl
+all:	../README.html ../embeddinglanguages.html
+../%.html:	../%.md style.html Markdown.pl
 	perl Markdown.pl $< | cat style.html - > $@

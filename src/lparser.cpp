@@ -2266,7 +2266,6 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     
     if(lua_pcall(ls->L,8,3,0)) {
         const char * str = luaL_checkstring(ls->L,-1);
-        printf("SYNTAX ERROR\n");
         if(ls->rethrow)
             luaX_reporterror(ls, str);
         else /* add line information */

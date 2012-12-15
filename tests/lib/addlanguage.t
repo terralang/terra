@@ -17,8 +17,7 @@ return {
 			local env = envfn()
 			local sum = 0
 			for i,expr in ipairs(exprs) do
-				setfenv(expr,env)
-				sum = sum + expr()
+				sum = sum + expr(env)
 			end
 			return sum
 		end

@@ -3611,6 +3611,7 @@ function terra.loadlanguage(lang)
     for i,k in ipairs(lang.entrypoints) do
         lang.keywordtable[k] = true
     end
+
     E.languages:insert(lang)
 end
 function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,islocal)
@@ -3635,7 +3636,11 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     end
     function lex:luaexpr()
         self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
-        return luaexpr()
+        local expr = luaexpr()
+        return function(env)
+            setfenv(expr,env)
+            return expr()
+        end
     end
 
     function lex:ref(name)
@@ -3693,12 +3698,14 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     end
 
     local constructor,names
-    if isstatement and islocal then
+    if isstatement and islocal and lang.localstatement then
         constructor,names = lang:localstatement(lex)
-    elseif isstatement and lang.statement then
+    elseif isstatement and not islocal and lang.statement then
         constructor,names = lang:statement(lex)
-    else
+    elseif not islocal and lang.expression then
         constructor = lang:expression(lex)
+    else
+        lex:error("unexpected token")
     end
     
     if not constructor or type(constructor) ~= "function" then

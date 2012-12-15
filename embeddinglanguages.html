@@ -1,0 +1,387 @@
+<!-- from: https://gist.github.com/2554919 -->
+<style type="text/css">
+
+body {
+  font-family: Georgia, serif;
+  font-size: 16px;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background-color: white;
+  padding: 30px;
+}
+
+#allstuff {
+  width: 600px;
+  margin-left: 10%;
+}
+body > *:first-child {
+  margin-top: 0 !important; }
+body > *:last-child {
+  margin-bottom: 0 !important; }
+
+a {
+  color: #4183C4; }
+a.absent {
+  color: #cc0000; }
+a.anchor {
+  display: block;
+  padding-left: 30px;
+  margin-left: -30px;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0; }
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: Helvetica, serif;
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  cursor: text;
+  position: relative; }
+
+h1:hover a.anchor, h2:hover a.anchor, h3:hover a.anchor, h4:hover a.anchor, h5:hover a.anchor, h6:hover a.anchor {
+  text-decoration: none; }
+
+h1 tt, h1 code {
+  font-size: inherit; }
+
+h2 tt, h2 code {
+  font-size: inherit; }
+
+h3 tt, h3 code {
+  font-size: inherit; }
+
+h4 tt, h4 code {
+  font-size: inherit; }
+
+h5 tt, h5 code {
+  font-size: inherit; }
+
+h6 tt, h6 code {
+  font-size: inherit; }
+
+h1 {
+  font-size: 28px;
+  color: black; }
+
+h2 {
+  font-size: 20px;
+  font-weight: normal;
+  font-family: Georgia;
+  letter-spacing:2px;
+  font-variant: small-caps;
+  text-transform: lowercase;
+  color: black; }
+
+h3 {
+  font-size: 16px;
+  font-family: Georgia;
+  font-style:italic;
+  font-weight: normal; }
+
+h4 {
+  font-size: 16px; }
+
+h5 {
+  font-size: 14px; }
+
+h6 {
+  color: #777777;
+  font-size: 14px; }
+
+p, blockquote, ul, ol, dl, li, table, pre {
+  margin: 15px 0; }
+
+hr {
+  border: 0 none;
+  color: #cccccc;
+  height: 4px;
+  padding: 0; }
+
+body > h2:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+body > h1:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+  body > h1:first-child + h2 {
+    margin-top: 0;
+    padding-top: 0; }
+body > h3:first-child, body > h4:first-child, body > h5:first-child, body > h6:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0; }
+
+h1 p, h2 p, h3 p, h4 p, h5 p, h6 p {
+  margin-top: 0; }
+
+li p.first {
+  display: inline-block; }
+
+ul, ol {
+  padding-left: 30px; }
+
+ul :first-child, ol :first-child {
+  margin-top: 0; }
+
+ul :last-child, ol :last-child {
+  margin-bottom: 0; }
+
+dl {
+  padding: 0; }
+  dl dt {
+    font-size: 14px;
+    font-weight: bold;
+    font-style: italic;
+    padding: 0;
+    margin: 15px 0 5px; }
+    dl dt:first-child {
+      padding: 0; }
+    dl dt > :first-child {
+      margin-top: 0; }
+    dl dt > :last-child {
+      margin-bottom: 0; }
+  dl dd {
+    margin: 0 0 15px;
+    padding: 0 15px; }
+    dl dd > :first-child {
+      margin-top: 0; }
+    dl dd > :last-child {
+      margin-bottom: 0; }
+
+blockquote {
+  border-left: 4px solid #dddddd;
+  padding: 0 15px;
+  color: #777777; }
+  blockquote > :first-child {
+    margin-top: 0; }
+  blockquote > :last-child {
+    margin-bottom: 0; }
+
+table {
+  padding: 0; }
+  table tr {
+    border-top: 1px solid #cccccc;
+    background-color: white;
+    margin: 0;
+    padding: 0; }
+    table tr:nth-child(2n) {
+      background-color: #f8f8f8; }
+    table tr th {
+      font-weight: bold;
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr td {
+      border: 1px solid #cccccc;
+      text-align: left;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr th :first-child, table tr td :first-child {
+      margin-top: 0; }
+    table tr th :last-child, table tr td :last-child {
+      margin-bottom: 0; }
+
+img {
+  max-width: 100%; }
+
+span.frame {
+  display: block;
+  overflow: hidden; }
+  span.frame > span {
+    border: 1px solid #dddddd;
+    display: block;
+    float: left;
+    overflow: hidden;
+    margin: 13px 0 0;
+    padding: 7px;
+    width: auto; }
+  span.frame span img {
+    display: block;
+    float: left; }
+  span.frame span span {
+    clear: both;
+    color: #333333;
+    display: block;
+    padding: 5px 0 0; }
+span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-center > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: center; }
+  span.align-center span img {
+    margin: 0 auto;
+    text-align: center; }
+span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px 0 0;
+    text-align: right; }
+  span.align-right span img {
+    margin: 0;
+    text-align: right; }
+span.float-left {
+  display: block;
+  margin-right: 13px;
+  overflow: hidden;
+  float: left; }
+  span.float-left span {
+    margin: 13px 0 0; }
+span.float-right {
+  display: block;
+  margin-left: 13px;
+  overflow: hidden;
+  float: right; }
+  span.float-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: right; }
+
+code, tt {
+  font-size: 14px;
+  margin: 0 2px;
+  padding: 0 5px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px; }
+
+pre code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent; }
+
+.highlight pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+  pre code, pre tt {
+    background-color: transparent;
+    border: none; }
+</style>
+<body>
+<div id="allstuff">
+<p><h1>Embedding Languages in Terra</h1>
+
+<p><em>Zach DeVito <a href="&#109;&#97;&#105;&#x6C;&#x74;&#x6F;:&#x7A;&#x64;&#x65;&#x76;&#105;&#x74;&#x6F;&#64;&#x73;&#x74;&#x61;&#x6E;&#x66;&#x6F;&#114;&#x64;&#46;&#101;&#100;u">&#x7A;&#x64;&#x65;&#x76;&#105;&#x74;&#x6F;&#64;&#x73;&#x74;&#x61;&#x6E;&#x66;&#x6F;&#114;&#x64;&#46;&#101;&#100;u</a></em></p>
+
+<p>This document decribes how to write a parser extension for Terra that will allow you to embed your own language in Lua similar to the way Terra code is embedded in Lua. For more information on Terra itself, see the <code>README</code>.</p>
+
+<h2>Overview</h2>
+
+<p>Language extensions in the Terra system allow you to create custom Lua statements and expressions that you can use to implement your own embedded language. Each language registers a set of entry-point keywords that indicate the start of a statment or expression in your language. If the Terra parser sees one of these keywords at the beginning of a Lua expression or statement, it will switch control of parsing over to your language, where you can  parse the tokens into an AST. After creating the AST, your language then returns a <em>constructor</em> function back to Terra parser. This function will be called during execution when your statement or expression should run.</p>
+
+<p>We first discuss how to load a language extension into the Terra runtime, and the go into detail about specifying its behavior.</p>
+
+<h2>Loading a Language</h2>
+
+<p>A language extension is defined using a Lua table like this one:</p>
+
+<pre><code>{ 
+  name = "mylanguage";
+  keywords = "mykeyword";
+  entrypoints = "startmylanguage";
+  expression = function(self,lexer)
+     --parse an expression for my language
+  end;
+}
+</code></pre>
+
+<p>The precise details of the API are described later. In order to user your language extension, it needs to be registered with Terra runtime. If you are using the <code>terra</code> interpreter you can load language extensions with the <code>-l</code> flag:</p>
+
+<pre><code>terra -l mylanguage.t my_script_using_my_language.t
+</code></pre>
+
+<p>The file <code>mylanguage.t</code> should <em>return</em> the Lua table describing your language:</p>
+
+<pre><code>local mylang = { ... } --fill in your table
+return mytable
+</code></pre>
+
+<p>You can also register language extensions using Terra's C-API by calling <code>terra_loadlanguage(lua_State * L)</code> with the language table on the top of the Lua stack. From Lua, you can call <code>terralib.loadlanguage(mylang)</code>. However, since a file is parsed <em>before</em> it is run, <code>terralib.loadlanguage</code> will only affect subsequent calls to <code>terra.loadfile</code>, not the current file.</p>
+
+<h2>Specifying a Language</h2>
+
+<p>The Lua table that specifies your language requires that you define several fields:</p>
+
+<ul>
+<li><code>name</code> a name for your language used for debugging</li>
+<li><code>entrypoints</code> a Lua list specifying the keywords that can begin a term in your language. These keywords must not be a Terra or Lua keyword and cannot overlap with entry-points for other loaded languages (In the future, we may allow you to rename entry-points when you load a language to resolve conflicts). These keywords must be valid Lua identifiers (i.e. they must be alphanumeric and cannot start with anumber). In the future, we may expand this to allow arbitrary operators (e.g. <code>+=</code>) as well.</li>
+<li><code>keywords</code> a Lua list specifying any additional keywords used your language. Like entry-points these also must be valid identifiers. A keyword in Lua or Terra is always considered a keyword in your language, so you do not need to list them here. </li>
+<li><code>expression</code> (Optional) A Lua method <code>function(self,lexer)</code> that is called whenever the parser encounters an entry-point keyword at the beginning of a Lua expression. <code>self</code> is your language object, and <code>lexer</code> is a Lua object used to interact with Terra's lexer to retrieve tokens and report errors. Its API is decribed below. The <code>expression</code> method should return a <em>constructor</em> function <code>function(environment_function)</code>. The constructor is called every time the expression is evaluated and should return the value of the expression as it should appear in Lua code.  Its argument, <code>environment_function</code>, is a function  that when called, returns the local lexical environment.</li>
+<li><code>statement</code> (Optional) A Lua method <code>function(self,lexer)</code> called when the parser encounters an entry-point keyword at the beginning of a Lua <em>statement</em>. Similar to <code>expression</code>, it returns a constructor function. Additionally, it can return a second argument that is a list of assignements that the statment performs to variables. For instance, the value <code>{ "a", "b", {"c","d"} }</code> will behave like the Lua statment <code>a,b,c.d = constructor(...)</code></li>
+<li><code>localstatement</code> (Optional) A Lua method <code>function(self,lexer)</code> called when the parser encounters an entry-point keyword at the beginning of a <code>local</code> statment (e.g. <code>local terra foo() end</code>). Similar to <code>statement</code> this method can also return a list of names (e.g. <code>{"a","b"}</code>). However, in this case, these names will be defined as local variables <code>local a, b = constructor(...)</code></li>
+</ul>
+
+<p>The methods in the Language are given an interface <code>lexer</code> to Terra <em>lexer</em>, which can be used to examine the stream of <em>tokens</em>, and report errors.  A <em>token</em> is a Lua table with fields:</p>
+
+<ul>
+<li><code>token.type</code> the <em>token type</em>. For keywords and operators this is just a string (e.g. <code>"and"</code>, or <code>"+"</code>). The values <code>lexer.name</code>, <code>lexer.number</code>, <code>lexer.string</code> indicate the token is respecitively an identifier (e.g. <code>myvar</code>), a number (e.g. 3), or a string (e.g. <code>"my string"</code>). The type <code>lexer.eof</code> indicates the end of the token stream. </li>
+<li><code>token.value</code> for names, strings, and numbers this is the specific value (e.g. <code>3.3</code>). Currently numbers are always represented as Lua numbers (i.e. doubles). In the future, we will extend this to include integral types as well.</li>
+<li><code>token.linenumber</code> The linenumber on which this token occured (not availiable for lookahead tokens).</li>
+<li><code>token.offset</code> The offset in characters from the beginning of the file where this token occured (not availiable for lookahead tokens).</li>
+</ul>
+
+<p>The <code>lexer</code> object then provides the following methods fields and methods. The <code>lexer</code> itself is only valid during parsing and should <em>not</em> be called from the constructor function.</p>
+
+<ul>
+<li><code>lexer:cur()</code> Returns the current <em>token</em>. Does not modify the position.</li>
+<li><code>lexer:lookahead()</code> Returns the <em>token</em> following the current token. Does not modify the position. Only 1 token of lookahead is allowed to keep the implementation simple.</li>
+<li><code>lexer:matches(tokentype)</code> shorthand for <code>lexer:cur().type == tokentype</code></li>
+<li><code>lexer:lookaheadmatches(tokentype)</code> shorthand for <code>lexer:lookahead().type == tokentype</code></li>
+<li><code>lexer:next()</code> Advances the current token. Returns nothing.</li>
+<li><code>lexer:nextif(tokentype)</code> If <code>tokentype</code> matches the <code>type</code> of the current token, it returns the token and advances the lexer. Otherwise, it returns <code>false</code> and does not advance the lexer. This function is useful when you want to try to parse many alternatives.</li>
+<li><code>lexer:expect(tokentype)</code> If <code>tokentype</code> matches the `type of the current token, it returns the token and advances the lexer. Otherwise, it stops parsing an emits an error. It is useful to use when you know what token should appear.</li>
+<li><code>lexer:expectmatch(tokentype,openingtokentype,linenumber)</code> Same as <code>expect</code> but provides better error reporting for matched tokens. For instance, to parse the closing brace '}' of a list you can call <code>lexer:expectmatch('}','{',lineno)</code>. It will report a mismatched bracket as well as the opening and closing lines.</li>
+<li><code>lexer.source</code> A string containing the filename, or identifier for the stream (useful for future error reporting)</li>
+<li><code>lexer:error(msg)</code> Report a parse error and give up. <code>msg</code> is a string. Does not return.</li>
+<li><code>lexer:errorexpected(msg)</code> Report that the string <code>msg</code> was expected but did not appear. Does not return.</li>
+<li><code>lexer:typetostring(tokentype)</code> Converts the token <em>type</em> to a string. Useful for error reporting.</li>
+<li><code>lexer:ref(name)</code> <code>name</code> is a string. Indicates to the Terra parser that your language may refer to the Lua variable <code>name</code>. This function must be called for any free identifiers that you are interested in looking up. Otherwise, the identifier may not appear in the lexical environment passed to your <em>constructor</em> functions. It is safe (though less efficient) to call it for identifiers that may not  reference.</li>
+<li><code>lexer:luaexpr()</code> Parses a single Lua expression from the token stream. This can be used to switch back into the Lua language for expressions in your language. For instance, Terra uses this to parse its types (which are just Lua expressions): <code>var a : aluaexpression(4) = 3</code>. It returns a function <code>function(lexicalenv)</code> that takes a table of the current lexical scope (such as the one return from <code>environment_function</code> in the constructor) and returns the value of the expression evaluated in that scope. This function is not indended to be used to parse a Lua expression into an AST. Currently, parsing a Lua expression into an AST requires you to writing the parser yourself. In the future we plan to add a library which will let you pick and choose pieces of Lua/Terra's grammer to use in your language.</li>
+</ul>
+
+<h2>Examples</h2>
+
+<p>TODO: a simple sum statement that works on identifiers</p>
+
+<p>TODO: a short lambda form for Lua</p>
+
+<h2>Future Extensions</h2>
+
+<ul>
+<li>A library for doing top-down precedence parsing (i.e. Pratt parsers). </li>
+<li>A library of common statements and expressions from Lua/Terra that allows the user to pick and choose which statements to include, making it easy to get started with a language.</li>
+</ul>
