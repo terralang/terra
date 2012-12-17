@@ -1,14 +1,44 @@
 
 local P = {}
 
+--same tokentypes as lexer, duplicated here for convience
 P.name = terralib.languageextension.name
 P.string = terralib.languageextension.string
 P.number = terralib.languageextension.number
 P.eof = terralib.languageextension.eof
 P.default = terralib.languageextension.default
 
-P.pratt = {}
+--a parser for a language is defined by a table of functions, one for each non-termina
+--in the language (e.g expression,statement, etc.)
 
+--these functions are either (1) raw recursive decent parsers
+-- or (2) Pratt parser objects
+
+--pratt parser objects behave like functions
+--but their behavior is defined by adding rules for what to do when 
+--a prefix or suffix is found
+--futhermore, when using a pratt parser object,  you can specify
+--a precedence such that the parser will only parse expressions 
+--with precedence _higher_ than that.
+--see tests/lib/pratttest.t for examples of how to use this interface
+--to parse common patters
+
+P.pratt = {}
+function P.Pratt()
+	return setmetatable({
+		infixtable = {};
+		prefixtable = {};
+	},{ __index = P.pratt, __call = P.pratt.__call })
+end
+
+
+--define a rule for infix operators like '+'
+--precidence is a numeric precedence
+--tokentype is a lexer token type (see embeddinglanguages.html)
+--rule is a function: function(parser,lhs) ... end
+--it is given the parser object and the AST value for the lhs of the expression.
+--it should parse and return the AST value for current expression
+--P.default can be used to define a rule that fires when no other rule applies
 function P.pratt:infix(tokentype,prec,rule)
 	if self.infixtable[tokentype] then
 		error("infix rule for "..tostring(tokentype).." already defined")
@@ -19,6 +49,11 @@ function P.pratt:infix(tokentype,prec,rule)
 	}
 	return self
 end
+
+--define a prefix rule
+--rule is a function: function(parser) ... end, that takes the parser object
+--and returns an AST for the expression
+
 function P.pratt:prefix(tokentype,rule)
 	if self.prefixtable[tokentype] then
 		error("prefix rule for "..tostring(tokentype).." already defined")
@@ -30,6 +65,7 @@ end
 P.defaultinfix = function(parser)
 	parser:error("unexpected symbol")
 end
+--table-driven implementation, invoked when you call the Pratt parser object
 P.pratt.__call = function(pratt,parser,precortoken,fixity)
 	local isleft = fixity == nil or fixity == "left"
 	local limit
@@ -57,15 +93,11 @@ P.pratt.__call = function(pratt,parser,precortoken,fixity)
 	return unpack(results)
 end
 
-
-function P.Pratt()
-	return setmetatable({
-		infixtable = {};
-		prefixtable = {};
-	},{ __index = P.pratt, __call = P.pratt.__call })
-end
-
-
+--entry-point that starts parsing
+--langtable is the table of non-terminal functions and/or pratt parser objects
+--lexer is the lexer object given by the language extension interface
+--nonterminal is the name (e.g. "expression") of the non-terminal to use as the starting point in the langtable
+--returns the AST produced by non-terminal rule
 function P.Parse(langtable,lexer,nonterminal)
 	local instance = {}
 	for k,v in pairs(lexer) do

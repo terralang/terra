@@ -295,13 +295,13 @@ pre {
 <div id="allstuff">
 <p><h1>Embedding Languages in Terra</h1>
 
-<p><em>Zach DeVito <a href="&#109;&#97;&#105;&#x6C;&#x74;&#111;:z&#100;&#101;&#118;&#105;&#x74;&#111;&#64;&#x73;t&#97;&#110;&#x66;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;">z&#100;&#101;&#118;&#105;&#x74;&#111;&#64;&#x73;t&#97;&#110;&#x66;&#111;&#114;&#x64;&#46;&#x65;&#x64;&#x75;</a></em></p>
+<p><em>Zach DeVito <a href="&#x6D;&#97;&#105;&#108;t&#x6F;:&#122;&#100;&#x65;&#x76;&#x69;&#116;&#111;&#64;&#x73;&#116;&#x61;&#x6E;&#102;&#x6F;&#x72;&#100;&#46;&#x65;&#100;&#x75;">&#122;&#100;&#x65;&#x76;&#x69;&#116;&#111;&#64;&#x73;&#116;&#x61;&#x6E;&#102;&#x6F;&#x72;&#100;&#46;&#x65;&#100;&#x75;</a></em></p>
 
-<p>This document decribes how to write a parser extension for Terra that will allow you to embed your own language in Lua similar to the way Terra code is embedded in Lua. For more information on Terra itself, see the <code>README</code>.</p>
+<p>This document describes how to write a parser extension for Terra that will allow you to embed your own language in Lua similar to the way Terra code is embedded in Lua. For more information on Terra itself, see the <code>README</code>.</p>
 
 <h2>Overview</h2>
 
-<p>Language extensions in the Terra system allow you to create custom Lua statements and expressions that you can use to implement your own embedded language. Each language registers a set of entry-point keywords that indicate the start of a statment or expression in your language. If the Terra parser sees one of these keywords at the beginning of a Lua expression or statement, it will switch control of parsing over to your language, where you can  parse the tokens into an abstract syntax tree (AST), or other intermediate representation. After creating the AST, your language then returns a <em>constructor</em> function back to Terra parser. This function will be called during execution when your statement or expression should run.</p>
+<p>Language extensions in the Terra system allow you to create custom Lua statements and expressions that you can use to implement your own embedded language. Each language registers a set of entry-point keywords that indicate the start of a statement or expression in your language. If the Terra parser sees one of these keywords at the beginning of a Lua expression or statement, it will switch control of parsing over to your language, where you can  parse the tokens into an abstract syntax tree (AST), or other intermediate representation. After creating the AST, your language then returns a <em>constructor</em> function back to Terra parser. This function will be called during execution when your statement or expression should run.</p>
 
 <p>This guide introduces language extensions with a simple stand-alone example, and shows how to register the extension with Terra. We then expand on this example by showing how it can interact with the Lua environment. The end of the guide documents the language extension interface, and the interface to the lexer in detail.</p>
 
@@ -310,36 +310,41 @@ pre {
 <p>To get started, let's add a simple language extension to Lua that sums up a list of numbers. The syntax will look like <code>sum 1,2,3 done</code>, and when run it will sum up the numbers, producing the value <code>6</code>. A language extension is defined using a Lua table. Here is the table for our language</p>
 
 <pre><code>local sumlanguage = {
-    name = "sumlanguage"; --name for debugging
-    entrypoints = {"sum"}; -- list of keywords that will start our expressions
-    keywords = {"done"}; --list of keywords specific to this language
-    expression = function(self,lex) --called by Terra parser to enter this language
-        --implementation here
-    end;
+  name = "sumlanguage"; --name for debugging
+  -- list of keywords that will start our expressions
+  entrypoints = {"sum"}; 
+  keywords = {"done"}; --list of keywords specific to this language
+   --called by Terra parser to enter this language
+  expression = function(self,lex)
+    --implementation here
+  end;
 }
 </code></pre>
 
-<p>We list <code>sum</code> in the <code>entrypoint</code> list since we want Terra to hand control over to our language when it encounters this token at the beginning of an expression. We also list <code>done</code> as a keyword since we are using it to end our expression. When the Terra parser sees the <code>sum</code> token it will call the <code>expression</code> function passing in an interface to the lexer, <code>lex</code>. Here is the implemention:</p>
+<p>We list <code>"sum"</code> in the <code>entrypoints</code> list since we want Terra to hand control over to our language when it encounters this token at the beginning of an expression. We also list <code>"done"</code> as a keyword since we are using it to end our expression. When the Terra parser sees the <code>sum</code> token it will call the <code>expression</code> function passing in an interface to the lexer, <code>lex</code>. Here is the implementation:</p>
 
 <pre><code>expression = function(self,lex)
-    local sum = 0
-    lex:expect("sum") --first token should be "sum"
-    if not lex:matches("done") then
-        repeat
-            local v = lex:expect(lex.number).value --parse a number, return its value
-            sum = sum + v
-        until not lex:nextif(",") --if there is a comma, consume it and continue
-    end
+  local sum = 0
+  lex:expect("sum") --first token should be "sum"
+  if not lex:matches("done") then
+    repeat
+      --parse a number, return its value
+      local v = lex:expect(lex.number).value 
+      sum = sum + v
+    --if there is a comma, consume it and continue
+    until not lex:nextif(",") 
+  end
 
-    lex:expect("done")
-    --return a function that is run when this expression would be evaluated by lua
-    return function(environment_function)
-        return sum
-    end
+  lex:expect("done")
+  --return a function that is run 
+  --when this expression would be evaluated by Lua
+  return function(environment_function)
+    return sum
+  end
 end
 </code></pre>
 
-<p>We use the <code>lex</code> object to interact with the tokens. The interface is document below. Since the statement only allows numeric constants, we can perform the summation during parsing. Finally, we return a <em>constructor</em> function that will be run everytime this statement is executed. We can use it in Lua code like so:</p>
+<p>We use the <code>lex</code> object to interact with the tokens. The interface is documented below. Since the statement only allows numeric constants, we can perform the summation during parsing. Finally, we return a <em>constructor</em> function that will be run every time this statement is executed. We can use it in Lua code like so:</p>
 
 <pre><code>print(sum 1,2,3 done) -- prints 6
 </code></pre>
@@ -350,7 +355,7 @@ end
 
 <p>In order to use our language extension, it needs to be registered with Terra runtime. If you are using the <code>terra</code> interpreter you can load language extensions with the <code>-l</code> flag:</p>
 
-<pre><code>terra -l tests/lib/sumlanguage.t tests/sumlanguage1.t
+<pre><code>./terra -l tests/lib/sumlanguage.t tests/sumlanguage1.t
 </code></pre>
 
 <p>The file specified should <em>return</em> the Lua table describing your language:</p>
@@ -363,7 +368,7 @@ return sumlanguage
 
 <h2>Interacting with Lua symbols</h2>
 
-<p>One of the advantages of Terra is that it shares the same lexical scope as Lua, making it easy to parameterize Terra functions. Extensions languages can also access Lua's static scope. Let's example our sum language so that it supports both constant numbers, as well as Lua variables:</p>
+<p>One of the advantages of Terra is that it shares the same lexical scope as Lua, making it easy to parameterize Terra functions. Extension languages can also access Lua's static scope. Let's extend our sum language so that it supports both constant numbers, as well as Lua variables:</p>
 
 <pre><code>local a = 4
 print(sum a,3 done) --prints 7
@@ -372,34 +377,36 @@ print(sum a,3 done) --prints 7
 <p>To do this we need to modify the code in our <code>expression</code> function:</p>
 
 <pre><code>expression = function(self,lex)
-    local sum = 0
-    local variables = terralib.newlist()
-    lex:expect("sum")
-    if not lex:matches("done") then
-        repeat
-            if lex:matches(lex.name) then --if it is a variable
-                local name = lex:next().value
-                lex:ref(name) --tell the Terra parser we will access a Lua variable, 'name'
-                variables:insert(name) --add its name to the list of variables
-            else
-                sum = sum + lex:expect(lex.number).value
-            end
-        until not lex:nextif(",")
+  local sum = 0
+  local variables = terralib.newlist()
+  lex:expect("sum")
+  if not lex:matches("done") then
+    repeat
+      if lex:matches(lex.name) then --if it is a variable
+        local name = lex:next().value
+        --tell the Terra parser we will access a Lua variable, 'name'
+        lex:ref(name) 
+        variables:insert(name) --add its name to the list of variables
+      else
+        sum = sum + lex:expect(lex.number).value
+      end
+    until not lex:nextif(",")
+  end
+  lex:expect("done")
+  return function(environment_function)
+    --capture the local environment
+    --a table from variable name =&gt; value
+    local env = environment_function() 
+    local mysum = sum
+    for i,v in ipairs(variables) do
+      mysum = mysum + env[v]
     end
-    lex:expect("done")
-    return function(environment_function)
-        local env = environment_function() --capture the local environment
-                                           --a table from variable name =&gt; value
-        local mysum = sum
-        for i,v in ipairs(variables) do
-            mysum = mysum + env[v]
-        end
-        return mysum
-    end
+    return mysum
+  end
 end
 </code></pre>
 
-<p>Now an expression can be a varible name (<code>lex.name</code>). Unlike constants, we don't know the value of this variable at parse time, so we can calculate the entire sum then. Instead, we save the variable name (<code>variables:insert(name)</code>) and tell the Terra parser that will need to value of this variable at runtime )<code>lex:ref(name)</code>).  In our <em>constructor</em> we now capture the local lexical environment by calling the <code>environment_function</code> parameter, and look up the values of our variables in the environment to compute the sum. It is important to call <code>lex:ref(name)</code>. If we had not called it, then this environment table will not contain the value of the variables we need.</p>
+<p>Now an expression can be a variable name (<code>lex.name</code>). Unlike constants, we don't know the value of this variable at parse time, so we cannot calculate the entire sum before execution. Instead, we save the variable name (<code>variables:insert(name)</code>) and tell the Terra parser that will need the value of this variable at runtime (<code>lex:ref(name)</code>).  In our <em>constructor</em> we now capture the local lexical environment by calling the <code>environment_function</code> parameter, and look up the values of our variables in the environment to compute the sum. It is important to call <code>lex:ref(name)</code>. If we had not called it, then this environment table will not contain the variables we need.</p>
 
 <h2>Recursively Parsing Lua</h2>
 
@@ -410,29 +417,29 @@ end
 
 <p>In this example, <code>int</code> is actually a Lua expression.</p>
 
-<p>The method <code>lex:luaexpr()</code> will parse a Lua expression and returns a Lua function that implements expression. This functions takes the local lexical environment, and returns the value of the expression in that environment. As an example, let's add a concise way of specifying a single argument Lua function <code>def(a) exp</code> where <code>a</code> is a single argument and <code>exp</code> is a Lua expression. Here is our language:</p>
+<p>The method <code>lex:luaexpr()</code> will parse a Lua expression. It returns a Lua function that implements the expression. This functions takes the local lexical environment, and returns the value of the expression in that environment. As an example, let's add a concise way of specifying a single argument Lua function, <code>def(a) exp</code>, where <code>a</code> is a single argument and <code>exp</code> is a Lua expression. This is similar to Pythons <code>lambda</code> statement. Here is our language extension:</p>
 
 <pre><code>{
-    name = "def";
-    entrypoints = {"def"};
-    keywords = {};
-    expression = function(self,lex)
-        lex:expect("def")
-        lex:expect("(")
-        local formal = lex:expect(lex.name).value
-        lex:expect(")")
-        local expfn = lex:luaexpr()
-        return function(environment_function)
-            --return our result, a single argument lua function
-            return function(actual)
-                local env = environment_function()
-                --bind the formal argument to the actual one in our environment
-                env[formal] = actual
-                --evaluate our expression in the environment
-                return expfn(env)
-            end
-        end
-    end;
+  name = "def";
+  entrypoints = {"def"};
+  keywords = {};
+  expression = function(self,lex)
+    lex:expect("def")
+    lex:expect("(")
+    local formal = lex:expect(lex.name).value
+    lex:expect(")")
+    local expfn = lex:luaexpr()
+    return function(environment_function)
+      --return our result, a single argument lua function
+      return function(actual)
+        local env = environment_function()
+        --bind the formal argument to the actual one in our environment
+        env[formal] = actual
+        --evaluate our expression in the environment
+        return expfn(env)
+      end
+    end
+  end;
 }
 </code></pre>
 
@@ -454,7 +461,7 @@ local def bar(a) luaexpr --defins local variable bar
 
 <h2>Higher-Level Parsing via Pratt Parsers</h2>
 
-<p>Writing a parser that directly uses the lexer interface can be tedious. One simple approach that makes parsing easier (especially for expressions with multiple precedence levels) is Pratt parsing, or top-down precedence parsing (for more information, see http://javascript.crockford.com/tdop/tdop.html). We've provided a library built on top of the Lexer interface to help do this. It can be found, along with documentation of the API in <code>tests/lib/parsing.t</code>. An example extension written using this library is found in <code>tests/lib/pratttest.t</code> and <code>tests/pratttest1.t</code>. </p>
+<p>Writing a parser that directly uses the lexer interface can be tedious. One simple approach that makes parsing easier (especially for expressions with multiple precedence levels) is Pratt parsing, or top-down precedence parsing (for more information, see http://javascript.crockford.com/tdop/tdop.html). We've provided a library built on top of the Lexer interface to help do this. It can be found, along with documentation of the API in <code>tests/lib/parsing.t</code>. An example extension written using this library is found in <code>tests/lib/pratttest.t</code> and an example program using it in <code>tests/pratttest1.t</code>. </p>
 
 <h2>The Language and Lexer API</h2>
 
@@ -472,10 +479,10 @@ local def bar(a) luaexpr --defins local variable bar
 <p>The methods in the Language are given an interface <code>lexer</code> to Terra <em>lexer</em>, which can be used to examine the stream of <em>tokens</em>, and report errors.  A <em>token</em> is a Lua table with fields:</p>
 
 <ul>
-<li><code>token.type</code> the <em>token type</em>. For keywords and operators this is just a string (e.g. <code>"and"</code>, or <code>"+"</code>). The values <code>lexer.name</code>, <code>lexer.number</code>, <code>lexer.string</code> indicate the token is respecitively an identifier (e.g. <code>myvar</code>), a number (e.g. 3), or a string (e.g. <code>"my string"</code>). The type <code>lexer.eof</code> indicates the end of the token stream. </li>
+<li><code>token.type</code> the <em>token type</em>. For keywords and operators this is just a string (e.g. <code>"and"</code>, or <code>"+"</code>). The values <code>lexer.name</code>, <code>lexer.number</code>, <code>lexer.string</code> indicate the token is respectively an identifier (e.g. <code>myvar</code>), a number (e.g. 3), or a string (e.g. <code>"my string"</code>). The type <code>lexer.eof</code> indicates the end of the token stream. </li>
 <li><code>token.value</code> for names, strings, and numbers this is the specific value (e.g. <code>3.3</code>). Currently numbers are always represented as Lua numbers (i.e. doubles). In the future, we will extend this to include integral types as well.</li>
-<li><code>token.linenumber</code> The linenumber on which this token occured (not availiable for lookahead tokens).</li>
-<li><code>token.offset</code> The offset in characters from the beginning of the file where this token occured (not availiable for lookahead tokens).</li>
+<li><code>token.linenumber</code> The linenumber on which this token occurred (not available for lookahead tokens).</li>
+<li><code>token.offset</code> The offset in characters from the beginning of the file where this token occurred (not available for lookahead tokens).</li>
 </ul>
 
 <p>The <code>lexer</code> object then provides the following methods fields and methods. The <code>lexer</code> itself is only valid during parsing and should <em>not</em> be called from the constructor function.</p>
@@ -492,9 +499,8 @@ local def bar(a) luaexpr --defins local variable bar
 <li><code>lexer.source</code> A string containing the filename, or identifier for the stream (useful for future error reporting)</li>
 <li><code>lexer:error(msg)</code> Report a parse error and give up. <code>msg</code> is a string. Does not return.</li>
 <li><code>lexer:errorexpected(msg)</code> Report that the string <code>msg</code> was expected but did not appear. Does not return.</li>
-<li><code>lexer:typetostring(tokentype)</code> Converts the token <em>type</em> to a string. Useful for error reporting.</li>
 <li><code>lexer:ref(name)</code> <code>name</code> is a string. Indicates to the Terra parser that your language may refer to the Lua variable <code>name</code>. This function must be called for any free identifiers that you are interested in looking up. Otherwise, the identifier may not appear in the lexical environment passed to your <em>constructor</em> functions. It is safe (though less efficient) to call it for identifiers that may not  reference.</li>
-<li><code>lexer:luaexpr()</code> Parses a single Lua expression from the token stream. This can be used to switch back into the Lua language for expressions in your language. For instance, Terra uses this to parse its types (which are just Lua expressions): <code>var a : aluaexpression(4) = 3</code>. It returns a function <code>function(lexicalenv)</code> that takes a table of the current lexical scope (such as the one return from <code>environment_function</code> in the constructor) and returns the value of the expression evaluated in that scope. This function is not indended to be used to parse a Lua expression into an AST. Currently, parsing a Lua expression into an AST requires you to writing the parser yourself. In the future we plan to add a library which will let you pick and choose pieces of Lua/Terra's grammer to use in your language.</li>
+<li><code>lexer:luaexpr()</code> Parses a single Lua expression from the token stream. This can be used to switch back into the Lua language for expressions in your language. For instance, Terra uses this to parse its types (which are just Lua expressions): <code>var a : aluaexpression(4) = 3</code>. It returns a function <code>function(lexicalenv)</code> that takes a table of the current lexical scope (such as the one return from <code>environment_function</code> in the constructor) and returns the value of the expression evaluated in that scope. This function is not intended to be used to parse a Lua expression into an AST. Currently, parsing a Lua expression into an AST requires you to writing the parser yourself. In the future we plan to add a library which will let you pick and choose pieces of Lua/Terra's grammar to use in your language.</li>
 </ul>
 
 <h2>Future Extensions</h2>
