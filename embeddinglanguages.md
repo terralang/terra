@@ -61,7 +61,7 @@ The `lexer` object then provides the following methods fields and methods. The `
 * `lexer:lookahead()` Returns the _token_ following the current token. Does not modify the position. Only 1 token of lookahead is allowed to keep the implementation simple.
 * `lexer:matches(tokentype)` shorthand for `lexer:cur().type == tokentype`
 * `lexer:lookaheadmatches(tokentype)` shorthand for `lexer:lookahead().type == tokentype`
-* `lexer:next()` Advances the current token. Returns nothing.
+* `lexer:next()` Returns the current token, and advances to the next token.
 * `lexer:nextif(tokentype)` If `tokentype` matches the `type` of the current token, it returns the token and advances the lexer. Otherwise, it returns `false` and does not advance the lexer. This function is useful when you want to try to parse many alternatives.
 * `lexer:expect(tokentype)` If `tokentype` matches the `type of the current token, it returns the token and advances the lexer. Otherwise, it stops parsing an emits an error. It is useful to use when you know what token should appear.
 * `lexer:expectmatch(tokentype,openingtokentype,linenumber)` Same as `expect` but provides better error reporting for matched tokens. For instance, to parse the closing brace '}' of a list you can call `lexer:expectmatch('}','{',lineno)`. It will report a mismatched bracket as well as the opening and closing lines.

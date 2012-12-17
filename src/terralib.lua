@@ -3561,7 +3561,7 @@ function terra.require(name)
         local file = name .. ".t"
         local fn, err = terra.loadfile(file)
         if not fn then
-            error(err)
+            error(err,0)
         end
         terra.packages[name] = { results = {fn()} }    
     end
@@ -3665,8 +3665,10 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
         return self._lookahead
     end
     function lex:next()
+        local v = self:cur()
         self._cur,self._lookahead = nil,nil
         next()
+        return v
     end
     function lex:luaexpr()
         self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
@@ -3694,9 +3696,7 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     
     function lex:nextif(typ)
         if self:cur().type == typ then
-            local r = self:cur()
-            self:next()
-            return r
+            return self:next()
         else return false end
     end
     function lex:expect(typ)
