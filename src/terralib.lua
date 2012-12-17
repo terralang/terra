@@ -3579,6 +3579,8 @@ end
 terra.languageextension = {
     languages = terra.newlist();
     entrypoints = {}; --table mapping entry pointing tokens to the language that handles them
+    tokentype = {}; --metatable for tokentype objects
+    tokenkindtotoken = {}; --map from token's kind id (terra.kind.name), to the singleton table (terra.languageextension.name) 
 }
 
 function terra.loadlanguage(lang)
@@ -3614,20 +3616,52 @@ function terra.loadlanguage(lang)
 
     E.languages:insert(lang)
 end
+
+function terra.languageextension.tokentype:__tostring()
+    return self.name
+end
+
+do
+    local special = { "name", "string", "number", "eof", "default" }
+    --note: default is not a tokentype but can be used in libraries to match
+    --a token that is not another type
+    for i,k in ipairs(special) do
+        local name = "<" .. k .. ">"
+        local tbl = setmetatable({
+            name = name }, terra.languageextension.tokentype )
+        terra.languageextension[k] = tbl
+        local kind = terra.kinds[name]
+        if kind then
+            terra.languageextension.tokenkindtotoken[kind] = tbl
+        end
+    end
+end
+
 function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,islocal)
     local lex = {}
-    lex.name = terra.kinds["<name>"]
-    lex.string = terra.kinds["<string>"]
-    lex.number = terra.kinds["<number>"]
-    lex.eof = terra.kinds["<eof>"]
+    
+    lex.name = terra.languageextension.name
+    lex.string = terra.languageextension.string
+    lex.number = terra.languageextension.number
+    lex.eof = terra.languageextension.eof
+    lex.default = terra.languageextension.default
+
     lex._references = terra.newlist()
     lex.source = source
+
+    local function maketoken(tok)
+        if type(tok.type) ~= "string" then
+            tok.type = terra.languageextension.tokenkindtotoken[tok.type]
+            assert(type(tok.type) == "table") 
+        end
+        return tok
+    end
     function lex:cur()
-        self._cur = self._cur or cur()
+        self._cur = self._cur or maketoken(cur())
         return self._cur
     end
     function lex:lookahead()
-        self._lookahead = self._lookahead or lookahead()
+        self._lookahead = self._lookahead or maketoken(lookahead())
         return self._lookahead
     end
     function lex:next()
@@ -3668,7 +3702,7 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     function lex:expect(typ)
         local n = self:nextif(typ)
         if not n then
-            self:errorexpected(self:typetostring(typ))
+            self:errorexpected(tostring(typ))
         end
         return n
     end
@@ -3689,9 +3723,9 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
        local n = self:nextif(typ)
         if not n then
             if self:cur().linenumber == linenumber then
-                lex:errorexpected(self:typetostring(typ))
+                lex:errorexpected(tostring(typ))
             else
-                lex:error(string.format("%s expected (to close %s at line %d)",self:typetostring(typ),self:typetostring(openingtokentype),linenumber))
+                lex:error(string.format("%s expected (to close %s at line %d)",tostring(typ),tostring(openingtokentype),linenumber))
             end
         end
         return n
