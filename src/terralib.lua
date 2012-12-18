@@ -3747,7 +3747,7 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     end
 
     local function isidentifier(str)
-        local b,e = string.find(str,"%a[%a%d]*")
+        local b,e = string.find(str,"[%a_][%a%d_]*")
         return b == 1 and e == string.len(str)
     end
 
