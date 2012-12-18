@@ -113,7 +113,7 @@ blockregisters = macro(function(ctx,tree,C,A,B,K,lda,ldc,m,n,kk)
 				end
 			end
 			local sum
-			if V == 8 then
+			if V == 8 and terralib.llvmversion ~= "3.1" then
 				sum = `hadd([cs[i][j]])
 			else
 				sum = getsum(0,V)
