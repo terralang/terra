@@ -59,6 +59,7 @@ static void addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * tm);
 
 
 static void disassemblefunction(void * data, size_t sz) {
+#ifndef __linux__
     printf("assembly for function at address %p\n",data);
     LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
     assert(disasm != NULL);
@@ -71,6 +72,7 @@ static void disassemblefunction(void * data, size_t sz) {
         offset += inc;
     }
     LLVMDisasmDispose(disasm);
+#endif
 }
 
 struct DisassembleFunctionListener : public JITEventListener {
