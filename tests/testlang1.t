@@ -1,4 +1,4 @@
-#!../terra -l lib/testlang.t
+#!../terra -llib/testlang.t
 
 print("hello")
 local a = image "astring"

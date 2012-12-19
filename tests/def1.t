@@ -1,4 +1,4 @@
-#!../terra -l lib/def.t
+#!../terra -llib/def.t
 local c = 3
 local a = 4
 local b = def(a) a + c
