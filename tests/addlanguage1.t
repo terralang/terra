@@ -1,4 +1,4 @@
-#!../terra -l lib/addlanguage.t
+#!../terra -llib/addlanguage.t
 local a = 4
 local b = add a,3,4+5,(function() terra one() return a end return one() end)() end
 local inception = add add 3,4,a end,4 end

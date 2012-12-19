@@ -312,7 +312,7 @@ int terra_loadfile(lua_State * L, const char * file) {
     ctx.fp = fopen(file,"r");
     if(!ctx.fp) {
        terra_State * T = getterra(L);
-       terra_pusherror(T,"failed to open file %s",file);
+       terra_pusherror(T,"failed to open file '%s'",file);
        return LUA_ERRFILE;
     }
     /*peek to see if we have a POSIX comment '#', which we repect on the first like for #! */
