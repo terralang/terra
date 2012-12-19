@@ -1,4 +1,4 @@
-#!../terra -v -l lib/examplelanguage.t
+#!../terra -llib/examplelanguage.t
 
 local a,b = 1,2
 c = 3

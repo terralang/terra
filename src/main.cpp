@@ -66,10 +66,6 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
     opterr = 0;
     while ((ch = getopt_long(*argc, *argv, "hvil:", longopts, NULL)) != -1) {
         switch (ch) {
-            case 'h':
-                usage();
-                exit (-1);
-                break;
             case 'v':
                 terra_setverbose(L,1);
                 break;
@@ -80,7 +76,11 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
                 if(terra_loadfile(L,optarg) || lua_pcall(L,0,1,0) || terra_loadlanguage(L))
                   doerror(L);
                 break;
+            case ':':
+            case 'h':
             default:
+                usage();
+                exit(-1);
                 break;
         }
     }
