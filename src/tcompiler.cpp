@@ -14,12 +14,10 @@ extern "C" {
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
 #include "tinline.h"
-#include "llvm-c/Disassembler.h"
 #include "llvm/Support/ManagedStatic.h"
 #include <sys/time.h>
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/Target/TargetLibraryInfo.h"
 
 using namespace llvm;
 
@@ -1664,11 +1662,6 @@ static int terra_disassemble(lua_State * L) {
     return 0;
 }
 
-
-
-static char * copyName(const StringRef & name) {
-    return strdup(name.str().c_str());
-}
 static int terra_saveobjimpl(lua_State * L) {
     const char * filename = luaL_checkstring(L, -4);
     int tbl = lua_gettop(L) - 2;
@@ -1696,15 +1689,10 @@ static int terra_saveobjimpl(lua_State * L) {
         lua_pushvalue(L,-2);
         Obj arguments;
         arguments.initFromStack(L,ref_table);
-
-        //TODO: copy the module with CloneModule so that we don't mess stuff up when internalizing things
-        ValueToValueMapTy VMap;
-        Module * M = CloneModule(T->C->m, VMap);
-        PassManager * MPM = new PassManager();
-        
-        llvmutil_addtargetspecificpasses(MPM, T->C->tm);
-        
-        std::vector<const char *> names;
+    
+    
+        std::vector<Function *> livefns;
+        std::vector<std::string> names;
         //iterate over the key value pairs in the table
         lua_pushnil(L);
         while (lua_next(L, tbl) != 0) {
@@ -1713,41 +1701,14 @@ static int terra_saveobjimpl(lua_State * L) {
             obj.initFromStack(L, ref_table);
             Function * fnold = (Function*) obj.ud("llvm_function");
             assert(fnold);
-            Function * fn = cast<Function>(VMap[fnold]);
-            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, key, fn, M);
-            names.push_back(copyName(ga->getName())); //internalize pass has weird interface, so we need to copy the names here
+            names.push_back(key);
+            livefns.push_back(fnold);
         }
         
-        //at this point we run optimizations on the module
-        //first internalize all functions not mentioned in "names" using an internalize pass and then perform 
-        //standard optimizations
-        
-        MPM->add(createVerifierPass()); //make sure we haven't messed stuff up yet
-        MPM->add(createInternalizePass(names));
-        MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
-                                         //this will remove dead functions
-        
-        //clean up the name list
-        for(size_t i = 0; i < names.size(); i++) {
-            free((char*)names[i]);
-            names[i] = NULL;
-        }
-        
-        PassManagerBuilder PMB;
-        PMB.OptLevel = 3;
-        PMB.DisableUnrollLoops = true;
-        
-        PMB.populateModulePassManager(*MPM);
-        //PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
-        
-        
-        MPM->run(*M);
-        
-        delete MPM;
-        MPM = NULL;
+        Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
         
         DEBUG_ONLY(T) {
-            printf("resulting module to be saved is:\n");
+            printf("extraced module is:\n");
             M->dump();
         }
         

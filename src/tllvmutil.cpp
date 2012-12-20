@@ -128,3 +128,52 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, const char * Filenam
 
     return false;
 }
+
+static char * copyName(const StringRef & name) {
+    return strdup(name.str().c_str());
+}
+
+Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames) {
+        assert(livefns->size() == symbolnames->size());
+        ValueToValueMapTy VMap;
+        Module * M = CloneModule(OrigMod, VMap);
+        PassManager * MPM = new PassManager();
+        
+        llvmutil_addtargetspecificpasses(MPM, TM);
+        
+        std::vector<const char *> names;
+        for(size_t i = 0; i < livefns->size(); i++) {
+            Function * fn = cast<Function>(VMap[(*livefns)[i]]);
+            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, (*symbolnames)[i], fn, M);
+            names.push_back(copyName(ga->getName())); //internalize pass has weird interface, so we need to copy the names here
+        }
+        
+        //at this point we run optimizations on the module
+        //first internalize all functions not mentioned in "names" using an internalize pass and then perform 
+        //standard optimizations
+        
+        MPM->add(createVerifierPass()); //make sure we haven't messed stuff up yet
+        MPM->add(createInternalizePass(names));
+        MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
+                                         //this will remove dead functions
+        
+        //clean up the name list
+        for(size_t i = 0; i < names.size(); i++) {
+            free((char*)names[i]);
+            names[i] = NULL;
+        }
+        
+        PassManagerBuilder PMB;
+        PMB.OptLevel = 3;
+        PMB.DisableUnrollLoops = true;
+        
+        PMB.populateModulePassManager(*MPM);
+        //PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
+    
+        MPM->run(*M);
+        
+        delete MPM;
+        MPM = NULL;
+    
+        return M;
+}
