@@ -160,7 +160,7 @@ endif
 FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
 
-LIBSRC = tkind.cpp tcompiler.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
 EXESRC = main.cpp linenoise.cpp
 
 LIBOBJS = $(LIBSRC:.cpp=.o)
