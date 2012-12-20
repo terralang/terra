@@ -545,11 +545,9 @@ int include_c(lua_State * L) {
         args.push_back(*cpaths);
         cpaths++;
     }
-    //args.push_back("-I");
-    //args.push_back("/usr/include");
     
-    //args.push_back("-I");
-    //args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
+    args.push_back("-I");
+    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
     
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);
