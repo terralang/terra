@@ -218,8 +218,14 @@ build/strict.h:	src/strict.lua $(PACKAGE_DEPS)
 	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg src/strict.lua build/strict.h
 
 
+build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS)
+	#run clang on a C file to extract the header search paths for this architecture
+	#genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
+	#to configure the paths
+	$(CC) -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@
+
 clean:
-	rm -rf build/*.o build/*.d build/terralib.h build/strict.h build/llvmheaders.h.pch
+	rm -rf build/*.o build/*.d build/terralib.h build/strict.h build/clangpaths.h build/llvmheaders.h.pch
 	rm -rf $(EXECUTABLE) $(LIBRARY)
 
 purge:	clean
@@ -233,7 +239,7 @@ package:
 	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
-build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h build/strict.h
+build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h build/strict.h build/clangpaths.h
 	@g++ $(FLAGS)  -MM -MT '$@ $(@:.d=.o)' $< -o $@
 	
 -include $(DEPENDENCIES)

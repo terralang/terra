@@ -16,6 +16,7 @@ extern "C" {
 
 #include "llvmheaders.h"
 #include "tcompilerstate.h"
+#include "clangpaths.h"
 
 using namespace clang;
 
@@ -538,12 +539,17 @@ int include_c(lua_State * L) {
     const char * code = luaL_checkstring(L, -2);
     int N = lua_objlen(L, -1);
     std::vector<const char *> args;
+
+    const char ** cpaths = clang_paths;
+    while(*cpaths) {
+        args.push_back(*cpaths);
+        cpaths++;
+    }
+    //args.push_back("-I");
+    //args.push_back("/usr/include");
     
-    args.push_back("-I");
-    args.push_back("/usr/include");
-    
-    args.push_back("-I");
-    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
+    //args.push_back("-I");
+    //args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
     
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);
