@@ -7,6 +7,7 @@
 #include "tcompiler.h"
 #include "tkind.h"
 #include "tcwrapper.h"
+#include "tcuda.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -194,7 +195,7 @@ int terra_lualoadstring(lua_State * L) {
 //defines strict.lua bytecodes
 #include "strict.h"
 
-static int loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name) {
+int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name) {
     return luaL_loadbuffer(L, bytecodes, size, name) 
            || lua_pcall(L,0,LUA_MULTRET,0);
 }
@@ -214,8 +215,8 @@ int terra_init(lua_State * L) {
     
 
 
-    int err =    loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
-              || loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
+    int err =    terra_loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
+              || terra_loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
               
     if(err) {
         free(T);
@@ -250,7 +251,13 @@ int terra_init(lua_State * L) {
         free(T);
         return err;
     }
-    
+
+    err = terra_cudainit(T); /* if cuda is not enabled, this does nothing */
+    if(err) {
+        free(T);
+        return err;
+    }
+
     return 0;   
 }
 
@@ -335,8 +342,9 @@ int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *na
     ctx.size = size;
     return terra_load(L,reader_string,&ctx,name);
 }
+
 int terra_loadstring(lua_State *L, const char *s) {
-  return terra_loadbuffer(L, s, strlen(s), s);
+  return terra_loadbuffer(L, s, strlen(s), "<string>");
 }
 int terra_setverbose(lua_State * L, int v) {
     terra_State * T = getterra(L);

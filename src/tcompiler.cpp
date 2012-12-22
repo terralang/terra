@@ -979,7 +979,11 @@ if(baseT->isIntegerTy()) { \
                         return fn; 
                     } else if(pt->getElementType()->isIntegerTy(8)) {
                         if(exp->boolean("value")) { //string literal
-                            Value * str = B->CreateGlobalString(exp->string("value"));
+                            exp->pushfield("value");
+                            size_t len;
+                            const char * rawstr = lua_tolstring(L,-1,&len);
+                            Value * str = B->CreateGlobalString(StringRef(rawstr,len));
+                            lua_pop(L,1);
                             return  B->CreateBitCast(str, pt);
                         } else { //null pointer
                             return ConstantPointerNull::get(pt);

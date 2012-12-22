@@ -1,19 +1,29 @@
-LLVM_CONFIG := $(shell which llvm-config)
-LLVM_COMPILER_PREFIX := /usr/local
 
 # if the defaults for LLVM_CONFIG are not right for your installation
-# create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution 
+# create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution
+# you may also need to reassign the CXX and CC compilers if they are not valid
+# if you want to enable cuda compiler support set ENABLE_CUDA to 1 in your Makefile.inc
+# CUDA_HOME is your cuda installation
+# LIBNVVM_HOME is the directory where libnvvm.so and nvvm.h live
+
+LLVM_CONFIG := $(shell which llvm-config)
+LLVM_COMPILER_BIN := $(shell llvm-config --bindir)
+CXX := $(LLVM_COMPILER_BIN)/clang++
+CC  := $(LLVM_COMPILER_BIN)/clang
+CUDA_HOME := /usr/local/cuda
+LIBNVVM_HOME := /usr/local/nvvm
+
+
 -include Makefile.inc
 
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
 .SUFFIXES:
+.SECONDARY:
 UNAME := $(shell uname)
 
 
-
-CXX = $(LLVM_COMPILER_PREFIX)/bin/clang++
-CC = $(LLVM_COMPILER_PREFIX)/bin/clang
 AR = ar
+LD = ld
 FLAGS = -g $(INCLUDE_PATH)
 LFLAGS = -g
 
@@ -26,9 +36,9 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
 LFLAGS += -Lbuild -lluajit -lterra
-INCLUDE_PATH += -I$(LUAJIT_DIR)/src
+INCLUDE_PATH += -I $(LUAJIT_DIR)/src
 
-FLAGS += -I$(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -I $(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
@@ -149,7 +159,7 @@ endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
-INCLUDE_PATH += -Ibuild
+INCLUDE_PATH += -I build
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
@@ -159,12 +169,20 @@ endif
 #so header include paths can be correctly configured on linux
 FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
+ifdef ENABLE_CUDA
+FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(LIBNVVM_HOME)
+LFLAGS += -L$(CUDA_HOME)/lib64 -L$(LIBNVVM_HOME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/lib64,-rpath,$(LIBNVVM_HOME)  
+endif
 
-LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp
+LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp tcuda.cpp
+LIBLUA = terralib.lua strict.lua cudalib.lua
+
 EXESRC = main.cpp linenoise.cpp
 
 LIBOBJS = $(LIBSRC:.cpp=.o)
 EXEOBJS = $(EXESRC:.cpp=.o)
+LUAHEADERS = $(addprefix build/,$(LIBLUA:.lua=.h))
+GENERATEDHEADERS = $(LUAHEADERS) build/clangpaths.h build/llvmheaders.h.pch
 
 OBJS = $(LIBOBJS) $(EXEOBJS)
 SRC = $(LIBSRC) $(EXESRC)
@@ -183,7 +201,7 @@ all:	$(EXECUTABLE)
 test:	$(EXECUTABLE)
 	(cd tests; ./run)
 
-build/%.o:	src/%.cpp $(PACKAGE_DEPS) build/llvmheaders.h.pch
+build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 	$(CXX) $(FLAGS) -include-pch build/llvmheaders.h.pch $< -c -o $@
 
 build/llvmheaders.h.pch:	src/llvmheaders.h
@@ -211,20 +229,19 @@ $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
 
-build/terralib.h:	src/terralib.lua $(PACKAGE_DEPS)
-	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg src/terralib.lua build/terralib.h
 
-build/strict.h:	src/strict.lua $(PACKAGE_DEPS)
-	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg src/strict.lua build/strict.h
+#rule for packaging lua code into a header file
+build/%.h:	src/%.lua $(PACKAGE_DEPS)
+	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg $< $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
-build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS)
-	$(CC) -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@
+build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
+	$(LLVM_PREFIX)/bin/clang -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(FLAGS)
 
 clean:
-	rm -rf build/*.o build/*.d build/terralib.h build/strict.h build/clangpaths.h build/llvmheaders.h.pch
+	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
 	rm -rf $(EXECUTABLE) $(LIBRARY)
 
 purge:	clean
@@ -238,7 +255,10 @@ package:
 	
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
-build/%.d:	src/%.cpp $(PACKAGE_DEPS) build/terralib.h build/strict.h build/clangpaths.h
+build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@g++ $(FLAGS)  -MM -MT '$@ $(@:.d=.o)' $< -o $@
-	
+
+#if we are cleaning, then don't include dependencies (which would require the header files are built)	
+ifeq ($(findstring $(MAKECMDGOALS),purge clean),)
 -include $(DEPENDENCIES)
+endif

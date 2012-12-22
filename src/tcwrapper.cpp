@@ -89,6 +89,9 @@ public:
             RecordDecl * rd = RT->getDecl();
             if(rd->isStruct()) {
                 std::string name = rd->getName();
+                //TODO: why do some types not have names?
+                if(name == "")
+                    name = "anon";
                 if(!result->obj(name.c_str(),tt)) {
                     //create new blank struct, fill in with members
                     PushTypeFunction("newstruct");
@@ -268,6 +271,8 @@ public:
           case Type::ObjCInterface:
           case Type::ObjCObjectPointer:
           case Type::Enum:
+            InitType("uint32",tt);
+            return true;
           case Type::BlockPointer:
           case Type::MemberPointer:
           case Type::Atomic:

@@ -134,7 +134,7 @@ static char * copyName(const StringRef & name) {
 }
 
 Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames) {
-        assert(livefns->size() == symbolnames->size());
+        assert(symbolnames == NULL || livefns->size() == symbolnames->size());
         ValueToValueMapTy VMap;
         Module * M = CloneModule(OrigMod, VMap);
         PassManager * MPM = new PassManager();
@@ -144,8 +144,14 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         std::vector<const char *> names;
         for(size_t i = 0; i < livefns->size(); i++) {
             Function * fn = cast<Function>(VMap[(*livefns)[i]]);
-            GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, (*symbolnames)[i], fn, M);
-            names.push_back(copyName(ga->getName())); //internalize pass has weird interface, so we need to copy the names here
+            const char * name;
+            if(symbolnames) {
+                GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, (*symbolnames)[i], fn, M);
+                name = copyName(ga->getName());
+            } else {
+                name = copyName(fn->getName());
+            }
+            names.push_back(name); //internalize pass has weird interface, so we need to copy the names here
         }
         
         //at this point we run optimizations on the module

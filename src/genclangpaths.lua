@@ -11,8 +11,13 @@ local function emitStr(str)
 	file:write(("\"%s\",\n"):format(str))
 end
 
+local function isincludearg(a)
+	return    (a:sub(1,1) == "-" and endswith(a,"isystem"))
+	       or (a == "-I")
+end
+
 for i,a in ipairs(arg) do
-	if a:sub(1,1) == "-" and endswith(a,"isystem") and i+1 <= #arg then
+	if isincludearg(a) and i+1 <= #arg and arg[i+1]:sub(1,1) == "/" then
 		emitStr(a)
 		emitStr(arg[i+1])
 	end

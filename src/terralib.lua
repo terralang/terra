@@ -1345,6 +1345,7 @@ do --construct type table that holds the singleton value representing each uniqu
         if not displayname then
             displayname = "anon"
         end
+        assert(displayname ~= "")
         local name = getuniquestructname(displayname)
                 
         local tbl = mktyp { kind = terra.kinds["struct"],
@@ -2383,7 +2384,6 @@ function terra.funcvariant:typecheck(ctx)
         local function generatenativewrapper(fn,paramlist)
             local paramtypes = paramlist.parameters:map(function(p) return p.type end)
             local castedtype = terra.types.funcpointer(paramtypes,{})
-            
             local fncache = terra.__wrappedluafunctions[fn]
 
             if not fncache then

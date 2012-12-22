@@ -8,10 +8,12 @@ Language Implementation:
 -- returning values from lua functions   
 -- better handling of options to try for overloaded operators
 -- better handling of lua layout of structs with recursion (can we seperate the creation of structs for their layout to simplify the problem) -- test the compiler fo handling jitting of functions previously optimized with nojit = true
+   (look into the way LLVM handles pointers to opaque structs, can we delay layout of a struct until we need to access it similar to the way C allows opaque struct pointers).
 -- tests for garbage collection of objects that mix LLVM state with Lua state to check for memory leaks from dangling references
 -- better interaction for low-level values allocated from Lua and used in Terra.
-
-
+--track down why some types RecordType structs do not have names, and fix the bugs that are caused by this. 
+--&&type should convert to &&uint8 (check number of addresses is the same, currently only allows &foo to convert to &uint8)
+--look into bug: if you cast an lvalue pointer to another pointer, it becomes an rvalue, this is not right...
 
 DONE:
 --function pointers

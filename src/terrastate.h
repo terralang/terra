@@ -7,10 +7,12 @@
 #include <string.h>
 
 struct terra_CompilerState;
+struct terra_CUDAState;
 
 typedef struct terra_State {
     struct lua_State * L;
     struct terra_CompilerState * C;
+    struct terra_CUDAState * cuda;
     int verbose;
 //for parser
     int nCcalls;
@@ -26,7 +28,7 @@ void terra_reporterror(terra_State * T, const char * fmt, ...);
 //the call is then responsibly for propagating the error to the caller of the terra function
 void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
-
+int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name);
 #define DEBUG_ONLY(T) if((T)->verbose != 0)
 
 #endif
