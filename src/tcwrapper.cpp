@@ -304,7 +304,7 @@ public:
         return true;
     }
     
-    bool GetFuncType(const FunctionProtoType * f, Obj * typ) {
+    bool GetFuncType(const FunctionType * f, Obj * typ) {
         Obj returns,parameters;
         result->newlist(&returns);
         result->newlist(&parameters);
@@ -320,14 +320,21 @@ public:
                 returns.addentry();
             }
         }
-        for(size_t i = 0; i < f->getNumArgs(); i++) {
-            QualType PT = f->getArgType(i);
-            Obj pt;
-            if(!GetType(PT,&pt)) {
-                valid = false; //keep going with attempting to parse type to make sure we see all the reasons why we cannot support this function
-            } else if(valid) {
-                pt.push();
-                parameters.addentry();
+       
+        
+        const FunctionProtoType * proto = f->getAs<FunctionProtoType>();
+        //proto is null if the function was declared without an argument list (e.g. void foo() and not void foo(void))
+        //we don't support old-style C parameter lists, we just treat them as empty
+        if(proto) {
+            for(size_t i = 0; i < proto->getNumArgs(); i++) {
+                QualType PT = proto->getArgType(i);
+                Obj pt;
+                if(!GetType(PT,&pt)) {
+                    valid = false; //keep going with attempting to parse type to make sure we see all the reasons why we cannot support this function
+                } else if(valid) {
+                    pt.push();
+                    parameters.addentry();
+                }
             }
         }
         
@@ -335,7 +342,7 @@ public:
             PushTypeFunction("functype");
             parameters.push();
             returns.push();
-            lua_pushboolean(L, f->isVariadic());
+            lua_pushboolean(L, proto ? proto->isVariadic() : false);
             lua_call(L, 3, 1);
             typ->initFromStack(L,ref_table);
         }
@@ -347,7 +354,7 @@ public:
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
         
-        const FunctionProtoType * fntyp = f->getType()->getAs<FunctionProtoType>();
+        const FunctionType * fntyp = f->getType()->getAs<FunctionType>();
         
         if(!fntyp)
             return true;
