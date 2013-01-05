@@ -61,13 +61,14 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
         { "language", 1, NULL,                'l' },
         { NULL,        0,     NULL,            0 }
     };
-
+    int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
     while ((ch = getopt_long(*argc, *argv, "hvil:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
-                terra_setverbose(L,1);
+                verbose++;
+                terra_setverbose(L,verbose);
                 break;
             case 'i':
                 *interactive = true;

@@ -5,12 +5,12 @@ local ffi = require("ffi")
 terra.isverbose = 0 --set by C api
 
 local function dbprint(level,...) 
-    if terra.isverbose > level then
+    if terra.isverbose >= level then
         print(...)
     end
 end
 local function dbprintraw(level,obj)
-    if terra.isverbose > level then
+    if terra.isverbose >= level then
         obj:printraw()
     end
 end
@@ -1209,6 +1209,12 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
         
+        --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
+        local ctype = ffi.typeof(self.cachedcstring)
+        types.ctypetoterra[tostring(ctype)] = self
+        local rctype = ffi.typeof(self.cachedcstring.."&")
+        types.ctypetoterra[tostring(rctype)] = self
+
         return self.cachedcstring,self.cachedreturnname --cachedreturnname is only set for sret functions where we need to know the name of the struct to allocate to hold the return value
     end
     
@@ -1233,6 +1239,8 @@ do --construct type table that holds the singleton value representing each uniqu
     --map from unique type identifier string to the metadata for the type
     types.table = {}
     
+    --map from luajit ffi ctype objects to corresponding terra type
+    types.ctypetoterra = {}
     
     local function mktyp(v)
         v.methods = setmetatable({},{ __index = types.type.methods }) --create new blank method table
@@ -3575,6 +3583,15 @@ function terra.makeenvunstrict(env)
     else return env end
 end
 
+function terra.new(terratype,...)
+    terratype:getcanonical(terra.newcontext())
+    local typ = terratype:cstring()
+    return ffi.new(typ,...)
+end
+
+function terra.typeof(obj)
+    return terra.types.ctypetoterra[tostring(ffi.typeof(obj))]
+end
 
 terra.languageextension = {
     languages = terra.newlist();
