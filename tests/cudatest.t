@@ -14,10 +14,10 @@ local C = terralib.includec("cuda_runtime.h")
 local R = terralib.cudacompile({ foo = foo, bar = foo })
 
 terra doit()
-	var data : &uint8
-	C.cudaMalloc(&data,sizeof(int))
+	var data : &int
+	C.cudaMalloc((&data):as(&&uint8),sizeof(int))
 	var launch = terralib.CUDAParams { 1,1,1, 1,1,1, 0, nil }
-	R.bar(&launch,data:as(&int))
+	R.bar(&launch,data)
 	var result : int
 	C.cudaMemcpy(&result,data,sizeof(int),2)
 	return result
