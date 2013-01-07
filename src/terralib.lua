@@ -3533,11 +3533,6 @@ end
 
 -- END DEBUG
 
-function terra.pointertolightuserdatahelper(cdataobj,assignfn,assignresult)
-    local afn = ffi.cast("void (*)(void *,void**)",assignfn)
-    afn(cdataobj,assignresult)
-end
-
 function terra.saveobj(filename,env,arguments)
     local cleanenv = {}
     for k,v in pairs(env) do

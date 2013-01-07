@@ -1769,14 +1769,11 @@ static void doassign(void * fn, void ** result) {
     *result = fn;
 }
 static int terra_pointertolightuserdata(lua_State * L) {
-    void * result;
-    lua_getfield(L,LUA_GLOBALSINDEX, "terra");
-    lua_getfield(L,-1,"pointertolightuserdatahelper");
-    lua_remove(L,-2); 
-    lua_pushvalue(L, -2); //original argument
-    lua_pushlightuserdata(L, (void*)doassign);
-    lua_pushlightuserdata(L, &result);
-    lua_call(L, 3, 0);
-    lua_pushlightuserdata(L, result);
+    //argument is a 'cdata'.
+    //calling topointer on it will return a pointer to the cdata payload
+    //here we know the payload is a pointer, which we extract:
+    void ** cdata = (void**) lua_topointer(L,-1);
+    assert(cdata);
+    lua_pushlightuserdata(L, *cdata);
     return 1;
 }
