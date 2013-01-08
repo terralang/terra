@@ -400,6 +400,35 @@ struct TerraCompiler {
         v->obj("type",&t);
         return getType(&t);
     }
+    
+    Value * getConstant(Obj * v) {
+        Obj t;
+        TType * typ = typeOfValue(v);
+        Type * ptyp = PointerType::getUnqual(typ->type);
+        GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
+        if(gv == NULL) {
+            v->pushfield("object");
+            const void * data = lua_topointer(L,-1);
+            assert(data);
+            lua_pop(L,1); // remove pointer
+            size_t size = C->td->getTypeAllocSize(typ->type);
+            size_t align = C->td->getPrefTypeAlignment(typ->type);
+            Constant * arr = ConstantDataArray::get(*T->C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
+            gv = new GlobalVariable(*T->C->m, arr->getType(),
+                                    true, GlobalValue::PrivateLinkage,
+                                    arr);
+            gv->setAlignment(align);
+            gv->setUnnamedAddr(true);
+            lua_pushlightuserdata(L,gv);
+            v->setfield("llvm_value");
+            DEBUG_ONLY(T) {
+                printf("created new constant:\n");
+                gv->dump();
+            }
+        }
+        return B->CreateBitCast(gv, ptyp);
+    }
+    
     GlobalVariable * allocGlobal(Obj * v) {
         const char * name = v->asstring("name");
         Type * typ = typeOfValue(v)->type;
@@ -995,6 +1024,11 @@ if(baseT->isIntegerTy()) { \
                     exp->dump();
                     assert(!"NYI - literal");
                 }
+            } break;
+            case T_constant: {
+                Obj value;
+                exp->obj("value",&value);
+                return getConstant(&value);
             } break;
             case T_luafunction: {
                 TType * typ = typeOfValue(exp);
@@ -1765,9 +1799,6 @@ static int terra_saveobjimpl(lua_State * L) {
     return 0;
 }
 
-static void doassign(void * fn, void ** result) {
-    *result = fn;
-}
 static int terra_pointertolightuserdata(lua_State * L) {
     //argument is a 'cdata'.
     //calling topointer on it will return a pointer to the cdata payload

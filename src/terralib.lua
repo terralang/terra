@@ -2392,18 +2392,8 @@ function terra.funcvariant:typecheck(ctx)
         local function generatenativewrapper(fn,paramlist)
             local paramtypes = paramlist.parameters:map(function(p) return p.type end)
             local castedtype = terra.types.funcpointer(paramtypes,{})
-            local fncache = terra.__wrappedluafunctions[fn]
 
-            if not fncache then
-                fncache = {}
-                terra.__wrappedluafunctions[fn] = fncache
-            end
-            local cb = fncache[castedtype]
-            if not cb then
-                cb = ffi.cast(castedtype:cstring(),fn)
-                fncache[castedtype] = cb
-            end
-
+            local cb = terra.cast(castedtype,fn)
             local fptr = terra.pointertolightuserdata(cb)
             return terra.newtree(anchor, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype })
         end
@@ -2555,6 +2545,11 @@ function terra.funcvariant:typecheck(ctx)
             return terra.newtree(anchor, { kind = terra.kinds.literal, value = v, type = bool })
         elseif type(v) == "string" then
             return terra.newtree(anchor, { kind = terra.kinds.literal, value = v, type = rawstring })
+        elseif type(v) == "cdata" then
+            return createspecial(anchor,terra.constant(v))
+        elseif terra.isconstant(v) then
+            --TODO: should constants (i.e. references to lua cdata objects) be united with literals in the IR?
+            return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = true })
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else
@@ -2691,6 +2686,8 @@ function terra.funcvariant:typecheck(ctx)
             if e:is "luaobject" then
                 return e
             elseif e:is "literal" then
+                return e
+            elseif e:is "constant"  then
                 return e
             elseif e:is "var" then
                 assert(e.type ~= nil, "found an unresolved var in checkexp")
@@ -3573,7 +3570,7 @@ end
 function terra.makeenvunstrict(env)
     if getmetatable(env) and getmetatable(env).__Idle_declared then
         return function(self,idx)
-            return (Strict.isDeclared(idx,env) and env[idx]) or nil 
+            return (Strict.isDeclared(idx,env) and env[idx]) or nil
         end
     else return env end
 end
@@ -3584,7 +3581,55 @@ function terra.new(terratype,...)
     return ffi.new(typ,...)
 end
 
+function terra.cast(terratype,obj)
+    terratype:getcanonical(terra.newcontext())
+    local ctyp = terratype:cstring()
+    if type(obj) == "function" then --functions are cached to avoid creating too many callback objects
+        local fncache = terra.__wrappedluafunctions[obj]
+
+        if not fncache then
+            fncache = {}
+            terra.__wrappedluafunctions[obj] = fncache
+        end
+        local cb = fncache[terratype]
+        if not cb then
+            cb = ffi.cast(ctyp,obj)
+            fncache[terratype] = cb
+        end
+        return cb
+    end
+    return ffi.cast(ctyp,obj)
+end
+
+terra.constantobj = {}
+terra.constantobj.__index = terra.constantobj
+
+function terra.isconstant(obj)
+    return getmetatable(obj) == terra.constantobj
+end
+
+function terra.constant(typorobj,obj)
+    local c = {}
+    if not obj then
+        if type(typorobj) ~= "cdata" then
+            error("constant constructor requires explicit type for objects that are not cdata")
+        end
+        c.type = terra.typeof(typorobj)
+        c.object = typorobj
+    else
+        if not terra.types.istype(typorobj) then
+            error("expected a terra type as first argument")
+        end
+        c.type = typorobj
+        c.object = terra.cast(c.type,obj)
+    end
+    return setmetatable(c,terra.constantobj)
+end
+
 function terra.typeof(obj)
+    if type(obj) ~= "cdata" then
+        error("cannot get the type of a non cdata object")
+    end
     return terra.types.ctypetoterra[tostring(ffi.typeof(obj))]
 end
 
