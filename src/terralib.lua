@@ -2549,7 +2549,7 @@ function terra.funcvariant:typecheck(ctx)
             return createspecial(anchor,terra.constant(v))
         elseif terra.isconstant(v) then
             --TODO: should constants (i.e. references to lua cdata objects) be united with literals in the IR?
-            return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = true })
+            return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:ispassedaspointer() })
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else

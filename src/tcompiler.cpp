@@ -404,29 +404,56 @@ struct TerraCompiler {
     Value * getConstant(Obj * v) {
         Obj t;
         TType * typ = typeOfValue(v);
-        Type * ptyp = PointerType::getUnqual(typ->type);
-        GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
-        if(gv == NULL) {
+        
+        if(typ->ispassedaspointer) { //if the constant is a large value, we make a single global variable that holds that value
+            Type * ptyp = PointerType::getUnqual(typ->type);
+            GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
+            if(gv == NULL) {
+                v->pushfield("object");
+                const void * data = lua_topointer(L,-1);
+                assert(data);
+                lua_pop(L,1); // remove pointer
+                size_t size = C->td->getTypeAllocSize(typ->type);
+                size_t align = C->td->getPrefTypeAlignment(typ->type);
+                Constant * arr = ConstantDataArray::get(*T->C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
+                gv = new GlobalVariable(*T->C->m, arr->getType(),
+                                        true, GlobalValue::PrivateLinkage,
+                                        arr);
+                gv->setAlignment(align);
+                gv->setUnnamedAddr(true);
+                lua_pushlightuserdata(L,gv);
+                v->setfield("llvm_value");
+                DEBUG_ONLY(T) {
+                    printf("created new constant:\n");
+                    gv->dump();
+                }
+            }
+            return B->CreateBitCast(gv, ptyp);
+        } else {
+            //otherwise translate the value to LLVM
             v->pushfield("object");
             const void * data = lua_topointer(L,-1);
             assert(data);
             lua_pop(L,1); // remove pointer
             size_t size = C->td->getTypeAllocSize(typ->type);
-            size_t align = C->td->getPrefTypeAlignment(typ->type);
-            Constant * arr = ConstantDataArray::get(*T->C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
-            gv = new GlobalVariable(*T->C->m, arr->getType(),
-                                    true, GlobalValue::PrivateLinkage,
-                                    arr);
-            gv->setAlignment(align);
-            gv->setUnnamedAddr(true);
-            lua_pushlightuserdata(L,gv);
-            v->setfield("llvm_value");
-            DEBUG_ONLY(T) {
-                printf("created new constant:\n");
-                gv->dump();
+            if(typ->type->isIntegerTy()) {
+                uint64_t integer = 0;
+                memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
+                return ConstantInt::get(typ->type, integer);
+            } else if(typ->type->isFloatTy()) {
+                return ConstantFP::get(typ->type, *(float*)data);
+            } else if(typ->type->isDoubleTy()) {
+                return ConstantFP::get(typ->type, *(double*)data);
+            } else if(typ->type->isPointerTy()) {
+                Constant * ptrint = ConstantInt::get(T->C->td->getIntPtrType(*T->C->ctx), *(intptr_t*)data);
+                return ConstantExpr::getIntToPtr(ptrint, typ->type);
+            } else {
+                typ->type->dump();
+                printf("NYI - constant load\n");
+                abort();
             }
+            
         }
-        return B->CreateBitCast(gv, ptyp);
     }
     
     GlobalVariable * allocGlobal(Obj * v) {
