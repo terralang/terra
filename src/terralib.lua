@@ -2063,7 +2063,7 @@ function terra.funcvariant:typecheck(ctx)
     local function gettreeattribute(tree,attrname,typ)
         local attr = tree.attributes and tree.attributes[attrname]
         if attr and typ ~= type(attr) then
-            terra.reporterror(ctx,tree,attrname," requires type ", typ " but found ", type(attr))
+            terra.reporterror(ctx,tree,attrname," requires type ", typ, " but found ", type(attr))
             return nil
         end
         return attr
@@ -2099,6 +2099,7 @@ function terra.funcvariant:typecheck(ctx)
             local e = checkrvalue(ee.operands[1])
             local dr = insertdereference(e)
             dr.alignment = gettreeattribute(ee,"align","number")
+            dr.nontemporal = gettreeattribute(ee,"nontemporal","boolean")
             return false, dr 
         elseif op_string == "&" then
             local e = checklvalue(ee.operands[1])

@@ -1550,6 +1550,9 @@ if(baseT->isIntegerTy()) { \
                         int alignment = lhs.number("alignment");
                         store->setAlignment(alignment);
                     }
+                    if(lhs.hasfield("nontemporal")) {
+                        store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
+                    }
                 }
             } break;
             default: {
