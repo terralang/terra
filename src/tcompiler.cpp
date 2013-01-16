@@ -418,7 +418,7 @@ struct TerraCompiler {
                 Constant * arr = ConstantDataArray::get(*T->C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
                 gv = new GlobalVariable(*T->C->m, arr->getType(),
                                         true, GlobalValue::PrivateLinkage,
-                                        arr);
+                                        arr, "const");
                 gv->setAlignment(align);
                 gv->setUnnamedAddr(true);
                 lua_pushlightuserdata(L,gv);
