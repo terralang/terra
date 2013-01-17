@@ -160,10 +160,19 @@ public:
                     tt->push();
                     result->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
                     
-                    // if this type isn't a struct (i.e. something like a union), we don't add its fields
-                    // and instead treat it as an opaque type
-                    if(rd->isStruct()){
-                        CreateFields(rd, tt);
+                    
+                    if(rd->isUnion()) {
+                        tt->pushfield("beginunion");
+                        tt->push();
+                        lua_call(L,1,0);
+                    }
+
+                    CreateFields(rd, tt);
+                    
+                    if(rd->isUnion()) {
+                        tt->pushfield("endunion");
+                        tt->push();
+                        lua_call(L,1,0);
                     }
 
                     std::stringstream ss;
