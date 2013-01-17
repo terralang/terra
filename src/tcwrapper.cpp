@@ -13,6 +13,7 @@ extern "C" {
 #include <cstdio>
 #include <string>
 #include <sstream>
+#include <iostream>
 
 #include "llvmheaders.h"
 #include "tcompilerstate.h"
@@ -78,6 +79,54 @@ public:
         error_message = msg;
         return false;
     }
+    
+    void CreateFields( RecordDecl * rd, Obj * tt) {
+        Obj addentry;
+        tt->obj("addentry",&addentry);        
+        //check the fields of this struct, if any one of them is not understandable, then this struct becomes 'opaque'
+        //that is, we insert the type, and link it to its llvm type, so it can be used in terra code
+        //but none of its fields are exposed (since we don't understand the layout)
+        bool opaque = false;
+        size_t ncalls = 0;
+        int stktop = lua_gettop(L);
+        for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
+            if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
+                opaque = true;
+                continue;
+            }
+            DeclarationName declname = it->getDeclName();
+            std::string declstr = declname.getAsString();
+            QualType FT = it->getType();
+            Obj fobj;
+            if(!GetType(FT,&fobj)) {
+                opaque = true;
+                continue;
+            }
+            //arguments to function call add entry are  push onto the lua stack, but the function itself is not called 
+            //it is delayed until we know that all fields are valid
+            lua_checkstack(L, 2);
+            
+            lua_pushstring(L,declstr.c_str());
+            fobj.push();
+            ncalls++;
+        }
+        if(!opaque) {
+            lua_checkstack(L,4);
+            assert(lua_gettop(L) == stktop + 2*ncalls);
+            int first_arg = stktop + 1;
+            for(size_t i = 0; i < ncalls; i++) {
+                addentry.push();
+                tt->push();
+                lua_pushvalue(L, first_arg + 2*i);
+                lua_pushvalue(L, first_arg + 2*i + 1);
+                lua_call(L,3,0); //make the calls addentry to form the struct
+            }
+            assert(lua_gettop(L) == stktop + 2*ncalls);
+        }
+        lua_settop(L,stktop); //reset the stack to before processing fields
+
+    } 
+
     bool GetType(QualType T, Obj * tt) {
         
         T = Context->getCanonicalType(T);
@@ -87,11 +136,21 @@ public:
           case Type::Record: {
             const RecordType *RT = dyn_cast<RecordType>(Ty);
             RecordDecl * rd = RT->getDecl();
-            if(rd->isStruct()) {
+            if(rd->isStruct() || rd->isUnion()) {
                 std::string name = rd->getName();
                 //TODO: why do some types not have names?
-                if(name == "")
-                    name = "anon";
+                
+                if(name == "") {
+                    TypedefNameDecl * decl = rd->getTypedefNameForAnonDecl();
+                    if(decl) { 
+                        name = decl->getName();
+                    } else {
+                        name = "anon";
+                    }
+                }
+
+                assert(name != "");
+
                 if(!result->obj(name.c_str(),tt)) {
                     //create new blank struct, fill in with members
                     PushTypeFunction("newstruct");
@@ -100,54 +159,22 @@ public:
                     tt->initFromStack(L,ref_table);
                     tt->push();
                     result->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
-                    Obj addentry;
-                    tt->obj("addentry",&addentry);
                     
-                    
-                    //check the fields of this struct, if any one of them is not understandable, then this struct becomes 'opaque'
-                    //that is, we insert the type, and link it to its llvm type, so it can be used in terra code
-                    //but none of its fields are exposed (since we don't understand the layout)
-                    bool opaque = false;
-                    size_t ncalls = 0;
-                    int stktop = lua_gettop(L);
-                    for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
-                        if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
-                            opaque = true;
-                            continue;
-                        }
-                        DeclarationName declname = it->getDeclName();
-                        std::string declstr = declname.getAsString();
-                        QualType FT = it->getType();
-                        Obj fobj;
-                        if(!GetType(FT,&fobj)) {
-                            opaque = true;
-                            continue;
-                        }
-                        //arguments to function call add entry are  push onto the lua stack, but the function itself is not called 
-                        //it is delayed until we know that all fields are valid
-                        lua_checkstack(L, 2);
-                        
-                        lua_pushstring(L,declstr.c_str());
-                        fobj.push();
-                        ncalls++;
+                    // if this type isn't a struct (i.e. something like a union), we don't add its fields
+                    // and instead treat it as an opaque type
+                    if(rd->isStruct()){
+                        CreateFields(rd, tt);
                     }
-                    if(!opaque) {
-                        lua_checkstack(L,4);
-                        assert(lua_gettop(L) == stktop + 2*ncalls);
-                        int first_arg = stktop + 1;
-                        for(size_t i = 0; i < ncalls; i++) {
-                            addentry.push();
-                            tt->push();
-                            lua_pushvalue(L, first_arg + 2*i);
-                            lua_pushvalue(L, first_arg + 2*i + 1);
-                            lua_call(L,3,0); //make the calls addentry to form the struct
-                        }
-                        assert(lua_gettop(L) == stktop + 2*ncalls);
-                    }
-                    lua_settop(L,stktop); //reset the stack to before processing fields
-                    
+
                     std::stringstream ss;
-                    ss << "struct." << name.c_str();
+                    if(rd->isStruct())
+                        ss << "struct.";
+                    else if(rd->isUnion())
+                        ss << "union.";
+                    else
+                        assert(!"not struct or union?");
+                    ss << name.c_str();
+                    
                     lua_pushstring(L,ss.str().c_str());
                     tt->setfield("llvm_name");
                 }
