@@ -882,7 +882,7 @@ do  --constructor functions for terra functions and variables
     end
     
     function terra.newfunction(olddef,newtree,name,envfn,reciever)
-        if not olddef then
+        if not olddef or not terra.isfunction(olddef) then
             olddef = mkfunction(name)
         end
         
