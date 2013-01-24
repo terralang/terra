@@ -55,6 +55,7 @@ test.eq(a1.a,1)
 test.eq(a1.b,2.5)
 test.eq(b1.a,2)
 test.eq(b1.b,3.5)
+--[[ C doesn't actually allow you to return arrays directly
 local arr = returnarray()
 test.eq(arr[0],1)
 test.eq(arr[1],2)
@@ -72,6 +73,8 @@ test.eq(arr3[3],8)
 local arr4 = returnaos()
 test.eq(arr4[0].a,1)
 test.eq(arr4[1].b,3.5)
+]]
+
 local arr5 = returnsoa()
 test.eq(arr5.a[0],1)
 test.eq(arr5.a[3],4)

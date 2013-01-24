@@ -17,6 +17,7 @@ Language Implementation:
 --refactor ctx object and terra.resolvetype it should be possible to canonicalize and resolve types without a ctx object
   instead there should be a seperate diagnostic object for reporting errors, and resolvetype should be given an environment in which to run
   getcanonical() should then take an _optional_ diagnostic object
+-- casting lua functions to Terra functions when they return multiple arguments, and supporting calling Lua functions with structs values/expecting struct returns
 
 DONE:
 --function pointers

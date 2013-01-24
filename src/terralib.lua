@@ -479,7 +479,7 @@ end
 function terra.funcvariant:makewrapper()
     local fntyp = self.type
     
-    local success,cfntyp,returnname = pcall(fntyp.cstring,fntyp)
+    local success,cfntyp = pcall(fntyp.cstring,fntyp)
     
     if not success then
         dbprint(1,"cstring error: ",cfntyp)
@@ -489,15 +489,8 @@ function terra.funcvariant:makewrapper()
         return
     end
     
-    self.ffireturnname = returnname
     self.ffiwrapper = ffi.cast(cfntyp,self.fptr)
-    local passedaspointers = {}
-    for i,p in ipairs(fntyp.parameters) do
-        if p:ispassedaspointer() then
-            passedaspointers[i] = p:cstring().."[1]"
-            self.passedaspointers = passedaspointers --passedaspointers is only set if at least one of the arguments needs to be passed as a pointer
-        end
-    end
+
 end
 
 function terra.funcvariant:jitandmakewrapper(flags)
@@ -563,34 +556,17 @@ end
 
 function terra.funcvariant:__call(...)
     self:compile()
-    
-    if not self.type.issret and not self.passedaspointers then --fast path
+    local NR = #self.type.returns
+    if NR <= 1 then --fast path
         return self.ffiwrapper(...)
     else
-    
-        local params = {...}
-        if self.passedaspointers then
-            for idx,allocname in pairs(self.passedaspointers) do
-                local a  = ffi.new(allocname) --create a copy of the C object and initialize it with the parameter
-                a[0] = params[idx]
-                params[idx] = a --replace the original parameter with the pointer
-                
-            end
+        --multireturn
+        local rs = self.ffiwrapper(...)
+        local rl = {}
+        for i = 0,NR-1 do
+            table.insert(rl,rs["_"..i])
         end
-        
-        if self.type.issret then
-            local nr = #self.type.returns
-            local result = ffi.new(self.ffireturnname)
-            self.ffiwrapper(result,unpack(params))
-            local rv = result[0]
-            local rs = {}
-            for i = 1,nr do
-                table.insert(rs,rv["v"..i])
-            end
-            return unpack(rs)
-        else
-            return self.ffiwrapper(unpack(params))
-        end
+        return unpack(rl)
     end
 end
 
@@ -1067,7 +1043,7 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.type:ispointertofunction()
         return self:ispointer() and self.type:isfunction()
     end
-    function types.type:ispassedaspointer() --warning: if you update this, you also need to update the behavior in tcompiler.cpp's getType function to set the ispassedaspointer flag
+    function types.type:isaggregate() 
         return self:isstruct() or self:isarray()
     end
     
@@ -1156,27 +1132,9 @@ do --construct type table that holds the singleton value representing each uniqu
                     self.cachedcstring = nm
                 end
             elseif self:isfunction() then
-                local rt
-                local rname
-                if #self.returns == 0 then
-                    rt = "void"
-                elseif not self.issret then
-                    rt = self.returns[1]:cstring()
-                else
-                    local rtype = "typedef struct { "
-                    for i,v in ipairs(self.returns) do
-                        rtype = rtype..v:cstring().." v"..tostring(i).."; "
-                    end
-                    rname = uniquetypename("return")
-                    self.cachedreturnname = rname.."[1]"
-                    rtype = rtype .. " } "..rname..";"
-                    ffi.cdef(rtype)
-                    rt = "void"
-                end
+                local rt = (#self.returns == 0 and "void") or self.returnobj:cstring()
                 local function getcstring(t)
-                    if t:ispassedaspointer() then
-                        return types.pointer(t):cstring()
-                    elseif t == rawstring then
+                    if t == rawstring then
                         --hack to make it possible to pass strings to terra functions
                         --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
                         --so it should be removed when we have a better solution
@@ -1185,13 +1143,7 @@ do --construct type table that holds the singleton value representing each uniqu
                         return t:cstring()
                     end
                 end
-                
                 local pa = self.parameters:map(getcstring)
-                
-                if self.issret then
-                    pa:insert(1,rname .. "*")
-                end
-                
                 pa = pa:mkstring("(",",",")")
                 local ntyp = uniquetypename("function")
                 local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
@@ -1215,7 +1167,7 @@ do --construct type table that holds the singleton value representing each uniqu
         local rctype = ffi.typeof(self.cachedcstring.."&")
         types.ctypetoterra[tostring(rctype)] = self
 
-        return self.cachedcstring,self.cachedreturnname --cachedreturnname is only set for sret functions where we need to know the name of the struct to allocate to hold the return value
+        return self.cachedcstring
     end
     
     function types.type:getcanonical(ctx) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
@@ -1498,8 +1450,16 @@ do --construct type table that holds the singleton value representing each uniqu
         local r = terra.list.map(returns,getname):mkstring("{",",","}")
         local name = a.."->"..r
         return registertype(name,function()
-            local issret = #returns > 1 or (#returns == 1 and returns[1]:ispassedaspointer())
-            return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, issret = issret }
+            local returnobj = nil
+            if #returns == 1 then
+                returnobj = returns[1]
+            elseif #returns > 1 then
+                returnobj = types.newstruct()
+                for i,r in ipairs(returns) do
+                    returnobj:addentry(nil,r)
+                end
+            end
+            return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
         end)
     end
     --a function type that represents lua functions in the type checker
@@ -1509,8 +1469,7 @@ do --construct type table that holds the singleton value representing each uniqu
                             islua = true,
                             parameters = terra.newlist(), 
                             returns = terra.newlist(), 
-                            isvararg = true, 
-                            issret = false
+                            isvararg = true
                           })
     
     for name,typ in pairs(types.table) do
@@ -2191,14 +2150,14 @@ function terra.funcvariant:typecheck(ctx)
                     if ismacro then --call was a macro, handle the results as if they were in the list
                         addelement(multifunc, depth, islast) --multiple returns, are added to the list, like function calls these are optional                        
                     else
-                        if #multifunc.types == 1 then
+                        if #multifunc.returntypes == 1 then
                             exps:insert(multifunc) --just insert it as a normal single-return function
                         else --remember the multireturn function and insert extract nodes into the expression list
                             multiret = multifunc
-                            if #multifunc.types == 0 and depth == 1 then
+                            if #multifunc.returntypes == 0 and depth == 1 then
                                 minsize = minsize - 1
                             end
-                            for i,t in ipairs(multifunc.types) do
+                            for i,t in ipairs(multifunc.returntypes) do
                                 exps:insert(createextractreturn(multiret, i - 1, t))
                             end
                         end
@@ -2332,7 +2291,7 @@ function terra.funcvariant:typecheck(ctx)
             
             if not fnobj then
                 terra.reporterror(ctx,exp,"no such method ",methodname," defined for type ",reciever.type)
-                return false, exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, types = terra.newlist() }
+                return false, exp:copy { kind = terra.kinds.apply, arguments = terra.newlist(), type = terra.types.error, paramtypes = terra.newlist(), returntypes = terra.newlist() }
             end
             
             local untypedarguments = terra.newlist { untypedreciever }
@@ -2433,28 +2392,32 @@ function terra.funcvariant:typecheck(ctx)
         --OK, no macros! we can check the parameter list safely now
         local paramlist = checkparameterlist(anchor,arguments)
         paramlist.recievers = recievers
-        
+
         local typelists = alternatives:map(function(a) return getparametertypes(a.type,paramlist) end)
         local valididx = tryinsertcasts(typelists,paramlist)
-        local typ,types,callee
+        local typ,returntypes,paramtypes,callee
+        local paramtypes = terra.newlist()
         if valididx then
             local fntyp = alternatives[valididx].type
             callee = alternatives[valididx].fn
             if type(callee) == "function" then
                 callee = generatenativewrapper(fn.value,paramlist)
             end
-            types = fntyp.returns
-            if #types > 0 then
-                typ = types[1]
+            returntypes = fntyp.returns
+            for i = 1,paramlist.size do
+                paramtypes[i] = paramlist.parameters[i].type
+            end
+            if #returntypes > 0 then
+                typ = returntypes[1]
             elseif mustreturnatleast1 then
                 typ = terra.types.error
                 terra.reporterror(ctx,anchor,"expected call to return at least 1 value")
             end --otherwise this is used in statement context and does not require a type
         else
             typ = terra.types.error
-            types = terra.newlist()
+            returntypes = terra.newlist()
         end
-        local callexp = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, type = typ, types = types })
+        local callexp = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, type = typ, returntypes = returntypes, paramtypes = paramtypes })
         return false, callexp
     end
     
@@ -2550,7 +2513,7 @@ function terra.funcvariant:typecheck(ctx)
             return createspecial(anchor,terra.constant(v))
         elseif terra.isconstant(v) then
             --TODO: should constants (i.e. references to lua cdata objects) be united with literals in the IR?
-            return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:ispassedaspointer() })
+            return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:isaggregate() })
         elseif terra.ismacro(v) or type(v) == "table" or type(v) == "function" then
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         else
@@ -2810,7 +2773,6 @@ function terra.funcvariant:typecheck(ctx)
                         terra.reporterror(ctx,v,"duplicate definition of field ",k)
                     end
                 end
-                
                 return e:copy { expressions = entries, type = typ:getcanonical(ctx) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)

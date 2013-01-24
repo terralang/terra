@@ -10,6 +10,17 @@ function test.neq(a,b)
 		error(tostring(a) .. " == "  .. tostring(b),2)
 	end
 end
+function test.meq(a,...)
+	local lst = {...}
+	if #lst ~= #a then
+		error("size mismatch",2)
+	end
+	for i,e in ipairs(a) do
+		if e ~= lst[i] then
+			error(tostring(i) .. ": "..tostring(e) .. " ~= " .. tostring(lst[i]),2)
+		end
+	end
+end
 
 function test.time(fn)
     local s = os.clock()
