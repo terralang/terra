@@ -190,17 +190,12 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 
 struct TerraCompiler;
 
-struct TypeProvider {
-    TerraCompiler * TC;
-    TType * getType(Obj * t);
-};
-
 //functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
 struct CCallingConv {
+    terra_State * T;
     lua_State * L;
     terra_CompilerState * C;
     IRBuilder<> * B;
-    TypeProvider * TP;
     
     enum RegisterClass {
         C_INTEGER,
@@ -235,11 +230,234 @@ struct CCallingConv {
         std::vector<Argument> paramtypes;
     };
     
-    void init(lua_State * L, terra_CompilerState * C, IRBuilder<> * B, TypeProvider * TP) {
-        this->L = L;
+    void init(terra_State * T, terra_CompilerState * C, IRBuilder<> * B) {
+        this->T = T;
+        this->L = T->L;
         this->C = C;
         this->B = B;
-        this->TP = TP;
+    }
+    
+     void LayoutStructs(Obj * deferred) {
+        for(int i = 0; i < deferred->size(); i++) {
+            Obj str;
+            deferred->objAt(i, &str);
+            TType * t = (TType*) str.ud("llvm_type");
+            assert(t->type->isStructTy());
+            StructType * st = cast<StructType>(t->type);
+            if(st->isOpaque())
+                LayoutStruct(st,&str,deferred);
+        }
+    }
+    
+    TType * GetType(Obj * type) {
+        Obj deferred;
+        type->newlist(&deferred);
+        TType * t = GetTypeDuringTypeCreation(type, &deferred);
+        LayoutStructs(&deferred);
+        return t;
+    }
+    
+    //if deferred == NULL, generate the struct's type layout
+    //otherwise generate the named struct
+    void LayoutStruct(StructType * st, Obj * typ, Obj * deferred) {
+        Obj entries;
+        typ->obj("entries", &entries);
+        int N = entries.size();
+        std::vector<Type *> entry_types;
+        
+        unsigned unionAlign = 0; //minimum union alignment
+        Type * unionType = NULL; //type with the largest alignment constraint
+        size_t unionAlignSz = 0; //size of type with largest alignment contraint
+        size_t unionSz   = 0;    //allocation size of the largest member
+                                 
+        for(int i = 0; i < N; i++) {
+            Obj v;
+            entries.objAt(i, &v);
+            Obj vt;
+            v.obj("type",&vt);
+            
+            Type * fieldtype = deferred == NULL ? GetTypeLayout(&vt) : GetTypeDuringTypeCreation(&vt,deferred)->type;
+            bool inunion = v.boolean("inunion");
+            if(inunion) {
+                Type * fieldlayout = GetTypeLayout(&vt);
+                unsigned align = C->td->getABITypeAlignment(fieldlayout);
+                if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
+                    unionAlign = align;
+                    unionType = fieldtype;
+                    unionAlignSz = C->td->getTypeAllocSize(fieldlayout);
+                }
+                size_t allocSize = C->td->getTypeAllocSize(fieldlayout);
+                if(allocSize > unionSz)
+                    unionSz = allocSize;
+                
+                //check if this is the last member of the union, and if it is, add it to our struct
+                Obj nextObj;
+                if(i + 1 < N)
+                    entries.objAt(i+1,&nextObj);
+                if(i + 1 == N || nextObj.number("allocation") != v.number("allocation")) {
+                    std::vector<Type *> union_types;
+                    assert(unionType);
+                    union_types.push_back(unionType);
+                    if(unionAlignSz < unionSz) { // the type with the largest alignment requirement is not the type with the largest size, pad this struct so that it will fit the largest type
+                        size_t diff = unionSz - unionAlignSz;
+                        union_types.push_back(ArrayType::get(Type::getInt8Ty(*C->ctx),diff));
+                    }
+                    entry_types.push_back(StructType::get(*C->ctx,union_types));
+                    unionAlign = 0;
+                    unionType = NULL;
+                    unionAlignSz = 0;
+                    unionSz = 0;
+                }
+            } else {
+                entry_types.push_back(fieldtype);
+            }
+        }
+        st->setBody(entry_types);
+        DEBUG_ONLY(T) {
+            printf("Struct Layout Is:\n");
+            st->dump();
+            printf("\nEnd Layout\n");
+        }
+    }
+    bool LookupTypeCache(Obj * typ, TType ** t) {
+        *t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
+        if(*t == NULL) {
+            *t = (TType*) lua_newuserdata(L,sizeof(TType));
+            memset(*t,0,sizeof(TType));
+            typ->setfield("llvm_type");
+            assert(*t != NULL);
+            return false;
+        }
+        return true;
+    }
+    void CreateNonRecursiveType(Obj * typ, TType * t) {
+        switch(typ->kind("kind")) {
+            case T_primitive: {
+                int bytes = typ->number("bytes");
+                switch(typ->kind("type")) {
+                    case T_float: {
+                        if(bytes == 4) {
+                            t->type = Type::getFloatTy(*C->ctx);
+                        } else {
+                            assert(bytes == 8);
+                            t->type = Type::getDoubleTy(*C->ctx);
+                        }
+                    } break;
+                    case T_integer: {
+                        t->issigned = typ->boolean("signed");
+                        t->type = Type::getIntNTy(*C->ctx,bytes * 8);
+                    } break;
+                    case T_logical: {
+                        t->type = Type::getInt8Ty(*C->ctx);
+                        t->islogical = true;
+                    } break;
+                    default: {
+                        printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
+                        terra_reporterror(T,"type not understood");
+                    } break;
+                }
+            } break;
+            case T_niltype: {
+                t->type = Type::getInt8PtrTy(*C->ctx);
+            } break;
+            case T_vector: {
+                Obj base;
+                typ->obj("type",&base);
+                int N = typ->number("N");
+                TType * ttype = GetTypeDuringTypeCreation(&base,NULL); //vectors can only contain primitives, so no deferred struct layouts will occur, hence it safe to pass NULL
+                Type * baseType = ttype->type;
+                t->issigned = ttype->issigned;
+                if(ttype->islogical) {
+                    baseType = Type::getInt1Ty(*C->ctx);
+                    t->islogical = true;
+                }
+                t->type = VectorType::get(baseType, N);
+            } break;
+            default: {
+                printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
+                terra_reporterror(T,"type not understood or not primitive\n");
+            } break;
+        }
+    }
+    StructType * CreateStruct(Obj * typ, Obj * deferred) {
+        //check to see if it was initialized externally first
+        StructType * st;
+        if(typ->hasfield("llvm_name")) {
+            const char * llvmname = typ->string("llvm_name");
+            st = C->m->getTypeByName(llvmname);
+        } else {
+            if(deferred == NULL) {
+                st = StructType::create(*C->ctx);
+                LayoutStruct(st, typ, NULL);
+            } else {
+                st = StructType::create(*C->ctx, typ->string("name"));
+                typ->push();
+                deferred->addentry();
+            }
+        }
+        return st;
+    }
+    Type * GetTypeLayout(Obj * typ) {
+        Type * t = (Type*) typ->ud("llvm_typelayout");
+        if(t == NULL) {
+            switch(typ->kind("kind")) {
+                case T_pointer:
+                    t = Type::getInt8PtrTy(*C->ctx);
+                    break;
+                case T_array: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    t = ArrayType::get(GetTypeLayout(&base), typ->number("N"));
+                } break;
+                case T_struct:
+                    t = CreateStruct(typ,NULL);
+                    break;
+                case T_functype:
+                    assert(!"functype (not pointer) found in GetTypeLayout?");
+                    break;
+                default:
+                    TType tt;
+                    CreateNonRecursiveType(typ,&tt);
+                    t = tt.type;
+                    break;
+            }
+            lua_pushlightuserdata(L,t);
+            typ->setfield("llvm_typelayout");
+        }
+        assert(t != NULL);
+        return t;
+    }
+    TType * GetTypeDuringTypeCreation(Obj * typ, Obj * deferred) {
+        TType * t = NULL;
+        if(!LookupTypeCache(typ, &t)) {
+            assert(t);
+            switch(typ->kind("kind")) {
+                case T_pointer: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    Type * baset = GetTypeDuringTypeCreation(&base,deferred)->type;
+                    t->type = PointerType::getUnqual(baset);
+                } break;
+                case T_array: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    t->type = ArrayType::get(GetTypeDuringTypeCreation(&base,deferred)->type, N);
+                } break;
+                case T_struct: {
+                    t->type = CreateStruct(typ, deferred);
+                } break;
+                case T_functype: {
+                    t->type = CreateFunctionType(typ,deferred);
+                } break;
+                default:
+                  CreateNonRecursiveType(typ,t);
+                  assert(t->type);
+                  break;
+            }
+        }
+        assert(t && t->type);
+        return t;
     }
     
     RegisterClass Meet(RegisterClass a, RegisterClass b) {
@@ -268,16 +486,17 @@ struct CCallingConv {
     }
     
     void MergeValue(RegisterClass * classes, size_t offset, Obj * type) {
-        TType * t = TP->getType(type);
+        Type * t = GetTypeLayout(type);
         int entry = offset / 8;
-        if(t->type->isVectorTy()) //we don't handle structures with vectors in them yet
+        if(t->isVectorTy()) //we don't handle structures with vectors in them yet
             classes[entry] = C_MEMORY;
-        else if(t->type->isFloatingPointTy())
+        else if(t->isFloatingPointTy())
             classes[entry] = Meet(classes[entry],C_SSE);
-        else if(t->type->isIntegerTy() || t->type->isPointerTy())
+        else if(t->isIntegerTy() || t->isPointerTy())
             classes[entry] = Meet(classes[entry],C_INTEGER);
-        else if(t->type->isStructTy()) {
-            StructType * st = cast<StructType>(t->type);
+        else if(t->isStructTy()) {
+            StructType * st = cast<StructType>(GetTypeLayout(type));
+            assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
             Obj entries;
             type->obj("entries", &entries);
@@ -291,8 +510,8 @@ struct CCallingConv {
                 entry.obj("type",&entrytype);
                 MergeValue(classes, offset + structoffset, &entrytype);
             }
-        } else if(t->type->isArrayTy()) {
-            ArrayType * at = cast<ArrayType>(t->type);
+        } else if(t->isArrayTy()) {
+            ArrayType * at = cast<ArrayType>(GetTypeLayout(type));
             size_t elemsize = C->td->getTypeAllocSize(at->getElementType());
             size_t sz = at->getNumElements();
             Obj elemtype;
@@ -318,9 +537,8 @@ struct CCallingConv {
                 assert(!"unexpected class");
         }
     }
-    Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
-        
-        TType * t = TP->getType(type);
+    Argument ClassifyArgument(Obj * type, Obj * deferred, int * usedfloat, int * usedint) {
+        TType * t = GetTypeDuringTypeCreation(type,deferred);
         
         if(!t->type->isAggregateType()) {
             if(t->type->isFloatingPointTy() || t->type->isVectorTy())
@@ -330,7 +548,7 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE,t->type);
         }
         
-        int sz = C->td->getTypeAllocSize(t->type);
+        int sz = C->td->getTypeAllocSize(GetTypeLayout(type));
         if(sz > 16) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
@@ -360,9 +578,13 @@ struct CCallingConv {
                         StructType::get(*C->ctx,elements));
     }
     
-    //rt is NULL if void
-    //args is a terra.list of argument types
-    void Classify(Obj * ftype, Obj * params, Classification * info) {
+    void Classify(Obj * ftype, Obj * params, Classification * info)  {
+        Obj deferred;
+        ftype->newlist(&deferred);
+        ClassifyDuringTypeCreation(ftype, params, &deferred, info);
+        LayoutStructs(&deferred);
+    }
+    void ClassifyDuringTypeCreation(Obj * ftype, Obj * params, Obj * deferred, Classification * info) {
         Obj returns;
         ftype->obj("returns",&returns);
         info->nreturns = returns.size();
@@ -373,7 +595,7 @@ struct CCallingConv {
             Obj returnobj;
             ftype->obj("returnobj",&returnobj);
             int zero = 0;
-            info->returntype = ClassifyArgument(&returnobj, &zero, &zero);
+            info->returntype = ClassifyArgument(&returnobj, deferred, &zero, &zero);
         }
         
         int nfloat = 0;
@@ -382,12 +604,19 @@ struct CCallingConv {
         for(int i = 0; i < N; i++) {
             Obj elem;
             params->objAt(i,&elem);
-            info->paramtypes.push_back(ClassifyArgument(&elem,&nfloat,&nint));
+            info->paramtypes.push_back(ClassifyArgument(&elem,deferred,&nfloat,&nint));
         }
     }
     
     //caches classification results for each function
     Classification * ClassifyFunction(Obj * fntyp) {
+        Obj deferred;
+        fntyp->newlist(&deferred);
+        Classification * c = ClassifyFunctionDuringTypeCreation(fntyp,&deferred);
+        LayoutStructs(&deferred);
+        return c;
+    }
+    Classification * ClassifyFunctionDuringTypeCreation(Obj * fntyp, Obj * deferred) {
         Classification * info  = (Classification*) fntyp->ud("llvm_ccinfo");
         if(!info) {
             info = new Classification();
@@ -395,22 +624,9 @@ struct CCallingConv {
             
             Obj params;
             fntyp->obj("parameters",&params);
-            Classify(fntyp, &params, info);
-            
-            //warning: due to recursion in structs we can reenter this function in the Classify call
-            //if we had already set llvm_ccinfo before calling Classify, this would result in it returning the
-            //classification before it was filled in
-            
-            //instead we set llvm_ccinfo afterward. This has the bad property that we allocate 2 classifications
-            //here we check if we already allocated one and then delete it
-            
-            //a better solution to this mess is to change to seperate resolution of pointers to structs
-            //from resolving the layout of the struct to guarentee
+            ClassifyDuringTypeCreation(fntyp, &params, deferred, info);
             Classification * oldinfo = (Classification*) fntyp->ud("llvm_ccinfo");
-            if(oldinfo) {
-                delete oldinfo;
-            }
-            
+            assert(!oldinfo);
             fntyp->setfield("llvm_ccinfo");
         }
         return info;
@@ -453,7 +669,7 @@ struct CCallingConv {
     }
     
     Function * CreateFunction(Obj * ftype, const char * name) {
-        TType * llvmtyp = TP->getType(ftype);
+        TType * llvmtyp = GetType(ftype);
         Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,name, C->m);
         Classification * info = ClassifyFunction(ftype);
         AttributeFnOrCall(fn,info);
@@ -595,11 +811,12 @@ struct CCallingConv {
         }
         
     }
-    Type * CreateFunctionType(Obj * typ) {
+    Type * CreateFunctionType(Obj * typ, Obj * deferred) {
+
         std::vector<Type*> arguments;
         bool isvararg = typ->boolean("isvararg");
         
-        Classification * info = ClassifyFunction(typ);
+        Classification * info = ClassifyFunctionDuringTypeCreation(typ, deferred);
         
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
@@ -629,6 +846,7 @@ struct CCallingConv {
                 } break;
             }
         }
+        
         return FunctionType::get(rt,arguments,isvararg);
     }
 };
@@ -642,157 +860,10 @@ struct TerraCompiler {
     Obj funcobj;
     Function * func;
     TType * func_type;
-    TypeProvider TP;
     CCallingConv CC;
     
-    void layoutStruct(StructType * st, Obj * typ) {
-        Obj entries;
-        typ->obj("entries", &entries);
-        int N = entries.size();
-        std::vector<Type *> entry_types;
-        
-        unsigned unionAlign = 0; //minimum union alignment
-        Type * unionType = NULL; //type with the largest alignment constraint
-        size_t unionSz   = 0;    //allocation size of the largest member
-                                 
-        for(int i = 0; i < N; i++) {
-            Obj v;
-            entries.objAt(i, &v);
-            Obj vt;
-            v.obj("type",&vt);
-            
-            Type * fieldtype = getType(&vt)->type;
-            bool inunion = v.boolean("inunion");
-            if(inunion) {
-                unsigned align = T->C->td->getABITypeAlignment(fieldtype);
-                if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
-                    unionAlign = align;
-                    unionType = fieldtype;
-                }
-                size_t allocSize = C->td->getTypeAllocSize(fieldtype);
-                if(allocSize > unionSz)
-                    unionSz = allocSize;
-                
-                //check if this is the last member of the union, and if it is, add it to our struct
-                Obj nextObj;
-                if(i + 1 < N)
-                    entries.objAt(i+1,&nextObj);
-                if(i + 1 == N || nextObj.number("allocation") != v.number("allocation")) {
-                    std::vector<Type *> union_types;
-                    assert(unionType);
-                    union_types.push_back(unionType);
-                    size_t sz = T->C->td->getTypeAllocSize(unionType);
-                    if(sz < unionSz) { // the type with the largest alignment requirement is not the type with the largest size, pad this struct so that it will fit the largest type
-                        size_t diff = unionSz - sz;
-                        union_types.push_back(ArrayType::get(Type::getInt8Ty(*C->ctx),diff));
-                    }
-                    entry_types.push_back(StructType::get(*C->ctx,union_types));
-                    unionAlign = 0;
-                    unionType = NULL;
-                    unionSz = 0;
-                }
-            } else {
-                entry_types.push_back(fieldtype);
-            }
-        }
-        st->setBody(entry_types);
-        DEBUG_ONLY(T) {
-            printf("Struct Layout Is:\n");
-            st->dump();
-            printf("\nEnd Layout\n");
-        }
-    }
-    TType * getType(Obj * typ) {
-        TType * t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
-        
-        if(t == NULL) { //the type wasn't initialized previously, generated its LLVM type now
-            t = (TType*) lua_newuserdata(T->L,sizeof(TType));
-            memset(t,0,sizeof(TType));
-            typ->setfield("llvm_type"); //llvm_type is set to avoid recursive traversals
-        }
-        if(t->type == NULL) { //recursive type lookup might cause us to reach a type that is being initialized before initialization finishes: 
-                             //for instance a pointer to a struct that has a pointer to itself as a member
-                             //in this case, we simply initialize the pointer at the leaf node
-                             //when the recursion unwinds we will harmlessly reinitialize it again to the same value
-            switch(typ->kind("kind")) {
-                case T_primitive: {
-                    int bytes = typ->number("bytes");
-                    switch(typ->kind("type")) {
-                        case T_float: {
-                            if(bytes == 4) {
-                                t->type = Type::getFloatTy(*C->ctx);
-                            } else {
-                                assert(bytes == 8);
-                                t->type = Type::getDoubleTy(*C->ctx);
-                            }
-                        } break;
-                        case T_integer: {
-                            t->issigned = typ->boolean("signed");
-                            t->type = Type::getIntNTy(*C->ctx,bytes * 8);
-                        } break;
-                        case T_logical: {
-                            t->type = Type::getInt8Ty(*C->ctx);
-                            t->islogical = true;
-                        } break;
-                        default: {
-                            printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
-                            terra_reporterror(T,"type not understood");
-                        } break;
-                    }
-                } break;
-                case T_struct: {
-                    //check to see if it was initialized externally first
-                    if(typ->hasfield("llvm_name")) {
-                        const char * llvmname = typ->string("llvm_name");
-                        StructType * st = C->m->getTypeByName(llvmname);
-                        assert(st);
-                        t->type = st;
-                    } else {
-                        const char * name = typ->string("name");
-                        StructType * st = StructType::create(*C->ctx, name);
-                        t->type = st; //it is important that this is before layoutStruct so that recursive uses of this struct's type will return the correct llvm Type object
-                        layoutStruct(st,typ);
-                    }
-                } break;
-                case T_pointer: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    Type * baset = getType(&base)->type;
-                    t->type = PointerType::getUnqual(baset);
-                } break;
-                case T_functype: {
-                    t->type = CC.CreateFunctionType(typ);
-                } break;
-                case T_array: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    int N = typ->number("N");
-                    t->type = ArrayType::get(getType(&base)->type, N);
-                } break;
-                case T_niltype: {
-                    t->type = Type::getInt8PtrTy(*C->ctx);
-                } break;
-                case T_vector: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    int N = typ->number("N");
-                    TType * ttype = getType(&base);
-                    Type * baseType = ttype->type;
-                    t->issigned = ttype->issigned;
-                    if(ttype->islogical) {
-                        baseType = Type::getInt1Ty(*C->ctx);
-                        t->islogical = true;
-                    }
-                    t->type = VectorType::get(baseType, N);
-                } break;
-                default: {
-                    printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
-                    terra_reporterror(T,"type not understood\n");
-                } break;
-            }
-        }
-        assert(t && t->type);
-        return t;
+    TType * getType(Obj * v) {
+        return CC.GetType(v);
     }
     TType * typeOfValue(Obj * v) {
         Obj t;
@@ -907,8 +978,7 @@ struct TerraCompiler {
         L = T->L;
         C = T->C;
         B = new IRBuilder<>(*C->ctx);
-        TP.TC = this;
-        CC.init(L, C, B, &TP);
+        CC.init(T, C, B);
         
         lua_pushvalue(T->L,-2); //the original argument
         funcobj.initFromStack(T->L, ref_table);
@@ -1877,9 +1947,6 @@ if(baseT->isIntegerTy()) { \
         }
     }
 };
-
-TType* TypeProvider::getType(Obj * t) { return TC->getType(t); }
-
 
 static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
