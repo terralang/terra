@@ -9,10 +9,12 @@ A:addentry(e,int)
 local b =  symbol()
 A.methods[b] = terra(self : &A) return 3 end
 
+local f = symbol()
 
 terra foo()
 	var a : A
 	a.[e] = 3
+  a.[f] = 4
 	return a:[b]() + a.[e]
 end
 

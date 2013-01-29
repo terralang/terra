@@ -2589,7 +2589,7 @@ function terra.funcvariant:typecheck(ctx)
                     local ret, success = insertselect(v,field)
                     if not success then
                         --struct has no member field, look for a getter __get<field>
-                        local getter = v.type.methods["__get"..field]
+                        local getter = type(field) == "string" and v.type.methods["__get"..field]
                         if getter then
                             return terra.newtree(v, { kind = terra.kinds.apply, fn = createspecial(v,getter), arguments = terra.newlist{untypedv}, typedarguments = terra.newlist{createtypedexpression(v)}, recievers = "first"})
                         else

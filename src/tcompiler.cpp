@@ -244,8 +244,8 @@ struct CCallingConv {
             TType * t = (TType*) str.ud("llvm_type");
             assert(t->type->isStructTy());
             StructType * st = cast<StructType>(t->type);
-            if(st->isOpaque())
-                LayoutStruct(st,&str,deferred);
+            assert(st->isOpaque());
+            LayoutStruct(st,&str,deferred);
         }
     }
     
