@@ -50,8 +50,9 @@ TString * luaS_vstringf(terra_State * L, const char * fmt, va_list ap) {
     char * buf = stack_buf;
     while(1) {
 	va_list cur;
-	va_copy(cur,ap);
+        va_copy(cur,ap);
         int n = vsnprintf(buf, N, fmt, cur);
+        va_end(cur);
         if(n > -1 && n < N) {
             TString * r = luaS_newlstr(L,buf,n);
             if(buf != stack_buf)
