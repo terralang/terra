@@ -93,26 +93,13 @@ static int new_list(LexState * ls) {
     } else return 0;
 }
 
-//add field at the top of the stack to table
-#if 0
-static void add_field(LexState * ls, int table, TA_Token t) {
-    if(ls->in_terra) {
-        lua_pushvalue(ls->L,t);
-        lua_pushvalue(ls->L,-2);
-        lua_settable(ls->L,table);
-        lua_pop(ls->L,1);
-    }
-}
-#endif
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
     if(ls->in_terra) {
         table = (table < 0) ? (table + lua_gettop(ls->L) + 1) : table; //otherwise table is wrong once we modify the stack 
         //printf("consume field\n");
-        lua_pushstring(ls->L,field);
-        lua_pushvalue(ls->L,-2);
-        lua_settable(ls->L,table);
-        lua_pop(ls->L,1);
+        
+        lua_setfield(ls->L,table,field);
     }
 }
 static void push_string(LexState * ls, const char * str) {
@@ -129,13 +116,15 @@ static void push_kind(LexState * ls, const char * str) {
     }
 }
 static void table_setposition(LexState * ls, int t, int line, int offset) {
-    lua_pushstring(ls->L,"linenumber");
     lua_pushinteger(ls->L,line);
-    lua_settable(ls->L,t);
+    lua_setfield(ls->L,t,"linenumber");
     
-    lua_pushstring(ls->L,"offset");
     lua_pushinteger(ls->L,offset);
-    lua_settable(ls->L,t);
+    lua_setfield(ls->L,t,"offset");
+    
+    lua_pushstring(ls->L, getstr(ls->source));
+    lua_setfield(ls->L,t, "filename");
+    
 }
 static int new_table(LexState * ls, T_Kind k) {
     if(ls->in_terra) {
@@ -674,8 +663,6 @@ static void structconstructor(LexState * ls, T_Kind kind) {
     } while(testnext(ls, ',') || testnext(ls, ';'));
     check_match(ls,'}','{',line);
     add_field(ls,tbl,"records");
-    push_string(ls,getstr(ls->source));
-    add_field(ls,tbl,"filename");
 }
 
 struct Name {
@@ -795,9 +782,6 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
   //codeclosure(ls, new_fs.f, e);
-  
-  push_string(ls,getstr(ls->source));
-  add_field(ls,tbl,"filename");
   
   close_func(ls);
 }
@@ -1029,8 +1013,7 @@ static void doquote(LexState * ls, bool isexp) {
         check_match(ls, TK_END, TK_QUOTE, line);
     }
     int tbl = lua_gettop(ls->L);
-    push_string(ls,getstr(ls->source));
-    add_field(ls,tbl,"filename");
+    
     luaX_patchbegin(ls,&begin);
     int id = store_value(ls);
     OutputBuffer_printf(&ls->output_buffer,"terra.newquote(_G.terra._trees[%d],\"%s\",",id,quotetyp);
@@ -1767,8 +1750,7 @@ static void terravar(LexState * ls, int islocal) {
         RETURNS_1(explist(ls,&v,0));
         add_field(ls,varexp,"initializers");
     }
-    push_string(ls,getstr(ls->source));
-    add_field(ls,varexp,"filename");
+    
     int id = store_value(ls);
     
     luaX_patchbegin(ls,&begin);

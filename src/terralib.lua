@@ -136,6 +136,7 @@ function terra.newtree(ref,body)
     end
     body.offset = ref.offset
     body.linenumber = ref.linenumber
+    body.filename = ref.filename
     return setmetatable(body,terra.tree)
 end
 
@@ -320,38 +321,33 @@ end
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
 function terra.context:printsource(anchor)
-    local top = self.fileinfo[#self.fileinfo]
-    if not top.filehandle then
-        top.filehandle = terra.opensourcefile(top.filename)
-    end
-    if top.filehandle then --if the code did not come from a file then we don't print the carrot, since we cannot reopen the text
-        terra.printlocation(top.filehandle,anchor.offset)
+    local filename = anchor.filename
+    local handle = self.filecache[filename] or terra.opensourcefile(filename)
+    self.filecache[filename] = handle
+    
+    if handle then --if the code did not come from a file then we don't print the carrot, since we cannot (easily) find the text
+        terra.printlocation(handle,anchor.offset)
     end
 end
+function terra.context:clearfilecache()
+    for k,v in pairs(self.filecache) do
+        terra.closesourcefile(v)
+    end
+    self.filecache = {}
+end
+
 function terra.context:reporterror(anchor,...)
     self.has_errors = true
-    local top = self.fileinfo[#self.fileinfo]
     if not anchor then
         print(debug.traceback())
         error("nil anchor")
     end
-    io.write(top.filename..":"..anchor.linenumber..": ")
+    io.write(anchor.filename..":"..anchor.linenumber..": ")
     for _,v in ipairs({...}) do
         io.write(tostring(v))
     end
     io.write("\n")
     self:printsource(anchor)
-end
-function terra.context:enterfile(filename)
-    table.insert(self.fileinfo,{ filename = filename })
-end
-
-function terra.context:leavefile(filename)
-    local tbl = table.remove(self.fileinfo)
-    if tbl.filehandle then
-        terra.closesourcefile(tbl.filehandle)
-        tbl.filehandle = nil
-    end
 end
 
 function terra.context:isempty()
@@ -407,7 +403,7 @@ end
 
 function terra.newcontext(flags)
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, fileinfo = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
+        terra.globalcompilecontext = setmetatable({definitions = {}, filecache = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
     end
     return terra.globalcompilecontext
 end
@@ -542,6 +538,7 @@ function terra.funcvariant:compile(ctx)
     if ctx.has_errors then 
         if ctx:isempty() then --if this was not the top level compile we let type-checking of other functions continue, 
                                 --though we don't actually compile because of the errors
+            ctx:clearfilecache()
             error("Errors reported during compilation.")
         end
     else
@@ -670,9 +667,7 @@ function terra.globalvar:compile(ctx)
     --this will happen when function referring to this GV is in the same strongly connected component as the global variables initializer
     if not globalinit.initfn:hasbeeninstate("optimize") then 
         local tree = globalinit.initfn.untypedtree
-        ctx:enterfile(tree.filename)
         ctx:reporterror(tree,"global variable recursively used by its own initializer")
-        ctx:leavefile()
     end
     
     if not ctx.has_errors and not ctx.compileflags.nojit then
@@ -859,7 +854,6 @@ do  --constructor functions for terra functions and variables
     
     local function registerlayoutfunction(st,tree,env)
         local function buildstruct(typ,ctx)
-            ctx:enterfile(tree.filename)
             ctx:enterdef(env)
             
             local function addstructentry(v)
@@ -881,7 +875,6 @@ do  --constructor functions for terra functions and variables
             end
             addrecords(tree.records)
             ctx:leavedef()
-            ctx:leavefile()
         end
         st.tree = tree --for debugging purposes, we keep the tree to improve error reporting
         st:addlayoutfunction(buildstruct)
@@ -1386,9 +1379,7 @@ do --construct type table that holds the singleton value representing each uniqu
             local function checkrecursion(t)
                 if t == self then
                     if self.tree then
-                        ctx:enterfile(self.tree.filename)
                         terra.reporterror(ctx,self.tree,"type recursively contains itself")
-                        ctx:leavefile()
                     else
                         --TODO: emit where the user-defined type was first used
                         error("programmatically defined type contains itself")
@@ -1606,7 +1597,6 @@ function terra.funcvariant:typecheck(ctx)
     
     
     --initialization
-    ctx:enterfile(self.filename)
     local origenv = self:env()
     ctx:enterdef(origenv)
     
@@ -2815,13 +2805,11 @@ function terra.funcvariant:typecheck(ctx)
             terra.reporterror(ctx,anchor,"found a quoted ",q.variant, " where a ",variant, " is expected.")
             return anchor:copy { type = terra.types.error }
         end
-        ctx:enterfile(q.tree.filename)
         if not ctx:enterquote(q:env()) then --q:env() returns both the luaenv and varenv here
             terra.reporterror(ctx,anchor,"quoted statement is not in scope in this function")
         end
         local r = checkfn(q.tree)
         ctx:leavequote()
-        ctx:leavefile()
         return r
     end
     
@@ -3152,7 +3140,6 @@ function terra.funcvariant:typecheck(ctx)
     dbprintraw(2,typedtree)
     
     ctx:leavedef()
-    ctx:leavefile()
     
     return typedtree
 end
