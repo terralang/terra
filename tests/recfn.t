@@ -1,7 +1,7 @@
 local terra foo() : {}
 	bar()
 end and 
-terra bar() : {}
+local terra bar() : {}
 	foo()
 end
 

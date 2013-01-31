@@ -1,23 +1,43 @@
 Language Implementation:
 
-
+Design Problems:
 -- how to save results for later (both Lua state and Terra JIT state)
+
+Low-priority Implementation:
 -- generate TBAA metadata like C will so that we can match perf (do we need?)
 -- gather and scatter for vectors (allow vec(int*) and its loads)
 -- pointer arithmetic on niltype?
--- returning values from lua functions   
 -- better handling of options to try for overloaded operators
+
+Implementation:
 -- better handling of lua layout of structs with recursion (can we seperate the creation of structs for their layout to simplify the problem) -- test the compiler fo handling jitting of functions previously optimized with nojit = true
    (look into the way LLVM handles pointers to opaque structs, can we delay layout of a struct until we need to access it similar to the way C allows opaque struct pointers).
+
 -- tests for garbage collection of objects that mix LLVM state with Lua state to check for memory leaks from dangling references
--- better interaction for low-level values allocated from Lua and used in Terra.
+
 --track down why some types RecordType structs do not have names, and fix the bugs that are caused by this. 
---&&type should convert to &&uint8 (check number of addresses is the same, currently only allows &foo to convert to &uint8)
---look into bug: if you cast an lvalue pointer to another pointer, it becomes an rvalue, this is not right...
+
 --refactor ctx object and terra.resolvetype it should be possible to canonicalize and resolve types without a ctx object
   instead there should be a seperate diagnostic object for reporting errors, and resolvetype should be given an environment in which to run
   getcanonical() should then take an _optional_ diagnostic object
+
 -- casting lua functions to Terra functions when they return multiple arguments, and supporting calling Lua functions with structs values/expecting struct returns
+
+Making specialization eager and simplifying the compiler.
+
+-- change parser rule to allow let rec form that can include  local/global structs/terra declarations/definitions together. modify terralib to accept this form and remove constructors for other forms.
+
+-- seperate specialization phase (e.g. variable resolution, select resolution, escape evaluation) from typechecking, specialization will be run eagerly
+
+-- (lower priority) allow codegeneration for opaque struct types when they are only used as pointers. this will require cooperation from the compiler to keep the struct opaque unless it is marked complete. compiler will need to be annotated to force completion of struct types when they are used as values (either directly or in an aggregate).
+
+-- tag _all_ tree nodes with the filename and remove the complicated stack of files for error reporting (we can compress tree node size later)
+
+-- make the compilation graph a singleton, environments should be handled by function compilation individually. If something is re-entrant into compilation from lua code and there are compile errors stop compilation. Double-check that re-entrant compiler code can compile as long as it is in a different SCC from its compile-time caller. Remove ctx objects as arguments. fnvariant:gettype() and fnvariant:compile() should be seperate from the internal interfaces.
+
+-- remove var syntax from lua. Instead use terralib.global to create global variables.
+
+
 
 DONE:
 --function pointers
@@ -69,3 +89,8 @@ DONE:
 -- overloaded functions
 -- overloaded operator behavior
 -- fix gc issues cleaning up functions: 1. either resolve symbols for quotes and functions once and throw away the env, or 2. trace references to local variables in the parser and construct the environment so that it only captures the referenced variables (this is probably the better solution, but changing the parser to do it may be tricky).
+-- returning values from lua functions (via terralib.cast)
+-- better interaction for low-level values allocated from Lua and used in Terra. (terralib.constant behavior implemented for ctypes)
+--&&type should convert to &&uint8 (check number of addresses is the same, currently only allows &foo to convert to &uint8) (did not fix, this isn't how C behaves either)
+--look into bug: if you cast an lvalue pointer to another pointer, it becomes an rvalue, this is not right... (did not fix, that is the right behavior)
+

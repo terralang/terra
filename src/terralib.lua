@@ -829,7 +829,7 @@ do  --constructor functions for terra functions and variables
         name_count = name_count + 1
         return fixed
     end
-    function terra.newfunctionvariant(newtree,name,env,reciever)
+    local function newfunctionvariant(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
         local obj = { untypedtree = newtree, filename = newtree.filename, environment = env, name = fname, state = "uninitializedterra", stats = {} }
@@ -857,67 +857,7 @@ do  --constructor functions for terra functions and variables
         return setmetatable({variants = terra.newlist(), name = name},terra.func)
     end
     
-    function terra.newfunction(olddef,newtree,name,envfn,reciever)
-        if not olddef or not terra.isfunction(olddef) then
-            olddef = mkfunction(name)
-        end
-        
-        olddef:addvariant(terra.newfunctionvariant(newtree,name,envfn(),reciever))
-        
-        return olddef
-    end
-    function terra.newlocalfunctions(trees,names,envfn)
-        local env = envfn()
-        local results = {}
-        for i,tree in ipairs(trees) do
-            local fn = mkfunction(names[i])
-            env[names[i]] = fn
-            fn:addvariant(terra.newfunctionvariant(tree,names[i],env,nil))
-            results[i] = fn
-        end
-        return unpack(results)
-    end
-    
-    function terra.newcfunction(name,typ)
-        local obj = { name = name, type = typ, state = "uninitializedc" }
-        setmetatable(obj,terra.funcvariant)
-        
-        local fn = mkfunction(name)
-        fn:addvariant(obj)
-        
-        return fn
-    end
-    
-    function terra.newvariables(tree,envfn)
-        local globals = terra.newlist()
-        local varentries = terra.newlist()
-        
-        local globalinit = {} --table to hold initialization information for this group of variables
-        
-        for i,v in ipairs(tree.variables) do
-            local n = v.name:concat("_") .. "_" .. name_count
-            name_count = name_count + 1
-            local sym = terra.newtree(v, {kind = terra.kinds.symbol, name = n})
-            local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = sym, type = v.type })
-            varentries:insert(varentry)
-            
-            local gv = setmetatable({initializer = globalinit},terra.globalvar)
-            globals:insert(gv)
-        end
-        
-        local anchor = tree.variables[1]
-        local dv = terra.newtree(anchor, { kind = terra.kinds.defvar, variables = varentries, initializers = tree.initializers, isglobal = true})
-        local body = terra.newtree(anchor, { kind = terra.kinds.block, statements = terra.newlist {dv} })
-        local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
-                                              is_varargs = false, filename = tree.filename, body = body})
-        
-        globalinit.initfn = terra.newfunctionvariant(ftree,nil,envfn())
-        globalinit.globals = globals
-
-        return unpack(globals)
-    end
-    
-    local function newstructwithlayout(name,tree,env)
+    local function registerlayoutfunction(st,tree,env)
         local function buildstruct(typ,ctx)
             ctx:enterfile(tree.filename)
             ctx:enterdef(env)
@@ -943,33 +883,75 @@ do  --constructor functions for terra functions and variables
             ctx:leavedef()
             ctx:leavefile()
         end
-        
-        local st = terra.types.newstruct(name)
         st.tree = tree --for debugging purposes, we keep the tree to improve error reporting
         st:addlayoutfunction(buildstruct)
-        return st 
-    end
-    
-    function terra.namedstruct(tree,name,envfn)
-        return newstructwithlayout(name,tree,envfn())
     end
 
-    function terra.localnamedstructs(trees,names,envfn)
-        local env = envfn()
-        local results = {}
-        for i,tree in ipairs(trees) do
-            results[i] = newstructwithlayout(names[i],tree,env)
-            env[names[i]] = results[i]
+    local function declareobjects(N,declfn,...)
+        local idx,args,results = 1,{...},{}
+        for i = 1,N do
+            local origv,name = args[idx], args[idx+1]
+            results[i] = declfn(origv,name)
         end
-        return unpack(results) 
+        return unpack(results)
     end
-    
+    function terra.declarestructs(N,...)
+        return declareobjects(N,function(origv,name)
+            return (terra.types.istype(origv) and origv:isstruct() and origv) or terra.types.newstruct(name)
+        end,...)
+    end
+    function terra.declarefunctions(N,...)
+        return declareobjects(N,function(origv,name)
+            return (terra.isfunction(origv) and origv) or mkfunction(name)
+        end,...)
+    end
+
+    function terra.defineobjects(fmt,envfn,...)
+        local args = {...}
+        local idx = 1
+        local results = {}
+        for i = 1, #fmt do
+            local c = fmt:sub(i,i)
+            local obj, name, tree = args[idx], args[idx+1], args[idx+2]
+            idx = idx + 3
+            if "s" == c then
+                registerlayoutfunction(obj,tree,envfn())
+            elseif "f" == c or "m" == c then
+                local reciever = nil
+                if "m" == c then
+                    reciever = args[idx]
+                    idx = idx + 1
+                end
+                obj:addvariant(newfunctionvariant(tree,name,envfn(),reciever))
+            else
+                error("unknown object format: "..c)
+            end
+        end
+    end
+
     function terra.anonstruct(tree,envfn)
-       local st = newstructwithlayout("anon",tree,envfn())
+        local st = terra.types.newstruct("anon")
+        registerlayoutfunction(st,tree,envfn())
         st:setconvertible(true)
         return st
     end
-    
+
+    function terra.anonfunction(tree,envfn)
+        local fn = mkfunction(nil)
+        fn:addvariant(newfunctionvariant(tree,nil,envfn(),nil))
+        return fn
+    end
+
+    function terra.newcfunction(name,typ)
+        local obj = { name = name, type = typ, state = "uninitializedc" }
+        setmetatable(obj,terra.funcvariant)
+        
+        local fn = mkfunction(name)
+        fn:addvariant(obj)
+        
+        return fn
+    end
+
     function terra.newquote(tree,variant,luaenvorfn,varenv) -- kind == "exp" or "stmt"
         local obj = { tree = tree, variant = variant, varenv = varenv or {}}
         if type(luaenvorfn) == "function" then
@@ -979,6 +961,35 @@ do  --constructor functions for terra functions and variables
         end
         setmetatable(obj,terra.quote)
         return obj
+    end
+
+    function terra.newvariables(tree,envfn)
+        local globals = terra.newlist()
+        local varentries = terra.newlist()
+        
+        local globalinit = {} --table to hold initialization information for this group of variables
+        
+        for i,v in ipairs(tree.variables) do
+            local n = v.name:concat("_") .. "_" .. name_count
+            name_count = name_count + 1
+            local sym = terra.newtree(v, {kind = terra.kinds.symbol, name = n})
+            local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = sym, type = v.type })
+            varentries:insert(varentry)
+            
+            local gv = setmetatable({initializer = globalinit},terra.globalvar)
+            globals:insert(gv)
+        end
+        
+        local anchor = tree.variables[1]
+        local dv = terra.newtree(anchor, { kind = terra.kinds.defvar, variables = varentries, initializers = tree.initializers, isglobal = true})
+        local body = terra.newtree(anchor, { kind = terra.kinds.block, statements = terra.newlist {dv} })
+        local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
+                                              is_varargs = false, filename = tree.filename, body = body})
+        
+        globalinit.initfn = newfunctionvariant(ftree,nil,envfn())
+        globalinit.globals = globals
+
+        return unpack(globals)
     end
 end
 
