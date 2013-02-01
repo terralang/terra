@@ -318,38 +318,6 @@ function terra.context:symenv()
     return self:definition().symenv
 end
 
---terra.printlocation
---and terra.opensourcefile are inserted by C wrapper
-function terra.context:printsource(anchor)
-    local filename = anchor.filename
-    local handle = self.filecache[filename] or terra.opensourcefile(filename)
-    self.filecache[filename] = handle
-    
-    if handle then --if the code did not come from a file then we don't print the carrot, since we cannot (easily) find the text
-        terra.printlocation(handle,anchor.offset)
-    end
-end
-function terra.context:clearfilecache()
-    for k,v in pairs(self.filecache) do
-        terra.closesourcefile(v)
-    end
-    self.filecache = {}
-end
-
-function terra.context:reporterror(anchor,...)
-    self.has_errors = true
-    if not anchor then
-        print(debug.traceback())
-        error("nil anchor")
-    end
-    io.write(anchor.filename..":"..anchor.linenumber..": ")
-    for _,v in ipairs({...}) do
-        io.write(tostring(v))
-    end
-    io.write("\n")
-    self:printsource(anchor)
-end
-
 function terra.context:isempty()
     return #self.definitions == 0
 end
@@ -379,13 +347,13 @@ function terra.context:functionend()
             scc:insert(tocompile)
         until tocompile == func
         
-        if not self.has_errors then
+        if not self.diagnostics:haserrors() then
             terra.optimize({ functions = scc, flags = self.compileflags })
         end
         
         for i,f in ipairs(scc) do
             f.state = "optimize"
-            if not self.has_errors and not self.compileflags.nojit then
+            if not self.diagnostics:haserrors() and not self.compileflags.nojit then
                 f:jitandmakewrapper(self.compileflags)
             end
         end
@@ -403,12 +371,101 @@ end
 
 function terra.newcontext(flags)
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, filecache = {}, functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
+        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
     end
     return terra.globalcompilecontext
 end
 
 -- END CONTEXT
+
+-- ENVIRONMENT
+
+terra.environment = {}
+terra.environment.__index = terra.environment
+
+function terra.environment:enterblock()
+    self._localenv = setmetatable({},{ __index = _localenv })
+end
+function terra.environment:leaveblock()
+    self._localenv = getmetatable(self._localenv).__index
+end
+function terra.environment:localenv()
+    return self._localenv
+end
+function terra.environment:luaenv()
+    return self._luaenv
+end
+function terra.environment:combinedenv()
+    return setmetatable({}, {__index = function(_,idx)
+        return self._localenv[idx] or self._luaenv[idx]
+    end})
+end
+
+function terra.newenvironment(_luaenv)
+    setmetatable({_luaenv = _luaenv, _localenv = nil}, terra.environment)
+end
+
+
+
+-- END ENVIRONMENT
+
+
+-- DIAGNOSTICS
+
+terra.diagnostics = {}
+terra.diagnostics.__index = terra.diagnostics
+
+--terra.printlocation
+--and terra.opensourcefile are inserted by C wrapper
+function terra.diagnostics:printsource(anchor)
+    local filename = anchor.filename
+    local handle = self.filecache[filename] or terra.opensourcefile(filename)
+    self.filecache[filename] = handle
+    
+    if handle then --if the code did not come from a file then we don't print the carrot, since we cannot (easily) find the text
+        terra.printlocation(handle,anchor.offset)
+    end
+end
+
+function terra.diagnostics:clearfilecache()
+    for k,v in pairs(self.filecache) do
+        terra.closesourcefile(v)
+    end
+    self.filecache = {}
+end
+
+function terra.diagnostics:reporterror(anchor,...)
+    self._haserrors = true
+    if not anchor then
+        print(debug.traceback())
+        error("nil anchor")
+    end
+    io.write(anchor.filename..":"..anchor.linenumber..": ")
+    for _,v in ipairs({...}) do
+        io.write(tostring(v))
+    end
+    io.write("\n")
+    self:printsource(anchor)
+end
+
+function terra.diagnostics:haserrors()
+    return self._haserrors
+end
+
+function terra.diagnostics:abortiferrors(msg)
+    if self:haserrors() then
+        self:clearfilecache()
+        error(msg)
+    else
+        assert(#self.filecache == 0)
+    end
+end
+
+function terra.newdiagnostics()
+    return setmetatable({ filecache = {}, _haserrors = false },terra.diagnostics)
+end
+
+-- END DIAGNOSTICS
 
 -- FUNCVARIANT
 
@@ -513,7 +570,7 @@ function terra.funcvariant:compile(ctx)
     local ctx = (terra.iscontext(ctx) and ctx) or terra.newcontext(ctx) -- if this is a top level compile, create a new compilation context
     
     if self.state == "optimize" then
-        if ctx.compileflags.nojit or ctx.has_errors then
+        if ctx.compileflags.nojit or ctx.diagnostics:haserrors() then
             return
         end
         self:jitandmakewrapper(ctx.compileflags)
@@ -535,11 +592,10 @@ function terra.funcvariant:compile(ctx)
     
     self.state = "codegen"
     
-    if ctx.has_errors then 
+    if ctx.diagnostics:haserrors() then 
         if ctx:isempty() then --if this was not the top level compile we let type-checking of other functions continue, 
                                 --though we don't actually compile because of the errors
-            ctx:clearfilecache()
-            error("Errors reported during compilation.")
+            ctx.diagnostics:abortiferrors("Errors reported during compilation.")
         end
     else
         terra.codegen(self)
@@ -550,6 +606,8 @@ function terra.funcvariant:compile(ctx)
     end
     
 end
+
+
 
 function terra.funcvariant:__call(...)
     self:compile()
@@ -1476,7 +1534,7 @@ end
 
 -- TYPECHECKER
 function terra.reporterror(ctx,anchor,...)
-    ctx:reporterror(anchor,...)
+    ctx.diagnostics:reporterror(anchor,...)
     return terra.types.error
 end
 
@@ -3172,7 +3230,7 @@ end)
 _G["attribute"] = macro(function(ctx,tree,arg,attributes)
     local attrs = attributes:asvalue(ctx)
     if type(attrs) ~= "table" then
-        ctx:reporterror(tree,"expected a table of attributes but found ", type(attrs))
+        ctx.diagnostics:reporterror(tree,"expected a table of attributes but found ", type(attrs))
     else
         arg.tree.attributes = attrs
     end
@@ -3180,7 +3238,7 @@ _G["attribute"] = macro(function(ctx,tree,arg,attributes)
 end)
 
 _G["global"] = terra.global
-_G["constant"] = terra.consta
+_G["constant"] = terra.constant
 
 terra.select = macro(function(ctx,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
