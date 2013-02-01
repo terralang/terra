@@ -2455,7 +2455,8 @@ function terra.funcvariant:typecheck(ctx)
             return terra.newtree(anchor, { kind = terra.kinds.speciallist, values = values})
         elseif terra.isglobalvar(v) then
             local typ = v.type:getcanonical(ctx)
-            return insertvar(anchor,typ,"anon",v)
+            local name = (anchor.name and tostring(anchor.name)) or "anon"
+            return insertvar(anchor,typ,name,v)
         elseif terra.issymbol(v) then
             local definition = ctx:symenv()[v]
             if not definition then
