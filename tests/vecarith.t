@@ -25,13 +25,20 @@ max = 16
 for i = 1,#types do
     local fenv = getfenv()
     for j = 0,max do
-        local var x : vector(types[i],N) = j
+        local x  = global(vector(types[i],N));
+        (terra() x = j end)()
         fenv[names[i]..j] = x
     end
 end
 
-var d375 : vector(double,N) = 3.75
-var d175 : vector(double,N) = 1.75
+
+d375 = global(vector(double,N))
+d175 = global(vector(double,N))
+terra init()
+    d375 = 3.75
+    d175 = 1.75
+end
+init()
 
 terra test0()
     var a = i1 + i3

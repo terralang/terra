@@ -25,14 +25,14 @@ local b = 3
 local e = 8
 g = 1
 local dd = 8
-var aa = 10
+ aa = global(10)
 terra nested3()
 	var luav = 8
 	return [ (function()
 		local b = 5
 		function c.b() return 7 end
 		local f = 7
-		var vv.bb = aa
+		vv.bb = global(aa:get())
 		terra d.c() return e + f + g + vv.bb + [ `dd ] end
 		return b + a
 	end)() ]

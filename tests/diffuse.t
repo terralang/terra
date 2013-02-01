@@ -24,8 +24,8 @@ int CalcTime(int * times, double * start) {
 }
 ]]
 
-var alignedloads = 0
-var loads = 0
+alignedloads = global(0)
+loads = global(0)
 NI,NJ = 1,1
 V = 4
 terra uload(d : &float)

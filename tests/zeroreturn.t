@@ -1,6 +1,7 @@
 
 
-var b = 0
+local b = global(0)
+
 terra foo(a : int)
 	if a > 3 then
 		return

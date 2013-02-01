@@ -19,14 +19,13 @@ local C = terralib.includecstring [[
 
 elem = int
 
-var s : elem[16]
-var t : elem[16]
+s = global(elem[16])
+t = global(elem[16])
 
-var maxflips : int
-var max_n : int
-var odd : bool
-var checksum : int
-
+maxflips = global(int)
+max_n = global(int)
+odd = global(bool)
+checksum = global(int)
 
 terra flip()
     var i = max_n

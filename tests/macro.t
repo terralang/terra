@@ -25,7 +25,7 @@ local bar4 = macro(function()
     return { a_fn = myfn }
 end)
 
-var moo : int = 3
+moo = global(int,3)
 
 local bar4 = macro(function()
     local terra myfn()

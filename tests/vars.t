@@ -1,8 +1,8 @@
 
 
 a = {}
-var a.b, a.c : double = 3,4
-local var d = 5
+a.b, a.c = global(3),global(double,4)
+d = global(5)
 --print(a.b)
 
 --a.b:gettype(nil)

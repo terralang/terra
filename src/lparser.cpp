@@ -1723,55 +1723,6 @@ void print_name_list(LexState * ls, std::vector<Name> * definednames) {
     }
 }
 
-static void terravar(LexState * ls, int islocal) {
-    ///take
-    // var a.b.c : int, c.e.d : bar = inits and change it into
-    // a.b.c,c.e.d,... = terra.newvariables(_G.terra.trees[%d],captured_locals);
-    Token begin = ls->t;
-    checknext(ls, TK_VAR);
-    
-    TerraCnt tc;
-    enterterra(ls, &tc);
-    
-    expdesc v;
-    int varexp = new_table(ls, T_globalvar);
-    int names = new_list(ls);
-    std::vector<Name> definednames;
-    definednames.push_back(Name());
-    RETURNS_1(varname(ls,&v,islocal,&definednames.back()));
-    add_entry(ls, names);
-    while(testnext(ls,',')) {
-        definednames.push_back(Name());
-        RETURNS_1(varname(ls,&v,islocal,&definednames.back()));
-        add_entry(ls,names);
-    }
-    add_field(ls,varexp,"variables");
-    if(testnext(ls,'=')) {
-        RETURNS_1(explist(ls,&v,0));
-        add_field(ls,varexp,"initializers");
-    }
-    
-    int id = store_value(ls);
-    
-    luaX_patchbegin(ls,&begin);
-    
-    print_name_list(ls, &definednames);
-
-    OutputBuffer_printf(&ls->output_buffer," = terra.newvariables(_G.terra._trees[%d],",id);
-    print_captured_locals(ls,&tc);
-    OutputBuffer_printf(&ls->output_buffer,")");
-    luaX_patchend(ls,&begin);
-    leaveterra(ls);
-    
-    for(size_t i = 0; i < definednames.size(); i++) {
-      TString * vname = definednames[i].data[0];
-      if(islocal)
-        definevariable(ls, vname);
-      else
-        refvariable(ls, vname);
-    }
-}
-
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
   int nvars = 0;
@@ -2089,8 +2040,6 @@ static int statement (LexState *ls) {
       check_no_terra(ls,"local keywords");
       if (testnext(ls, TK_FUNCTION)) { /* local function? */
         localfunc(ls);
-      } else if(ls->t.token == TK_VAR) {
-        terravar(ls,1);
       } else if(ls->t.token == TK_STRUCT || ls->t.token == TK_TERRA) {
         terrastats(ls, true);
       } else if(ls->t.token == TK_SPECIAL) {
@@ -2101,12 +2050,9 @@ static int statement (LexState *ls) {
       break;
     }
     case TK_VAR: {
-        if(!ls->in_terra) {
-            terravar(ls,0);
-        } else {
-            luaX_next(ls); /* skip var */
-            RETURNS_1(localstat(ls));
-        }
+        check_terra(ls, "variables");
+        luaX_next(ls); /* skip var */
+        RETURNS_1(localstat(ls));
         break;  
     }
     case TK_DBCOLON: {  /* stat -> label */

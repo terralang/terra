@@ -6,7 +6,7 @@ local c = terralib.new(int64,5)
 local d = terralib.new(float,3.25)
 local e = terralib.new(double,4.25)
 
-var f = 4
+f = global(4)
 terra foo()
 	return &f
 end

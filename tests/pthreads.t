@@ -3,7 +3,7 @@ C = terralib.includecstring [[
 #include <stdio.h>
 ]]
 
-var acc : int[4]
+acc = global(int[4])
 
 terra forkedFn(args : &uint8) : &uint8
   var threadid = @(args:as(&int))

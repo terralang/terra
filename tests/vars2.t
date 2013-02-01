@@ -1,5 +1,6 @@
 
-var a : int --testing variable with no initializer
+a = global(int) --testing variable with no initializer
+
 
 terra foo()
 	a = 3

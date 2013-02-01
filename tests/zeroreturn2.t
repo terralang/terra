@@ -1,5 +1,5 @@
 
-var a = 0
+a = global(0)
 
 terra doit()
 	a = a + 1

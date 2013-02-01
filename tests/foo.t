@@ -1,1 +1,1 @@
-var a : struct { real : float, imag : float }
+a  = global( struct { real : float, imag : float })

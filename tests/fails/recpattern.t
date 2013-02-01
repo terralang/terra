@@ -1,5 +1,5 @@
 
-var foo = b()
+foo = global(2)
 terra a() : int
     b()
     c()

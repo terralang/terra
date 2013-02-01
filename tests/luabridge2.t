@@ -30,7 +30,9 @@ terra returnsoa()
     return a
 end
 
-var global_a : A = {3, 4.5}
+global_a = global(A)
+global_a:set( {3, 4.5})
+
 terra retstructptr()
     return &global_a
 end
@@ -38,7 +40,9 @@ terra structptr(a : &A)
     return a.a + a.b
 end
 
-var global_arr : int[2] = array(3, 4)
+global_arr = global(int[2]) 
+global_arr:set({3,4})
+
 terra retarrptr()
     return &global_arr
 end

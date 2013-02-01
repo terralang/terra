@@ -26,6 +26,8 @@ static int terra_optimize(lua_State * L);  //entry point from lua into compiler 
                                            //all callee's of these functions that are not in this scc have already been optimized
 static int terra_jit(lua_State * L);  //entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction
 
+static int terra_createglobal(lua_State * L);
+
 static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
 static int terra_saveobjimpl(lua_State * L);
 static int terra_deletefunction(lua_State * L);
@@ -100,6 +102,10 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_jit,1);
     lua_setfield(T->L,-2,"jit");
+    
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_createglobal,1);
+    lua_setfield(T->L,-2,"createglobal");
     
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_disassemble,1);
@@ -851,6 +857,89 @@ struct CCallingConv {
     }
 };
 
+static Constant * GetConstant(CCallingConv * CC, Obj * v) {
+    lua_State * L = CC->L;
+    terra_CompilerState * C = CC->C;
+    Obj t;
+    v->obj("type", &t);
+    TType * typ = CC->GetType(&t);
+    ConstantFolder B;
+    if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
+        Type * ptyp = PointerType::getUnqual(typ->type);
+        GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
+        if(gv == NULL) {
+            v->pushfield("object");
+            const void * data = lua_topointer(L,-1);
+            assert(data);
+            lua_pop(L,1); // remove pointer
+            size_t size = C->td->getTypeAllocSize(typ->type);
+            size_t align = C->td->getPrefTypeAlignment(typ->type);
+            Constant * arr = ConstantDataArray::get(*C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
+            gv = new GlobalVariable(*C->m, arr->getType(),
+                                    true, GlobalValue::PrivateLinkage,
+                                    arr, "const");
+            gv->setAlignment(align);
+            gv->setUnnamedAddr(true);
+            lua_pushlightuserdata(L,gv);
+            v->setfield("llvm_value");
+        }
+        return B.CreateBitCast(gv, ptyp);
+    } else {
+        //otherwise translate the value to LLVM
+        v->pushfield("object");
+        const void * data = lua_topointer(L,-1);
+        assert(data);
+        lua_pop(L,1); // remove pointer
+        size_t size = C->td->getTypeAllocSize(typ->type);
+        if(typ->type->isIntegerTy()) {
+            uint64_t integer = 0;
+            memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
+            return ConstantInt::get(typ->type, integer);
+        } else if(typ->type->isFloatTy()) {
+            return ConstantFP::get(typ->type, *(float*)data);
+        } else if(typ->type->isDoubleTy()) {
+            return ConstantFP::get(typ->type, *(double*)data);
+        } else if(typ->type->isPointerTy()) {
+            Constant * ptrint = ConstantInt::get(C->td->getIntPtrType(*C->ctx), *(intptr_t*)data);
+            return ConstantExpr::getIntToPtr(ptrint, typ->type);
+        } else {
+            typ->type->dump();
+            printf("NYI - constant load\n");
+            abort();
+        }
+    }
+}
+
+
+static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const char * name) {
+    GlobalVariable * gv = (GlobalVariable *) global->ud("value");
+    if (gv == NULL) {
+        Obj t;
+        global->obj("type",&t);
+        Type * typ = CC->GetType(&t)->type;
+        
+        Constant * llvmconstant = UndefValue::get(typ);
+        Obj constant;
+        if(global->obj("initializer",&constant)) {
+            llvmconstant = GetConstant(CC,&constant);
+        }
+        gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name);
+        lua_pushlightuserdata(CC->L, gv);
+        global->setfield("value");
+        //TODO: eventually the initialization constant can be a constant expression that hasn't been defined yet
+        //so this would not be safe to do here
+        void * data = CC->C->ee->getPointerToGlobal(gv);
+        assert(data);
+        lua_pushlightuserdata(CC->L,data);
+        global->setfield("llvm_ptr");
+        
+    }
+    assert(gv != NULL);
+    return gv;
+}
+
+
+
 struct TerraCompiler {
     lua_State * L;
     terra_State * T;
@@ -871,69 +960,6 @@ struct TerraCompiler {
         return getType(&t);
     }
     
-    Value * getConstant(Obj * v) {
-        Obj t;
-        TType * typ = typeOfValue(v);
-        
-        if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
-            Type * ptyp = PointerType::getUnqual(typ->type);
-            GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
-            if(gv == NULL) {
-                v->pushfield("object");
-                const void * data = lua_topointer(L,-1);
-                assert(data);
-                lua_pop(L,1); // remove pointer
-                size_t size = C->td->getTypeAllocSize(typ->type);
-                size_t align = C->td->getPrefTypeAlignment(typ->type);
-                Constant * arr = ConstantDataArray::get(*T->C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
-                gv = new GlobalVariable(*T->C->m, arr->getType(),
-                                        true, GlobalValue::PrivateLinkage,
-                                        arr, "const");
-                gv->setAlignment(align);
-                gv->setUnnamedAddr(true);
-                lua_pushlightuserdata(L,gv);
-                v->setfield("llvm_value");
-                DEBUG_ONLY(T) {
-                    printf("created new constant:\n");
-                    gv->dump();
-                }
-            }
-            return B->CreateBitCast(gv, ptyp);
-        } else {
-            //otherwise translate the value to LLVM
-            v->pushfield("object");
-            const void * data = lua_topointer(L,-1);
-            assert(data);
-            lua_pop(L,1); // remove pointer
-            size_t size = C->td->getTypeAllocSize(typ->type);
-            if(typ->type->isIntegerTy()) {
-                uint64_t integer = 0;
-                memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
-                return ConstantInt::get(typ->type, integer);
-            } else if(typ->type->isFloatTy()) {
-                return ConstantFP::get(typ->type, *(float*)data);
-            } else if(typ->type->isDoubleTy()) {
-                return ConstantFP::get(typ->type, *(double*)data);
-            } else if(typ->type->isPointerTy()) {
-                Constant * ptrint = ConstantInt::get(T->C->td->getIntPtrType(*T->C->ctx), *(intptr_t*)data);
-                return ConstantExpr::getIntToPtr(ptrint, typ->type);
-            } else {
-                typ->type->dump();
-                printf("NYI - constant load\n");
-                abort();
-            }
-            
-        }
-    }
-    
-    GlobalVariable * allocGlobal(Obj * v) {
-        const char * name = v->asstring("name");
-        Type * typ = typeOfValue(v)->type;
-        GlobalVariable * gv = new GlobalVariable(*C->m, typ, false, GlobalValue::ExternalLinkage, UndefValue::get(typ), name);
-        lua_pushlightuserdata(L, gv);
-        v->setfield("value");
-        return gv;
-    }
     AllocaInst * allocVar(Obj * v) {
         IRBuilder<> TmpB(&func->getEntryBlock(),
                           func->getEntryBlock().begin()); //make sure alloca are at the beginning of the function
@@ -1348,14 +1374,21 @@ if(baseT->isIntegerTy()) { \
         }
         return B->CreateSelect(condExp, aExp, bExp);
     }
+    Value * variableFromDefinition(Obj * exp) {
+        Obj def;
+        exp->obj("definition",&def);
+        if(def.hasfield("isglobal")) {
+            return GetGlobalVariable(&CC,&def,exp->asstring("name"));
+        } else {
+            Value * v = (Value*) def.ud("value");
+            assert(v);
+            return v;
+        }
+    }
     Value * emitExp(Obj * exp) {
         switch(exp->kind("kind")) {
             case T_var:  {
-                Obj def;
-                exp->obj("definition",&def);
-                Value * v = (Value*) def.ud("value");
-                assert(v);
-                return v;
+                return variableFromDefinition(exp);
             } break;
             case T_ltor: {
                 Obj e;
@@ -1512,7 +1545,7 @@ if(baseT->isIntegerTy()) { \
             case T_constant: {
                 Obj value;
                 exp->obj("value",&value);
-                return getConstant(&value);
+                return GetConstant(&CC,&value);
             } break;
             case T_luafunction: {
                 TType * typ = typeOfValue(exp);
@@ -1904,17 +1937,10 @@ if(baseT->isIntegerTy()) { \
                 Obj vars;
                 stmt->obj("variables",&vars);
                 int N = vars.size();
-                bool isglobal = stmt->boolean("isglobal");
                 for(int i = 0; i < N; i++) {
                     Obj v;
                     vars.objAt(i,&v);
-                    Value * addr;
-                    
-                    if(isglobal) {
-                        addr = allocGlobal(&v);
-                    } else {
-                        addr = allocVar(&v);
-                    }
+                    Value * addr = allocVar(&v);
                     if(has_inits)
                         B->CreateStore(rhs[i],addr);
                 }
@@ -1958,6 +1984,28 @@ static int terra_codegen(lua_State * L) { //entry point into compiler from lua c
     {
         TerraCompiler c;
         c.run(T,ref_table);
+    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
+    
+    lobj_removereftable(T->L,ref_table);
+    
+    return 0;
+}
+
+
+static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    
+    //create lua table to hold object references anchored on stack
+    int ref_table = lobj_newreftable(T->L);
+    
+    {
+        CCallingConv CC;
+        CC.init(T, T->C, NULL);
+        Obj global;
+        lua_pushvalue(T->L,-2); //original argument
+        global.initFromStack(T->L, ref_table);
+        GetGlobalVariable(&CC,&global,"anon");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);

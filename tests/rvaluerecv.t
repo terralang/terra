@@ -11,7 +11,8 @@ terra A.methods.foo2(self : A)
 end
 
 
-var mya = A { 0 }
+mya = global(A)
+mya:set({0})
 
 terra geta()
     return mya

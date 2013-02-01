@@ -1,1 +1,1 @@
-var a : struct { a : int }
+a = global( struct { a : int } )

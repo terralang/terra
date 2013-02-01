@@ -1,6 +1,7 @@
 
 
-var a = 4 + 5
+--var a = 4 + 5
+a = global(4 + 5)
 terra foo()
 	return a
 end

@@ -652,45 +652,53 @@ function terra.isglobalvar(obj)
     return getmetatable(obj) == terra.globalvar
 end
 
-function terra.globalvar:compile(ctx)
-
-    local ctx = ctx or terra.newcontext()
-    local globalinit = self.initializer --this initializer may initialize more than 1 variable, all of them are handled here
-    
-    globalinit.initfn:compile(ctx)
-    
-    local entries = globalinit.initfn.typedtree.body.statements[1].variables --extract definitions from generated function
-    for i,v in ipairs(globalinit.globals) do
-        v.tree = entries[i]
-        v.type = v.tree.type
-    end
-    --this will happen when function referring to this GV is in the same strongly connected component as the global variables initializer
-    if not globalinit.initfn:hasbeeninstate("optimize") then 
-        local tree = globalinit.initfn.untypedtree
-        ctx:reporterror(tree,"global variable recursively used by its own initializer")
-    end
-    
-    if not ctx.has_errors and not ctx.compileflags.nojit then
-        globalinit.initfn()
-    end
+function terra.globalvar:gettype()
+    return self.type
 end
 
-function terra.globalvar:gettype(ctx) 
-    local initfn = self.initializer.initfn
-    local state = initfn.state
-    if initfn:hasbeeninstate("optimize") then
-        if (ctx == nil or not ctx.compileflags.nojit) and state ~= "initialized" then
-            initfn()
+--terra.createglobal provided by tcompiler.cpp
+function terra.global(a0, a1)
+    local typ,c
+    if terra.types.istype(a0) then
+        typ = a0
+        if a1 then
+            c = terra.constant(typ,a1)
         end
-        return self.type
-    elseif state == "uninitializedterra" then
-        self:compile(ctx)
-        assert(self.type ~= nil, "nil type?")
-        return self.type
     else
-        return terra.types.error, "reference to global variable in its own initializer"
+        c = terra.constant(a0)
+        typ = c.type
     end
+    
+    local gbl =  setmetatable({type = typ, isglobal = true, initializer = c},terra.globalvar)
+    
+    if c then --if we have an initializer we know that the type is not opaque and we can create the variable
+              --we need to call this now because it is possible for the initializer's underlying cdata object to change value
+              --in later code
+        gbl:getpointer()
+    end
+
+    return gbl
 end
+
+function terra.globalvar:getpointer()
+    if not self.llvm_ptr then
+        self.type:getcanonical(terra.newcontext())
+        terra.createglobal(self)
+    end
+    if not self.cdata_ptr then
+        self.cdata_ptr = terra.cast(terra.types.pointer(self.type),self.llvm_ptr)
+    end
+    return self.cdata_ptr
+end
+function terra.globalvar:get()
+    local ptr = self:getpointer()
+    return ptr[0]
+end
+function terra.globalvar:set(v)
+    local ptr = self:getpointer()
+    ptr[0] = v
+end
+    
 
 -- END GLOBALVAR
 
@@ -956,34 +964,6 @@ do  --constructor functions for terra functions and variables
         return obj
     end
 
-    function terra.newvariables(tree,envfn)
-        local globals = terra.newlist()
-        local varentries = terra.newlist()
-        
-        local globalinit = {} --table to hold initialization information for this group of variables
-        
-        for i,v in ipairs(tree.variables) do
-            local n = v.name:concat("_") .. "_" .. name_count
-            name_count = name_count + 1
-            local sym = terra.newtree(v, {kind = terra.kinds.symbol, name = n})
-            local varentry = terra.newtree(v, { kind = terra.kinds.entry, name = sym, type = v.type })
-            varentries:insert(varentry)
-            
-            local gv = setmetatable({initializer = globalinit},terra.globalvar)
-            globals:insert(gv)
-        end
-        
-        local anchor = tree.variables[1]
-        local dv = terra.newtree(anchor, { kind = terra.kinds.defvar, variables = varentries, initializers = tree.initializers, isglobal = true})
-        local body = terra.newtree(anchor, { kind = terra.kinds.block, statements = terra.newlist {dv} })
-        local ftree = terra.newtree(anchor, { kind = terra.kinds["function"], parameters = terra.newlist(),
-                                              is_varargs = false, filename = tree.filename, body = body})
-        
-        globalinit.initfn = newfunctionvariant(ftree,nil,envfn())
-        globalinit.globals = globals
-
-        return unpack(globals)
-    end
 end
 
 -- END CONSTRUCTORS
@@ -1100,7 +1080,7 @@ do --construct type table that holds the singleton value representing each uniqu
                     self.cachedcstring = definetype(value,"ptr",value .. "*")
                 end
             elseif self:islogical() then
-                self.cachedcstring = "unsigned char"
+                self.cachedcstring = "uint8_t"
             elseif self:isstruct() then
                 local nm = uniquetypename(self.name)
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --first make a typedef to the opaque pointer
@@ -2474,13 +2454,8 @@ function terra.funcvariant:typecheck(ctx)
             end
             return terra.newtree(anchor, { kind = terra.kinds.speciallist, values = values})
         elseif terra.isglobalvar(v) then
-            local typ,errstr = v:gettype(ctx) -- this will initialize the variable if it is not already
-            if typ ~= terra.types.error then
-                return insertvar(anchor,typ,v.tree.name,v.tree)
-            else
-                terra.reporterror(ctx,anchor," error resolving global variable. ",errstr)
-                return anchor:copy{type = terra.types.error}
-            end
+            local typ = v.type:getcanonical(ctx)
+            return insertvar(anchor,typ,"anon",v)
         elseif terra.issymbol(v) then
             local definition = ctx:symenv()[v]
             if not definition then
@@ -3203,6 +3178,9 @@ _G["attribute"] = macro(function(ctx,tree,arg,attributes)
     return arg.tree
 end)
 
+_G["global"] = terra.global
+_G["constant"] = terra.consta
+
 terra.select = macro(function(ctx,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
 end)
@@ -3569,22 +3547,31 @@ function terra.isconstant(obj)
     return getmetatable(obj) == terra.constantobj
 end
 
-function terra.constant(typorobj,obj)
+function terra.constant(a0,a1)
     local c = {}
-    if not obj then
-        if type(typorobj) ~= "cdata" then
-            error("constant constructor requires explicit type for objects that are not cdata")
+    if terra.types.istype(a0) then
+        c.type = a0
+        c.object = a1
+        if type(c.object) ~= "cdata" or terra.typeof(c.object) ~= c.type then
+            c.object = terra.cast(c.type,c.object)
         end
-        c.type = terra.typeof(typorobj)
-        c.object = typorobj
+        return setmetatable(c,terra.constantobj)
     else
-        if not terra.types.istype(typorobj) then
-            error("expected a terra type as first argument")
+        local init,typ = a0,nil
+        if type(init) == "cdata" then
+            typ = terra.typeof(init)
+        elseif type(init) == "number" then
+            typ = (math.floor(init) == init and int) or double
+        elseif type(init) == "boolean" then
+            typ = bool
+        elseif type(init) == "string" then
+            typ = rawstring
+            init = ffi.cast("const char *",init) --otherwise the conversion will fail...
+        else
+            error("constant constructor requires explicit type for objects of type "..type(init))
         end
-        c.type = typorobj
-        c.object = terra.cast(c.type,obj)
+        return terra.constant(typ,init)
     end
-    return setmetatable(c,terra.constantobj)
 end
 
 function terra.typeof(obj)

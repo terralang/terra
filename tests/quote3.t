@@ -1,4 +1,4 @@
-var c = 0
+c = global(0)
 terra count()
     c = c + 1
     return c

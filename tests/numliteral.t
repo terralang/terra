@@ -1,9 +1,14 @@
-var a,b,c,d,e = 3,3.0,3.f,3LL, 3ULL
+
+terra thetest()
+	var a,b,c,d,e = 3,3.0,3.f,3LL, 3ULL
+	return a,b,c,d,e
+end
 
 local exp = { "int32", "double", "float", "int64", "uint64" }
-local v = {a,b,c,d,e}
 
 local test = require("test")
-for i,e in ipairs(v) do
-	test.eq(tostring(e:gettype()),exp[i]) 
+thetest:compile()
+local typ = thetest.variants[1]:gettype()
+for i,e in ipairs(typ.returns) do
+	test.eq(tostring(e),exp[i]) 
 end

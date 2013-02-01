@@ -1,5 +1,5 @@
 
-var c = 0
+c = global(0)
 terra foo(a : int)
     c = c + a
 end

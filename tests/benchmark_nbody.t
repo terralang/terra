@@ -134,10 +134,8 @@ terra main(argc : int, argv : &&int8)
   return 0
 end
 
-var myargv : (&int8)[2] = {"what","1000000"}
-
 terra run()
-    main(2,myargv)
+    main(2,array("what","1000000"))
 end
 
 --run:compile()

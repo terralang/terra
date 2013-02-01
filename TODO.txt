@@ -36,6 +36,8 @@ Making specialization eager and simplifying the compiler.
 -- make the compilation graph a singleton, environments should be handled by function compilation individually. If something is re-entrant into compilation from lua code and there are compile errors stop compilation. Double-check that re-entrant compiler code can compile as long as it is in a different SCC from its compile-time caller. Remove ctx objects as arguments. fnvariant:gettype() and fnvariant:compile() should be seperate from the internal interfaces.
 
 -- remove var syntax from lua. Instead use terralib.global to create global variables.
+-- add asynchronous versions of :compile and :gettype that can be called when the compiler is running
+-- support LLVM constant expressions: terralib.constant(`exp) (this will allow vtables etc. to be constructed)
 
 
 
