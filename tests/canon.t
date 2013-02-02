@@ -1,21 +1,20 @@
 
 struct B {
    a : A
-}
-
-
+} and
 struct A {
    b : &B
 }
 
 
-local U = struct { c : C }
 
-local UP = &U
 
 struct C {
     i : int
 }
+local U = struct { c : C }
+local UP = &U
+
 
 local FP = UP -> int
 local FP2 = UP -> int

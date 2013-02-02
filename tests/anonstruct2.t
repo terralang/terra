@@ -1,5 +1,5 @@
 
-A = struct { a : &A }
+struct A { a : &A }
 
 terra foo()
     var a : A    

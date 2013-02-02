@@ -607,8 +607,6 @@ function terra.funcvariant:compile(ctx)
     
 end
 
-
-
 function terra.funcvariant:__call(...)
     self:compile()
     local NR = #self.type.returns
@@ -918,32 +916,38 @@ do  --constructor functions for terra functions and variables
         return setmetatable({variants = terra.newlist(), name = name},terra.func)
     end
     
-    local function registerlayoutfunction(st,tree,env)
-        local function buildstruct(typ,ctx)
-            ctx:enterdef(env)
-            
-            local function addstructentry(v)
-                local resolvedtype = terra.resolvetype(ctx,v.type)
-                if not typ:addentry(v.key,resolvedtype) then
-                    terra.reporterror(ctx,v,"duplicate definition of field ",v.key)
-                end
+    local function layoutstruct(st,tree,env)
+        local diag = terra.newdiagnostics()
+
+        local function addstructentry(v)
+            local success,resolvedtype = terra.evalluaexpression(diag,v.type,env)
+            if not success then return end
+            if not terra.types.istype(resolvedtype) then
+                diag:reporterror(v,"lua expression is not a terra type but ", type(resolvedtype))
+                return
             end
-            local function addrecords(records)
-                for i,v in ipairs(records) do
-                    if v.kind == terra.kinds["union"] then
-                        typ:beginunion()
-                        addrecords(v.records)
-                        typ:endunion()
-                    else
-                        addstructentry(v)
-                    end
-                end
+            if not st:addentry(v.key,resolvedtype) then
+                diag:reporterror(v,"duplicate definition of field ",v.key)
             end
-            addrecords(tree.records)
-            ctx:leavedef()
         end
+        
+        local function addrecords(records)
+            for i,v in ipairs(records) do
+                if v.kind == terra.kinds["union"] then
+                    st:beginunion()
+                    addrecords(v.records)
+                    st:endunion()
+                else
+                    addstructentry(v)
+                end
+            end
+        end
+        addrecords(tree.records)
+        
         st.tree = tree --for debugging purposes, we keep the tree to improve error reporting
-        st:addlayoutfunction(buildstruct)
+        
+        diag:abortiferrors("Errors reported during struct definition.")
+
     end
 
     local function declareobjects(N,declfn,...)
@@ -974,7 +978,7 @@ do  --constructor functions for terra functions and variables
             local obj, name, tree = args[idx], args[idx+1], args[idx+2]
             idx = idx + 3
             if "s" == c then
-                registerlayoutfunction(obj,tree,envfn())
+                layoutstruct(obj,tree,envfn())
             elseif "f" == c or "m" == c then
                 local reciever = nil
                 if "m" == c then
@@ -990,7 +994,7 @@ do  --constructor functions for terra functions and variables
 
     function terra.anonstruct(tree,envfn)
         local st = terra.types.newstruct("anon")
-        registerlayoutfunction(st,tree,envfn())
+        layoutstruct(st,tree,envfn())
         st:setconvertible(true)
         return st
     end
@@ -1408,10 +1412,8 @@ do --construct type table that holds the singleton value representing each uniqu
             
             self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
             
-            for i,layoutfn in ipairs(self.layoutfunctions) do
-                layoutfn(self,ctx)
-            end
-            
+            --TODO: this is where a metatable callback will occur right before the struct will become complete
+
             self.incomplete = nil
             
             local function checkrecursion(t)
@@ -1438,11 +1440,6 @@ do --construct type table that holds the singleton value representing each uniqu
             dbprintraw(2,self)
             return self
         
-        end
-        
-        function tbl:addlayoutfunction(fn)
-            assert(self.incomplete)
-            self.layoutfunctions:insert(fn)
         end
         
         function tbl:setconvertible(b)
@@ -1547,6 +1544,7 @@ function terra.parseerror(startline, errmsg)
     end
 end
 
+--deprecated, in the process of switching everything to evalluaexpression
 function terra.resolveluaexpression(ctx,e)
     if not terra.istree(e) or not e:is "luaexpression" then
         print(debug.traceback())
@@ -1554,6 +1552,24 @@ function terra.resolveluaexpression(ctx,e)
         error("not a lua expression?")
     end
     return terra.treeeval(ctx,e,e.expression)
+end
+
+function terra.evalluaexpression(diag, e, env)
+    if not terra.istree(e) or not e:is "luaexpression" then
+       print(debug.traceback())
+       terra.tree.printraw(e)
+       error("not a lua expression?") 
+    end
+    assert(type(e.expression) == "function")
+    local fn = e.expression
+    setfenv(fn,env)
+    local success,v = pcall(fn)
+    if not success then --v contains the error message
+        local ln,err = terra.parseerror(e.linenumber,v)
+        diag:reporterror(e:copy( { linenumber = ln }),err)
+        return false
+    end
+    return true,v
 end
 
 function terra.resolvetype(ctx,t,returnlist)

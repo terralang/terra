@@ -1,5 +1,5 @@
 --the zero line
-struct A { b : B }
+struct A { b : B } and
 struct B {a : int, b : int}
 
 B.methods.foo = terra(b : B)

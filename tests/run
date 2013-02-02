@@ -30,7 +30,7 @@ for line in io.popen("find . -name '*.t'"):lines() do
     --which suggests that the error was reported gracefully
     --(if the compiler bites it before it finishes typechecking then it will not print this)
     if string.sub(file,1,5) == "fails" then
-        if os.execute(execstring.." | grep 'Errors reported during compilation'") ~= 0 then
+        if os.execute(execstring.." | grep 'Errors reported during'") ~= 0 then
             e.v = "FAIL"
             failed = failed + 1
         else

@@ -1,5 +1,5 @@
 
-struct B { a : A[4] }
+struct B { a : A[4] } and
 struct A { b : B }
 
 terra foo()
