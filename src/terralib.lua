@@ -1393,6 +1393,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 end
             end
             for i,v in ipairs(self.entries) do
+                v.type:getcanonical(ctx)
                 checkrecursion(v.type)
             end
             
