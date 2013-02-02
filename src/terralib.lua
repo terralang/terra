@@ -1539,8 +1539,12 @@ function terra.reporterror(ctx,anchor,...)
 end
 
 function terra.parseerror(startline, errmsg)
-    local line,err = errmsg:match(":([0-9]+):(.*)")
-    return startline + tonumber(line) - 1, err
+    local line,err = errmsg:match [["$terra$"]:([0-9]+):(.*)]]
+    if line and err then
+        return startline + tonumber(line) - 1, "error evaluating lua code: " .. err
+    else
+        return startline, "error evaluating lua code: " .. errmsg
+    end
 end
 
 function terra.resolveluaexpression(ctx,e)

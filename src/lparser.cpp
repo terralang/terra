@@ -1355,7 +1355,7 @@ static void luaexpr(LexState * ls) {
     data.step = 0;
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     
-    if(lua_load(ls->L, expr_reader, &data, "expr") != 0) {
+    if(lua_load(ls->L, expr_reader, &data, "$terra$") != 0) {
         //we already parsed this buffer, so this should rarely cause an error
         //we need to find the line number in the error string, add it to where we began this line,
         //and then report the error with the correct line number
