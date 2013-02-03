@@ -43,10 +43,10 @@ local IO = terralib.includec("stdio.h")
 NI,NJ = 1,4
 V = 8
 terra uload(d : &float)
-	return attribute(@d:as(&vector(float,V)),{align = 4})
+	return attribute(@[&vector(float,V)](d),{align = 4})
 end
 terra ustore(d : &float, v : vector(float,V))
-	attribute(@d:as(&vector(float,V)),{align = 4}) = v
+	attribute(@[&vector(float,V)](d),{align = 4}) = v
 end
 
 terra runit(N : int, input : &float, output : &float)
@@ -92,8 +92,8 @@ end
 
 terra doit()
 	var N = 2048
-	var img = C.malloc(N*N*sizeof(float)):as(&float)
-	var img2 = C.malloc(N*N*sizeof(float)):as(&float)
+	var img = [&float](C.malloc(N*N*sizeof(float)))
+	var img2 = [&float](C.malloc(N*N*sizeof(float)))
 
 	for i = 0, N do
 		for j = 0, N do

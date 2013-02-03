@@ -26,15 +26,16 @@ function genkernel(NB, RM, RN, V,alpha)
 	local k = symbol("k")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
-
+	local VT = vector(double,V)
+	local VP = &VT
 	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + (mm+m)*ldc + nn + n*V
-				var [c[m][n]] = alpha * @[caddr[m][n]]:as(&vector(double,V))
+				var [c[m][n]] = alpha * @VP([caddr[m][n]])
 			end)
 			storec:insert(quote
-				@[caddr[m][n]]:as(&vector(double,V)) = [c[m][n]]
+				@VP([caddr[m][n]]) = [c[m][n]]
 			end)
 		end
 	end
@@ -43,12 +44,12 @@ function genkernel(NB, RM, RN, V,alpha)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = @(&B[k*ldb + nn + n*V]):as(&vector(double,V))
+			var [b[n]] = @VP(&B[k*ldb + nn + n*V])
 		end)
 	end
 	for m = 0, RM-1 do
 		calcc:insert(quote
-			var [a[m]] = A[(mm+m)*lda + k]:as(vector(double,V))
+			var [a[m]] = VT(A[(mm+m)*lda + k])
 		end)
 	end
 	for m = 0, RM-1 do 
@@ -87,20 +88,21 @@ end
 
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
+local VP = &vector(double,V)
 
 terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
 	           beta : double, C : &double, ldc : int)
 	
-	var AA = stdlib.malloc(sizeof(double)*M*K):as(&double)
-	var BB = stdlib.malloc(sizeof(double)*K*N):as(&double)
-	var CC = stdlib.malloc(sizeof(double)*M*N):as(&double)
+	var AA = [&double](stdlib.malloc(sizeof(double)*M*K))
+	var BB = [&double](stdlib.malloc(sizeof(double)*K*N))
+	var CC = [&double](stdlib.malloc(sizeof(double)*M*N))
 
 	var i = 0
 	for mm = 0,M,NB do
 		for kk = 0,K,NB do
 			for m = mm,mm+NB do
 				for k = kk,kk+NB,V do
-					@(&AA[i]):as(&vector(double,V)) = @(&A[m*lda + k]):as(&vector(double,V))
+					@VP(&AA[i]) = @VP(&A[m*lda + k])
 					i = i + V
 				end
 			end
@@ -111,7 +113,7 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 		for nn = 0,N,NB do
 			for k = kk,kk+NB do
 				for n = nn,nn+NB,V do
-					@(&BB[i]):as(&vector(double,V)) = @(&B[k*ldb + n]):as(&vector(double,V))
+					@VP(&BB[i]) = @VP(&B[k*ldb + n])
 					i = i + V
 				end
 			end
@@ -146,7 +148,7 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 		for nn = 0,N,NB do
 			for m = mm,mm+NB do
 				for n = nn,nn+NB,V do
-					@(&C[m*ldc + n]):as(&vector(double,V)) = @(&CC[i]):as(&vector(double,V))
+					@VP(&C[m*ldc + n]) = @VP(&CC[i])
 					i = i + V
 				end
 			end

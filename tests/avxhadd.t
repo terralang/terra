@@ -11,7 +11,7 @@ ffi = require("ffi")
 local stdio = terralib.includec("stdio.h")
 
 terra foobar(a : &float)
-	return hadd(@a:as(&vector(float,8)))
+	return hadd(@[&vector(float,8)](a))
 end
 
 dat = ffi.new("float[?] __attribute__((aligned(32)))",8)

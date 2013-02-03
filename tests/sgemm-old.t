@@ -9,7 +9,7 @@ local V = 8
 
 terra vecload(data : &float, idx : int)
 	var addr = &data[idx]
-	return @addr:as(&vector(float,V))
+	return @[&vector(float,V)](addr)
 end
 
 haddavx = terralib.intrinsic("llvm.x86.avx.hadd.ps.256", { vector(float,8), vector(float,8) } -> vector(float,8))
@@ -153,7 +153,7 @@ end)
 terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int, 
 	           beta : float, C : &float, ldc : int)
 	
-	var TB = stdlib.malloc(K * N * sizeof(float)):as(&float)
+	var TB = [&float](stdlib.malloc(K * N * sizeof(float)))
 	var TA = A
 	for kk = 0,K,NK do
 		for nn = 0,N,NB do
@@ -170,7 +170,7 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float,
 	end
 
 	if BLOCKA then
-		TA = stdlib.malloc(M * K * sizeof(float)):as(&float)
+		TA = [&float](stdlib.malloc(M * K * sizeof(float)))
 		for mm = 0,M,NB do
 			for kk = 0,K,NK do
 				for m = mm,mm+NB do

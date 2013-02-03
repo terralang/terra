@@ -35,13 +35,14 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 	assert(isinteger(NB / (RN*V)))
 	assert(isinteger(NB / RM))
 
+	local VP = &vector(double,V)
 	local terra vecload(data : &double, idx : int)
 		var addr = &data[idx]
-		return @addr:as(&vector(double,V))
+		return @VP(addr)
 	end
 	local terra vecstore(data : &double, idx : int, v : vector(double,V))
 		var addr = &data[idx]
-		@addr:as(&vector(double,V)) = v
+		@VP(addr) = v
 	end
 
 	local A,B,C,mm,nn, alpha = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("alpha")

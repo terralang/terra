@@ -13,7 +13,7 @@ local N = 10
 terra foo()
 	var cur : &Node = nil
 	for i = 0, N do
-		var n = c.malloc(sizeof(Node)):as(&Node)
+		var n = [&Node](c.malloc(sizeof(Node)))
 		n.v = i
 		n.next = cur
 		cur = n

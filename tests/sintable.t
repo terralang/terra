@@ -7,7 +7,7 @@ end
 local ctable = terralib.constant(tbl)
 
 terra sintable(a : float) : float
-	var idx = (a / (2 * math.pi) * N):as(int) 
+	var idx = int(a / (2 * math.pi) * N) 
 	return ctable[idx]
 end
 

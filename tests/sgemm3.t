@@ -21,15 +21,16 @@ function genkernel(NB, RM, RN, V,alpha)
 	local k = symbol("k")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
-
+	local VT = vector(float,V)
+	local VP = &VT
 	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + m*ldc + n*V
-				var [c[m][n]] = alpha * @[caddr[m][n]]:as(&vector(float,V))
+				var [c[m][n]] = alpha * @VP([caddr[m][n]])
 			end)
 			storec:insert(quote
-				@[caddr[m][n]]:as(&vector(float,V)) = [c[m][n]]
+				@VP([caddr[m][n]]) = [c[m][n]]
 			end)
 		end
 	end
@@ -38,12 +39,12 @@ function genkernel(NB, RM, RN, V,alpha)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = @(&B[n*V]):as(&vector(float,V))
+			var [b[n]] = @VP(&B[n*V])
 		end)
 	end
 	for m = 0, RM-1 do
 		calcc:insert(quote
-			var [a[m]] = A[m*lda]:as(vector(float,V))
+			var [a[m]] = VT(A[m*lda])
 		end)
 	end
 	for m = 0, RM-1 do 

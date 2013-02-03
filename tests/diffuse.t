@@ -28,15 +28,16 @@ alignedloads = global(0)
 loads = global(0)
 NI,NJ = 1,1
 V = 4
+local VP = &vector(float,V)
 terra uload(d : &float)
 	--if d:as(uint64) % 16 == 0 then
 	--	alignedloads = alignedloads + 1
 	--end
 	--loads = loads + 1
-	return attribute(@d:as(&vector(float,V)),{align = 4})
+	return attribute(@VP(d),{align = 4})
 end
 terra ustore(d : &float, v : vector(float,V))
-	attribute(@d:as(&vector(float,V)),{align = 4}) = v
+	attribute(@VP(d),{align = 4}) = v
 end
 
 terra diffuse_reference(output : &float, N : int, M : int, stride : int, x : &float, x0 : &float, a : float)
@@ -158,14 +159,14 @@ terra doit(thea : float)
 	var M1 = (M + 2*enlarge)
 
 	var NA = N1
-	var x = C.malloc(NA*M1*sizeof(float)):as(&float)
-	var x0 = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var x = [&float](C.malloc(NA*M1*sizeof(float)))
+	var x0 = [&float](C.malloc(NA*M1*sizeof(float)))
 
-	var ro1 = C.malloc(NA*M1*sizeof(float)):as(&float)
-	var ro2 = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var ro1 = [&float](C.malloc(NA*M1*sizeof(float)))
+	var ro2 = [&float](C.malloc(NA*M1*sizeof(float)))
 
-	var to1 = C.malloc(NA*M1*sizeof(float)):as(&float)
-	var to2 = C.malloc(NA*M1*sizeof(float)):as(&float)
+	var to1 = [&float](C.malloc(NA*M1*sizeof(float)))
+	var to2 = [&float](C.malloc(NA*M1*sizeof(float)))
 
 	
 	for i = 0, N1 do

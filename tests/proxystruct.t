@@ -10,7 +10,7 @@ struct Node {
 }
 
 terra foo()
-	var cur : &Node = c.malloc(sizeof(Node)):as(&Node)
+	var cur : &Node = [&Node](c.malloc(sizeof(Node)))
 	cur.v = 3
 	return cur.v
 end

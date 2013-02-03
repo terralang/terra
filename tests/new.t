@@ -2,7 +2,7 @@ local c = terralib.includec("stdlib.h")
 
 new = macro(function(ctx,tree,typquote)
     local typ = typquote:astype(ctx)
-    return `c.malloc(sizeof(typ)):as(&typ)
+    return `[&typ](c.malloc(sizeof(typ)))
 end)
 
 local typ = int

@@ -1,7 +1,7 @@
 local test = require("test")
 
 terra foo(a : int)
-    return 1 << 2, a >> 1, -4 >> 1, (-a):as(uint32) >> 1
+    return 1 << 2, a >> 1, -4 >> 1, uint32(-a) >> 1
 end
 
 local a,b,c,d = foo(4)

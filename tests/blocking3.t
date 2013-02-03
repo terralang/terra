@@ -29,7 +29,7 @@ function Image(PixelType)
   }
   terra ImageImpl:init(N: int): {} --returns nothing
     self.data = 
-      std.malloc(N*N*sizeof(PixelType)):as(&PixelType)
+      [&PixelType](std.malloc(N*N*sizeof(PixelType)))
     self.N = N
   end
   terra ImageImpl:get(x: int, y: int) : PixelType

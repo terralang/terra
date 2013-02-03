@@ -51,7 +51,7 @@ function Image(Spectrum)
 		N : int
 	}
 	terra ImageImpl:init(N : int)
-		self.data = stdlib.malloc(N*N*sizeof(Spectrum)):as(&float)
+		self.data = [&float](stdlib.malloc(N*N*sizeof(Spectrum)))
 		self.N = N
 	end
 	ImageImpl.methods.pixel = macro(function(ctx,tree,self,x,y)

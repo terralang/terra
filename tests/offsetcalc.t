@@ -8,8 +8,8 @@ function offsetinbytes(structtype,key)
     offsetinbytescache[structtype] = typetable
     
     local terra offsetcalc() : int
-        var a : &structtype = (0):as(&structtype)
-        return (&a.[key]):as(&int8) - a:as(&int8)
+        var a : &structtype = [&structtype](0)
+        return [&int8](&a.[key]) - [&int8](a)
     end
     
     local result = offsetcalc()

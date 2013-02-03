@@ -6,17 +6,13 @@ local C = terralib.includecstring [[
 local OC = {}
 setmetatable(OC, {
 	 __index = function(self,idx)
-	 	return `C.objc_getClass(idx):as(C.id)
+	 	return `C.id(C.objc_getClass(idx))
 	end
 })
 OC.ID = &C.objc_object
 setmetatable(C.objc_object.methods,{
 	defaulttable = getmetatable(C.objc_object.methods);
 	__index = function(self,idx)
-		local df = getmetatable(self).defaulttable[idx]
-		if df then
-			return df
-		end
 		if string.sub(idx,1,2) == "__" then --ignore metamethods
 			return nil
 		end

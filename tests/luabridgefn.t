@@ -1,6 +1,6 @@
 
 terra plus1(a : int)
-    return a + (1):as(int)
+    return a + int(1)
 end
 
 terra afn() : int -> int

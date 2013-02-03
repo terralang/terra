@@ -1225,11 +1225,7 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         return self
     end
-    
-    types.type.methods = {} --metatable of all types
-    types.type.methods.as = macro(function(ctx,tree,exp,typ)
-        return terra.newtree(tree,{ kind = terra.kinds.explicitcast, totype = typ:astype(ctx), value = exp.tree })
-    end)    
+        
     function types.istype(t)
         return getmetatable(t) == types.type
     end
@@ -1241,7 +1237,7 @@ do --construct type table that holds the singleton value representing each uniqu
     types.ctypetoterra = {}
     
     local function mktyp(v)
-        v.methods = setmetatable({},{ __index = types.type.methods }) --create new blank method table
+        v.methods = {}
         return setmetatable(v,types.type)
     end
     
@@ -2423,7 +2419,7 @@ function terra.funcvariant:typecheck(ctx)
         if fn:is "luaobject" then
             if terra.ismacro(fn.value) then
                  return true,resolvemacro(fn.value,anchor,unpack(untypedarguments))
-            elseif terra.types.istype(fn.value) and fn.value:isstruct() then
+            elseif terra.types.istype(fn.value) then
                 local typfn = fn.value:getcanonical(ctx)
                 local castmacro = macro(function(ctx,tree,arg)
                     return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = typfn })

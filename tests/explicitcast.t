@@ -1,10 +1,10 @@
 
 terra foo()
     var a = 256+3
-    var c = (&a):as(intptr)
-    var d = c:as(&int64)
-    var fi = (true):as(int)
-    var what = @(&a):as(&int8)
+    var c = intptr(&a)
+    var d = [&int64](c)
+    var fi = int(true)
+    var what = @[&int8](&a)
     return @d,fi,what
 end
 

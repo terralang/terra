@@ -13,11 +13,11 @@ function genkernel(NB, RM, RN, V,alpha)
 
 	local terra vecload(data : &float, idx : int)
 		var addr = &data[idx]
-		return @addr:as(&vector(float,V))
+		return @[&vector(float,V)](addr)
 	end
 	local terra vecstore(data : &float, idx : int, v : vector(float,V))
 		var addr = &data[idx]
-		@addr:as(&vector(float,V)) = v
+		@[&vector(float,V)](addr) = v
 	end
 
 	local A,B,C,mm,nn = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn")
@@ -26,15 +26,16 @@ function genkernel(NB, RM, RN, V,alpha)
 	local k = symbol("k")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
-
+	local VT = vector(float,V)
+	local VP = &VT
 	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + (mm+m)*ldc + nn + n*V
-				var [c[m][n]] = alpha * @[caddr[m][n]]:as(&vector(float,V))
+				var [c[m][n]] = alpha * @VP([caddr[m][n]])
 			end)
 			storec:insert(quote
-				@[caddr[m][n]]:as(&vector(float,V)) = [c[m][n]]
+				@VP([caddr[m][n]]) = [c[m][n]]
 			end)
 		end
 	end
@@ -43,12 +44,12 @@ function genkernel(NB, RM, RN, V,alpha)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = @(&B[k*ldb + nn + n*V]):as(&vector(float,V))
+			var [b[n]] = @VP(&B[k*ldb + nn + n*V])
 		end)
 	end
 	for m = 0, RM-1 do
 		calcc:insert(quote
-			var [a[m]] = A[(mm+m)*lda + k]:as(vector(float,V))
+			var [a[m]] = VT(A[(mm+m)*lda + k])
 		end)
 	end
 	for m = 0, RM-1 do 
@@ -88,19 +89,21 @@ end
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 
+local VT = vector(float,V)
+
 terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &float, lda : int, B : &float, ldb : int, 
 	           beta : float, C : &float, ldc : int)
 	
-	var AA = stdlib.malloc(sizeof(float)*M*K):as(&float)
-	var BB = stdlib.malloc(sizeof(float)*K*N):as(&float)
-	var CC = stdlib.malloc(sizeof(float)*M*N):as(&float)
+	var AA = [&float](stdlib.malloc(sizeof(float)*M*K))
+	var BB = [&float](stdlib.malloc(sizeof(float)*K*N))
+	var CC = [&float](stdlib.malloc(sizeof(float)*M*N))
 
 	var i = 0
 	for mm = 0,M,NB do
 		for kk = 0,K,NB do
 			for m = mm,mm+NB do
 				for k = kk,kk+NB,V do
-					@(&AA[i]):as(&vector(float,V)) = @(&A[m*lda + k]):as(&vector(float,V))
+					@[&VT](&AA[i]) = @[&VT](&A[m*lda + k])
 					i = i + V
 				end
 			end
@@ -111,7 +114,7 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 		for nn = 0,N,NB do
 			for k = kk,kk+NB do
 				for n = nn,nn+NB,V do
-					@(&BB[i]):as(&vector(float,V)) = @(&B[k*ldb + n]):as(&vector(float,V))
+					@[&VT](&BB[i]) = @[&VT](&B[k*ldb + n])
 					i = i + V
 				end
 			end
@@ -146,7 +149,7 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 		for nn = 0,N,NB do
 			for m = mm,mm+NB do
 				for n = nn,nn+NB,V do
-					@(&C[m*ldc + n]):as(&vector(float,V)) = @(&CC[i]):as(&vector(float,V))
+					@[&VT](&C[m*ldc + n]) = @[&VT](&CC[i])
 					i = i + V
 				end
 			end

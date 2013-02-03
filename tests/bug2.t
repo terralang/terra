@@ -4,8 +4,8 @@ cstdio = terralib.includec("stdio.h")
 local vec4 = &vector(float,4)
 
 terra lol( w : &float, out : &float)
-  var a  = attribute(@(w:as(vec4)), { align = 4 })
-  attribute((out:as(vec4))[0], { align = 4 }) = a
+  var a  = attribute(@vec4(w), { align = 4 })
+  attribute(vec4(out)[0], { align = 4 }) = a
 end
 
 dat = ffi.new("float[?]",32)
