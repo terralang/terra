@@ -1,12 +1,12 @@
 
 local bar2 = macro(function(ctx,tree,typ)
-	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], name = "a" })
+	return typ
 	
 end)
 
 terra foo() : int
 	var a = 3
-	bar2(int) = bar2(int) + 5
+	bar2(a) = bar2(a) + 5
 	return a
 end
 

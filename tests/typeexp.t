@@ -1,5 +1,6 @@
-terra foo(a : int)
-   var b : &a.type = &a
+atype = int
+terra foo(a : atype)
+   var b : &atype = &a
    return @b
 end
 

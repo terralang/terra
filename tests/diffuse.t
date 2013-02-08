@@ -34,10 +34,10 @@ terra uload(d : &float)
 	--	alignedloads = alignedloads + 1
 	--end
 	--loads = loads + 1
-	return attribute(@VP(d),{align = 4})
+	return terralib.aligned(@VP(d),4)
 end
 terra ustore(d : &float, v : vector(float,V))
-	attribute(@VP(d),{align = 4}) = v
+	terralib.aligned(@VP(d),4) = v
 end
 
 terra diffuse_reference(output : &float, N : int, M : int, stride : int, x : &float, x0 : &float, a : float)

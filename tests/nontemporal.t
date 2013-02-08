@@ -1,7 +1,7 @@
 
 
 terra foobar(a : &vector(float,4),b : vector(float,4))
-	attribute(@a,{nontemporal = true}) = b
+	terralib.nontemporal(@a) = b
 end
 
 foobar:disas()

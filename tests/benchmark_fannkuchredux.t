@@ -111,16 +111,6 @@ terra tk(n : int)
 end
 
 
-terra main(argc : int, v : &&int8)
-    if argc < 2 then
-      C.printf("usage: %s number\n", v[0])
-      C.exit(1);
-    end
-    
-    doit(C.atoi(v[1]))
-    return 0
-end
-
 terra doit(N : int)
     maxflips = 0
     odd = false
@@ -138,6 +128,17 @@ terra doit(N : int)
     C.printf("%d\nPfannkuchen(%d) = %d\n", checksum, max_n, maxflips)
     return checksum
 end
+
+terra main(argc : int, v : &&int8)
+    if argc < 2 then
+      C.printf("usage: %s number\n", v[0])
+      C.exit(1);
+    end
+    
+    doit(C.atoi(v[1]))
+    return 0
+end
+
 
 local test = require("test")
 

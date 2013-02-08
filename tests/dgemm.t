@@ -6,7 +6,7 @@ local function isinteger(x) return math.floor(x) == x end
 
 
 
-
+local NB = 48
 terra naivel1matmul(A : &double, B : &double, C : &double, lda : int, ldb : int, ldc : int, alpha : double)
 
 	for m = 0, NB do
@@ -110,8 +110,6 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 end
 
 
-
-local NB = 48
 
 local NB2 = 8 * NB
 local l1matmul = genl1matmul(NB,4, 3, 2, 4)

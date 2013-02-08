@@ -5,7 +5,7 @@ local bar = macro(function(ctx,tree,typ)
 end)
 
 local bar2 = macro(function(ctx,tree,typ)
-	return terralib.newtree(typ.tree, { kind = terralib.kinds["var"], name = "a" })
+	return typ
 	
 end)
 
@@ -22,7 +22,7 @@ local bar4 = macro(function()
     local terra myfn()
         return 42
     end
-    return { a_fn = myfn }
+    return myfn
 end)
 
 moo = global(int,3)
@@ -31,7 +31,7 @@ local bar4 = macro(function()
     local terra myfn()
         return 42
     end
-    return { a_fn = myfn }
+    return myfn
 end)
 
 local bar5 = macro(function()
@@ -40,10 +40,10 @@ end)
 
 terra foo() : int
 	var a : int = bar(int,int16,int32)
-	bar2(int) = bar2(int) + 5
+	bar2(a) = bar2(a) + 5
 	bar3(up(&a),up(&a))
 	bar5() = bar5() + 1
-	return a + bar4().a_fn() + moo
+	return a + bar4()() + moo
 end
 
 local test = require("test")

@@ -3,8 +3,19 @@
 #include <getopt.h>
 #include "terra.h"
 
+
+static void printstats(lua_State * L) {
+#if 0
+  //LINE COVERAGE INFORMATION 
+  lua_getfield(L, LUA_GLOBALSINDEX,"terra");
+  lua_getfield(L, -1, "dumplineinfo");
+  lua_call(L,0,0);
+#endif
+}
+
 static void doerror(lua_State * L) {
     printf("%s\n",luaL_checkstring(L,-1));
+    printstats(L);
     exit(1);
 }
 const char * progname = NULL;
@@ -39,6 +50,8 @@ int main(int argc, char ** argv) {
         dotty(L);
     }
     
+    printstats(L);
+
     return 0;
 }
 

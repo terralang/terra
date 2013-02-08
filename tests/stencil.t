@@ -43,10 +43,10 @@ local IO = terralib.includec("stdio.h")
 NI,NJ = 1,4
 V = 8
 terra uload(d : &float)
-	return attribute(@[&vector(float,V)](d),{align = 4})
+	return terralib.aligned(@[&vector(float,V)](d),4)
 end
 terra ustore(d : &float, v : vector(float,V))
-	attribute(@[&vector(float,V)](d),{align = 4}) = v
+	terralib.aligned(@[&vector(float,V)](d),4) = v
 end
 
 terra runit(N : int, input : &float, output : &float)

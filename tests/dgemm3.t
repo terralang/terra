@@ -37,10 +37,10 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + m*ldc + n*V
-				var [c[m][n]] = alpha * attribute(@VP([caddr[m][n]]),{align=8})
+				var [c[m][n]] = alpha * terralib.aligned(@VP([caddr[m][n]]),8)
 			end)
 			storec:insert(quote
-				attribute(@VP([caddr[m][n]]),{align=8}) = [c[m][n]]
+				terralib.aligned(@VP([caddr[m][n]]),8) = [c[m][n]]
 			end)
 		end
 	end
@@ -49,7 +49,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = attribute(@VP(&B[n*V]),{align=8})
+			var [b[n]] = terralib.aligned(@VP(&B[n*V]),8)
 		end)
 	end
 	for m = 0, RM-1 do

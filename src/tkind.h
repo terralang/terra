@@ -60,7 +60,6 @@ _(logical,"logical") \
 _(ltor,"ltor") \
 _(cast,"cast") \
 _(extractreturn,"extractreturn") \
-_(parameterlist,"parameterlist") \
 _(globalvar, "globalvar") \
 _(struct, "struct") \
 _(structentry, "structentry") \
@@ -80,17 +79,18 @@ _(quote, "quote") \
 _(vector, "vector") \
 _(vectorconstructor,"vectorconstructor") \
 _(arrayconstructor,"arrayconstructor") \
-_(typedexpression,"typeexpression") \
 _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
 _(selectconst, "selectconst") \
-_(speciallist, "speciallist") \
+_(treelist, "treelist") \
+_(typedexpressionlist, "typedexpressionlist") \
 _(instrinsic, "intrinsic") \
 _(nametoken, "<name>") \
 _(numbertoken, "<number>") \
 _(stringtoken, "<string>") \
 _(eostoken, "<eof>") \
-_(constant,"constant")
+_(constant,"constant") \
+_(truncate, "truncate")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

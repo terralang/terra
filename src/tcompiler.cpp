@@ -748,7 +748,7 @@ struct CCallingConv {
             assert(!"unhandled return value");
         }
     }
-    Value * EmitCall(Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals, bool truncateto1arg) {
+    Value * EmitCall(Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals) {
         Classification info;
         Classify(ftype,paramtypes,&info);
         
@@ -789,7 +789,7 @@ struct CCallingConv {
         
         //unstage results
         if(info.nreturns == 0) {
-            return NULL;
+            return call;
         } else if(C_PRIMITIVE == info.returntype.kind) {
             return call;
         } else {
@@ -808,14 +808,18 @@ struct CCallingConv {
                 return B->CreateLoad(aggregate);
             } else {
                 //multireturn
-                if (truncateto1arg) {
-                    return B->CreateLoad(B->CreateConstGEP2_32(aggregate,0,0));
-                } else {
-                    return aggregate;
-                }
+                return aggregate;
             }
         }
         
+    }
+    Value * EmitExtractReturn(Value * aggregate, int nreturns, int idx) {
+        assert(nreturns != 0);
+        if(nreturns > 1) {
+            return B->CreateLoad(B->CreateConstGEP2_32(aggregate, 0, idx));
+        } else {
+            return aggregate;
+        }
     }
     Type * CreateFunctionType(Obj * typ, Obj * deferred) {
 
@@ -1595,21 +1599,14 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("oftype",&typ);
                 TType * tt = getType(&typ);
                 return ConstantInt::get(Type::getInt64Ty(*C->ctx),C->td->getTypeAllocSize(tt->type));
-            } break;
-            case T_apply: {
-                Value * v = emitCall(exp,true);
-                return v;
             } break;   
             case T_extractreturn: {
-                Obj index,resulttable,value;
-                int idx = exp->number("index");
-                exp->obj("result",&resulttable);
-                Value * v = (Value *) resulttable.ud("struct");
-                assert(v);
-                //v->dump();
-                int64_t idxs[] = {0,idx};
-                Value * addr = emitCGEP(v,idxs,2);
-                return B->CreateLoad(addr);
+                return emitExtractReturn(exp);
+            } break;
+            case T_typedexpressionlist: {
+                std::vector<Value*> values;
+                emitParameterList(exp, &values);
+                return (values.size() == 0) ? NULL : values[0];
             } break;
             case T_select: {
                 Obj obj,typ;
@@ -1740,7 +1737,7 @@ if(baseT->isIntegerTy()) { \
         }
         return B->CreateGEP(st, ivalues);
     }
-    Value * emitCall(Obj * call, bool truncateto1arg) {
+    Value * emitCall(Obj * call) {
         Obj paramlist;
         Obj paramtypes;
         Obj func;
@@ -1759,7 +1756,7 @@ if(baseT->isIntegerTy()) { \
         std::vector<Value*> actuals;
         emitParameterList(&paramlist,&actuals);
         
-        return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals, truncateto1arg);
+        return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
     }
     
     void emitReturnUndef() {
@@ -1770,41 +1767,54 @@ if(baseT->isIntegerTy()) { \
             B->CreateRet(UndefValue::get(rt));
         }
     }
-    void emitMultiReturnCall(Obj * call) {
-        Value * rvalues = emitCall(call,false);
-        if(rvalues) {
-            Obj result;
-            call->obj("result",&result);
-            lua_pushlightuserdata(L, rvalues);
-            result.setfield("struct");
+    
+    std::vector<Obj *> fncallstack;
+    std::vector<Value*> fncallresultstack;
+    Value * ensureFunctionCall() {
+        Value * v = fncallresultstack.back();
+        if(v == NULL) {
+            Obj * fncall = fncallstack.back();
+            assert(fncall);
+            v = fncallresultstack.back() = emitCall(fncall);
         }
+        return v;
     }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
-        
         Obj params;
+        Obj fncall;
+        paramlist->obj("expressions",&params);
+        if(paramlist->obj("fncall",&fncall))
+            fncallstack.push_back(&fncall);
+        else
+            fncallstack.push_back(NULL); //make sure we fail fast when an extract return is called when there is not fncall
+        fncallresultstack.push_back(NULL);
         
-        paramlist->obj("parameters",&params);
-        
-        int minN = paramlist->number("minsize");
-        int sizeN = paramlist->number("size");
+        int sizeN = params.size();
         //emit arguments before possible function call
-        for(int i = 0; minN != 0 && i < minN - 1; i++) {
+        for(int i = 0; i < sizeN; i++) {
             Obj v;
             params.objAt(i,&v);
             results->push_back(emitExp(&v));
         }
-        Obj call;
-        //if there is a function call, emit it now
-        if(paramlist->obj("call",&call)) {
-            emitMultiReturnCall(&call);
+        
+        //if no emitreturn caused the function to be emitted, then emit it now
+        if(fncallstack.back()) {
+            ensureFunctionCall();
         }
-        //emit last argument, or (if there was a call) the list of extractors from the function call
-        for(int i = minN - 1; minN != 0 && i < sizeN; i++) {
-            Obj v;
-            params.objAt(i,&v);
-            results->push_back(emitExp(&v));
-        }
+        
+        assert(fncallstack.back() == &fncall || fncallstack.back() == NULL);
+        fncallstack.pop_back();
+        fncallresultstack.pop_back();
     }
+    
+    Value * emitExtractReturn(Obj * exp) {
+        int idx = exp->number("index");
+        Obj * fncall = fncallstack.back();
+        Obj rtypes;
+        fncall->obj("returntypes",&rtypes);
+        return CC.EmitExtractReturn(ensureFunctionCall(),rtypes.size(),idx);
+    }
+    
     void emitStmt(Obj * stmt) {
         T_Kind kind = stmt->kind("kind");
         if(!BB) { //dead code, no emitting

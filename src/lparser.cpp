@@ -786,35 +786,15 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   close_func(ls);
 }
 
-//arguments to function calls may either be terra expressions
-//or if it is a macro, they may also be type expressions (which need to be evaluated as lua code)
-//we have two options:
-//1. parse the AST to terra, and then if we discover it is actualy a lua type, interpret the AST as lua code to resolve the type
-//2. parse the AST to terra and save the string for the argument, if we discover that we have a type then compile and run the string to evalute the type
-//for now we use (2). This store more information in the AST but allows us to avoid having to write a lua interpreter for the terra AST
-//"expressionstring" will hold the string from arguments to function calls
-void exprwithstring(LexState * ls, expdesc *v) {
-    Token begintoken = ls->t;
-    expr(ls,v);
-    if(ls->in_terra) {
-        const char * data;
-        int N;
-        luaX_getoutput(ls, &begintoken, &data, &N);
-        lua_pushlstring(ls->L, data, N);
-        add_field(ls, -2, "expressionstring");
-        
-    }
-}
-
-static int explist (LexState *ls, expdesc *v, int isarglist) {
+static int explist (LexState *ls, expdesc *v) {
   /* explist -> expr { `,' expr } */
   int n = 1;  /* at least one expression */
   int lst = new_list(ls);
-  if(isarglist) exprwithstring(ls,v); else expr(ls, v);
+  expr(ls, v);
   add_entry(ls,lst);
   while (testnext(ls, ',')) {
     //luaK_exp2nextreg(ls->fs, v);
-    if(isarglist) exprwithstring(ls,v); else expr(ls, v);
+    expr(ls, v);
     add_entry(ls,lst);
     n++;
   }
@@ -832,7 +812,7 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
       if (ls->t.token == ')') {  /* arg list is empty? */
         new_list(ls); //empty return list
       } else {
-        RETURNS_1(explist(ls, &args,1));
+        RETURNS_1(explist(ls, &args));
       }
       check_match(ls, ')', '(', line);
       break;
@@ -867,15 +847,6 @@ static void funcargs (LexState *ls, expdesc *f, int line) {
 ** =======================================================================
 */
 
-
-//true when an expression might return multiple values and needs to be marked 'truncated'
-//this can occur on function invocation (apply or method)
-//or if the value is resolved via create special, which can occur for variables, or select statements
-//that resolve to lua objects
-static bool canreturnmultiple(T_Kind k) {
-    return k == T_apply || k == T_method || k == T_var || k == T_select;
-}
-
 static void prefixexp (LexState *ls, expdesc *v) {
   /* prefixexp -> NAME | '(' expr ')' */
   
@@ -884,19 +855,13 @@ static void prefixexp (LexState *ls, expdesc *v) {
       int line = ls->linenumber;
       luaX_next(ls);
       RETURNS_1(expr(ls, v));
-      if(ls->in_terra) {
-        int tbl = lua_gettop(ls->L);
-        lua_getfield(ls->L, tbl, "kind");
-        T_Kind k = (T_Kind) luaL_checkint(ls->L, -1);
-        lua_pop(ls->L,1);
-        //if an call was parenthesized, mark it as only returned one argument
-        //we only care in cases where the result might return multiple values
-        if(canreturnmultiple(k)) { 
-            push_boolean(ls, true);
-            add_field(ls, tbl, "truncated");
-        }
-      }
       check_match(ls, ')', '(', line);
+      if(ls->in_terra) {
+        //if an call was parenthesized, mark it truncated
+        //so that it only returns one argument
+        int tbl = new_table_before(ls, T_truncate);
+        add_field(ls, tbl, "value");
+      }
       //luaK_dischargevars(ls->fs, v);
       return;
     }
@@ -996,7 +961,6 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
 static void block (LexState *ls);
 
 static void doquote(LexState * ls, bool isexp) {
-    const char * quotetyp = isexp ? "exp" : "stmt";
     check_no_terra(ls, isexp ? "`" : "quote");
     
     TerraCnt tc;
@@ -1016,7 +980,7 @@ static void doquote(LexState * ls, bool isexp) {
     
     luaX_patchbegin(ls,&begin);
     int id = store_value(ls);
-    OutputBuffer_printf(&ls->output_buffer,"terra.newquote(_G.terra._trees[%d],\"%s\",",id,quotetyp);
+    OutputBuffer_printf(&ls->output_buffer,"terra.definequote(_G.terra._trees[%d],",id);
     print_captured_locals(ls,&tc);
     OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
@@ -1436,7 +1400,7 @@ static void assignment (LexState *ls, struct LHS_assign *lh, int nvars, int lhs)
     checknext(ls, '=');
     int tbl = new_table_before(ls,T_assignment, true);
     add_field(ls,tbl,"lhs");
-    RETURNS_1(nexps = explist(ls, &e,0));
+    RETURNS_1(nexps = explist(ls, &e));
     add_field(ls,tbl,"rhs");
   }
   //init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
@@ -1595,7 +1559,7 @@ static void forlist (LexState *ls, TString *indexname) {
   add_field(ls,tbl,"variables");
   checknext(ls, TK_IN);
   line = ls->linenumber;
-  RETURNS_1(explist(ls, &e,0));
+  RETURNS_1(explist(ls, &e));
   add_field(ls,tbl,"iterators");
   RETURNS_1(forbody(ls, line, nvars - 3, 0, &bl));
   add_field(ls,tbl,"body");
@@ -1747,7 +1711,7 @@ static void localstat (LexState *ls) {
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
-    RETURNS_1(nexps = explist(ls, &e,0));
+    RETURNS_1(nexps = explist(ls, &e));
     add_field(ls,tbl,"initializers");
   } else {
     //blank initializers
@@ -1979,7 +1943,7 @@ static void retstat (LexState *ls) {
     first = nret = 0;  /* return no values */
     new_list(ls);
   } else {
-    RETURNS_1(nret = explist(ls, &e,0));  /* optional return values */
+    RETURNS_1(nret = explist(ls, &e));  /* optional return values */
   }
   add_field(ls,tbl,"expressions");
   testnext(ls, ';');  /* skip optional semicolon */

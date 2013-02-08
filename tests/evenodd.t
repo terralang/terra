@@ -4,8 +4,7 @@ terra iseven(a : uint) : bool
 	else
 		return isodd(a - 1)
 	end
-end
-
+end and
 terra isodd(a : uint) : bool
 	if a == 0 then
 		return false
