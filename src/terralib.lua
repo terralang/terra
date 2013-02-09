@@ -1432,7 +1432,7 @@ function terra.createterraexpression(diag,anchor,v)
     local function createsingle(v)
         if terra.isglobalvar(v) or terra.issymbol(v) then
             local name = anchor:is "var" and anchor.name and tostring(anchor.name) --propage original variable name for debugging purposes
-            return terra.newtree(anchor, { kind = terra.kinds["var"], value = v, name = name, lvalue = true }) 
+            return terra.newtree(anchor, { kind = terra.kinds["var"], value = v, name = name or tostring(v), lvalue = true }) 
         elseif terra.isquote(v) then
             assert(terra.istree(v.tree))
             if v.tree:is "block" then
