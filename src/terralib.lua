@@ -261,10 +261,11 @@ function terra.context:functioncalls(func)
     end
 end
 
-function terra.newcontext(flags)
+function terra.getcontext(flags)
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0, compileflags = flags or {}},terra.context)
+        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
     end
+    terra.globalcompilecontext.compileflags = flags or {}
     return terra.globalcompilecontext
 end
 
@@ -461,7 +462,7 @@ function terra.funcvariant:compile(ctx)
         return
     end
     
-    local ctx = (terra.iscontext(ctx) and ctx) or terra.newcontext(ctx) -- if this is a top level compile, create a new compilation context
+    local ctx = (terra.iscontext(ctx) and ctx) or terra.getcontext(ctx) -- if this is a top level compile, create a new compilation context
     
     if self.state == "optimize" then
         if ctx.compileflags.nojit or ctx.diagnostics:haserrors() then
@@ -634,7 +635,7 @@ end
 
 function terra.globalvar:getpointer()
     if not self.llvm_ptr then
-        self.type:getcanonical(terra.newcontext())
+        self.type:freeze()
         terra.createglobal(self)
     end
     if not self.cdata_ptr then
@@ -1125,12 +1126,15 @@ do --construct type table that holds the singleton value representing each uniqu
         return self.cachedcstring
     end
     
-    function types.type:getcanonical(ctx) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
-        if self:isvector() or self:ispointer() or self:isarray() then
-            self.type:getcanonical(ctx)
-        elseif self:isfunction() then
-            self.parameters:map(function(e) e:getcanonical(ctx) end)
-            self.returns   :map(function(e) e:getcanonical(ctx) end)
+    function types.type:freeze(diag) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
+        if not self.complete then
+            self.complete = true
+            if self:isvector() or self:ispointer() or self:isarray() then
+                self.type:freeze(diag)
+            elseif self:isfunction() then
+                self.parameters:map(function(e) e:freeze(diag) end)
+                self.returns   :map(function(e) e:freeze(diag) end)
+            end
         end
         return self
     end
@@ -1266,12 +1270,11 @@ do --construct type table that holds the singleton value representing each uniqu
                             keytoindex = {}, 
                             nextunnamed = 0, 
                             nextallocation = 0,
-                            layoutfunctions = terra.newlist(),
-                            incomplete = true                            
+                            layoutfunctions = terra.newlist(),                           
                           }
                             
         function tbl:addentry(k,t)
-            assert(self.incomplete)
+            assert(not self.complete)
             local entry = { type = t, key = k, hasname = true, allocation = self.nextallocation, inunion = self.inunion ~= nil }
             if not k then
                 entry.hasname = false
@@ -1292,14 +1295,14 @@ do --construct type table that holds the singleton value representing each uniqu
             return notduplicate
         end
         function tbl:beginunion()
-            assert(self.incomplete)
+            assert(not self.complete)
             if not self.inunion then
                 self.inunion = 0
             end
             self.inunion = self.inunion + 1
         end
         function tbl:endunion()
-            assert(self.incomplete)
+            assert(not self.complete)
             self.inunion = self.inunion - 1
             if self.inunion == 0 then
                 self.inunion = nil
@@ -1311,20 +1314,20 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         
         
-        function tbl:getcanonical(ctx)
+        function tbl:freeze(diag)
         
-            assert(self.incomplete)
-            
-            self.getcanonical = nil -- if we recursively try to evaluate this type then just return it
+            assert(not self.complete)
+            self.complete = true
+            self.freeze = nil -- if we recursively try to evaluate this type then just return it
             
             --TODO: this is where a metatable callback will occur right before the struct will become complete
 
-            self.incomplete = nil
-            
+            local ldiag = diag or terra.newdiagnostics()
+
             local function checkrecursion(t)
                 if t == self then
                     if self.tree then
-                        terra.reporterror(ctx,self.tree,"type recursively contains itself")
+                        ldiag:reporterror(self.tree,"type recursively contains itself")
                     else
                         --TODO: emit where the user-defined type was first used
                         error("programmatically defined type contains itself")
@@ -1338,10 +1341,14 @@ do --construct type table that holds the singleton value representing each uniqu
                 end
             end
             for i,v in ipairs(self.entries) do
-                v.type:getcanonical(ctx)
+                v.type:freeze(diag)
                 checkrecursion(v.type)
             end
             
+            if not diag then
+                ldiag:abortiferrors("Errors occured duing struct creation.")
+            end
+
             dbprint(2,"Resolved Named Struct To:")
             dbprintraw(2,self)
             return self
@@ -1349,7 +1356,7 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         
         function tbl:setconvertible(b)
-            assert(self.incomplete)
+            assert(not self.complete)
             self.isconvertible = b
         end
         
@@ -1832,7 +1839,7 @@ function terra.funcvariant:typecheck(ctx)
         if fntyp == terra.types.error then
             terra.reporterror(ctx,anchor,"error resolving function literal. ",errstr)
         end
-        local typ = fntyp and terra.types.pointer(fntyp):getcanonical(ctx)
+        local typ = fntyp and terra.types.pointer(fntyp):freeze(diag)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
     
@@ -2827,7 +2834,7 @@ function terra.funcvariant:typecheck(ctx)
                         terra.reporterror(ctx,v,"duplicate definition of field ",k)
                     end
                 end
-                return e:copy { expressions = entries, type = typ:getcanonical(ctx) }
+                return e:copy { expressions = entries, type = typ:freeze(diag) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)
             else
@@ -2838,18 +2845,18 @@ function terra.funcvariant:typecheck(ctx)
         
         --check the expression, may return 1 value or multiple
         local result = docheck(e_)
-        --canonicalize all types returned by the expression (or list of expressions)
+        --freeze all types returned by the expression (or list of expressions)
         local isexpressionlist = result:is "typedexpressionlist"
         if isexpressionlist then
             for i,e in ipairs(result.expressions) do
                 if not e:is "luaobject" then
                     assert(terra.types.istype(e.type))
-                    e.type:getcanonical(ctx)
+                    e.type:freeze(diag)
                 end
             end
         elseif not result:is "luaobject" then
             assert(terra.types.istype(result.type))
-            result.type:getcanonical(ctx)
+            result.type:freeze(diag)
         end
 
         --remove any lua objects if they are not allowed in this context
@@ -2909,7 +2916,7 @@ function terra.funcvariant:typecheck(ctx)
             assert(terra.issymbol(p.symbol))
             if p.type then
                 assert(terra.types.istype(p.type))
-                p.type:getcanonical(ctx)
+                p.type:freeze(diag)
             end
         end
         --copy the entries since we mutate them and this list could appear multiple times in the tree
@@ -3090,7 +3097,7 @@ function terra.funcvariant:typecheck(ctx)
     if ftree.return_types then --take the return types to be as specified
         return_types = ftree.return_types
         for i,r in ipairs(return_types) do
-            r:getcanonical(ctx)
+            r:freeze(diag)
         end
     else --calculate the meet of all return type to calculate the actual return type
         if #return_stmts == 0 then
@@ -3557,13 +3564,13 @@ function terra.makeenvunstrict(env)
 end
 
 function terra.new(terratype,...)
-    terratype:getcanonical(terra.newcontext())
+    terratype:freeze()
     local typ = terratype:cstring()
     return ffi.new(typ,...)
 end
 
 function terra.cast(terratype,obj)
-    terratype:getcanonical(terra.newcontext())
+    terratype:freeze()
     local ctyp = terratype:cstring()
     if type(obj) == "function" then --functions are cached to avoid creating too many callback objects
         local fncache = terra.__wrappedluafunctions[obj]
