@@ -354,10 +354,14 @@ function terra.diagnostics:haserrors()
     return self._haserrors
 end
 
+function terra.diagnostics:clearerrors()
+    self._haserrors = false
+end
+
 function terra.diagnostics:abortiferrors(msg)
     if self:haserrors() then
         self:clearfilecache()
-        self._haserrors = false --clear error state so future calls don't abort
+        self:clearerrors()
         error(msg)
     else
         assert(#self.filecache == 0)
@@ -1755,10 +1759,6 @@ function terra.specialize(origtree, luaenv)
 end
 
 -- TYPECHECKER
-function terra.reporterror(ctx,anchor,...)
-    ctx.diagnostics:reporterror(anchor,...)
-    return terra.types.error
-end
 
 function terra.evalluaexpression(diag, env, e)
     local function parseerrormessage(startline, errmsg)
@@ -1837,7 +1837,7 @@ function terra.funcvariant:typecheck(ctx)
     local function createfunctionliteral(anchor,e)
         local fntyp,errstr = e:gettype(ctx)
         if fntyp == terra.types.error then
-            terra.reporterror(ctx,anchor,"error resolving function literal. ",errstr)
+            diag:reporterror(anchor,"error resolving function literal. ",errstr)
         end
         local typ = fntyp and terra.types.pointer(fntyp):freeze(diag)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
@@ -1873,7 +1873,7 @@ function terra.funcvariant:typecheck(ctx)
         local e = asrvalue(ee)
         local ret = terra.newtree(e,{ kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist{e}, lvalue = true })
         if not e.type:ispointer() then
-            terra.reporterror(ctx,e,"argument of dereference is not a pointer type but ",e.type)
+            diag:reporterror(e,"argument of dereference is not a pointer type but ",e.type)
             ret.type = terra.types.error 
         elseif e.type.type:isfunction() then
             --function pointer dereference does nothing, return the input
@@ -1910,7 +1910,7 @@ function terra.funcvariant:typecheck(ctx)
     local function checklvalue(ee)
         local e = checkexp(ee)
         if not e.lvalue then
-            terra.reporterror(ctx,e,"argument to operator must be an lvalue")
+            diag:reporterror(e,"argument to operator must be an lvalue")
             e.type = terra.types.error
         end
         return e
@@ -1936,7 +1936,7 @@ function terra.funcvariant:typecheck(ctx)
         local function err(...)
             valid = false
             if not speculative then
-                terra.reporterror(ctx,exp,...)
+                diag:reporterror(exp,...)
             end
         end
         
@@ -2032,7 +2032,7 @@ function terra.funcvariant:typecheck(ctx)
             end
 
             if not speculative then
-                terra.reporterror(ctx,exp,"invalid conversion from ",exp.type," to ",typ)
+                diag:reporterror(exp,"invalid conversion from ",exp.type," to ",typ)
             end
             return cast_exp, false
         end
@@ -2046,7 +2046,7 @@ function terra.funcvariant:typecheck(ctx)
             return createcast(exp,typ)
         elseif typ:isintegral() and exp.type:ispointer() then
             if typ.bytes < intptr.bytes then
-                terra.reporterror(ctx,exp,"pointer to ",typ," conversion loses precision")
+                diag:reporterror(exp,"pointer to ",typ," conversion loses precision")
             end
             return createcast(exp,typ)
         elseif typ:isprimitive() and exp.type:isprimitive() then --explicit conversions from logicals to other primitives are allowed
@@ -2079,7 +2079,7 @@ function terra.funcvariant:typecheck(ctx)
     
     local function typemeet(op,a,b)
         local function err()
-            terra.reporterror(ctx,op,"incompatible types: ",a," and ",b)
+            diag:reporterror(op,"incompatible types: ",a," and ",b)
         end
         if a == terra.types.error or b == terra.types.error then
             return terra.types.error
@@ -2133,7 +2133,7 @@ function terra.funcvariant:typecheck(ctx)
     local function checkunary(ee,operands,property)
         local e = operands[1]
         if e.type ~= terra.types.error and not e.type[property](e.type) then
-            terra.reporterror(ctx,e,"argument of unary operator is not valid type but ",e.type)
+            diag:reporterror(e,"argument of unary operator is not valid type but ",e.type)
             return e:copy { type = terra.types.error }
         end
         return ee:copy { type = e.type, operands = terra.newlist{e} }
@@ -2143,7 +2143,7 @@ function terra.funcvariant:typecheck(ctx)
     local function meetbinary(e,property,lhs,rhs)
         local t,l,r = typematch(e,lhs,rhs)
         if t ~= terra.types.error and not t[property](t) then
-            terra.reporterror(ctx,e,"arguments of binary operator are not valid type but ",t)
+            diag:reporterror(e,"arguments of binary operator are not valid type but ",t)
             return e:copy { type = terra.types.error }
         end
         return e:copy { type = t, operands = terra.newlist {l,r} }
@@ -2219,7 +2219,7 @@ function terra.funcvariant:typecheck(ctx)
                 b = insertcast(b,typ)
             
             else
-                terra.reporterror(ctx,ee,"arguments to shift must be integers but found ",a.type," and ", b.type)
+                diag:reporterror(ee,"arguments to shift must be integers but found ",a.type," and ", b.type)
             end
         end
         
@@ -2234,11 +2234,11 @@ function terra.funcvariant:typecheck(ctx)
             if cond.type:isvector() and cond.type.type == bool then
                 if not t:isvector() or t.N ~= cond.type.N then
                     print(ee)
-                    terra.reporterror(ctx,ee,"conditional in select is not the same shape as ",cond.type)
+                    diag:reporterror(ee,"conditional in select is not the same shape as ",cond.type)
                 end
             elseif cond.type ~= bool then
                 print(ee)
-                terra.reporterror(ctx,ee,"expected a boolean or vector of booleans but found ",cond.type)   
+                diag:reporterror(ee,"expected a boolean or vector of booleans but found ",cond.type)   
             end
         end
         return ee:copy { type = t, operands = terra.newlist{cond,l,r}}
@@ -2247,7 +2247,7 @@ function terra.funcvariant:typecheck(ctx)
     local function gettreeattribute(tree,attrname,typ)
         local attr = tree.attributes and tree.attributes[attrname]
         if attr and typ ~= type(attr) then
-            terra.reporterror(ctx,tree,attrname," requires type ", typ, " but found ", type(attr))
+            diag:reporterror(tree,attrname," requires type ", typ, " but found ", type(attr))
             return nil
         end
         return attr
@@ -2356,12 +2356,12 @@ function terra.funcvariant:typecheck(ctx)
             if #typelist > maxsize then
                 allvalid = false
                 if not speculate then
-                    terra.reporterror(ctx,paramlist,"expected at least "..#typelist.." parameters, but found "..maxsize)
+                    diag:reporterror(paramlist,"expected at least "..#typelist.." parameters, but found "..maxsize)
                 end
             elseif #typelist < minsize then
                 allvalid = false
                 if not speculate then
-                    terra.reporterror(ctx,paramlist,"expected no more than "..#typelist.." parameters, but found at least "..minsize)
+                    diag:reporterror(paramlist,"expected no more than "..#typelist.." parameters, but found at least "..minsize)
                 end
             end
             
@@ -2418,7 +2418,7 @@ function terra.funcvariant:typecheck(ctx)
                     else
                         local optiona = typelists[valididx]:mkstring("(",",",")")
                         local optionb = typelist:mkstring("(",",",")")
-                        terra.reporterror(ctx,paramlist,"call to overloaded function is ambiguous. can apply to both ", optiona, " and ", optionb)
+                        diag:reporterror(paramlist,"call to overloaded function is ambiguous. can apply to both ", optiona, " and ", optionb)
                         break
                     end
                 end
@@ -2432,7 +2432,7 @@ function terra.funcvariant:typecheck(ctx)
                 if not speculate then
                     diag:reporterror(paramlist,"call to overloaded function does not apply to any arguments")
                     for i,typelist in ipairs(typelists) do
-                        terra.reporterror(ctx,paramlist,"option ",i," with type ",typelist:mkstring("(",",",")"))
+                        diag:reporterror(paramlist,"option ",i," with type ",typelist:mkstring("(",",",")"))
                         trylist(typelist,false)
                     end
                 end
@@ -2525,13 +2525,13 @@ function terra.funcvariant:typecheck(ctx)
                         end
                     end
                 else
-                    terra.reporterror(ctx,anchor,"expected a function or macro but found lua value of type ",type(fn.value))
+                    diag:reporterror(anchor,"expected a function or macro but found lua value of type ",type(fn.value))
                 end
             elseif fn.type:ispointer() and fn.type.type:isfunction() then
                 terrafunctions:insert(fn)
             else
                 if fn.type ~= terra.types.error then
-                    terra.reporterror(ctx,anchor,"expected a function but found ",fn.type)
+                    diag:reporterror(anchor,"expected a function but found ",fn.type)
                 end
             end 
         end
@@ -2619,16 +2619,16 @@ function terra.funcvariant:typecheck(ctx)
         end
         local name,intrinsictype = e.typefn(paramtypes,params.minsize)
         if type(name) ~= "string" then
-            terra.reporterror(ctx,e,"expected an intrinsic name but found ",tostring(name))
+            diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
             return e:copy { type = terra.types.error }
         elseif intrinsictype == terra.types.error then
-            terra.reporterror(ctx,e,"instrinsic ",name," does not support arguments: ",unpack(paramtypes))
+            diag:reporterror(e,"instrinsic ",name," does not support arguments: ",unpack(paramtypes))
             return e:copy { type = terra.types.error }
         elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
-            terra.reporterror(ctx,e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
+            diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
             return e:copy { type = terra.types.error }
         elseif (#intrinsictype.type.returns == 0 and mustreturnatleast1) or (#intrinsictype.type.returns > 1) then
-            terra.reporterror(ctx,e,"instrinsic used in an expression must return 1 argument")
+            diag:reporterror(e,"instrinsic used in an expression must return 1 argument")
             return e:copy { type = terra.types.error }
         end
         
@@ -2728,7 +2728,7 @@ function terra.funcvariant:typecheck(ctx)
                 if v.type:ispointer() or v.type:isarray() or v.type:isvector() then
                     typ = v.type.type
                     if not idx.type:isintegral() and idx.type ~= terra.types.error then
-                        terra.reporterror(ctx,e,"expected integral index but found ",idx.type)
+                        diag:reporterror(e,"expected integral index but found ",idx.type)
                     end
                     if v.type:ispointer() then
                         v = asrvalue(v)
@@ -2742,7 +2742,7 @@ function terra.funcvariant:typecheck(ctx)
                 else
                     typ = terra.types.error
                     if v.type ~= terra.types.error then
-                        terra.reporterror(ctx,e,"expected an array or pointer but found ",v.type)
+                        diag:reporterror(e,"expected an array or pointer but found ",v.type)
                     end
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
@@ -2759,7 +2759,7 @@ function terra.funcvariant:typecheck(ctx)
                     typ = e.oftype
                 else
                     if N == 0 then
-                        terra.reporterror(ctx,e,"cannot determine type of empty aggregate")
+                        diag:reporterror(e,"cannot determine type of empty aggregate")
                         return e:copy { type = terra.types.error }
                     end
                     
@@ -2773,7 +2773,7 @@ function terra.funcvariant:typecheck(ctx)
                 local aggtype
                 if e:is "vectorconstructor" then
                     if not typ:isprimitive() and typ ~= terra.types.error then
-                        terra.reporterror(ctx,e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
+                        diag:reporterror(e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
                         return e:copy { type = terra.types.error }
                     end
                     aggtype = terra.types.vector(typ,N)
@@ -2831,7 +2831,7 @@ function terra.funcvariant:typecheck(ctx)
                     local k = e.records[i] and e.records[i].key
                     k = k and checksymbol(k)
                     if not typ:addentry(k,v.type) then
-                        terra.reporterror(ctx,v,"duplicate definition of field ",k)
+                        diag:reporterror(v,"duplicate definition of field ",k)
                     end
                 end
                 return e:copy { expressions = entries, type = typ:freeze(diag) }
@@ -2899,7 +2899,7 @@ function terra.funcvariant:typecheck(ctx)
     local function checkexptyp(re,target)
         local e = checkrvalue(re)
         if e.type ~= target then
-            terra.reporterror(ctx,e,"expected a ",target," expression but found ",e.type)
+            diag:reporterror(e,"expected a ",target," expression but found ",e.type)
             e.type = terra.types.error
         end
         return e
@@ -2958,8 +2958,8 @@ function terra.funcvariant:typecheck(ctx)
             ss.labelname = tostring(label)
             local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
-                terra.reporterror(ctx,s,"label defined twice")
-                terra.reporterror(ctx,lbls,"previous definition here")
+                diag:reporterror(s,"label defined twice")
+                diag:reporterror(lbls,"previous definition here")
             else
                 for _,v in ipairs(lbls) do
                     v.definition = ss
@@ -2981,7 +2981,7 @@ function terra.funcvariant:typecheck(ctx)
         elseif s:is "break" then
             local ss = s:copy({})
             if #loopstmts == 0 then
-                terra.reporterror(ctx,s,"break found outside a loop")
+                diag:reporterror(s,"break found outside a loop")
             else
                 ss.breaktable = loopstmts[#loopstmts]
             end
@@ -3084,7 +3084,7 @@ function terra.funcvariant:typecheck(ctx)
     --check the label table for any labels that have been referenced but not defined
     for _,v in pairs(labels) do
         if not terra.istree(v) then
-            terra.reporterror(ctx,v[1],"goto to undefined label")
+            diag:reporterror(v[1],"goto to undefined label")
         end
     end
     
@@ -3116,7 +3116,7 @@ function terra.funcvariant:typecheck(ctx)
                     minsize = math.max(minsize,stmt.expressions.minsize)
                     maxsize = math.min(maxsize,#stmt.expressions.expressions)
                     if minsize > maxsize then
-                        terra.reporterror(ctx,stmt,"returning a different length from previous return")
+                        diag:reporterror(stmt,"returning a different length from previous return")
                     else
                         for i,exp in ipairs(stmt.expressions.expressions) do
                             if i <= maxsize then
