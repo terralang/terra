@@ -4,7 +4,7 @@ function terralib.cudacompile(module)
 		if not terra.isfunction(v) then
 			error("module must contain only terra functions")
 		end
-		v:compile({nojit = true})
+		v:emitllvm()
 		local variants =  v:getvariants()
 		if #variants > 1 then
 			error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)

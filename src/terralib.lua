@@ -207,10 +207,6 @@ end
 terra.context = {}
 terra.context.__index = terra.context
 
-function terra.iscontext(ctx)
-    return getmetatable(ctx) == terra.context
-end
-
 function terra.context:isempty()
     return #self.functions == 0
 end
@@ -227,45 +223,77 @@ end
 
 function terra.context:functionend()
     local func = table.remove(self.functions)
-    local prev = self.functions[#self.functions]
-    if prev ~= nil then
-        prev.lowlink = math.min(prev.lowlink,func.lowlink)
-    end
-    
     if func.lowlink == func.compileindex then
         local scc = terra.newlist{}
         repeat
             local tocompile = table.remove(self.tobecompiled)
+            assert(tocompile.state == "typechecking")
             scc:insert(tocompile)
         until tocompile == func
         
-        if not self.diagnostics:haserrors() then
+        if self.diagnostics:haserrors() then
+            for i,f in ipairs(scc) do
+                f.state = "error"
+            end
+        else
+            for i,f in ipairs(scc) do
+                terra.codegen(f)
+                f.state = "emittedllvm"
+            end
             terra.optimize({ functions = scc, flags = self.compileflags })
-        end
-        
-        for i,f in ipairs(scc) do
-            f.state = "optimize"
-            if not self.diagnostics:haserrors() and not self.compileflags.nojit then
-                f:jitandmakewrapper(self.compileflags)
+            --dispatch callbacks that should occur once the llvm is emitted
+            for i,f in ipairs(scc) do
+                local onemit = f.onemit or terra.newlist()
+                for i,fn in ipairs(onemit) do
+                    fn(f)
+                end
             end
         end
-        return true
     end
-    return false
 end
 
-function terra.context:functioncalls(func)
+function terra.context:currentfunctionreferences(anchor, func)
     local curfunc = self.functions[#self.functions]
-    if curfunc then
+    if func.state == "untyped" then
+        func:typecheck()
+        assert(terra.types.istype(func.type))
+        curfunc.lowlink = math.min(curfunc.lowlink,func.lowlink)
+        return func.type
+    elseif func.state == "typechecking" then
         curfunc.lowlink = math.min(curfunc.lowlink,func.compileindex)
+        local success, typ = func:peektype()
+        if not success then
+            self.diagnostics:reporterror(anchor,"recursively called function needs an explicit return type.")
+            if func.untypedtree then
+                self.diagnostics:reporterror(anchor,"definition of recursively called function is here.")
+            end
+        end
+        return typ
+    elseif func.state == "compiled" or func.state == "emittedllvm" then
+        assert(terra.types.istype(func.type))
+        return func.type
+    elseif func.state == "uninitializedc" then
+        func:initializecfunction()
+        assert(terra.types.istype(func.type))
+        return func.type
+    elseif func.state == "error" then
+        assert(terra.types.istype(func.type))
+        if not self.diagnostics:haserrors() then --the error that caused this function to not compile may have been reported in a previous compile
+                                                 --if we don't have any errors preventing the current compile from succeeding, then
+                                                 --we need to emit one here
+            self.diagnostics:reporterror(anchor,"expression references a function which failed to compile.")
+            if func.untypedtree then
+                self.diagnostics:reporterror(func.untypedtree,"definition of function which failed to compile.")
+            end
+        end
+        return terra.types.error
     end
 end
 
-function terra.getcontext(flags)
+function terra.getcompilecontext()
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0},terra.context)
+        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
     end
-    terra.globalcompilecontext.compileflags = flags or {}
     return terra.globalcompilecontext
 end
 
@@ -383,25 +411,13 @@ end
 terra.funcvariant = {} --metatable for all function types
 terra.funcvariant.__index = terra.funcvariant
 
-function terra.funcvariant:hasbeeninstate(state)
-    local states = {"uninitializedterra","uninitializedc","typecheck","codegen","optimize","initialized"}
-    for i,s in ipairs(states) do
-        if state == s then
-            return true
-        end
-        if self.state == s then
-            break
-        end
-    end
-    return false
-end
 function terra.funcvariant:peektype() --look at the type but don't compile the function (if possible)
                                       --this will return success, <type if success == true>
     if self.type then
         return true,self.type
     end
     if not self.untypedtree.return_types then
-        return false
+        return false, terra.types.error
     end
 
     local params = self.untypedtree.parameters:map(function(entry) return entry.type end)
@@ -410,24 +426,13 @@ function terra.funcvariant:peektype() --look at the type but don't compile the f
     
     return true, self.type
 end
-function terra.funcvariant:gettype(ctx)
-    if self.state == "codegen" then --function is in the same strongly connected component of the call graph as its called, even though it has already been typechecked
-        ctx:functioncalls(self)
-        assert(self.type ~= nil, "no type in codegen'd function?")
-        return self.type
-    elseif self.state == "typecheck" then
-        ctx:functioncalls(self)
-        local success,typ = self:peektype(ctx) --we are already compiling this function, but if the return types are listed, we can resolve the type anyway 
-        if success then
-            return typ
-        else
-            return terra.types.error, "recursively called function needs an explicit return type"
-        end
-    else
-        self:compile(ctx)
-        return self.type
-    end    
+
+function terra.funcvariant:gettype(cont)
+    self:emitllvm(cont)
+    assert(cont or self.type ~= nil) --either this was asynchronous and type can be nil, or it wasn't so type needs to be set
+    return self.type
 end
+
 function terra.funcvariant:makewrapper()
     local fntyp = self.type
     
@@ -445,67 +450,71 @@ function terra.funcvariant:makewrapper()
 
 end
 
-function terra.funcvariant:jitandmakewrapper(flags)
-    terra.jit({ func = self, flags = flags })
-    self:makewrapper()
-    self.state = "initialized"
+function terra.funcvariant:jitandmakewrapper()
+    if self.state == "emittedllvm" then
+        terra.jit({ func = self, flags = {} })
+        self:makewrapper()
+        self.state = "compiled"
+    end
 end
 
-function terra.funcvariant:compile(ctx)
-    
-    local freshcall = ctx == nil --was this a call to the compiler from within the compiler? or was it a fresh call to the compiler?
-    if self.state == "initialized" then
-        return
-    end
-
-    
-    if self.state == "uninitializedc" then --this is a stub generated by the c wrapper, connect it with the right llvm_function object and set fptr
-        terra.registercfunction(self)
-        self:makewrapper()
-        self.state = "initialized"
-        return
-    end
-    
-    local ctx = (terra.iscontext(ctx) and ctx) or terra.getcontext(ctx) -- if this is a top level compile, create a new compilation context
-    
-    if self.state == "optimize" then
-        if ctx.compileflags.nojit or ctx.diagnostics:haserrors() then
-            return
+function terra.funcvariant:compile(cont)
+    if self.state == "compiled" then
+        if cont then
+            cont(self)
         end
-        self:jitandmakewrapper(ctx.compileflags)
         return
     end
     
+    if cont then 
+        self:emitllvm(function()
+            self:jitandmakewrapper()
+            cont(self)
+        end)
+    else
+        self:emitllvm()
+        self:jitandmakewrapper()
+    end
+end
 
-    if self.state ~= "uninitializedterra" then
-        error("attempting to compile a function that is already in the process of being compiled.",2)
+function terra.funcvariant:initializecfunction()
+    assert(self.state == "uninitializedc")
+    terra.registercfunction(self)
+    self:makewrapper()
+    self.state = "compiled"
+end
+
+function terra.funcvariant:emitllvm(cont)
+    if self.state == "untyped" then
+        local ctx = terra.getcompilecontext()
+        if ctx:isempty() then
+            ctx.diagnostics:clearerrors()
+        end
+        self:typecheck()
+        if ctx.diagnostics:haserrors() then
+            error("Errors reported during compilation.",2)
+        end
     end
 
-    ctx:functionbegin(self)
-    self.state = "typecheck"
-    local start = terra.currenttimeinseconds()
-    self.typedtree = self:typecheck(ctx)
-    
-    self.stats.typec = terra.currenttimeinseconds() - start
-    self.type = self.typedtree.type
-    
-    self.state = "codegen"
-    
-    if not ctx.diagnostics:haserrors() then
-        terra.codegen(self)
-    end
-    
-    local compiled = ctx:functionend(self)
-
-    if ctx:isempty() then --if this was not the top level compile we let type-checking of other functions continue, 
-                          --though we don't actually compile because of the errors
-        ctx.diagnostics:abortiferrors("Errors reported during compilation.")
+    if self.state == "compiled" or self.state == "emittedllvm" then
+        --pass
+    elseif self.state == "uninitializedc" then --this is a stub generated by the c wrapper, connect it with the right llvm_function object and set fptr
+        self:initializecfunction()
+    elseif self.state == "typechecking" then
+        if cont then
+            self.onemit = self.onemit or terra.newlist()
+            self.onemit:insert(cont)
+            return
+        else
+            error("attempting to compile a function that is already being compiled",2)
+        end
+    elseif self.state == "error" then
+        error("attempting to compile a function which already has an error",2)
     end
 
-    if not compiled and freshcall then
-        error("attempting to compile function within another function that requires it.",2)
+    if cont then
+        cont(self)
     end
-    
 end
 
 function terra.funcvariant:__call(...)
@@ -542,9 +551,14 @@ end
 terra.func = {} --metatable for all function types
 terra.func.__index = terra.func
 
-function terra.func:compile(ctx)
+function terra.func:compile(cont)
     for i,v in ipairs(self.variants) do
-        v:compile(ctx)
+        v:compile(cont)
+    end
+end
+function terra.func:emitllvm(cont)
+    for i,v in ipairs(self.variants) do
+        v:emitllvm(cont)
     end
 end
 
@@ -786,7 +800,7 @@ function terra.intrinsic(str, typ)
     else
         error("expected a name and type or a function providing a name and type but found "..tostring(str) .. ", " .. tostring(typ))
     end
-    local function instrinsiccall(ctx,tree,...)
+    local function instrinsiccall(diag,tree,...)
         local args = terra.newlist({...}):map(function(e) return e.tree end)
         return terra.newtree(tree, { kind = terra.kinds.intrinsic, typefn = typefn, arguments = args } )
     end
@@ -805,7 +819,7 @@ do  --constructor functions for terra functions and variables
     local function newfunctionvariant(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
-        local obj = { untypedtree = newtree, filename = newtree.filename, name = fname, state = "uninitializedterra", stats = {} }
+        local obj = { untypedtree = newtree, filename = newtree.filename, name = fname, state = "untyped", stats = {} }
         local fn = setmetatable(obj,terra.funcvariant)
         
         --handle desugaring of methods defintions by adding an implicit self argument
@@ -1794,7 +1808,13 @@ local function map(lst,fn)
     return r
 end
 
-function terra.funcvariant:typecheck(ctx)
+function terra.funcvariant:typecheck()
+    
+    assert(self.state == "untyped")
+
+    terra.getcompilecontext():functionbegin(self)
+    self.state = "typechecking"
+    local starttime = terra.currenttimeinseconds()
     
     --initialization
 
@@ -1804,7 +1824,7 @@ function terra.funcvariant:typecheck(ctx)
     local ftree = self.untypedtree
     
     local symbolenv = terra.newenvironment()
-    local diag = ctx.diagnostics
+    local diag = terra.getcompilecontext().diagnostics
 
     -- TYPECHECKING FUNCTION DECLARATIONS
     --declarations major driver functions for typechecker
@@ -1835,10 +1855,7 @@ function terra.funcvariant:typecheck(ctx)
         return terra.newtree(anchor,{ kind = terra.kinds.extractreturn, index = index, type = t})
     end
     local function createfunctionliteral(anchor,e)
-        local fntyp,errstr = e:gettype(ctx)
-        if fntyp == terra.types.error then
-            diag:reporterror(anchor,"error resolving function literal. ",errstr)
-        end
+        local fntyp = terra.getcompilecontext():currentfunctionreferences(anchor,e)
         local typ = fntyp and terra.types.pointer(fntyp):freeze(diag)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
@@ -2509,7 +2526,7 @@ function terra.funcvariant:typecheck(ctx)
                     fnlike = fn.value
                     break
                 elseif terra.types.istype(fn.value) then
-                    local castmacro = macro(function(ctx,tree,arg)
+                    local castmacro = macro(function(diag,tree,arg)
                         return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = fn.value })
                     end)
                     fnlike = castmacro
@@ -2585,7 +2602,7 @@ function terra.funcvariant:typecheck(ctx)
         if fnlike then
             if terra.ismacro(fnlike) then
                 local quotes = arguments:map(terra.newquote)
-                local success, result = invokeuserfunction(anchor, false, fnlike, ctx, anchor, unpack(quotes))
+                local success, result = invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
                 
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
@@ -3139,12 +3156,13 @@ function terra.funcvariant:typecheck(ctx)
     end
     
     --we're done. build the typed tree for this function
-    local typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
-    
+    self.typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
+    self.type = self.typedtree.type
+    self.stats.typec = terra.currenttimeinseconds() - starttime
+    terra.getcompilecontext():functionend()
+
     dbprint(2,"TypedTree")
-    dbprintraw(2,typedtree)
-    
-    return typedtree
+    dbprintraw(2,self.typedtree)
 end
 --cache for lua functions called by terra, to prevent making multiple callback functions
 terra.__wrappedluafunctions = {}
@@ -3171,35 +3189,35 @@ function terra.includetableindex(tbl,name)    --this is called when a table retu
 end
 
 -- GLOBAL MACROS
-_G["sizeof"] = macro(function(ctx,tree,typ)
-    return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype(ctx)})
+_G["sizeof"] = macro(function(diag,tree,typ)
+    return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype()})
 end)
-_G["vector"] = macro(function(ctx,tree,...)
-    if terra.types.istype(ctx) then --vector used as a type constructor vector(int,3)
-        return terra.types.vector(ctx,tree)
+_G["vector"] = macro(function(diag,tree,...)
+    if terra.types.istype(diag) then --vector used as a type constructor vector(int,3)
+        return terra.types.vector(diag,tree)
     end
     --otherwise this is a macro that constructs a vector literal
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
     
 end)
-_G["vectorof"] = macro(function(ctx,tree,typ,...)
+_G["vectorof"] = macro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
-    return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, oftype = typ:astype(ctx), expressions = exps })
+    return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, oftype = typ:astype(), expressions = exps })
 end)
-_G["array"] = macro(function(ctx,tree,...)
+_G["array"] = macro(function(diag,tree,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, expressions = exps })
 end)
-_G["arrayof"] = macro(function(ctx,tree,typ,...)
+_G["arrayof"] = macro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
-    return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(ctx), expressions = exps })
+    return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
 
 _G["global"] = terra.global
 _G["constant"] = terra.constant
 
-terra.select = macro(function(ctx,tree,guard,a,b)
+terra.select = macro(function(diag,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
 end)
 
@@ -3213,11 +3231,11 @@ local function annotatememory(arg,tbl)
     error("expected a dereference operator")
 end
 
-terra.nontemporal = macro( function(ctx,tree,arg)
+terra.nontemporal = macro( function(diag,tree,arg)
     return annotatememory(arg,{nontemporal = true})
 end)
 
-terra.aligned = macro( function(ctx,tree,arg,num)
+terra.aligned = macro( function(diag,tree,arg,num)
     local n = num:asvalue()
     if type(n) ~= "number" then
         error("expected a number for alignment")
@@ -3522,7 +3540,7 @@ function terra.saveobj(filename,env,arguments)
     local cleanenv = {}
     for k,v in pairs(env) do
         if terra.isfunction(v) then
-            v:compile({nojit = true})
+            v:emitllvm()
             local variants = v:getvariants()
             if #variants > 1 then
                 error("cannot create a C function from an overloaded terra function, "..k)
