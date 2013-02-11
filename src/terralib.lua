@@ -1290,17 +1290,9 @@ do --construct type table that holds the singleton value representing each uniqu
             self.complete = true
             self.freeze = nil -- if we recursively try to evaluate this type then just return it
             
-            --TODO: this is where a metatable callback will occur right before the struct will become complete
-
             local ldiag = diag or terra.newdiagnostics()
             local tree = self.tree or anchor
 
-            local nextallocation = 0
-            local nextunnamed = 0
-            local uniondepth = 0
-            local unionsize = 0
-            self.layout = terra.newlist()
-            
             local function emiterror(err)
                 if tree then
                     ldiag:reporterror(tree,err)
@@ -1308,6 +1300,20 @@ do --construct type table that holds the singleton value representing each uniqu
                     error(err)
                 end
             end
+            
+            if type(self.metamethods.__abouttocompile) == "function" then
+                local success,errmsg = pcall(self.metamethods.__abouttocompile,self)
+                if not success then
+                    emiterror(errmsg)
+                end
+            end
+            
+            local nextallocation = 0
+            local nextunnamed = 0
+            local uniondepth = 0
+            local unionsize = 0
+            self.layout = terra.newlist()
+            
             
             local function addentry(k,t)
                 local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
