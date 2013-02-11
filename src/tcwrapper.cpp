@@ -80,15 +80,12 @@ public:
         return false;
     }
     
-    void CreateFields( RecordDecl * rd, Obj * tt) {
-        Obj addentry;
-        tt->obj("addentry",&addentry);        
+    bool GetFields( RecordDecl * rd, Obj * entries) {
+     
         //check the fields of this struct, if any one of them is not understandable, then this struct becomes 'opaque'
         //that is, we insert the type, and link it to its llvm type, so it can be used in terra code
         //but none of its fields are exposed (since we don't understand the layout)
         bool opaque = false;
-        size_t ncalls = 0;
-        int stktop = lua_gettop(L);
         for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
             if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
                 opaque = true;
@@ -102,28 +99,14 @@ public:
                 opaque = true;
                 continue;
             }
-            //arguments to function call add entry are  push onto the lua stack, but the function itself is not called 
-            //it is delayed until we know that all fields are valid
-            lua_checkstack(L, 2);
-            
-            lua_pushstring(L,declstr.c_str());
+            lua_newtable(L);
             fobj.push();
-            ncalls++;
+            lua_setfield(L,-2,"type");
+            lua_pushstring(L,declstr.c_str());
+            lua_setfield(L,-2,"field");
+            entries->addentry();
         }
-        if(!opaque) {
-            lua_checkstack(L,4);
-            assert(lua_gettop(L) == stktop + 2*ncalls);
-            int first_arg = stktop + 1;
-            for(size_t i = 0; i < ncalls; i++) {
-                addentry.push();
-                tt->push();
-                lua_pushvalue(L, first_arg + 2*i);
-                lua_pushvalue(L, first_arg + 2*i + 1);
-                lua_call(L,3,0); //make the calls addentry to form the struct
-            }
-            assert(lua_gettop(L) == stktop + 2*ncalls);
-        }
-        lua_settop(L,stktop); //reset the stack to before processing fields
+        return !opaque;
 
     } 
 
@@ -160,19 +143,21 @@ public:
                     tt->push();
                     result->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
                     
-                    
-                    if(rd->isUnion()) {
-                        tt->pushfield("beginunion");
-                        tt->push();
-                        lua_call(L,1,0);
-                    }
-
-                    CreateFields(rd, tt);
-                    
-                    if(rd->isUnion()) {
-                        tt->pushfield("endunion");
-                        tt->push();
-                        lua_call(L,1,0);
+                    Obj entries;
+                    tt->newlist(&entries);
+                    if(GetFields(rd, &entries)) {
+                        if(!rd->isUnion()) {
+                            //structtype.entries = {entry1, entry2, ... }
+                            entries.push();
+                            tt->setfield("entries");
+                        } else {
+                            //add as a union:
+                            //structtype.entries = { {entry1,entry2,...} }
+                            Obj allentries;
+                            tt->obj("entries",&allentries);
+                            entries.push();
+                            allentries.addentry();
+                        }
                     }
 
                     std::stringstream ss;

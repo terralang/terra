@@ -6,8 +6,7 @@ struct A {
 	v : int
 }
 
-S:addentry("what",A)
-
+S.entries:insert( { type = A, field = "what" } )
 terra foo()
 	var v : S
 	return v.what.v

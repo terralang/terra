@@ -266,9 +266,9 @@ struct CCallingConv {
     //if deferred == NULL, generate the struct's type layout
     //otherwise generate the named struct
     void LayoutStruct(StructType * st, Obj * typ, Obj * deferred) {
-        Obj entries;
-        typ->obj("entries", &entries);
-        int N = entries.size();
+        Obj layout;
+        typ->obj("layout", &layout);
+        int N = layout.size();
         std::vector<Type *> entry_types;
         
         unsigned unionAlign = 0; //minimum union alignment
@@ -278,7 +278,7 @@ struct CCallingConv {
                                  
         for(int i = 0; i < N; i++) {
             Obj v;
-            entries.objAt(i, &v);
+            layout.objAt(i, &v);
             Obj vt;
             v.obj("type",&vt);
             
@@ -299,7 +299,7 @@ struct CCallingConv {
                 //check if this is the last member of the union, and if it is, add it to our struct
                 Obj nextObj;
                 if(i + 1 < N)
-                    entries.objAt(i+1,&nextObj);
+                    layout.objAt(i+1,&nextObj);
                 if(i + 1 == N || nextObj.number("allocation") != v.number("allocation")) {
                     std::vector<Type *> union_types;
                     assert(unionType);
@@ -504,12 +504,12 @@ struct CCallingConv {
             StructType * st = cast<StructType>(GetTypeLayout(type));
             assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
-            Obj entries;
-            type->obj("entries", &entries);
-            int N = entries.size();
+            Obj layout;
+            type->obj("layout", &layout);
+            int N = layout.size();
             for(int i = 0; i < N; i++) {
                 Obj entry;
-                entries.objAt(i,&entry);
+                layout.objAt(i,&entry);
                 int allocation = entry.number("allocation");
                 size_t structoffset = sl->getElementOffset(allocation);
                 Obj entrytype;
@@ -1350,10 +1350,10 @@ if(baseT->isIntegerTy()) { \
         PointerType * objTy = cast<PointerType>(structPtr->getType());
         assert(objTy->getElementType()->isStructTy());
         
-        Obj entries;
-        structType->obj("entries",&entries);
+        Obj layout;
+        structType->obj("layout",&layout);
         Obj entry;
-        entries.objAt(index,&entry);
+        layout.objAt(index,&entry);
         
         int allocindex = entry.number("allocation");
         

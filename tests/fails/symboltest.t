@@ -2,8 +2,8 @@
 
 local e = symbol()
 A = terralib.types.newstruct("A")
-A:addentry("a",int)
-A:addentry(e,int)
+A.entries:insert({ field = "a", type = int})
+A.entries:insert({ field = e, type = int })
 
 
 local b =  symbol()

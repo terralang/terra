@@ -854,31 +854,26 @@ do  --constructor functions for terra functions and variables
             diag:reporterror(st.tree,"previous definition was here")
         end
 
-        local function addstructentry(v)
+        local function getstructentry(v)
             local success,resolvedtype = terra.evalluaexpression(diag,env,v.type)
             if not success then return end
             if not terra.types.istype(resolvedtype) then
                 diag:reporterror(v,"lua expression is not a terra type but ", type(resolvedtype))
-                return
+                return terra.types.error
             end
-            if not st:addentry(v.key,resolvedtype) then
-                diag:reporterror(v,"duplicate definition of field ",v.key)
-            end
+            return { field = v.key, type = resolvedtype }
         end
         
-        local function addrecords(records)
-            for i,v in ipairs(records) do
+        local function getrecords(records)
+            return records:map(function(v)
                 if v.kind == terra.kinds["union"] then
-                    st:beginunion()
-                    addrecords(v.records)
-                    st:endunion()
+                    return getrecords(v.records)
                 else
-                    addstructentry(v)
+                    return getstructentry(v)
                 end
-            end
+            end)
         end
-        addrecords(tree.records)
-        
+        st.entries = getrecords(tree.records)
         st.tree = tree --for debugging purposes and to track whether the struct has already beend defined
                        --we keep the tree to improve error reporting
         
@@ -1049,7 +1044,8 @@ do --construct type table that holds the singleton value representing each uniqu
     
     function types.type:cstring()
         if not self.cachedcstring then
-            
+            self:freeze()
+
             local function definetype(base,name,value)
                 local nm = uniquetypename(base,name)
                 ffi.cdef("typedef "..value.." "..nm..";")
@@ -1076,10 +1072,10 @@ do --construct type table that holds the singleton value representing each uniqu
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --first make a typedef to the opaque pointer
                 self.cachedcstring = nm -- prevent recursive structs from re-entering this function by having them return the name
                 local str = "struct "..nm.." { "
-                for i,v in ipairs(self.entries) do
+                for i,v in ipairs(self.layout) do
                 
-                    local prevalloc = self.entries[i-1] and self.entries[i-1].allocation
-                    local nextalloc = self.entries[i+1] and self.entries[i+1].allocation
+                    local prevalloc = self.layout[i-1] and self.layout[i-1].allocation
+                    local nextalloc = self.layout[i+1] and self.layout[i+1].allocation
             
                     if v.inunion and prevalloc ~= v.allocation then
                         str = str .. " union { "
@@ -1144,14 +1140,15 @@ do --construct type table that holds the singleton value representing each uniqu
         return self.cachedcstring
     end
     
-    function types.type:freeze(diag) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
+    function types.type:freeze(diag,anchor) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
         if not self.complete then
             self.complete = true
             if self:isvector() or self:ispointer() or self:isarray() then
-                self.type:freeze(diag)
+                self.type:freeze(diag,anchor)
             elseif self:isfunction() then
-                self.parameters:map(function(e) e:freeze(diag) end)
-                self.returns   :map(function(e) e:freeze(diag) end)
+                self.parameters:map(function(e) e:freeze(diag,anchor) end)
+                self.returns   :map(function(e) e:freeze(diag,anchor) end)
+                self.returnobj = self.returnobj and self.returnobj:freeze(diag,anchor)
             end
         end
         return self
@@ -1284,56 +1281,10 @@ do --construct type table that holds the singleton value representing each uniqu
         local tbl = mktyp { kind = terra.kinds["struct"],
                             name = name, 
                             displayname = displayname, 
-                            entries = terra.newlist(), 
-                            keytoindex = {}, 
-                            nextunnamed = 0, 
-                            nextallocation = 0,
-                            layoutfunctions = terra.newlist(),                           
+                            keytoindex = {},
+                            entries = terra.newlist()                   
                           }
-                            
-        function tbl:addentry(k,t)
-            assert(not self.complete)
-            local entry = { type = t, key = k, hasname = true, allocation = self.nextallocation, inunion = self.inunion ~= nil }
-            if not k then
-                entry.hasname = false
-                entry.key = "_"..tostring(self.nextunnamed)
-                self.nextunnamed = self.nextunnamed + 1
-            end
-            
-            local notduplicate = self.keytoindex[entry.key] == nil          
-            self.keytoindex[entry.key] = #self.entries
-            self.entries:insert(entry)
-            
-            if self.inunion then
-                self.unionisnonempty = true
-            else
-                self.nextallocation = self.nextallocation + 1
-            end
-            
-            return notduplicate
-        end
-        function tbl:beginunion()
-            assert(not self.complete)
-            if not self.inunion then
-                self.inunion = 0
-            end
-            self.inunion = self.inunion + 1
-        end
-        function tbl:endunion()
-            assert(not self.complete)
-            self.inunion = self.inunion - 1
-            if self.inunion == 0 then
-                self.inunion = nil
-                if self.unionisnonempty then
-                    self.nextallocation = self.nextallocation + 1
-                end
-                self.unionisnonempty = nil
-            end
-        end
-        
-        
-        function tbl:freeze(diag)
-        
+        function tbl:freeze(diag,anchor)
             assert(not self.complete)
             self.complete = true
             self.freeze = nil -- if we recursively try to evaluate this type then just return it
@@ -1341,25 +1292,91 @@ do --construct type table that holds the singleton value representing each uniqu
             --TODO: this is where a metatable callback will occur right before the struct will become complete
 
             local ldiag = diag or terra.newdiagnostics()
+            local tree = self.tree or anchor
+
+            local nextallocation = 0
+            local nextunnamed = 0
+            local uniondepth = 0
+            local unionsize = 0
+            self.layout = terra.newlist()
+            
+            local function emiterror(err)
+                if tree then
+                    ldiag:reporterror(tree,err)
+                else
+                    error(err)
+                end
+            end
+            
+            local function addentry(k,t)
+                local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
+                if not k then
+                    entry.hasname = false
+                    entry.key = "_"..tostring(nextunnamed)
+                    nextunnamed = nextunnamed + 1
+                end
+                
+                if self.keytoindex[entry.key] ~= nil then
+                    emiterror("duplicate field "..tostring(entry.key))
+                end
+
+                self.keytoindex[entry.key] = #self.layout
+                self.layout:insert(entry)
+                
+                if uniondepth > 0 then
+                    unionsize = unionsize + 1
+                else
+                    nextallocation = nextallocation + 1
+                end
+            end
+            local function beginunion()
+                uniondepth = uniondepth + 1
+            end
+            local function endunion()
+                uniondepth = uniondepth - 1
+                if uniondepth == 0 and unionsize > 0 then
+                    nextallocation = nextallocation + 1
+                    unionsize = 0
+                end
+            end
+            local function addentrylist(entries)
+                for i,e in ipairs(entries) do
+                    if terra.types.istype(e) then
+                        addentry(nil,e)
+                    elseif type(e) == "table" then
+                        if terra.types.istype(e.type) then
+                           local f = e.field
+                           if f and not (type(f) == "string" or terra.issymbol(f)) then
+                                emiterror("field must be a string or symbol")
+                                f = nil
+                           end
+                           addentry(f,e.type)
+                        else
+                            beginunion()
+                            addentrylist(e)
+                            endunion()
+                        end
+                    else
+                        emiterror("expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
+                    end
+                end
+            end
+            addentrylist(self.entries)
+
 
             local function checkrecursion(t)
                 if t == self then
-                    if self.tree then
-                        ldiag:reporterror(self.tree,"type recursively contains itself")
-                    else
-                        --TODO: emit where the user-defined type was first used
-                        error("programmatically defined type contains itself")
-                    end
+                    emiterror("type recursively contains itself")
                 elseif t:isstruct() then
-                    for i,v in ipairs(t.entries) do
+                    for i,v in ipairs(t.layout) do
                         checkrecursion(v.type)
                     end
                 elseif t:isarray() or t:isvector() then
                     checkrecursion(t.type)
                 end
             end
-            for i,v in ipairs(self.entries) do
-                v.type:freeze(diag)
+            for i,v in ipairs(self.layout) do
+                v.type:freeze(diag,anchor)
                 checkrecursion(v.type)
             end
             
@@ -1423,9 +1440,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 returnobj = returns[1]
             elseif #returns > 1 then
                 returnobj = types.newstruct()
-                for i,r in ipairs(returns) do
-                    returnobj:addentry(nil,r)
-                end
+                returnobj.entries = returns
             end
             return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
         end)
@@ -1856,7 +1871,7 @@ function terra.funcdefinition:typecheck()
     end
     local function createfunctionliteral(anchor,e)
         local fntyp = terra.getcompilecontext():currentfunctionreferences(anchor,e)
-        local typ = fntyp and terra.types.pointer(fntyp):freeze(diag)
+        local typ = fntyp and terra.types.pointer(fntyp):freeze(diag,anchor)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
     
@@ -1914,7 +1929,7 @@ function terra.funcdefinition:typecheck()
             return nil,false
         end
         tree.index = index
-        tree.type = v.type.entries[index+1].type
+        tree.type = v.type.layout[index+1].type
         return tree,true
     end
 
@@ -1947,8 +1962,7 @@ function terra.funcdefinition:typecheck()
     function structcast(cast,exp,typ, speculative) 
         local from = exp.type
         local to = typ
-        
-    
+
         local valid = true
         local function err(...)
             valid = false
@@ -1961,7 +1975,7 @@ function terra.funcdefinition:typecheck()
         local var_ref = insertvar(exp,from,cast.structvariable.name,cast.structvariable)
         
         local indextoinit = {}
-        for i,entry in ipairs(from.entries) do
+        for i,entry in ipairs(from.layout) do
             local selected = asrvalue(insertselect(var_ref,entry.key))
             if entry.hasname then
                 local offset = to.keytoindex[entry.key]
@@ -1971,17 +1985,17 @@ function terra.funcdefinition:typecheck()
                     if indextoinit[offset] then
                         err("structural cast invalid, ",entry.key," initialized more than once")
                     end
-                    indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
+                    indextoinit[offset] = insertcast(selected,to.layout[offset+1].type)
                 end
             else
                 local offset = 0
                 
                 --find the first non initialized entry
-                while offset < #to.entries and indextoinit[offset] do
+                while offset < #to.layout and indextoinit[offset] do
                     offset = offset + 1
                 end
-                local totyp = to.entries[offset+1] and to.entries[offset+1].type
-                local maxsz = #to.entries
+                local totyp = to.layout[offset+1] and to.layout[offset+1].type
+                local maxsz = #to.layout
                 
                 if offset == maxsz then
                     err("structural cast invalid, too many unnamed fields")
@@ -2764,6 +2778,7 @@ function terra.funcdefinition:typecheck()
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
             elseif e:is "explicitcast" then
+                e.totype:freeze(diag,e)
                 return insertexplicitcast(checkrvalue(e.value),e.totype)
             elseif e:is "sizeof" then
                 return e:copy { type = uint64 }
@@ -2773,7 +2788,7 @@ function terra.funcdefinition:typecheck()
                          
                 local typ
                 if e.oftype ~= nil then
-                    typ = e.oftype
+                    typ = e.oftype:freeze(diag,e)
                 else
                     if N == 0 then
                         diag:reporterror(e,"cannot determine type of empty aggregate")
@@ -2847,11 +2862,10 @@ function terra.funcdefinition:typecheck()
                 for i,v in ipairs(entries.expressions) do
                     local k = e.records[i] and e.records[i].key
                     k = k and checksymbol(k)
-                    if not typ:addentry(k,v.type) then
-                        diag:reporterror(v,"duplicate definition of field ",k)
-                    end
+                    typ.entries:insert({field = k, type = v.type})
                 end
-                return e:copy { expressions = entries, type = typ:freeze(diag) }
+
+                return e:copy { expressions = entries, type = typ:freeze(diag,e) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)
             else
@@ -2868,12 +2882,12 @@ function terra.funcdefinition:typecheck()
             for i,e in ipairs(result.expressions) do
                 if not e:is "luaobject" then
                     assert(terra.types.istype(e.type))
-                    e.type:freeze(diag)
+                    e.type:freeze(diag,e)
                 end
             end
         elseif not result:is "luaobject" then
             assert(terra.types.istype(result.type))
-            result.type:freeze(diag)
+            result.type:freeze(diag,result)
         end
 
         --remove any lua objects if they are not allowed in this context
@@ -2933,7 +2947,7 @@ function terra.funcdefinition:typecheck()
             assert(terra.issymbol(p.symbol))
             if p.type then
                 assert(terra.types.istype(p.type))
-                p.type:freeze(diag)
+                p.type:freeze(diag,p)
             end
         end
         --copy the entries since we mutate them and this list could appear multiple times in the tree
@@ -3113,9 +3127,6 @@ function terra.funcdefinition:typecheck()
     local return_types
     if ftree.return_types then --take the return types to be as specified
         return_types = ftree.return_types
-        for i,r in ipairs(return_types) do
-            r:freeze(diag)
-        end
     else --calculate the meet of all return type to calculate the actual return type
         if #return_stmts == 0 then
             return_types = terra.newlist()
@@ -3149,6 +3160,8 @@ function terra.funcdefinition:typecheck()
             
         end
     end
+    local fntype = terra.types.functype(parameter_types,return_types)
+    fntype:freeze(diag,ftree)
     
     --now cast each return expression to the expected return type
     for _,stmt in ipairs(return_stmts) do
@@ -3156,8 +3169,9 @@ function terra.funcdefinition:typecheck()
     end
     
     --we're done. build the typed tree for this function
-    self.typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = terra.types.functype(parameter_types,return_types) }
-    self.type = self.typedtree.type
+    self.typedtree = ftree:copy { body = result, parameters = typed_parameters, labels = labels, type = fntype}
+    self.type = fntype
+
     self.stats.typec = terra.currenttimeinseconds() - starttime
     terra.getcompilecontext():functionend()
 
@@ -3496,7 +3510,7 @@ function terra.funcdefinition:printpretty()
         elseif e:is "constructor" then
             emit("{")
             local anon = 0
-            local keys = e.type.entries:map(function(e) return e.key end)
+            local keys = e.type.layout:map(function(e) return e.key end)
             emitParamList(e.expressions,keys)
             emit("}")
         elseif e:is "constant" then
