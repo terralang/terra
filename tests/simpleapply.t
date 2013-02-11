@@ -1,10 +1,10 @@
 struct Vec { data : int[4] }
-terra Vec:__apply(i : int)
+Vec.metamethods.__apply = terra(self : &Vec, i : int)
     return self.data[i]
 end
 
 struct Vec2 { data : int[4] }
-Vec2.methods.__apply = macro(function(ctx,tree,self,b)
+Vec2.metamethods.__apply = macro(function(ctx,tree,self,b)
     return `self.data[b]
 end)
 

@@ -358,23 +358,22 @@ terra B:inc(v : int)
 	self.a = self.a + v
 end
 
-terra B:__apply(v :int)
+B.metamethods.__apply = terra(self : &B, v :int)
 	return v + v
 end
 
-terra B:__getfoo()
+B.metamethods.__get = { foo = terra(self : &B)
 	return 8
-end
+end }
 
 struct C {
 	a : int;
 }
 
-terra B:__add(a : int, b : int)
+terra B.metamethods.__add(self : &B, a : int, b : int)
 	return self.a + a
 end
-
-terra B:__add(a : int, b : int, c : int)
+terra B.metamethods.__add(self : &B, a : int, b : int, c : int)
 	return self.a + a
 end
 
@@ -389,7 +388,7 @@ print("BEFORE")
 testcallvoid()
 print("AFTER")
 
-terra C.methods.__add(b : &B, c : &C)
+terra C.metamethods.__add(b : &B, c : &C)
 	return b.a + c.a
 end
 
@@ -403,7 +402,7 @@ terra foo40()
 end
 
 assert(foo40() == 8 + 8 + 6 + 6 + 6 + 11 + 6 + 11 + 3 + 11)
-B.methods.__add = macro(function(ctx,tree,b,c) return `b.a + c.a + 1 end)
+B.metamethods.__add = macro(function(ctx,tree,b,c) return `b.a + c.a + 1 end)
 terra foo41()
 	var b = B { 5,6 }
 	var c = C { 3 }

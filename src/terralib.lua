@@ -1282,7 +1282,8 @@ do --construct type table that holds the singleton value representing each uniqu
                             name = name, 
                             displayname = displayname, 
                             keytoindex = {},
-                            entries = terra.newlist()                   
+                            entries = terra.newlist(),
+                            metamethods = {}                   
                           }
         function tbl:freeze(diag,anchor)
             assert(not self.complete)
@@ -2044,8 +2045,8 @@ function terra.funcdefinition:typecheck()
             --no builtin casts worked... now try user-defined casts
             local cast_fns = terra.newlist()
             local function addcasts(typ)
-                if typ:isstruct() and typ.methods.__cast then
-                    cast_fns:insert(typ.methods.__cast)
+                if typ:isstruct() and typ.metamethods.__cast then
+                    cast_fns:insert(typ.metamethods.__cast)
                 elseif typ:ispointertostruct() then
                     addcasts(typ.type)
                 end
@@ -2328,7 +2329,7 @@ function terra.funcdefinition:typecheck()
         local overloads = terra.newlist()
         for i,e in ipairs(operands) do
             if e.type:isstruct() then
-                local overload = e.type.methods[overloadmethod] --TODO: be more intelligent here about merging overloaded functions so that all possibilities are considered
+                local overload = e.type.metamethods[overloadmethod] --TODO: be more intelligent here about merging overloaded functions so that all possibilities are considered
                 if overload then
                     overloads:insert(terra.createterraexpression(diag, ee, overload))
                 end
@@ -2514,7 +2515,7 @@ function terra.funcdefinition:typecheck()
     
         if not fnlike:is "luaobject" then
             if fnlike.type:isstruct() or fnlike.type:ispointertostruct() then
-                return checkmethodwithreciever(exp, "methods", "__apply", fnlike, arguments, isstatement) 
+                return checkmethodwithreciever(exp, "metamethods", "__apply", fnlike, arguments, isstatement) 
             end
             fnlike = asrvalue(fnlike)
         end
@@ -2728,7 +2729,7 @@ function terra.funcdefinition:typecheck()
                     local ret, success = insertselect(v,field)
                     if not success then
                         --struct has no member field, look for a getter __get<field>
-                        local getter = type(field) == "string" and v.type.methods["__get"..field]
+                        local getter = type(v.type.metamethods.__get) == "table" and v.type.metamethods.__get[field]
                         if getter then
                             getter = terra.createterraexpression(diag, e, getter) 
                             local til = createtypedexpressionlist(v, terra.newlist { v } ) 
