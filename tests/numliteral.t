@@ -8,7 +8,7 @@ local exp = { "int32", "double", "float", "int64", "uint64" }
 
 local test = require("test")
 thetest:compile()
-local typ = thetest.variants[1]:gettype()
+local typ = thetest.definitions[1]:gettype()
 for i,e in ipairs(typ.returns) do
 	test.eq(tostring(e),exp[i]) 
 end

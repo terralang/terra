@@ -74,7 +74,7 @@ function terra.tree:printraw()
             if parents[t] then
                 print(string.rep(" ",#spacing).."<cyclic reference>")
                 return
-            elseif depth > 0 and (terra.isfunction(t) or terra.isfunctionvariant(t)) then
+            elseif depth > 0 and (terra.isfunction(t) or terra.isfunctiondefinition(t)) then
                 return --don't print the entire nested function...
             end
             parents[t] = true
@@ -404,14 +404,14 @@ end
 
 -- FUNCVARIANT
 
--- a function variant is an implementation of a function for a particular set of arguments
--- functions themselves are overloadable. Each potential implementation is its own function variant
+-- a function definition is an implementation of a function for a particular set of arguments
+-- functions themselves are overloadable. Each potential implementation is its own function definition
 -- with its own compile state, type, AST, etc.
  
-terra.funcvariant = {} --metatable for all function types
-terra.funcvariant.__index = terra.funcvariant
+terra.funcdefinition = {} --metatable for all function types
+terra.funcdefinition.__index = terra.funcdefinition
 
-function terra.funcvariant:peektype() --look at the type but don't compile the function (if possible)
+function terra.funcdefinition:peektype() --look at the type but don't compile the function (if possible)
                                       --this will return success, <type if success == true>
     if self.type then
         return true,self.type
@@ -427,13 +427,13 @@ function terra.funcvariant:peektype() --look at the type but don't compile the f
     return true, self.type
 end
 
-function terra.funcvariant:gettype(cont)
+function terra.funcdefinition:gettype(cont)
     self:emitllvm(cont)
     assert(cont or self.type ~= nil) --either this was asynchronous and type can be nil, or it wasn't so type needs to be set
     return self.type
 end
 
-function terra.funcvariant:makewrapper()
+function terra.funcdefinition:makewrapper()
     local fntyp = self.type
     
     local success,cfntyp = pcall(fntyp.cstring,fntyp)
@@ -450,7 +450,7 @@ function terra.funcvariant:makewrapper()
 
 end
 
-function terra.funcvariant:jitandmakewrapper()
+function terra.funcdefinition:jitandmakewrapper()
     if self.state == "emittedllvm" then
         terra.jit({ func = self, flags = {} })
         self:makewrapper()
@@ -458,7 +458,7 @@ function terra.funcvariant:jitandmakewrapper()
     end
 end
 
-function terra.funcvariant:compile(cont)
+function terra.funcdefinition:compile(cont)
     if self.state == "compiled" then
         if cont then
             cont(self)
@@ -477,14 +477,14 @@ function terra.funcvariant:compile(cont)
     end
 end
 
-function terra.funcvariant:initializecfunction()
+function terra.funcdefinition:initializecfunction()
     assert(self.state == "uninitializedc")
     terra.registercfunction(self)
     self:makewrapper()
     self.state = "compiled"
 end
 
-function terra.funcvariant:emitllvm(cont)
+function terra.funcdefinition:emitllvm(cont)
     if self.state == "untyped" then
         local ctx = terra.getcompilecontext()
         if ctx:isempty() then
@@ -517,7 +517,7 @@ function terra.funcvariant:emitllvm(cont)
     end
 end
 
-function terra.funcvariant:__call(...)
+function terra.funcdefinition:__call(...)
     self:compile()
     local NR = #self.type.returns
     if NR <= 1 then --fast path
@@ -537,39 +537,39 @@ terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
 end }
 
-function terra.isfunctionvariant(obj)
-    return getmetatable(obj) == terra.funcvariant
+function terra.isfunctiondefinition(obj)
+    return getmetatable(obj) == terra.funcdefinition
 end
 
---END FUNCVARIANT
+--END FUNCDEFINITION
 
 -- FUNCTION
--- a function is a list of possible function variants that can be invoked
+-- a function is a list of possible function definitions that can be invoked
 -- it is implemented this way to support function overloading, where the same symbol
--- may have different variants
+-- may have different definitions
 
 terra.func = {} --metatable for all function types
 terra.func.__index = terra.func
 
 function terra.func:compile(cont)
-    for i,v in ipairs(self.variants) do
+    for i,v in ipairs(self.definitions) do
         v:compile(cont)
     end
 end
 function terra.func:emitllvm(cont)
-    for i,v in ipairs(self.variants) do
+    for i,v in ipairs(self.definitions) do
         v:emitllvm(cont)
     end
 end
 
 function terra.func:__call(...)
     self:compile()
-    if #self.variants == 1 then --fast path for the non-overloaded case
-        return self.variants[1](...)
+    if #self.definitions == 1 then --fast path for the non-overloaded case
+        return self.definitions[1](...)
     end
     
     local results
-    for i,v in ipairs(self.variants) do
+    for i,v in ipairs(self.definitions) do
         --TODO: this is very inefficient, we should have a routine which
         --figures out which function to call based on argument types
         results = {pcall(v.__call,v,...)}
@@ -578,22 +578,22 @@ function terra.func:__call(...)
             return unpack(results)
         end
     end
-    --none of the variants worked, remove the final error
+    --none of the definitions worked, remove the final error
     error(results[2])
 end
 
-function terra.func:addvariant(v)
-    self.variants:insert(v)
+function terra.func:adddefinition(v)
+    self.definitions:insert(v)
 end
 
-function terra.func:getvariants()
-    return self.variants
+function terra.func:getdefinitions()
+    return self.definitions
 end
 
 function terra.func:printstats()
     self:compile()
-    for i,v in ipairs(self.variants) do
-        print("variant ", v.type)
+    for i,v in ipairs(self.definitions) do
+        print("definition ", v.type)
         for k,v in pairs(v.stats) do
             print("",k,v)
         end
@@ -602,8 +602,8 @@ end
 
 function terra.func:disas()
     self:compile()
-    for i,v in ipairs(self.variants) do
-        print("variant ", v.type)
+    for i,v in ipairs(self.definitions) do
+        print("definition ", v.type)
         terra.disassemble(v)
     end
 end
@@ -816,11 +816,11 @@ do  --constructor functions for terra functions and variables
         name_count = name_count + 1
         return fixed
     end
-    local function newfunctionvariant(newtree,name,env,reciever)
+    local function newfunctiondefinition(newtree,name,env,reciever)
         local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
         local fname = manglename(rawname)
         local obj = { untypedtree = newtree, filename = newtree.filename, name = fname, state = "untyped", stats = {} }
-        local fn = setmetatable(obj,terra.funcvariant)
+        local fn = setmetatable(obj,terra.funcdefinition)
         
         --handle desugaring of methods defintions by adding an implicit self argument
         if reciever ~= nil then
@@ -843,7 +843,7 @@ do  --constructor functions for terra functions and variables
     end
     
     local function mkfunction(name)
-        return setmetatable({variants = terra.newlist(), name = name},terra.func)
+        return setmetatable({definitions = terra.newlist(), name = name},terra.func)
     end
     
     local function layoutstruct(st,tree,env)
@@ -921,7 +921,7 @@ do  --constructor functions for terra functions and variables
                     reciever = args[idx]
                     idx = idx + 1
                 end
-                obj:addvariant(newfunctionvariant(tree,name,envfn(),reciever))
+                obj:adddefinition(newfunctiondefinition(tree,name,envfn(),reciever))
             else
                 error("unknown object format: "..c)
             end
@@ -937,16 +937,16 @@ do  --constructor functions for terra functions and variables
 
     function terra.anonfunction(tree,envfn)
         local fn = mkfunction(nil)
-        fn:addvariant(newfunctionvariant(tree,nil,envfn(),nil))
+        fn:adddefinition(newfunctiondefinition(tree,nil,envfn(),nil))
         return fn
     end
 
     function terra.newcfunction(name,typ)
         local obj = { name = name, type = typ, state = "uninitializedc" }
-        setmetatable(obj,terra.funcvariant)
+        setmetatable(obj,terra.funcdefinition)
         
         local fn = mkfunction(name)
-        fn:addvariant(obj)
+        fn:adddefinition(obj)
         
         return fn
     end
@@ -1808,7 +1808,7 @@ local function map(lst,fn)
     return r
 end
 
-function terra.funcvariant:typecheck()
+function terra.funcdefinition:typecheck()
     
     assert(self.state == "untyped")
 
@@ -2532,10 +2532,10 @@ function terra.funcvariant:typecheck()
                     fnlike = castmacro
                     break
                 elseif terra.isfunction(fn.value) then
-                    if #fn.value:getvariants() == 0 then
+                    if #fn.value:getdefinitions() == 0 then
                         diag:reporterror(anchor,"attempting to call undefined function")
                     end
-                    for i,v in ipairs(fn.value:getvariants()) do
+                    for i,v in ipairs(fn.value:getdefinitions()) do
                         local fnlit = createfunctionliteral(anchor,v)
                         if fnlit.type ~= terra.types.error then
                             terrafunctions:insert( fnlit )
@@ -2882,12 +2882,12 @@ function terra.funcvariant:typecheck()
             local function removeluaobject(e)
                 if e.type == terra.types.error then return e end --don't repeat error messages
                 if terra.isfunction(e.value) then
-                    local variants = e.value:getvariants()
-                    if #variants ~= 1 then
-                        diag:reporterror(e,(#variants == 0 and "undefined") or "overloaded", " functions cannot be used as values")
+                    local definitions = e.value:getdefinitions()
+                    if #definitions ~= 1 then
+                        diag:reporterror(e,(#definitions == 0 and "undefined") or "overloaded", " functions cannot be used as values")
                         return e:copy { type = terra.types.error }
                     end
-                    return createfunctionliteral(e,variants[1])
+                    return createfunctionliteral(e,definitions[1])
                 else
                     diag:reporterror(e, "expected a terra expression but found ",type(result.value))
                     return e:copy { type = terra.types.error }
@@ -3262,13 +3262,13 @@ function terra.printf(s,...)
 end
 
 function terra.func:printpretty()
-    for i,v in ipairs(self.variants) do
+    for i,v in ipairs(self.definitions) do
         v:compile()
         terra.printf("%s = ",v.name,v.type)
         v:printpretty()
     end
 end
-function terra.funcvariant:printpretty()
+function terra.funcdefinition:printpretty()
     self:compile()
     if not self.typedtree then
         terra.printf("<extern : %s>\n",self.type)
@@ -3541,11 +3541,11 @@ function terra.saveobj(filename,env,arguments)
     for k,v in pairs(env) do
         if terra.isfunction(v) then
             v:emitllvm()
-            local variants = v:getvariants()
-            if #variants > 1 then
+            local definitions = v:getdefinitions()
+            if #definitions > 1 then
                 error("cannot create a C function from an overloaded terra function, "..k)
             end
-            cleanenv[k] = variants[1]
+            cleanenv[k] = definitions[1]
         end
     end
     local isexe

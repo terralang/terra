@@ -5,11 +5,11 @@ function terralib.cudacompile(module)
 			error("module must contain only terra functions")
 		end
 		v:emitllvm()
-		local variants =  v:getvariants()
-		if #variants > 1 then
+		local definitions =  v:getdefinitions()
+		if #definitions > 1 then
 			error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
 		end
-		local fn = variants[1]
+		local fn = definitions[1]
 		local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
 		                            -- we should modify gettype to allow the return of a type for a non-jitted function
 		assert(success)
@@ -23,7 +23,7 @@ function terralib.cudacompile(module)
 				error(k..": kernels arguments can only be primitive types or pointers but kernel has type ", typ)
 			end
 		end
-		tbl[k] = variants[1]
+		tbl[k] = definitions[1]
 	end
 	--call into tcuda.cpp to perform compilation
 	return terralib.cudacompileimpl(tbl)

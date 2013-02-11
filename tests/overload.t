@@ -7,7 +7,7 @@ terra foo(a : &int8)
 	return 2
 end
 
-print(#foo.variants)
+print(#foo.definitions)
 
 terra doit()
 	return foo(1) + foo("what")

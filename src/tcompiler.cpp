@@ -991,7 +991,7 @@ struct TerraCompiler {
             //when the function variant is GC'd in lua
             Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
             *gchandle = fn;
-            if(luaL_newmetatable(L,"terra_gcfuncvariant")) {
+            if(luaL_newmetatable(L,"terra_gcfuncdefinition")) {
                 lua_pushlightuserdata(L,(void*)T);
                 lua_pushcclosure(L,terra_deletefunction,1);
                 lua_setfield(L,-2,"__gc");
