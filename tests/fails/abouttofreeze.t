@@ -4,10 +4,7 @@ struct A {
 }
 
 function A.metamethods.__abouttofreeze(self)
-	print("ABOUT TO COMPILE")
-	for i,e in ipairs(self.entries) do
-		e.field = "foo"..e.field
-	end
+	self:freeze()
 end
 
 terra foo()

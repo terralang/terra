@@ -74,7 +74,7 @@ function terra.tree:printraw()
             if parents[t] then
                 print(string.rep(" ",#spacing).."<cyclic reference>")
                 return
-            elseif depth > 0 and terra.isfunctiondefinition(t) then
+            elseif depth > 0 and (terra.isfunction(t) or terra.isfunctiondefinition(t)) then
                 return --don't print the entire nested function...
             end
             parents[t] = true
@@ -131,6 +131,12 @@ function terra.newtree(ref,body)
     body.offset = ref.offset
     body.linenumber = ref.linenumber
     body.filename = ref.filename
+    return setmetatable(body,terra.tree)
+end
+
+function terra.newanchor(depth)
+    local info = debug.getinfo(1 + depth,"Sl")
+    local body = { linenumber = info.currentline, filename = info.short_src }
     return setmetatable(body,terra.tree)
 end
 
@@ -208,59 +214,74 @@ terra.context = {}
 terra.context.__index = terra.context
 
 function terra.context:isempty()
-    return #self.functions == 0
+    return #self.stack == 0
 end
 
-function terra.context:functionbegin(func)
-    func.compileindex = self.nextindex
-    func.lowlink = func.compileindex
+function terra.context:begin(obj) --obj is either a funcdefinition or a type
+    obj.compileindex = self.nextindex
+    obj.lowlink = obj.compileindex
     self.nextindex = self.nextindex + 1
     
-    table.insert(self.functions,func)
-    table.insert(self.tobecompiled,func)
+    table.insert(self.stack,obj)
+    table.insert(self.tobecompiled,obj)
     
 end
 
-function terra.context:functionend()
-    local func = table.remove(self.functions)
-    if func.lowlink == func.compileindex then
-        local scc = terra.newlist{}
+function terra.context:finish(anchor)
+    local obj = table.remove(self.stack)
+    if obj.lowlink == obj.compileindex then
+        local scc = terra.newlist()
+        local functions = terra.newlist()
         repeat
             local tocompile = table.remove(self.tobecompiled)
-            assert(tocompile.state == "typechecking")
             scc:insert(tocompile)
-        until tocompile == func
+            if terra.isfunctiondefinition(tocompile) then
+                assert(tocompile.state == "typechecking")
+                functions:insert(tocompile)
+            end
+        until tocompile == obj
         
         if self.diagnostics:haserrors() then
-            for i,f in ipairs(scc) do
-                f.state = "error"
+            for i,o in ipairs(scc) do
+                o.state = "error"
             end
         else
-            for i,f in ipairs(scc) do
-                terra.codegen(f)
-                f.state = "emittedllvm"
+            for i,o in ipairs(scc) do
+                if terra.types.istype(o) then
+                    o.state = "frozen"
+                else
+                    terra.codegen(o)
+                    o.state = "emittedllvm"
+                end
             end
-            terra.optimize({ functions = scc, flags = self.compileflags })
+            terra.optimize({ functions = functions, flags = self.compileflags })
             --dispatch callbacks that should occur once the llvm is emitted
-            for i,f in ipairs(scc) do
-                local onemit = f.onemit or terra.newlist()
-                for i,fn in ipairs(onemit) do
-                    fn(f)
+            for i,o in ipairs(scc) do
+                if o.oncompletion then
+                    for i,fn in ipairs(o.oncompletion) do
+                        terra.invokeuserfunction(anchor,false,fn,o)
+                    end    
+                    o.oncompletion = nil
                 end
             end
         end
     end
 end
 
-function terra.context:currentfunctionreferences(anchor, func)
-    local curfunc = self.functions[#self.functions]
+function terra.context:oncompletion(obj,callback)
+    obj.oncompletion = obj.oncompletion or terra.newlist()
+    obj.oncompletion:insert(callback)
+end
+
+function terra.context:referencefunction(anchor, func)
+    local curobj = self.stack[#self.stack]
     if func.state == "untyped" then
         func:typecheck()
         assert(terra.types.istype(func.type))
-        curfunc.lowlink = math.min(curfunc.lowlink,func.lowlink)
+        curobj.lowlink = math.min(curobj.lowlink,func.lowlink)
         return func.type
     elseif func.state == "typechecking" then
-        curfunc.lowlink = math.min(curfunc.lowlink,func.compileindex)
+        curobj.lowlink = math.min(curobj.lowlink,func.compileindex)
         local success, typ = func:peektype()
         if not success then
             self.diagnostics:reporterror(anchor,"recursively called function needs an explicit return type.")
@@ -290,9 +311,27 @@ function terra.context:currentfunctionreferences(anchor, func)
     end
 end
 
+function terra.context:referencetype(anchor,typ)
+    local curobj = self.stack[#self.stack]
+    if typ.state == "unfrozen" then
+        typ:typecheck(anchor)
+        curobj.lowlink = math.min(curobj.lowlink,typ.lowlink)
+    elseif typ.state == "freezing" then
+        curobj.lowlink = math.min(curobj.lowlink,typ.compileindex)
+    elseif typ.state == "error" then
+        if not self.diagnostics:haserrors() then
+            self.diagnostics:reporterror(anchor,"referencing a type which failed to compile.")
+            if typ.tree then
+                self.diagnostics:reporterror(anchor,"definition of type which failed to compile.")
+            end
+        end
+    end
+    return typ
+end
+
 function terra.getcompilecontext()
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , functions = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
+        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
     end
     return terra.globalcompilecontext
 end
@@ -348,6 +387,9 @@ terra.diagnostics.__index = terra.diagnostics
 --terra.printlocation
 --and terra.opensourcefile are inserted by C wrapper
 function terra.diagnostics:printsource(anchor)
+    if not anchor.offset then 
+        return
+    end
     local filename = anchor.filename
     local handle = self.filecache[filename] or terra.opensourcefile(filename)
     self.filecache[filename] = handle
@@ -502,8 +544,7 @@ function terra.funcdefinition:emitllvm(cont)
         self:initializecfunction()
     elseif self.state == "typechecking" then
         if cont then
-            self.onemit = self.onemit or terra.newlist()
-            self.onemit:insert(cont)
+            terra.getcompilecontext():oncompletion(self,cont)
             return
         else
             error("attempting to compile a function that is already being compiled",2)
@@ -1145,18 +1186,153 @@ do --construct type table that holds the singleton value representing each uniqu
         return self.cachedcstring
     end
     
-    function types.type:freeze(diag,anchor) --overriden by named structs to build their member tables and by proxy types to lazily evaluate their type
-        if not self.complete then
-            self.complete = true
-            if self:isvector() or self:ispointer() or self:isarray() then
-                self.type:freeze(diag,anchor)
-            elseif self:isfunction() then
-                self.parameters:map(function(e) e:freeze(diag,anchor) end)
-                self.returns   :map(function(e) e:freeze(diag,anchor) end)
-                self.returnobj = self.returnobj and self.returnobj:freeze(diag,anchor)
+    function types.type:callhandler(anchor,name)
+        if self:isstruct() and type(self.metamethods[name]) == "function" then
+            local success,errmsg = pcall(self.metamethods[name],self)
+            if not success then
+                diag:reporterror(anchor,"error while invoking ",name, ": ", errmsg)
             end
         end
-        return self
+    end
+
+    function types.type:typecheck(anchor)
+        assert(self.state == "unfrozen")
+        local ctx = terra.getcompilecontext()
+        
+        --handle callbacks for structs
+        if self:isstruct() then
+            local abouttofreeze = self.metamethods.__abouttofreeze 
+            if type(abouttofreeze) == "function" then
+                self.metamethods.__abouttofreeze = function(self) error("__abouttofreeze recursively called itself.") end
+                terra.invokeuserfunction(anchor,false,abouttofreeze,self)
+                if self.state ~= "unfrozen" then --we recursively entered this function since __abouttofreeze called itself
+                                                 --this means we are already have begun freezing this type and will just return here
+                    return
+                end
+            end
+            if type(self.metamethods.__hasbeenfrozen) == "function" then
+                ctx:oncompletion(self,self.metamethods.__hasbeenfrozen)
+            end
+        end
+
+        self.state = "freezing"
+        ctx:begin(self)
+        local diag = ctx.diagnostics
+        
+        if self:isvector() or self:ispointer() or self:isarray() then
+            ctx:referencetype(anchor,self.type)
+        elseif self:isfunction() then
+            self.parameters:map(function(e) ctx:referencetype(anchor,e) end)
+            self.returns   :map(function(e) ctx:referencetype(anchor,e) end)
+            self.returnobj = self.returnobj and ctx:referencetype(anchor,self.returnobj)
+        elseif self:isstruct() then
+            local tree = self.tree or anchor
+            local nextallocation = 0
+            local nextunnamed = 0
+            local uniondepth = 0
+            local unionsize = 0
+            self.layout = terra.newlist()
+            local function addentry(k,t)
+                local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
+                if not k then
+                    entry.hasname = false
+                    entry.key = "_"..tostring(nextunnamed)
+                    nextunnamed = nextunnamed + 1
+                end
+                
+                if self.keytoindex[entry.key] ~= nil then
+                    diag:reporterror(tree,"duplicate field ",tostring(entry.key))
+                end
+
+                self.keytoindex[entry.key] = #self.layout
+                self.layout:insert(entry)
+                
+                if uniondepth > 0 then
+                    unionsize = unionsize + 1
+                else
+                    nextallocation = nextallocation + 1
+                end
+            end
+            local function beginunion()
+                uniondepth = uniondepth + 1
+            end
+            local function endunion()
+                uniondepth = uniondepth - 1
+                if uniondepth == 0 and unionsize > 0 then
+                    nextallocation = nextallocation + 1
+                    unionsize = 0
+                end
+            end
+            local function addentrylist(entries)
+                for i,e in ipairs(entries) do
+                    if terra.types.istype(e) then
+                        addentry(nil,e)
+                    elseif type(e) == "table" then
+                        if terra.types.istype(e.type) then
+                           local f = e.field
+                           if f and not (type(f) == "string" or terra.issymbol(f)) then
+                                diag:reporterror(tree,"field must be a string or symbol")
+                                f = nil
+                           end
+                           addentry(f,e.type)
+                        else
+                            beginunion()
+                            addentrylist(e)
+                            endunion()
+                        end
+                    else
+                        diag:reporterror(tree,"expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
+                    end
+                end
+            end
+            addentrylist(self.entries)
+            local function checkrecursion(t)
+                if t == self then
+                    diag:reporterror(tree,"type recursively contains itself")
+                elseif t:isstruct() then
+                    for i,v in ipairs(t.layout) do
+                        checkrecursion(v.type)
+                    end
+                elseif t:isarray() or t:isvector() then
+                    checkrecursion(t.type)
+                end
+            end
+            for i,v in ipairs(self.layout) do
+                ctx:referencetype(tree,v.type)
+                checkrecursion(v.type)
+            end
+
+            dbprint(2,"Resolved Named Struct To:")
+            dbprintraw(2,self)
+
+        end
+        ctx:finish(anchor)
+    end
+    function types.type:freeze(cont)
+        if self.state == "unfrozen" then
+            local ctx = terra.getcompilecontext()
+            if ctx:isempty() then
+                ctx.diagnostics:clearerrors()
+            end
+            local anchor = self.tree or terra.newanchor(2)
+            self:typecheck(anchor)
+            if ctx.diagnostics:haserrors() then
+                error("Errors reported during freezing.",2)
+            end
+        end
+        if self.state == "frozen" then
+            if cont then
+                cont(self)
+            end
+        elseif self.state == "freezing" then
+            if cont then
+                terra.getcompilecontext():oncompletion(self,cond)
+            else
+                error("attempting to freeze a type that is already being frozen",2)
+            end
+        elseif self.state == "error" then
+            error("attempting to freeze a type which already has an error",2)
+        end
     end
         
     function types.istype(t)
@@ -1171,6 +1347,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local function mktyp(v)
         v.methods = {}
+        v.state = "unfrozen"
         return setmetatable(v,types.type)
     end
     
@@ -1290,118 +1467,6 @@ do --construct type table that holds the singleton value representing each uniqu
                             entries = terra.newlist(),
                             metamethods = {}                   
                           }
-        function tbl:freeze(diag,anchor)
-            assert(not self.complete)
-            self.complete = true
-            self.freeze = nil -- if we recursively try to evaluate this type then just return it
-            
-            local ldiag = diag or terra.newdiagnostics()
-            local tree = self.tree or anchor
-
-            local function emiterror(err)
-                if tree then
-                    ldiag:reporterror(tree,err)
-                else
-                    error(err)
-                end
-            end
-            
-            if type(self.metamethods.__abouttocompile) == "function" then
-                local success,errmsg = pcall(self.metamethods.__abouttocompile,self)
-                if not success then
-                    emiterror(errmsg)
-                end
-            end
-            
-            local nextallocation = 0
-            local nextunnamed = 0
-            local uniondepth = 0
-            local unionsize = 0
-            self.layout = terra.newlist()
-            
-            
-            local function addentry(k,t)
-                local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
-                if not k then
-                    entry.hasname = false
-                    entry.key = "_"..tostring(nextunnamed)
-                    nextunnamed = nextunnamed + 1
-                end
-                
-                if self.keytoindex[entry.key] ~= nil then
-                    emiterror("duplicate field "..tostring(entry.key))
-                end
-
-                self.keytoindex[entry.key] = #self.layout
-                self.layout:insert(entry)
-                
-                if uniondepth > 0 then
-                    unionsize = unionsize + 1
-                else
-                    nextallocation = nextallocation + 1
-                end
-            end
-            local function beginunion()
-                uniondepth = uniondepth + 1
-            end
-            local function endunion()
-                uniondepth = uniondepth - 1
-                if uniondepth == 0 and unionsize > 0 then
-                    nextallocation = nextallocation + 1
-                    unionsize = 0
-                end
-            end
-            local function addentrylist(entries)
-                for i,e in ipairs(entries) do
-                    if terra.types.istype(e) then
-                        addentry(nil,e)
-                    elseif type(e) == "table" then
-                        if terra.types.istype(e.type) then
-                           local f = e.field
-                           if f and not (type(f) == "string" or terra.issymbol(f)) then
-                                emiterror("field must be a string or symbol")
-                                f = nil
-                           end
-                           addentry(f,e.type)
-                        else
-                            beginunion()
-                            addentrylist(e)
-                            endunion()
-                        end
-                    else
-                        emiterror("expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
-                    end
-                end
-            end
-            addentrylist(self.entries)
-
-
-            local function checkrecursion(t)
-                if t == self then
-                    emiterror("type recursively contains itself")
-                elseif t:isstruct() then
-                    for i,v in ipairs(t.layout) do
-                        checkrecursion(v.type)
-                    end
-                elseif t:isarray() or t:isvector() then
-                    checkrecursion(t.type)
-                end
-            end
-            for i,v in ipairs(self.layout) do
-                v.type:freeze(diag,anchor)
-                checkrecursion(v.type)
-            end
-            
-            if not diag then
-                ldiag:abortiferrors("Errors occured duing struct creation.")
-            end
-
-            dbprint(2,"Resolved Named Struct To:")
-            dbprintraw(2,self)
-            return self
-        
-        end
-        
         function tbl:setconvertible(b)
             assert(not self.complete)
             self.isconvertible = b
@@ -1835,11 +1900,21 @@ local function map(lst,fn)
     return r
 end
 
+--all calls to user-defined functions from the compiler go through this wrapper
+function terra.invokeuserfunction(anchor, speculate, userfn,  ...)
+    local results = { pcall(userfn, ...) }
+    if not speculate and not results[1] then
+        local diag = terra.getcompilecontext().diagnostics
+        diag:reporterror(anchor,"error while invoking macro or metamethod: ",results[2])
+    end
+    return unpack(results)
+end
+
 function terra.funcdefinition:typecheck()
     
     assert(self.state == "untyped")
-
-    terra.getcompilecontext():functionbegin(self)
+    local ctx = terra.getcompilecontext()
+    ctx:begin(self)
     self.state = "typechecking"
     local starttime = terra.currenttimeinseconds()
     
@@ -1860,15 +1935,6 @@ function terra.funcdefinition:typecheck()
     local checkcall -- any invocation (method, function call, macro, overloaded operator) gets translated into a call to checkcall (e.g. sizeof(int), foobar(3), obj:method(arg))
     local checkparameterlist -- (e.g. 3,4 of foo(3,4))
 
-    --helper functions interacting with state outside the typechecker
-    local function invokeuserfunction(anchor, speculate, userfn,  ...)
-        local results = { pcall(userfn, ...) }
-        if not speculate and not results[1] then
-            diag:reporterror(anchor,"error while invoking macro or metamethod: ",results[2])
-        end
-        return unpack(results)
-    end
-
     --tree constructors for trees created in the typechecking process
     local function createcast(exp,typ)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ, expression = exp })
@@ -1882,8 +1948,8 @@ function terra.funcdefinition:typecheck()
         return terra.newtree(anchor,{ kind = terra.kinds.extractreturn, index = index, type = t})
     end
     local function createfunctionliteral(anchor,e)
-        local fntyp = terra.getcompilecontext():currentfunctionreferences(anchor,e)
-        local typ = fntyp and terra.types.pointer(fntyp):freeze(diag,anchor)
+        local fntyp = ctx:referencefunction(anchor,e)
+        local typ = fntyp and ctx:referencetype(anchor,terra.types.pointer(fntyp))
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ or terra.types.error })
     end
     
@@ -2069,7 +2135,7 @@ function terra.funcdefinition:typecheck()
             for i,__cast in ipairs(cast_fns) do
                 local tel = createtypedexpressionlist(exp,terra.newlist{exp},nil)
                 local quotedexp = terra.newquote(tel)
-                local success,valid,result = invokeuserfunction(exp, true,__cast,diag,exp,exp.type,typ,quotedexp)
+                local success,valid,result = terra.invokeuserfunction(exp, true,__cast,diag,exp,exp.type,typ,quotedexp)
                 if success and valid then
                     return checkrvalue(terra.createterraexpression(diag,exp,result))
                 elseif not success then
@@ -2649,7 +2715,7 @@ function terra.funcdefinition:typecheck()
         if fnlike then
             if terra.ismacro(fnlike) then
                 local quotes = arguments:map(terra.newquote)
-                local success, result = invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
+                local success, result = terra.invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
                 
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
@@ -2811,7 +2877,7 @@ function terra.funcdefinition:typecheck()
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
             elseif e:is "explicitcast" then
-                e.totype:freeze(diag,e)
+                ctx:referencetype(e,e.totype)
                 return insertexplicitcast(checkrvalue(e.value),e.totype)
             elseif e:is "sizeof" then
                 return e:copy { type = uint64 }
@@ -2821,7 +2887,7 @@ function terra.funcdefinition:typecheck()
                          
                 local typ
                 if e.oftype ~= nil then
-                    typ = e.oftype:freeze(diag,e)
+                    typ = ctx:referencetype(e,e.oftype)
                 else
                     if N == 0 then
                         diag:reporterror(e,"cannot determine type of empty aggregate")
@@ -2898,7 +2964,7 @@ function terra.funcdefinition:typecheck()
                     typ.entries:insert({field = k, type = v.type})
                 end
 
-                return e:copy { expressions = entries, type = typ:freeze(diag,e) }
+                return e:copy { expressions = entries, type = ctx:referencetype(e,typ) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)
             else
@@ -2915,12 +2981,12 @@ function terra.funcdefinition:typecheck()
             for i,e in ipairs(result.expressions) do
                 if not e:is "luaobject" then
                     assert(terra.types.istype(e.type))
-                    e.type:freeze(diag,e)
+                    ctx:referencetype(e,e.type)
                 end
             end
         elseif not result:is "luaobject" then
             assert(terra.types.istype(result.type))
-            result.type:freeze(diag,result)
+            ctx:referencetype(result,result.type)
         end
 
         --remove any lua objects if they are not allowed in this context
@@ -2980,7 +3046,7 @@ function terra.funcdefinition:typecheck()
             assert(terra.issymbol(p.symbol))
             if p.type then
                 assert(terra.types.istype(p.type))
-                p.type:freeze(diag,p)
+                ctx:referencetype(p,p.type)
             end
         end
         --copy the entries since we mutate them and this list could appear multiple times in the tree
@@ -3194,7 +3260,7 @@ function terra.funcdefinition:typecheck()
         end
     end
     local fntype = terra.types.functype(parameter_types,return_types)
-    fntype:freeze(diag,ftree)
+    ctx:referencetype(ftree,fntype)
     
     --now cast each return expression to the expected return type
     for _,stmt in ipairs(return_stmts) do
@@ -3206,10 +3272,12 @@ function terra.funcdefinition:typecheck()
     self.type = fntype
 
     self.stats.typec = terra.currenttimeinseconds() - starttime
-    terra.getcompilecontext():functionend()
-
+    
     dbprint(2,"TypedTree")
     dbprintraw(2,self.typedtree)
+
+    ctx:finish(ftree)
+
 end
 --cache for lua functions called by terra, to prevent making multiple callback functions
 terra.__wrappedluafunctions = {}
