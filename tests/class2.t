@@ -42,5 +42,4 @@ terra foo()
 end
 
 local test = require("test")
-
 test.eq(foo(),9)

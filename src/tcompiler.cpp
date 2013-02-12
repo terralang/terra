@@ -936,8 +936,8 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
         assert(data);
         lua_pushlightuserdata(CC->L,data);
         global->setfield("llvm_ptr");
-        
     }
+    void ** data = (void**) CC->C->ee->getPointerToGlobal(gv);
     assert(gv != NULL);
     return gv;
 }

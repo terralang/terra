@@ -1,6 +1,4 @@
 
-local std = terralib.includec("stdlib.h")
-
 local Interface = {}
 
 Interface.interface = {}
@@ -11,8 +9,8 @@ function Interface.castmethod(ctx,tree,from,to,exp)
 	if to:isstruct() and from:ispointertostruct() then
 		local self = Interface.defined[to]
 		if not self then return false end
-
-		return true, self:createcast(ctx,from.type,exp)
+		local cst = self:createcast(ctx,from.type,exp)
+		return true, cst
 	end
 	return false
 end
@@ -22,7 +20,7 @@ function Interface.create(methods)
 		data : uint64
 	}
 	Interface.defined[self.type] = self
-	self.type.methods.__cast = Interface.castmethod
+	self.type.metamethods.__cast = Interface.castmethod
 
 	self.nextid = 0
 	self.allocatedsize = 256
@@ -41,18 +39,18 @@ function Interface.create(methods)
 		end
 		local typ = params -> rets
 		self.methods:insert({name = k, type = typ, syms = syms})
-		self.vtabletype:addentry(k,typ)
+		self.vtabletype.entries:insert { field = k, type = &uint8 }
 	end
-	var self.vtables : &self.vtabletype = std.malloc(self.allocatedsize * sizeof(self.vtabletype)):as(&self.vtabletype)
-	self.vtables:compile()
+	self.vtables = global(&self.vtabletype)
+	self.vtablearray = terralib.new(self.vtabletype[self.allocatedsize])
+	self.vtables:set(self.vtablearray)
 
-	local thevtables = self.vtables
 	for _,m in ipairs(self.methods) do
-		self.type.methods[m.name] = terra(self : &self.type, [m.syms])
-			var id = self.data >> 48
+		self.type.methods[m.name] = terra(interface : &self.type, [m.syms])
+			var id = interface.data >> 48
 			var mask = (1ULL << 48) - 1
-			var obj = (mask and self.data):as(&uint8)
-			return thevtables[id].[m.name](obj,[m.syms])
+			var obj = [&uint8](mask and interface.data)
+			return  m.type(self.vtables[id].[m.name])(obj,[m.syms])
 		end
 	end
 
@@ -63,26 +61,21 @@ function Interface.interface:createcast(ctx,from,exp)
 	if not self.implementedtypes[from] then
 		local instance = {}
 		instance.id = self.nextid
-
 		assert(instance.id < self.allocatedsize) --TODO: handle resize
+		local vtableentry = self.vtablearray[self.nextid]
 		self.nextid = self.nextid + 1
-
-		local instancemethods = terralib.newlist()
 		for _,m in ipairs(self.methods) do
 			local fn = from.methods[m.name]
 			assert(fn and terralib.isfunction(fn))
-			--TODO: check the types match here
-			instancemethods:insert(`fn:as(m.type))
+			fn:compile(function(fndef)
+				vtableentry[m.name] = terralib.cast(&uint8,fndef:getpointer())
+			end)
 		end
-		local terra initfn()
-			self.vtables[instance.id:as(int)] = {instancemethods}
-		end
-		initfn()
 		self.implementedtypes[from] = instance
 	end
 
 	local id = self.implementedtypes[from].id
-	return `self.type { exp:as(uint64) or ((id):as(uint64) << 48) }
+	return `self.type { uint64(exp) or (uint64(id) << 48) }
 end
 
 return Interface

@@ -74,7 +74,7 @@ function terra.tree:printraw()
             if parents[t] then
                 print(string.rep(" ",#spacing).."<cyclic reference>")
                 return
-            elseif depth > 0 and (terra.isfunction(t) or terra.isfunctiondefinition(t)) then
+            elseif depth > 0 and terra.isfunctiondefinition(t) then
                 return --don't print the entire nested function...
             end
             parents[t] = true
@@ -531,6 +531,11 @@ function terra.funcdefinition:__call(...)
         end
         return unpack(rl)
     end
+end
+function terra.funcdefinition:getpointer()
+    self:compile()
+    assert(type(self.ffiwrapper) == "cdata")
+    return self.ffiwrapper
 end
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
@@ -2060,17 +2065,23 @@ function terra.funcdefinition:typecheck()
             addcasts(exp.type)
             addcasts(typ)
 
+            local errormsgs = terra.newlist()
             for i,__cast in ipairs(cast_fns) do
                 local tel = createtypedexpressionlist(exp,terra.newlist{exp},nil)
                 local quotedexp = terra.newquote(tel)
                 local success,valid,result = invokeuserfunction(exp, true,__cast,diag,exp,exp.type,typ,quotedexp)
                 if success and valid then
                     return checkrvalue(terra.createterraexpression(diag,exp,result))
+                elseif not success then
+                    errormsgs:insert(valid)
                 end
             end
 
             if not speculative then
                 diag:reporterror(exp,"invalid conversion from ",exp.type," to ",typ)
+                for i,e in ipairs(errormsgs) do
+                    diag:reporterror(exp,"user-defined cast failed: ",e)
+                end
             end
             return cast_exp, false
         end
@@ -2483,13 +2494,28 @@ function terra.funcdefinition:typecheck()
         return tryinsertcasts(terra.newlist { typelist }, "none", false, false, paramlist)
     end
 
-    local function checkmethodwithreciever(anchor, methodtablename, methodname, reciever, arguments, isstatement)
-        local fnlike
+    local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, isstatement)
+        local objtyp
         if reciever.type:isstruct() then
-            fnlike = reciever.type[methodtablename][methodname]
+            objtyp = reciever.type
         elseif reciever.type:ispointertostruct() then
-            fnlike = reciever.type.type[methodtablename][methodname]
+            objtyp = reciever.type.type
             reciever = insertdereference(reciever)
+        else
+            diag:reporterror(anchor,"attempting to call a method on a non-structural type ",reciever.type)
+            return anchor:copy { type = terra.types.error }
+        end
+
+        local fnlike
+        if ismeta then
+            fnlike = objtyp.metamethods[methodname]
+        else
+            fnlike = objtyp.methods[methodname]
+            if not fnlike and terra.ismacro(objtyp.metamethods.__methodmissing) then
+                fnlike = macro(function(ctx,tree,...)
+                    return objtyp.metamethods.__methodmissing(ctx,tree,methodname,...)
+                end)
+            end
         end
 
         if not fnlike then
@@ -2512,7 +2538,7 @@ function terra.funcdefinition:typecheck()
         assert(type(methodname) == "string" or terra.issymbol(methodname))
         local reciever = checkexp(exp.value)
         local arguments = exp.arguments:map( function(a) return checkexp(a,true,true) end )
-        return checkmethodwithreciever(exp, "methods", methodname, reciever, arguments, isstatement)
+        return checkmethodwithreciever(exp, false, methodname, reciever, arguments, isstatement)
     end
 
     local function checkapply(exp, isstatement)
@@ -2521,7 +2547,7 @@ function terra.funcdefinition:typecheck()
     
         if not fnlike:is "luaobject" then
             if fnlike.type:isstruct() or fnlike.type:ispointertostruct() then
-                return checkmethodwithreciever(exp, "metamethods", "__apply", fnlike, arguments, isstatement) 
+                return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, isstatement) 
             end
             fnlike = asrvalue(fnlike)
         end

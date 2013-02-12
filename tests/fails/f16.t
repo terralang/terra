@@ -1,5 +1,5 @@
 
 terra foo(c : int)
-    var a : int8 = (&c):as(int8)
+    var a : int8 = int8(&c)
 end
 foo(1)
