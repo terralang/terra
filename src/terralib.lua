@@ -1259,19 +1259,17 @@ do --construct type table that holds the singleton value representing each uniqu
                 for i,e in ipairs(entries) do
                     if terra.types.istype(e) then
                         addentry(nil,e)
-                    elseif type(e) == "table" then
-                        if terra.types.istype(e.type) then
-                           local f = e.field
-                           if f and not (type(f) == "string" or terra.issymbol(f)) then
-                                diag:reporterror(tree,"field must be a string or symbol")
-                                f = nil
-                           end
-                           addentry(f,e.type)
-                        else
-                            beginunion()
-                            addentrylist(e)
-                            endunion()
+                    elseif type(e) == "table" and terra.types.istype(e.type) then
+                        local f = e.field
+                        if f and not (type(f) == "string" or terra.issymbol(f)) then
+                            diag:reporterror(tree,"field must be a string or symbol")
+                            f = nil
                         end
+                        addentry(f,e.type)
+                    elseif terra.israwlist(e) then
+                        beginunion()
+                        addentrylist(e)
+                        endunion()
                     else
                         diag:reporterror(tree,"expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
                     end
@@ -1316,7 +1314,7 @@ do --construct type table that holds the singleton value representing each uniqu
             end
         elseif self.state == "freezing" then
             if cont then
-                terra.getcompilecontext():oncompletion(self,cond)
+                terra.getcompilecontext():oncompletion(self,cont)
             else
                 error("attempting to freeze a type that is already being frozen",2)
             end
@@ -2334,7 +2332,6 @@ function terra.funcdefinition:typecheck()
         if cond.type ~= terra.types.error and t ~= terra.types.error then
             if cond.type:isvector() and cond.type.type == bool then
                 if not t:isvector() or t.N ~= cond.type.N then
-                    print(ee)
                     diag:reporterror(ee,"conditional in select is not the same shape as ",cond.type)
                 end
             elseif cond.type ~= bool then
@@ -2824,6 +2821,7 @@ function terra.funcdefinition:typecheck()
                 if e.key ~= typedexpressionkey then --if it went through a macro, it could have been retained by lua code and returned to a different function
                                                     --we check that this didn't happen by checking that it has an expression key unique to this function
                     diag:reporterror(e,"cannot use a typed expression from one function in another")
+                    diag:reporterror(ftree,"typed expression used in this function.")
                 end
                 return e
             elseif e:is "operator" then
