@@ -222,9 +222,13 @@ function terra.context:begin(obj) --obj is either a funcdefinition or a type
     obj.lowlink = obj.compileindex
     self.nextindex = self.nextindex + 1
     
+    if not self:isempty() then
+        obj.haderrors = self.diagnostics:haserrors()
+    end
+    self.diagnostics:seterrors(false)
+    
     table.insert(self.stack,obj)
     table.insert(self.tobecompiled,obj)
-    
 end
 
 function terra.context:finish(anchor)
@@ -266,6 +270,8 @@ function terra.context:finish(anchor)
             end
         end
     end
+    self.diagnostics:seterrors(self.diagnostics:haserrors() or obj.haderrors)
+    obj.haderrors = nil
 end
 
 function terra.context:oncompletion(obj,callback)
@@ -312,17 +318,22 @@ function terra.context:referencefunction(anchor, func)
 end
 
 function terra.context:referencetype(anchor,typ)
+    if typ.state == "frozen" then
+        return typ
+    end
     local curobj = self.stack[#self.stack]
     if typ.state == "unfrozen" then
         typ:typecheck(anchor)
         curobj.lowlink = math.min(curobj.lowlink,typ.lowlink)
+    elseif typ.state == "abouttofreeze" then
+        self.diagnostics:reporterror(typ.tree or anchor,"calling freeze inside the __abouttofreeze method for the same type.")
     elseif typ.state == "freezing" then
         curobj.lowlink = math.min(curobj.lowlink,typ.compileindex)
     elseif typ.state == "error" then
         if not self.diagnostics:haserrors() then
             self.diagnostics:reporterror(anchor,"referencing a type which failed to compile.")
             if typ.tree then
-                self.diagnostics:reporterror(anchor,"definition of type which failed to compile.")
+                self.diagnostics:reporterror(typ.tree,"definition of type which failed to compile.")
             end
         end
     end
@@ -368,7 +379,7 @@ function terra.newenvironment(_luaenv)
             return self._localenv[idx] or self._luaenv[idx]
         end;
         __newindex = function() 
-            error("cannot define global variables in an escape")
+            error("cannot define global variables or assign to upvalues in an escape")
         end;
     })
     return setmetatable(self, terra.environment)
@@ -424,15 +435,14 @@ function terra.diagnostics:haserrors()
     return self._haserrors
 end
 
-function terra.diagnostics:clearerrors()
-    self._haserrors = false
+function terra.diagnostics:seterrors(b)
+    self._haserrors = b
 end
 
-function terra.diagnostics:abortiferrors(msg)
+function terra.diagnostics:abortiferrors(msg,depth)
     if self:haserrors() then
         self:clearfilecache()
-        self:clearerrors()
-        error(msg)
+        error(msg,depth+1)
     else
         assert(#self.filecache == 0)
     end
@@ -529,13 +539,8 @@ end
 function terra.funcdefinition:emitllvm(cont)
     if self.state == "untyped" then
         local ctx = terra.getcompilecontext()
-        if ctx:isempty() then
-            ctx.diagnostics:clearerrors()
-        end
         self:typecheck()
-        if ctx.diagnostics:haserrors() then
-            error("Errors reported during compilation.",2)
-        end
+        ctx.diagnostics:abortiferrors("Errors reported during compilation.",2)
     end
 
     if self.state == "compiled" or self.state == "emittedllvm" then
@@ -883,7 +888,7 @@ do  --constructor functions for terra functions and variables
             fn.untypedtree = newtree:copy { parameters = newparameters} 
         end
 
-        fn.untypedtree = terra.specialize(fn.untypedtree,env)
+        fn.untypedtree = terra.specialize(fn.untypedtree,env,3)
         
         return fn
     end
@@ -923,7 +928,7 @@ do  --constructor functions for terra functions and variables
         st.tree = tree --for debugging purposes and to track whether the struct has already beend defined
                        --we keep the tree to improve error reporting
         
-        diag:abortiferrors("Errors reported during struct definition.")
+        diag:abortiferrors("Errors reported during struct definition.",3)
 
     end
 
@@ -993,7 +998,7 @@ do  --constructor functions for terra functions and variables
     end
 
     function terra.definequote(tree,envfn)
-        return terra.newquote(terra.specialize(tree,envfn()))
+        return terra.newquote(terra.specialize(tree,envfn(),2))
     end
 end
 
@@ -1062,8 +1067,8 @@ do --construct type table that holds the singleton value representing each uniqu
         return self:isstruct() or self:isarray()
     end
     
-    function types.type:iscanonical()
-        return not self:isstruct() or not self.incomplete
+    function types.type:isfrozen()
+        return self.state == "frozen"
     end
     
     function types.type:isvector()
@@ -1185,30 +1190,19 @@ do --construct type table that holds the singleton value representing each uniqu
 
         return self.cachedcstring
     end
-    
-    function types.type:callhandler(anchor,name)
-        if self:isstruct() and type(self.metamethods[name]) == "function" then
-            local success,errmsg = pcall(self.metamethods[name],self)
-            if not success then
-                diag:reporterror(anchor,"error while invoking ",name, ": ", errmsg)
-            end
-        end
-    end
 
     function types.type:typecheck(anchor)
         assert(self.state == "unfrozen")
         local ctx = terra.getcompilecontext()
+        local diag = ctx.diagnostics
+
+        ctx:begin(self)
+        self.state = "abouttofreeze"
         
         --handle callbacks for structs
         if self:isstruct() then
-            local abouttofreeze = self.metamethods.__abouttofreeze 
-            if type(abouttofreeze) == "function" then
-                self.metamethods.__abouttofreeze = function(self) error("__abouttofreeze recursively called itself.") end
-                terra.invokeuserfunction(anchor,false,abouttofreeze,self)
-                if self.state ~= "unfrozen" then --we recursively entered this function since __abouttofreeze called itself
-                                                 --this means we are already have begun freezing this type and will just return here
-                    return
-                end
+            if type(self.metamethods.__abouttofreeze) == "function" then
+                terra.invokeuserfunction(anchor,false,self.metamethods.__abouttofreeze,self)
             end
             if type(self.metamethods.__hasbeenfrozen) == "function" then
                 ctx:oncompletion(self,self.metamethods.__hasbeenfrozen)
@@ -1216,8 +1210,6 @@ do --construct type table that holds the singleton value representing each uniqu
         end
 
         self.state = "freezing"
-        ctx:begin(self)
-        local diag = ctx.diagnostics
         
         if self:isvector() or self:ispointer() or self:isarray() then
             ctx:referencetype(anchor,self.type)
@@ -1311,16 +1303,14 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.type:freeze(cont)
         if self.state == "unfrozen" then
             local ctx = terra.getcompilecontext()
-            if ctx:isempty() then
-                ctx.diagnostics:clearerrors()
-            end
             local anchor = self.tree or terra.newanchor(2)
             self:typecheck(anchor)
-            if ctx.diagnostics:haserrors() then
-                error("Errors reported during freezing.",2)
-            end
+            ctx.diagnostics:abortiferrors("Errors reported during freezing.",2)
         end
-        if self.state == "frozen" then
+
+        if self.state == "abouttofreeze" then
+            error("calling freeze inside the __abouttofreeze method for the same type.",2)
+        elseif self.state == "frozen" then
             if cont then
                 cont(self)
             end
@@ -1346,7 +1336,10 @@ do --construct type table that holds the singleton value representing each uniqu
     types.ctypetoterra = {}
     
     local function mktyp(v)
-        v.methods = {}
+        v.state = "frozen"
+        return setmetatable(v,types.type)
+    end
+    local function mkunfrozen(v)
         v.state = "unfrozen"
         return setmetatable(v,types.type)
     end
@@ -1398,7 +1391,7 @@ do --construct type table that holds the singleton value representing each uniqu
         if typ == types.error then return types.error end
         
         return registertype("&"..typ.name, function()
-            return mktyp { kind = terra.kinds.pointer, type = typ }
+            return mkunfrozen { kind = terra.kinds.pointer, type = typ }
         end)
     end
     
@@ -1418,7 +1411,7 @@ do --construct type table that holds the singleton value representing each uniqu
         local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
         local name = tname .. "[" .. N .. "]"
         return registertype(name,function()
-            return mktyp { kind = terra.kinds.array, type = typ, N = N }
+            return mkunfrozen { kind = terra.kinds.array, type = typ, N = N }
         end)
     end
     
@@ -1460,11 +1453,12 @@ do --construct type table that holds the singleton value representing each uniqu
         assert(displayname ~= "")
         local name = getuniquestructname(displayname)
                 
-        local tbl = mktyp { kind = terra.kinds["struct"],
+        local tbl = mkunfrozen { kind = terra.kinds["struct"],
                             name = name, 
                             displayname = displayname, 
                             keytoindex = {},
                             entries = terra.newlist(),
+                            methods = {},
                             metamethods = {}                   
                           }
         function tbl:setconvertible(b)
@@ -1519,7 +1513,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 returnobj = types.newstruct()
                 returnobj.entries = returns
             end
-            return mktyp { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
+            return mkunfrozen { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
         end)
     end
     
@@ -1586,7 +1580,7 @@ function terra.createterraexpression(diag,anchor,v)
     end
 end
 
-function terra.specialize(origtree, luaenv)
+function terra.specialize(origtree, luaenv, depth)
     local env = terra.newenvironment(luaenv)
     local diag = terra.newdiagnostics()
 
@@ -1612,7 +1606,7 @@ function terra.specialize(origtree, luaenv)
             end
             
 
-            if terra.types.istype(value) then --class method resolve to method table
+            if terra.types.istype(value) and value:isstruct() then --class method resolve to method table
                 value = value.methods
             end
 
@@ -1860,7 +1854,7 @@ function terra.specialize(origtree, luaenv)
 
     local newtree = translatetree(origtree)
     
-    diag:abortiferrors("Errors reported during specialization.")
+    diag:abortiferrors("Errors reported during specialization.",depth+1)
     return newtree
 end
 
@@ -1890,14 +1884,6 @@ function terra.evalluaexpression(diag, env, e)
         return false
     end
     return true,v
-end
-
-local function map(lst,fn)
-    r = {}
-    for i,v in ipairs(lst) do
-        r[i] = fn(v)
-    end
-    return r
 end
 
 --all calls to user-defined functions from the compiler go through this wrapper
@@ -2357,15 +2343,6 @@ function terra.funcdefinition:typecheck()
             end
         end
         return ee:copy { type = t, operands = terra.newlist{cond,l,r}}
-    end
-
-    local function gettreeattribute(tree,attrname,typ)
-        local attr = tree.attributes and tree.attributes[attrname]
-        if attr and typ ~= type(attr) then
-            diag:reporterror(tree,attrname," requires type ", typ, " but found ", type(attr))
-            return nil
-        end
-        return attr
     end
 
     local operator_table = {
@@ -3406,9 +3383,6 @@ function terra.funcdefinition:printpretty()
 
     local function emitList(lst,begin,sep,finish,fn)
         emit(begin)
-        if not fn then
-            fn = function(e) emit(e) end
-        end
         for i,k in ipairs(lst) do
             fn(k,i)
             if i ~= #lst then
@@ -3483,9 +3457,6 @@ function terra.funcdefinition:printpretty()
             emit("\n")
         elseif s:is "defvar" then
             begin("var ")
-            if s.isglobal then
-                emit("{global} ")
-            end
             emitList(s.variables,"",", ","",emitParam)
             if s.initializers then
                 emit(" = ")

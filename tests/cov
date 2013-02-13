@@ -1,0 +1,26 @@
+#!../build/LuaJIT-2.0.0/src/luajit
+
+local terralib = io.open("../src/terralib.lua","r")
+local lineinfo = loadfile("coverageinfo.lua")()
+
+local i = 1
+for l in terralib:lines() do
+	local ntimes = lineinfo[i]
+
+	if ntimes then
+		io.write(string.format("%5d:  ",ntimes))
+	else
+		if string.match(l,"^ *%-%-") or 
+		   string.match(l,"^ *$")  or 
+		   string.match(l,"^ *end *$") or
+		    string.match(l,"^ *else *$") or
+		    string.match(l,"^ *local function") then
+			io.write("     :  ")
+		else
+			io.write("#####:  ")
+		end
+	end
+	io.write(l)
+	io.write("\n")
+	i = i + 1
+end
