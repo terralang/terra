@@ -1733,6 +1733,9 @@ function terra.specialize(origtree, luaenv, depth)
                 assert(sym.expression)
                 local success, value = terra.evalluaexpression(diag,env:combinedenv(),sym.expression)
                 if success then
+                    if not value then
+                        diag:reporterror(p,"expected a symbol or string but found nil")
+                    end
                     local symlist = (terra.israwlist(value) and value) or terra.newlist{ value }
                     for i,entry in ipairs(symlist) do
                         if terra.issymbol(entry) then

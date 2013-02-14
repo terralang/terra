@@ -1,6 +1,6 @@
 
 IO = terralib.includec("stdio.h")
-local Class = terralib.require("lib/javalike2")
+local Class = terralib.require("lib/javalike")
 
 struct A {
   a : int
@@ -71,28 +71,18 @@ end
 
 assert(23 == foobar())
 
---[[
-local test = require("test")
-test.eq(23,foobar())
+Doubles = Class.interface { times2 = {} -> int } 
 
-local Doubles
-= Class.interface()
-  :method("double",{} -> int)
-  :type()
+Adds = Class.interface { add = int -> int }
 
-local Adds
-= Class.interface()
-  :method("add", int -> int)
-  :type()
+struct D {
+  data : int
+}
+Class.implements(D,Doubles)
+Class.implements(D,Adds)
 
-local D 
-= Class.class()
-  :member("data",int)
-  :implements(Doubles)
-  :implements(Adds)
-  :type()
 
-terra D:double() : int
+terra D:times2() : int
     return self.data * 2
 end
 
@@ -102,7 +92,7 @@ end
 
 
 terra aDoubles(a : &Doubles)
-    return a:double()
+    return a:times2()
 end
 
 terra aAdds(a : &Adds)
@@ -116,9 +106,9 @@ terra foobar2()
     return aDoubles(&a) + aAdds(&a)
 end
 
-test.eq(12,foobar2())
+assert(12 == foobar2())
 
-]]
+
 local IO = terralib.includec("stdio.h")
 struct Animal {
   data : int
@@ -159,25 +149,21 @@ terra barnyard()
 end
 barnyard()
 
---[[
-local Add = Class.interface()
-            :method("add",int->int)
-            :type()
 
-local Sub = Class.interface()
-            :method("sub",int->int)
-            :type()
+local Add = Class.interface { add = int -> int }
 
-local P = Class.class()
-          :member("data",int)
-          :implements(Add)
-          :type()
+local Sub = Class.interface { sub = int -> int }
 
-local C = Class.class()
-          :extends(P)
-          :member("data2",int)
-          :implements(Sub)
-          :type()
+local struct P {
+   data : int
+}
+Class.implements(P,Add)
+
+local struct C {
+  data2 : int
+}
+Class.extends(C,P)
+Class.implements(C,Sub)
 
 terra P:add(b : int) : int
    self.data = self.data + b
@@ -200,8 +186,6 @@ terra dosubstuff(s : &Sub)
     return s:sub(1)
 end
 
-
-
 terra dotests()
     var p : P
     p:init()
@@ -213,8 +197,7 @@ terra dotests()
     return dopstuff(&p) + dopstuff(&c) + dosubstuff(&c)
 end
 
-test.eq(dotests(),15)
-
+assert(dotests() == 15)
 
 terra timeadd(a :&P, N : int)
   IO.printf("%p\n",a)
@@ -233,8 +216,7 @@ terra timeadd(a :&P, N : int)
   return a
 end
 
-
-var a : C
+local a = global(C)
 
 terra doinit() : &P
   a:init()
@@ -250,4 +232,4 @@ local b = terralib.currenttimeinseconds()
 local e = terralib.currenttimeinseconds()
 print(e - b)
 print(v.data)
-]]
+

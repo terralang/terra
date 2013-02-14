@@ -1,279 +1,218 @@
-
-IO = terralib.includec("stdio.h")
 local std = terralib.includec("stdlib.h")
 local Class = {}
-Class.Class = {}
-Class.Class.__index = Class.Class
-Class.defined = {}
+local metadata = {}
+--map from class type to metadata about it:
+-- parent = the type of the parent class or nil
+-- methodimpl = methodname-funcdef table of the concrete implementations for this class
+-- vtable = the type of the types vtable
+-- vtableglobal = the global variable that holds the data for this vtable
 
-Class.Interface = {}
-Class.Interface.__index = Class.Interface
+local interfacemetadata = {}
+--map from interface type to metadata about it
 
-Class.parentclasstable = {}
-function Class.issubclass(c,t)
-    if c == t then 
-        return true 
+local vtablesym = symbol()
+
+local function offsetinbytes(structtype,key)
+    local terra offsetcalc() : uint64
+        var a : &structtype = [&structtype](0)
+        return [&uint8](&a.[key]) - [&uint8](a)
     end
-    local parent = Class.parentclasstable[c]
-    if parent and Class.issubclass(parent,t) then
-        return true
+    local r =  offsetcalc()
+    return r
+end
+
+local function abouttofreeze(self)
+	local md = metadata[self]
+
+	
+	md.vtable = terralib.types.newstruct()
+	md.methodimpl = {}
+
+	self.entries:insert(1, { field = vtablesym, type = &md.vtable })
+
+	local parentinterfaces
+	if md.parent then
+		md.parent:freeze(true) --asynchronous, only guarenteed to be in state "freezing" now
+		local pmd = metadata[md.parent]
+		for i,m in ipairs(pmd.vtable.entries) do
+			md.vtable.entries:insert(m)
+			md.methodimpl[m.field] = pmd.methodimpl[m.field]
+			assert(md.methodimpl[m.field])
+		end
+		for i,v in ipairs(md.parent.entries) do
+			if i > 1 then --skip the vtable
+				self.entries:insert(i,v)
+			end
+		end
+		parentinterfaces = pmd.interfaces
+		for iface,_ in pairs(parentinterfaces) do
+			md.interfaces[iface] = true
+		end
+	else
+		parentinterfaces = {}
+	end
+	for methodname,impl in pairs(self.methods) do
+		if terralib.isfunction(impl) and methodname ~= "alloc" and #impl:getdefinitions() == 1 then
+			local impldef = impl:getdefinitions()[1]
+			local success, typ = impldef:peektype()
+			if not success then
+				error("methods used in class system must have explicit return types")
+			end
+			if not md.methodimpl[methodname] then
+				md.vtable.entries:insert { field = methodname, type = &typ }
+			end
+			md.methodimpl[methodname] = impldef
+			local symbols = typ.parameters:map(symbol)
+			local obj = symbols[1]
+			local terra wrapper([symbols]) : typ.returns
+				return obj.[vtablesym].[methodname]([symbols])
+			end
+			self.methods[methodname] = wrapper
+		end
+	end
+	local obj = symbol()
+	local vtableinits = terralib.newlist()
+	for iface,_ in pairs(md.interfaces) do
+		local imd = interfacemetadata[iface]
+		if not parentinterfaces[iface] then
+			--we need an entry in the class for this interface object
+			self.entries:insert { field = imd.name, type = iface }
+		end
+		--check the class implements the methods
+		for methodname,_ in pairs(iface.methods) do
+			if not md.methodimpl[methodname] then
+				error("class does not implement method required by interface "..tostring(methodname))
+			end
+		end
+		local vtableglobal = global(imd.vtable)
+		md.interfaces[iface] = vtableglobal 
+		vtableinits:insert(quote
+			obj.[imd.name].[vtablesym] = &vtableglobal
+		end)
+	end
+	md.vtableglobal = global(md.vtable)
+	terra self.methods.init([obj] : &self)
+		obj.[vtablesym] = &md.vtableglobal
+		vtableinits
+	end
+    terra self:free()
+        std.free(self)
     end
-
-    return false
 end
-
-local J = Class
-
-function J.implementsiface(from,to)
-    local builder = Class.defined[from]
-    assert(builder)
-    local ifacename = builder.interfacetypetoname[to]
-    return ifacename ~= nil
+local function hasbeenfrozen(self)
+	local md = metadata[self]
+	local vtbl = md.vtableglobal:get()
+	for methodname,impl in pairs(md.methodimpl) do
+		impl:compile(function()
+			vtbl[methodname] = impl:getpointer()  
+		end)
+	end
+	for iface,ifacevtableglobal in pairs(md.interfaces) do
+		local ifacevtable = ifacevtableglobal:get()
+		local imd = interfacemetadata[iface]
+		for methodname,_ in pairs(iface.methods) do
+			local impl = md.methodimpl[methodname]
+			impl:compile(function()
+				ifacevtable[methodname] = terralib.cast(&uint8,impl:getpointer())
+			end)
+		end
+		(&self):freeze(function()
+			local offset = offsetinbytes(self,imd.name) 
+			ifacevtable.__offset = offset
+		end)
+	end
 end
-
-function J.ifacename(from,to)
-    local builder = Class.defined[from]
-    assert(builder)
-    local ifacename = builder.interfacetypetoname[to]
-    return ifacename
+local function issubclass(child,parent)
+	if child == parent then
+		return true
+	else
+		local md = metadata[child]
+		return md and md.parent and issubclass(md.parent,parent)
+	end
 end
-
-function Class.castmethod(ctx,tree,from,to,exp)
-  if from:ispointer() and to:ispointer() then
-    if J.issubclass(from.type,to.type) then
-      return true, `exp:as(to) --force cast
-    elseif J.implementsiface(from.type,to.type) then
-      --extract subobject with interface vtable:
-      return true, `&exp.[J.ifacename(from.type,to.type)]
-    else return false end --cast not valid
-  end
+local function implementsinterface(child,parent)
+	local md = metadata[child]
+	return md and md.interfaces[parent]
 end
-
-function Class.Class:extends(parentclass)
-    Class.parentclasstable[self.ttype] = parentclass
-    self.parentbuilder = Class.defined[parentclass]
-    self.parent = self.parentbuilder
-    return self
+local function castoperator(diag,tree,from,to,exp)
+	if from:ispointer() and to:ispointer() then
+		if issubclass(from.type,to.type) then
+			return true, `to(exp)
+		elseif implementsinterface(from.type,to.type) then
+			local imd = interfacemetadata[to.type]
+			return true, `&exp.[imd.name]
+		end
+	else
+		return false
+	end
 end
-
-
-
-
-function generatestubs(c,self)
-        local initinterfaces = macro(function(ctx,tree,self)
-            local stmts = terralib.newlist()
-            for name,vtable in pairs(c.interfacevtables) do
-                stmts:insert(quote
-                    self.[name].__vtable = &vtable
-                end)
-            end
-            return stmts
-        end)
-
-        local vtable = c.vtablevar
-        
-        terra self:init()
-            self.__vtable = &vtable
-            initinterfaces(self)
-        end
-        terra self.methods.alloc()
-            var obj = std.malloc(sizeof(self)):as(&self)
-            obj:init()
-            return obj
-        end
-        terra self:free()
-            std.free(self)
-        end
-
+local function initialize(c)
+	if not metadata[c] then
+		metadata[c] = { interfaces = {} }
+		assert(not c.metamethods.__abouttofreeze)
+		assert(not c.metamethods.__hasbeenfrozen)
+		assert(not c.metamethods.__cast)
+		c.metamethods.__abouttofreeze = abouttofreeze
+		c.metamethods.__hasbeenfrozen = hasbeenfrozen
+		c.metamethods.__cast = castoperator
+		terra c.methods.alloc()
+        	var obj = [&c](std.malloc(sizeof(c)))
+        	obj:init()
+        	return obj
+    	end
+	end
 end
-
-function createvtable(c,self,ctx)
-    c:createvtable(ctx)
-    self:addentry("__vtable",&c.vtabletype)
+function Class.extends(child,parent)
+	assert(terralib.types.istype(child) and child:isstruct() and
+	       terralib.types.istype(parent) and parent:isstruct())
+	local md = metadata[child]
+	if md and md.parent then
+		error("already inherits from"..tostring(md.parent),2)
+	end
+	local cur = md
+	while cur ~= nil do
+		if cur.parent == child then
+			error("recursively inheriting from itself",2)
+		end
+		cur = metadata[cur.parent]
+	end
+	initialize(parent)
+	initialize(child)
+	metadata[child].parent = parent
 end
-
-function addinterfacevtable(c,self,interface)
-    local function offsetinbytes(structtype,key)
-        local terra offsetcalc() : int
-            var a : &structtype = (0):as(&structtype)
-            return (&a.[key]):as(&int8) - a:as(&int8)
-        end
-        return `offsetcalc()
-    end
-    local name = "__interface_"..interface.name
-    if not c.interfacevtables[name] then
-        self:addentry(name,interface:type())
-        local methods = terralib.newlist()
-        for _,m in ipairs(interface.methods) do
-            local methodentry = Class.defined[self].vtablemap[m.name]
-            assert(methodentry)
-            assert(methodentry.name == m.name)
-            --TODO: check that the types match...
-            methods:insert(`methodentry.value:as(m.type))
-        end
-        local offsetofinterface = offsetinbytes(self,name)
-        local var interfacevtable : interface.vtabletype = {offsetofinterface,methods}
-        c.interfacevtables[name] = interfacevtable
-        c.interfacetypetoname[interface:type()] = name
-    end 
+function Class.interface(ifacetable)
+	local md = {}
+	md.name = symbol()
+	md.vtable = terralib.types.newstruct()
+	local iface = terralib.types.newstruct("interface")
+	iface.entries:insert { field = vtablesym, type = &md.vtable}
+	md.vtable.entries:insert { field = "__offset", type = uint64 } --offset to get back to object
+	for methodname,methodtype in pairs(ifacetable) do
+		assert(type(methodname) == "string" and terralib.types.istype(methodtype) and methodtype:ispointertofunction())
+		local params = terralib.newlist { &uint8 }
+		for i,t in ipairs(methodtype.type.parameters) do 
+			params:insert(t)
+		end
+		local fullmethodtype =  params -> methodtype.type.returns
+		md.vtable.entries:insert { field = methodname, type = &uint8 }
+		local args = methodtype.type.parameters:map(symbol)
+		iface.methods[methodname] = terra(obj : &iface,[args]) : methodtype.type.returns
+			var method = fullmethodtype(obj.[vtablesym].[methodname])
+			var origobj = [&uint8](int64(obj) - obj.[vtablesym].__offset)
+			return method(origobj,[args])
+		end
+	end
+	interfacemetadata[iface] = md
+	return iface
 end
-
-
-function layoutstruct(factory,newstruct,ctx)
-  local function layoutbody(cls)
-    if cls.parent ~= nil then
-      layoutbody(cls.parent)
-    end
-    for _,m in ipairs(cls.members) do
-        newstruct:addentry(m.name,m.type)
-    end
-    for _,iface in ipairs(cls.interfaces) do
-      addinterfacevtable(factory,newstruct,iface)
-    end
-  end
-  createvtable(factory,newstruct,ctx)
-  layoutbody(factory)
-  generatestubs(factory,newstruct)
+function Class.implements(child,iface)
+	local imd = interfacemetadata[iface]
+	assert(imd)
+	local md = metadata[child]
+	if not md then
+		initialize(child)
+		md = metadata[child]
+	end
+	md.interfaces[iface] = true
 end
-
-
-function createclass(factory)
-  local newtype = terralib.types.newstruct()
-  local function callback(self,ctx)
-    layoutstruct(factory,newtype,ctx)
-  end
-  newtype:addlayoutfunction(callback)
-  return newtype
-end
-
-
-function Class.class(parentclass)
-    local c = setmetatable({},Class.Class)
-    c.ttype = createclass(c)
-    c.ttype.methods.__cast = Class.castmethod
-    Class.defined[c.ttype] = c
-    c.members = terralib.newlist()
-
-    c.interfaces = terralib.newlist() --list of new interfaces added by this class, excluding parent's interfaces
-    c.interfacetypetoname = {} --map from implemented interface types -> the name of the interface in the vtable
-
-    c.interfacevtables = {}
-
-    return c
-end
-
-function Class.Class:member(name,typ)
-    self.members:insert( { name = name, type = typ })
-    return self
-end
-
-function Class.Class:createvtableentries(ctx)
-    if self.vtableentries ~= nil then
-        return
-    end
-
-    self.vtableentries = terralib.newlist{}
-    self.vtablemap = {}
-
-    if self.parentbuilder then
-        self.parentbuilder:createvtableentries(ctx)
-        for _,i in ipairs(self.parentbuilder.vtableentries) do
-            local e = {name = i.name, value = i.value}
-            self.vtableentries:insert(e)
-            self.vtablemap[i.name] = e
-        end
-    end
-    for name,method in pairs(self.ttype.methods) do
-        if terralib.isfunction(method) then
-            if self.vtablemap[name] then
-                --TODO: we should check that the types match...
-                --but i am lazy
-                self.vtablemap[name].value = method
-            else
-                local e = {name = name, value = method}
-                self.vtableentries:insert(e)
-                self.vtablemap[name] = e
-            end
-        end
-    end
-
-end
-
-function Class.Class:createvtable(ctx)
-    if not self.vtableentries then
-        self:createvtableentries(ctx)
-    end
-
-    local vtabletype = terralib.types.newstruct("vtable")
-    local inits = terralib.newlist()
-    for _,e in ipairs(self.vtableentries) do
-        assert(terralib.isfunction(e.value))
-        assert(#e.value:getvariants() == 1)
-        local variant = e.value:getvariants()[1]
-        local success,typ = variant:peektype(ctx)
-        assert(success)
-        vtabletype:addentry(e.name,&typ)
-        inits:insert(`e.value)
-        local arguments = typ.parameters:map(symbol)
-        local obj = arguments[1] 
-        self.ttype.methods[e.name] = terra([arguments])
-            return obj.__vtable.[e.name]([arguments])
-        end
-    end
-
-    local var vtable : vtabletype = {inits}
-    self.vtabletype = vtabletype
-    self.vtablevar = vtable
-end
-
-function Class.Class:implements(interface)
-    self.interfaces:insert(Class.defined[interface])
-    return self
-end
-
-function Class.Class:type()
-    return self.ttype
-end
-
-local interfaceid = 0
-function Class.interface()
-    local name = "interface_"..interfaceid
-    interfaceid = interfaceid + 1
-    local self = setmetatable({},Class.Interface)
-    self.name = name
-    self.methods = terralib.newlist()
-    self.vtabletype = terralib.types.newstruct(name.."_vtable")
-    self.vtabletype:addentry("offset",ptrdiff)
-    self.interfacetype = terralib.types.newstruct(name)
-    self.interfacetype:addentry("__vtable",&self.vtabletype)
-    Class.defined[self.interfacetype] = self
-    self.interfacetype.methods.__cast = Class.castmethod
-    return self
-end
-
-function Class.Interface:method(name,typ)
-    assert(typ:ispointer() and typ.type:isfunction())
-    local returns = typ.type.returns
-    local parameters = terralib.newlist({&uint8})
-    local arguments = terralib.newlist()
-    for _,e in ipairs(typ.type.parameters) do
-        parameters:insert(e)
-        arguments:insert(symbol(e))
-    end
-    local interfacetype = parameters -> returns
-    self.methods:insert({name = name, type = interfacetype})
-    self.vtabletype:addentry(name,interfacetype)
-    
-    local obj = symbol(&self.interfacetype)
-    self.interfacetype.methods[name] = terra([obj],[arguments]) 
-        return (obj.__vtable.[name])((obj):as(&uint8) - obj.__vtable.offset,[arguments]) 
-    end
-    return self
-end
-
-function Class.Interface:type()
-    return self.interfacetype
-end
-
 return Class
-
