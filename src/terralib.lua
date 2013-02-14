@@ -512,7 +512,7 @@ end
 
 function terra.funcdefinition:compile(cont)
     if self.state == "compiled" then
-        if cont then
+        if cont and type(cont) == "function" then
             cont(self)
         end
         return
@@ -521,7 +521,9 @@ function terra.funcdefinition:compile(cont)
     if cont then 
         self:emitllvm(function()
             self:jitandmakewrapper()
-            cont(self)
+            if type(cont) == "function" then
+                cont(self)
+            end
         end)
     else
         self:emitllvm()
@@ -549,7 +551,9 @@ function terra.funcdefinition:emitllvm(cont)
         self:initializecfunction()
     elseif self.state == "typechecking" then
         if cont then
-            terra.getcompilecontext():oncompletion(self,cont)
+            if type(cont) == "function" then
+                terra.getcompilecontext():oncompletion(self,cont)
+            end
             return
         else
             error("attempting to compile a function that is already being compiled",2)
@@ -558,7 +562,7 @@ function terra.funcdefinition:emitllvm(cont)
         error("attempting to compile a function which already has an error",2)
     end
 
-    if cont then
+    if cont and type(cont) == "function" then
         cont(self)
     end
 end
@@ -1309,12 +1313,14 @@ do --construct type table that holds the singleton value representing each uniqu
         if self.state == "abouttofreeze" then
             error("calling freeze inside the __abouttofreeze method for the same type.",2)
         elseif self.state == "frozen" then
-            if cont then
+            if cont and type(cont) == "function" then
                 cont(self)
             end
         elseif self.state == "freezing" then
             if cont then
-                terra.getcompilecontext():oncompletion(self,cont)
+                if type(cont) == "function" then
+                    terra.getcompilecontext():oncompletion(self,cont)
+                end
             else
                 error("attempting to freeze a type that is already being frozen",2)
             end

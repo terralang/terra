@@ -1,39 +1,38 @@
 
 IO = terralib.includec("stdio.h")
-local Class = terralib.require("lib/javalike")
+local Class = terralib.require("lib/javalike2")
 
-A = Class.class()
-    :member("a",int)
-    :type()
-    
-terra A:double() : int
+struct A {
+  a : int
+}
+terra A:times2() : int
     return self.a*2
 end
-    
-B = Class.class()
-    :extends(A)
-    :member("b",int)
-    :type()
+   
+struct B {
+  b : int
+} 
+Class.extends(B,A)
     
 terra B:combine(a : int) : int
     return self.b + self.a + a
 end
     
-C = Class.class()
-    :extends(B)
-    :member("c",double)
-    :type()
-    
+
+struct C {
+  c : double
+}
+Class.extends(C,B)
+
 terra C:combine(a : int) : int
     return self.c + self.a + self.b + a
 end
-
-terra C:double() : double
+terra C:times2() : double
     return self.a * 4
 end
 
 terra doubleAnA(a : &A)
-    return a:double()
+    return a:times2()
 end
 
 terra combineAB(b : &B)
@@ -43,6 +42,13 @@ end
 terra returnA(a : A)
     return a
 end
+terra foobar1()
+  var c = C.alloc()
+  c.a,c.b,c.c = 1,2,3.5
+  return c:times2()
+end
+
+assert(foobar1() == 4)
 
 terra foobar()
 
@@ -63,6 +69,9 @@ terra foobar()
     return r
 end
 
+assert(23 == foobar())
+
+--[[
 local test = require("test")
 test.eq(23,foobar())
 
@@ -109,23 +118,27 @@ end
 
 test.eq(12,foobar2())
 
-Animal = Class.class()
-         :member("data",int)
-         :type()
+]]
+local IO = terralib.includec("stdio.h")
+struct Animal {
+  data : int
+}
 terra Animal:speak() : {}
     IO.printf("... %d\n",self.data)
 end
 
-Dog = Class.class()
-      :extends(Animal)
-      :type()
+struct Dog {
+}
+Class.extends(Dog,Animal)
 terra Dog:speak() : {}
     IO.printf("woof! %d\n",self.data)
 end
 
-Cat = Class.class()
-      :extends(Animal)
-      :type()
+struct Cat {
+}
+
+Class.extends(Cat,Animal)
+
 terra Cat:speak() : {}
     IO.printf("meow! %d\n",self.data)
 end
@@ -144,9 +157,9 @@ terra barnyard()
     dospeak(&c)
     dospeak(&d)
 end
-
 barnyard()
 
+--[[
 local Add = Class.interface()
             :method("add",int->int)
             :type()
@@ -237,4 +250,4 @@ local b = terralib.currenttimeinseconds()
 local e = terralib.currenttimeinseconds()
 print(e - b)
 print(v.data)
-
+]]
