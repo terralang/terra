@@ -12,13 +12,12 @@ local interfacemetadata = {}
 
 local vtablesym = symbol()
 
-local function offsetinbytes(structtype,key)
+local function offsetinbytesfn(structtype,key)
     local terra offsetcalc() : uint64
         var a : &structtype = [&structtype](0)
         return [&uint8](&a.[key]) - [&uint8](a)
     end
-    local r =  offsetcalc()
-    return r
+    return offsetcalc
 end
 
 local function abouttofreeze(self)
@@ -116,10 +115,7 @@ local function hasbeenfrozen(self)
 				ifacevtable[methodname] = terralib.cast(&uint8,impl:getpointer())
 			end)
 		end
-		(&self):freeze(function()
-			local offset = offsetinbytes(self,imd.name) 
-			ifacevtable.__offset = offset
-		end)
+		ifacevtable.__offset = terralib.offsetof(self,imd.name)
 	end
 end
 local function issubclass(child,parent)

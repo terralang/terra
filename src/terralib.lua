@@ -3679,6 +3679,19 @@ function terra.new(terratype,...)
     local typ = terratype:cstring()
     return ffi.new(typ,...)
 end
+function terra.sizeof(terratype,...)
+    terratype:freeze()
+    local typ = terratype:cstring()
+    return ffi.sizeof(typ,...)
+end
+function terra.offsetof(terratype,field)
+    terratype:freeze()
+    local typ = terratype:cstring()
+    if terra.issymbol(field) then
+        field = "__symbol"..field.id
+    end
+    return ffi.offsetof(typ,field)
+end
 
 function terra.cast(terratype,obj)
     terratype:freeze()
