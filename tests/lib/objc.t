@@ -3,6 +3,26 @@ local C = terralib.includecstring [[
 	#include <objc/message.h>
 	#include <stdio.h>
 ]]
+local mangleSelector
+
+
+--replace methods such as:   myobj:methodcall(arg0,arg1)
+--with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
+
+C.objc_object.metamethods.__methodmissing = macro(function(_,_,sel,obj,...)
+	local arguments = {...}
+	sel = mangleSelector(sel,#arguments)
+	return `C.objc_msgSend(&obj,C.sel_registerName(sel),arguments)
+end)
+
+function mangleSelector(sel,nargs)
+	local sel = sel:gsub("_",":")
+	if nargs >= 1 then
+		sel = sel .. ":"
+	end
+	return sel
+end
+
 local OC = {}
 setmetatable(OC, {
 	 __index = function(self,idx)
@@ -10,13 +30,5 @@ setmetatable(OC, {
 	end
 })
 OC.ID = &C.objc_object
-C.objc_object.metamethods.__methodmissing = macro(function(ctx,tree,idx,obj,...)
-	local idx = idx:gsub("_",":")
-	local args = {...}
-	if #args >= 1 then
-		idx = idx .. ":"
-	end
-	return `C.objc_msgSend(&obj,C.sel_registerName(idx),args)
-end)
 
 return OC

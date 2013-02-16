@@ -2211,6 +2211,11 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     
     if(isstatement && names.size() > 0) {
         print_name_list(ls, &names);
+        if(islocal) {
+            for(size_t i = 0; i < names.size(); i++) {
+                definevariable(ls, names[i].data[0]);
+            }
+        }
         OutputBuffer_printf(&ls->output_buffer," = ");
     }
     

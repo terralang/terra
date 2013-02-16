@@ -891,9 +891,9 @@ do  --constructor functions for terra functions and variables
             end
             fn.untypedtree = newtree:copy { parameters = newparameters} 
         end
-
+        local starttime = terra.currenttimeinseconds() 
         fn.untypedtree = terra.specialize(fn.untypedtree,env,3)
-        
+        fn.stats.specialize = terra.currenttimeinseconds() - starttime
         return fn
     end
     
