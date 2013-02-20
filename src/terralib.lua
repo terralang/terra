@@ -2093,7 +2093,7 @@ function terra.funcdefinition:typecheck()
         else
             local cast_exp = createcast(exp,typ)
             if ((typ:isprimitive() and exp.type:isprimitive()) or
-                (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N)) and 
+                (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N)) and
                not typ:islogicalorvector() and not exp.type:islogicalorvector() then
                 return cast_exp, true
             elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
@@ -2157,7 +2157,8 @@ function terra.funcdefinition:typecheck()
                 diag:reporterror(exp,"pointer to ",typ," conversion loses precision")
             end
             return createcast(exp,typ)
-        elseif typ:isprimitive() and exp.type:isprimitive() then --explicit conversions from logicals to other primitives are allowed
+        elseif (typ:isprimitive() and exp.type:isprimitive())
+            or (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N) then --explicit conversions from logicals to other primitives are allowed
             return createcast(exp,typ)
         else
             return insertcast(exp,typ) --otherwise, allow any implicit casts
