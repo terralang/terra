@@ -643,7 +643,7 @@ struct CCallingConv {
             AttrBuilder builder;
             builder.addAttribute(Attributes::StructRet);
             builder.addAttribute(Attributes::NoAlias);
-            return Attributes::get(&C->ctx,builder);
+            return Attributes::get(*C->ctx,builder);
         #else
             return Attributes(Attribute::StructRet | Attribute::NoAlias);
         #endif
@@ -652,7 +652,7 @@ struct CCallingConv {
         #ifdef LLVM_3_2
             AttrBuilder builder;
             builder.addAttribute(Attributes::ByVal);
-            return Attributes::get(&C->ctx,builder);
+            return Attributes::get(*C->ctx,builder);
         #else
             return Attributes(Attribute::ByVal);
         #endif
