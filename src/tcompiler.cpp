@@ -373,10 +373,7 @@ struct CCallingConv {
                 TType * ttype = GetTypeDuringTypeCreation(&base,NULL); //vectors can only contain primitives, so no deferred struct layouts will occur, hence it safe to pass NULL
                 Type * baseType = ttype->type;
                 t->issigned = ttype->issigned;
-                if(ttype->islogical) {
-                    baseType = Type::getInt1Ty(*C->ctx);
-                    t->islogical = true;
-                }
+                t->islogical = ttype->islogical;
                 t->type = VectorType::get(baseType, N);
             } break;
             default: {
@@ -1337,8 +1334,6 @@ if(baseT->isIntegerTy()) { \
     }
     Value * emitBroadcast(TType * fromT, TType * toT, Value * v) {
         Value * result = UndefValue::get(toT->type);
-        if(toT->islogical)
-            v = emitCond(v); //logicals become packed so that vector selects work
         VectorType * vt = cast<VectorType>(toT->type);
         Type * integerType = Type::getInt32Ty(*C->ctx);
         for(int i = 0; i < vt->getNumElements(); i++)
@@ -1373,9 +1368,7 @@ if(baseT->isIntegerTy()) { \
         Value * condExp = emitExp(cond);
         Value * aExp = emitExp(a);
         Value * bExp = emitExp(b);
-        if(!condExp->getType()->isVectorTy()) {
-            condExp = emitCond(condExp); //convert to i1
-        }
+        condExp = emitCond(condExp); //convert to i1
         return B->CreateSelect(condExp, aExp, bExp);
     }
     Value * variableFromDefinition(Obj * exp) {
@@ -1647,9 +1640,6 @@ if(baseT->isIntegerTy()) { \
                 Value * vec = UndefValue::get(vecType->type);
                 Type * intType = Type::getInt32Ty(*C->ctx);
                 for(size_t i = 0; i < values.size(); i++) {
-                    if(vecType->islogical) {
-                        values[i] = emitCond(values[i]);
-                    }
                     vec = B->CreateInsertElement(vec, values[i], ConstantInt::get(intType, i));
                 }
                 return vec;
@@ -1688,7 +1678,12 @@ if(baseT->isIntegerTy()) { \
         return emitCond(emitExp(cond));
     }
     Value * emitCond(Value * cond) {
-        return B->CreateTrunc(cond, Type::getInt1Ty(*C->ctx));
+        Type * resultType = Type::getInt1Ty(*C->ctx);
+        if(cond->getType()->isVectorTy()) {
+            VectorType * vt = cast<VectorType>(cond->getType());
+            resultType = VectorType::get(resultType,vt->getNumElements());
+        }
+        return B->CreateTrunc(cond, resultType);
     }
     void emitIfBranch(Obj * ifbranch, BasicBlock * footer) {
         Obj cond,body;
