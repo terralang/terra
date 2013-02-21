@@ -3293,6 +3293,12 @@ _G["sizeof"] = macro(function(diag,tree,typ)
     return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype()})
 end)
 _G["vector"] = macro(function(diag,tree,...)
+    if not diag then
+        error("nil first argument in vector constructor")
+    end
+    if not tree then
+        error("nil second argument in vector constructor")
+    end
     if terra.types.istype(diag) then --vector used as a type constructor vector(int,3)
         return terra.types.vector(diag,tree)
     end
