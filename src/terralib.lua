@@ -3271,11 +3271,11 @@ terra.__wrappedluafunctions = {}
 
 -- INCLUDEC
 
-function terra.includecstring(code)
-    return terra.registercfile(code,{"-I",".","-O3"})
+function terra.includecstring(code,...)
+    return terra.registercfile(code,{"-I",".","-O3",...})
 end
-function terra.includec(fname)
-    return terra.includecstring("#include \""..fname.."\"\n")
+function terra.includec(fname,...)
+    return terra.includecstring("#include \""..fname.."\"\n",...)
 end
 
 function terra.includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry
