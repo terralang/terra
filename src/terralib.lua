@@ -2198,7 +2198,7 @@ function terra.funcdefinition:typecheck()
             if a:isintegral() and b:isintegral() then
                 if a.bytes < b.bytes then
                     return b
-                elseif b.bytes > a.bytes then
+                elseif a.bytes > b.bytes then
                     return a
                 elseif a.signed then
                     return b

@@ -52,7 +52,7 @@ LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir)
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
-           -lclangAnalysis -lclangRewrite \
+           -lclangAnalysis \
            -lclangEdit -lclangAST -lclangLex -lclangBasic
            #-lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
            #-lclangStaticAnalyzerCore \
@@ -145,9 +145,9 @@ LFLAGS_MANUAL += \
 
 
 ifeq ($(LLVM_VERSION), LLVM_3_1)
-LFLAGS += $(LFLAGS_MANUAL)
+LFLAGS += $(LFLAGS_MANUAL) -lclangRewrite
 else
-LFLAGS += $(shell $(LLVM_CONFIG) --libs)
+LFLAGS += $(shell $(LLVM_CONFIG) --libs) -lclangRewriteCore
 endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
