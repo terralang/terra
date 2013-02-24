@@ -2130,7 +2130,11 @@ function terra.funcdefinition:typecheck()
                 local quotedexp = terra.newquote(tel)
                 local success,valid,result = terra.invokeuserfunction(exp, true,__cast,diag,exp,exp.type,typ,quotedexp)
                 if success and valid then
-                    return checkrvalue(terra.createterraexpression(diag,exp,result))
+                    local result = checkrvalue(terra.createterraexpression(diag,exp,result))
+                    if result.type ~= typ then 
+                        diag:reporterror(exp,"user-defined cast returned expression with the wrong type.")
+                    end
+                    return result
                 elseif not success then
                     errormsgs:insert(valid)
                 end
