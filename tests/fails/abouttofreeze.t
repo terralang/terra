@@ -3,7 +3,7 @@ struct A {
 	b : int;
 }
 
-function A.metamethods.__abouttofreeze(self)
+function A.metamethods.__finalizelayout(self)
 	self:freeze()
 end
 

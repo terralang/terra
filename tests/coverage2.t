@@ -20,7 +20,7 @@ end)
 A = terralib.types.newstruct()
 A.entries:insert{ field = "a", type = int[2] }
 
-A.metamethods.__abouttofreeze = function() error("NOPE") end
+A.metamethods.__finalizelayout = function() error("NOPE") end
 
 failit(erd,function()
 	A:freeze()
@@ -84,7 +84,7 @@ struct SF {
 } and struct SF2 {
 	a : int
 }
-SF2.metamethods.__abouttofreeze = function(self) SF:freeze() end
+SF2.metamethods.__finalizelayout = function(self) SF:freeze() end
 failit(erd,function()
 SF:freeze()
 end)
@@ -177,7 +177,7 @@ struct ATF {
 	a : int
 }
 
-ATF.metamethods.__abouttofreeze = function(self) 
+ATF.metamethods.__finalizelayout = function(self) 
 	local terra foo()
 		var a : ATF
 		return a.a
@@ -195,7 +195,7 @@ struct FA {
 	a : int
 }
 
-FA2.metamethods.__abouttofreeze = function(self)
+FA2.metamethods.__finalizelayout = function(self)
 	FA:freeze(function()
 		a = a + 1
 	end)

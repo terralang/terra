@@ -20,7 +20,7 @@ local function offsetinbytesfn(structtype,key)
     return offsetcalc
 end
 
-local function abouttofreeze(self)
+local function finalizelayout(self)
 	local md = metadata[self]
 
 	
@@ -145,10 +145,10 @@ end
 local function initialize(c)
 	if not metadata[c] then
 		metadata[c] = { interfaces = {} }
-		assert(not c.metamethods.__abouttofreeze)
+		assert(not c.metamethods.__finalizelayout)
 		assert(not c.metamethods.__hasbeenfrozen)
 		assert(not c.metamethods.__cast)
-		c.metamethods.__abouttofreeze = abouttofreeze
+		c.metamethods.__finalizelayout = finalizelayout
 		c.metamethods.__hasbeenfrozen = hasbeenfrozen
 		c.metamethods.__cast = castoperator
 		terra c.methods.alloc()

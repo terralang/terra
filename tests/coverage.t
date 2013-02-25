@@ -31,7 +31,7 @@ local struct A {
 	a : int
 }
 
-A.metamethods.__abouttofreeze = function(self)
+A.metamethods.__finalizelayout = function(self)
 	error("I AM BAD")
 end
 

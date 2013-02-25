@@ -3,7 +3,7 @@ struct A {
 	b : int;
 }
 
-function A.metamethods.__abouttofreeze(self)
+function A.metamethods.__finalizelayout(self)
 	print("ABOUT TO COMPILE")
 	for i,e in ipairs(self.entries) do
 		e.field = "foo"..e.field

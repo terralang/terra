@@ -322,7 +322,7 @@ function terra.context:referencetype(anchor,typ)
         typ:typecheck(anchor)
         curobj.lowlink = math.min(curobj.lowlink,typ.lowlink)
     elseif typ.state == "inlayout" then
-        self.diagnostics:reporterror(typ.tree or anchor,"calling freeze inside the __abouttofreeze method for the same type.")
+        self.diagnostics:reporterror(typ.tree or anchor,"calling freeze inside the __finalizelayout method for the same type.")
     elseif typ.state == "freezing" then
         curobj.lowlink = math.min(curobj.lowlink,typ.compileindex)
     elseif typ.state == "error" then
@@ -1203,8 +1203,8 @@ do --construct type table that holds the singleton value representing each uniqu
     function types.type:dolayout(anchor)
         assert(self.state == "unfrozen")
         self.state = "inlayout"
-        if self:isstruct() and type(self.metamethods.__abouttofreeze) == "function" then
-            terra.invokeuserfunction(anchor,false,self.metamethods.__abouttofreeze,self)
+        if self:isstruct() and type(self.metamethods.__finalizelayout) == "function" then
+            terra.invokeuserfunction(anchor,false,self.metamethods.__finalizelayout,self)
         end
         self.state = "finishedlayout"
     end
