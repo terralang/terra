@@ -222,10 +222,7 @@ function terra.context:begin(obj) --obj is either a funcdefinition or a type
     obj.lowlink = obj.compileindex
     self.nextindex = self.nextindex + 1
     
-    if not self:isempty() then
-        obj.haderrors = self.diagnostics:haserrors()
-    end
-    self.diagnostics:seterrors(false)
+    self.diagnostics:begin()
     
     table.insert(self.stack,obj)
     table.insert(self.tobecompiled,obj)
@@ -270,8 +267,7 @@ function terra.context:finish(anchor)
             end
         end
     end
-    self.diagnostics:seterrors(self.diagnostics:haserrors() or obj.haderrors)
-    obj.haderrors = nil
+    self.diagnostics:finish()
 end
 
 function terra.context:oncompletion(obj,callback)
@@ -418,7 +414,7 @@ function terra.diagnostics:clearfilecache()
 end
 
 function terra.diagnostics:reporterror(anchor,...)
-    self._haserrors = true
+    self._haserrors[#self._haserrors] = true
     if not anchor then
         print(debug.traceback())
         error("nil anchor")
@@ -432,15 +428,24 @@ function terra.diagnostics:reporterror(anchor,...)
 end
 
 function terra.diagnostics:haserrors()
-    return self._haserrors
+    return self._haserrors[#self._haserrors]
 end
 
-function terra.diagnostics:seterrors(b)
-    self._haserrors = b
+function terra.diagnostics:begin()
+    table.insert(self._haserrors,false)
 end
 
-function terra.diagnostics:abortiferrors(msg,depth)
-    if self:haserrors() then
+function terra.diagnostics:finish()
+    local haderrors = table.remove(self._haserrors)
+    local top = #self._haserrors
+    assert(top > 0)
+    self._haserrors[top] = self._haserrors[top] or haderrors
+    return haderrors
+end
+
+function terra.diagnostics:finishandabortiferrors(msg,depth)
+    local haderrors = self:finish()
+    if haderrors then
         self:clearfilecache()
         error(msg,depth+1)
     else
@@ -449,7 +454,7 @@ function terra.diagnostics:abortiferrors(msg,depth)
 end
 
 function terra.newdiagnostics()
-    return setmetatable({ filecache = {}, _haserrors = false },terra.diagnostics)
+    return setmetatable({ filecache = {}, _haserrors = { true } },terra.diagnostics)
 end
 
 -- END DIAGNOSTICS
@@ -541,8 +546,9 @@ end
 function terra.funcdefinition:emitllvm(cont)
     if self.state == "untyped" then
         local ctx = terra.getcompilecontext()
+        ctx.diagnostics:begin()
         self:typecheck()
-        ctx.diagnostics:abortiferrors("Errors reported during compilation.",2)
+        ctx.diagnostics:finishandabortiferrors("Errors reported during compilation.",2)
     end
 
     if self.state == "compiled" or self.state == "emittedllvm" then
@@ -903,7 +909,7 @@ do  --constructor functions for terra functions and variables
     
     local function layoutstruct(st,tree,env)
         local diag = terra.newdiagnostics()
-
+        diag:begin()
         if st.tree then
             diag:reporterror(tree,"attempting to redefine struct")
             diag:reporterror(st.tree,"previous definition was here")
@@ -932,7 +938,7 @@ do  --constructor functions for terra functions and variables
         st.tree = tree --for debugging purposes and to track whether the struct has already beend defined
                        --we keep the tree to improve error reporting
         
-        diag:abortiferrors("Errors reported during struct definition.",3)
+        diag:finishandabortiferrors("Errors reported during struct definition.",3)
 
     end
 
@@ -1306,8 +1312,9 @@ do --construct type table that holds the singleton value representing each uniqu
         if self.state == "unfrozen" then
             local ctx = terra.getcompilecontext()
             local anchor = self.tree or terra.newanchor(2)
+            ctx.diagnostics:begin()
             self:typecheck(anchor)
-            ctx.diagnostics:abortiferrors("Errors reported during freezing.",2)
+            ctx.diagnostics:finishandabortiferrors("Errors reported during freezing.",2)
         end
 
         if self.state == "abouttofreeze" then
@@ -1587,7 +1594,7 @@ end
 function terra.specialize(origtree, luaenv, depth)
     local env = terra.newenvironment(luaenv)
     local diag = terra.newdiagnostics()
-
+    diag:begin()
     local translatetree, translategenerictree, translatelist, resolvetype, createformalparameterlist, desugarfornum
     function translatetree(e)
         if e:is "var" then
@@ -1861,7 +1868,7 @@ function terra.specialize(origtree, luaenv, depth)
 
     local newtree = translatetree(origtree)
     
-    diag:abortiferrors("Errors reported during specialization.",depth+1)
+    diag:finishandabortiferrors("Errors reported during specialization.",depth+1)
     return newtree
 end
 
