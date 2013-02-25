@@ -318,10 +318,10 @@ function terra.context:referencetype(anchor,typ)
         return typ
     end
     local curobj = self.stack[#self.stack]
-    if typ.state == "unfrozen" then
+    if typ.state == "unfrozen" or typ.state == "finishedlayout" then
         typ:typecheck(anchor)
         curobj.lowlink = math.min(curobj.lowlink,typ.lowlink)
-    elseif typ.state == "abouttofreeze" then
+    elseif typ.state == "inlayout" then
         self.diagnostics:reporterror(typ.tree or anchor,"calling freeze inside the __abouttofreeze method for the same type.")
     elseif typ.state == "freezing" then
         curobj.lowlink = math.min(curobj.lowlink,typ.compileindex)
@@ -1200,27 +1200,32 @@ do --construct type table that holds the singleton value representing each uniqu
 
         return self.cachedcstring
     end
-
-    function types.type:typecheck(anchor)
+    function types.type:dolayout(anchor)
         assert(self.state == "unfrozen")
+        self.state = "inlayout"
+        if self:isstruct() and type(self.metamethods.__abouttofreeze) == "function" then
+            terra.invokeuserfunction(anchor,false,self.metamethods.__abouttofreeze,self)
+        end
+        self.state = "finishedlayout"
+    end
+    function types.type:typecheck(anchor)
+        
         local ctx = terra.getcompilecontext()
         local diag = ctx.diagnostics
 
         ctx:begin(self)
-        self.state = "abouttofreeze"
-        
-        --handle callbacks for structs
-        if self:isstruct() then
-            if type(self.metamethods.__abouttofreeze) == "function" then
-                terra.invokeuserfunction(anchor,false,self.metamethods.__abouttofreeze,self)
-            end
-            if type(self.metamethods.__hasbeenfrozen) == "function" then
-                ctx:oncompletion(self,self.metamethods.__hasbeenfrozen)
-            end
-        end
 
+        if self.state == "unfrozen" then
+            self:dolayout(anchor)
+        end
+        assert(self.state == "finishedlayout")
         self.state = "freezing"
         
+        --handle callbacks for structs
+        if self:isstruct() and type(self.metamethods.__hasbeenfrozen) == "function" then
+            ctx:oncompletion(self,self.metamethods.__hasbeenfrozen)
+        end
+
         if self:isvector() or self:ispointer() or self:isarray() then
             ctx:referencetype(anchor,self.type)
         elseif self:isfunction() then
@@ -1308,18 +1313,32 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         ctx:finish(anchor)
     end
+    function types.type:finalizelayout()
+        if self.state == "unfrozen" then 
+            local ctx = terra.getcompilecontext()
+            local anchor = self.tree or terra.newanchor(2)
+            ctx.diagnostics:begin()
+            self:dolayout(anchor)
+            if ctx.diagnostics:haserrors() then
+                self.state = "error"
+            end
+            ctx.diagnostics:finishandabortiferrors("Errors reported during layout.",2)
+        elseif self.state == "error" then
+             error("attempting to layout a type which already has an error",2)
+        elseif self.state == "inlayout" then
+            error("attempting to finalize the layout of a type already finalizing layout",2)
+        end
+    end
+
     function types.type:freeze(cont)
-        if self.state == "unfrozen" then
+        if self.state == "unfrozen" or self.state == "finishedlayout" then
             local ctx = terra.getcompilecontext()
             local anchor = self.tree or terra.newanchor(2)
             ctx.diagnostics:begin()
             self:typecheck(anchor)
             ctx.diagnostics:finishandabortiferrors("Errors reported during freezing.",2)
         end
-
-        if self.state == "abouttofreeze" then
-            error("calling freeze inside the __abouttofreeze method for the same type.",2)
-        elseif self.state == "frozen" then
+        if self.state == "frozen" then
             if cont and type(cont) == "function" then
                 cont(self)
             end
@@ -1332,7 +1351,9 @@ do --construct type table that holds the singleton value representing each uniqu
                 error("attempting to freeze a type that is already being frozen",2)
             end
         elseif self.state == "error" then
-            error("attempting to freeze a type which already has an error",2)
+             error("attempting to freeze a type which already has an error",2)
+        elseif self.state == "inlayout" then
+            error("attempting to freeze a type already finalizing layout",2)
         end
     end
         

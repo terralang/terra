@@ -31,7 +31,7 @@ local function abouttofreeze(self)
 
 	local parentinterfaces
 	if md.parent then
-		md.parent:freeze(true) --asynchronous, only guarenteed to be in state "freezing" now
+		md.parent:finalizelayout()
 		local pmd = metadata[md.parent]
 		for i,m in ipairs(pmd.vtable.entries) do
 			md.vtable.entries:insert(m)
