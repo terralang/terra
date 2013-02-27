@@ -783,6 +783,21 @@ function terra.quote:astype()
     return obj.value
 end
 
+function terra.quote:gettype()
+    if not self.tree:is "typedexpressionlist" then
+        error("not a typed quote")
+    end
+    local exps = self.tree.expressions 
+    if #exps == 0 then
+        error("expected at least one expression in quote")
+    end
+    local exp = exps[1]
+    if not terra.types.istype(exp.type) then
+        error("not a typed quote")
+    end
+    return exp.type
+end
+
 function terra.quote:asvalue()
     
     local function getvalue(e)
@@ -1676,7 +1691,9 @@ function terra.specialize(origtree, luaenv, depth)
             local return_types
             if e.return_types then
                 local success, value = terra.evalluaexpression(diag,env:combinedenv(),e.return_types)
-                if success then
+                if not value then
+                    diag:reporterror(e.return_types,"expected a type but found nil")
+                elseif success then
                     return_types = (terra.israwlist(value) and terra.newlist(value)) or terra.newlist { value }
                     for i,t in ipairs(return_types) do
                         if not terra.types.istype(t) then
@@ -1722,7 +1739,7 @@ function terra.specialize(origtree, luaenv, depth)
                 local typ
                 if p.type then
                     local success, v = terra.evalluaexpression(diag,env:combinedenv(),p.type)
-                    typ = (success and v) or terra.types.error
+                    typ = (success and v) or nil
                     if not terra.types.istype(typ) then
                         diag:reporterror(p,"expected a type but found ",type(typ))
                         typ = terra.types.error
@@ -2423,7 +2440,7 @@ function terra.funcdefinition:typecheck()
             diag:reporterror(ee,"operator ",op_string," not defined in terra code.")
             return ee:copy { type = terra.types.error }
         end
-        local operands = ee.operands:map(checkrvalue)
+        local operands = ee.operands:map(checkexp)
         
         local overloads = terra.newlist()
         for i,e in ipairs(operands) do
@@ -2441,7 +2458,7 @@ function terra.funcdefinition:typecheck()
             end
             return checkcall(ee, overloads, operands:map(wrapexp), "all", true, false)
         else
-            return op(ee,operands)
+            return op(ee,operands:map(asrvalue))
         end
 
     end
@@ -2812,6 +2829,10 @@ function terra.funcdefinition:typecheck()
         --this function will return either 1 tree, or a list of trees and a function call
         --checkexp then makes the return value consistent with the notruncate argument
         local function docheck(e)
+            if not terra.istree(e) then
+                print("NOT A TREE: ",terra.isquote(e))
+                terra.tree.printraw(e)
+            end
             if e:is "luaobject" then
                 return e
             elseif e:is "literal" then
@@ -4011,6 +4032,37 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     end
 
     return constructor,names,lex._references
+end
+
+function terra.defaultmetamethod(method)
+        local tbl = {
+            __sub = "-";
+            __add = "+";
+            __mul = "*";
+            __div = "/";
+            __mod = "%";
+            __lt = "<";
+            __le = "<=";
+            __gt = ">";
+            __ge = ">=";
+            __eq = "==";
+            __ne = "~=";
+            __and = "and";
+            __or = "or";
+            __not = "not";
+            __xor = "^";
+            __lshift = "<<";
+            __rshift = ">>";
+            __select = "select";
+        }
+    return tbl[method] and terra.defaultoperator(tbl[method])
+end
+
+function terra.defaultoperator(op)
+    return macro(function(ctx,tree,...)
+        local exps = terra.newlist({...}):map(function(x) return x.tree end)
+        return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds[op], operands = exps })
+    end)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword

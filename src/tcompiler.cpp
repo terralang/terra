@@ -735,7 +735,7 @@ struct CCallingConv {
             FillAggregate(function->arg_begin(),results);
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
-            Value * dest = B->CreateAlloca(info->returntype.type);
+            Value * dest = CreateAlloca(info->returntype.type);
             FillAggregate(dest,results);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.nargs == 1)
@@ -752,7 +752,7 @@ struct CCallingConv {
         std::vector<Value*> arguments;
         
         if(C_AGGREGATE_MEM == info.returntype.kind) {
-            arguments.push_back(B->CreateAlloca(info.returntype.type));
+            arguments.push_back(CreateAlloca(info.returntype.type));
         }
         
         for(size_t i = 0; i < info.paramtypes.size(); i++) {
@@ -763,12 +763,12 @@ struct CCallingConv {
                     arguments.push_back(actual);
                     break;
                 case C_AGGREGATE_MEM: {
-                    Value * scratch = B->CreateAlloca(a->type);
+                    Value * scratch = CreateAlloca(a->type);
                     B->CreateStore(actual,scratch);
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
-                    Value * scratch = B->CreateAlloca(a->type);
+                    Value * scratch = CreateAlloca(a->type);
                     B->CreateStore(actual,scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
                     for(size_t j = 0; j < a->nargs; j++) {
@@ -794,7 +794,7 @@ struct CCallingConv {
             if(C_AGGREGATE_MEM == info.returntype.kind) {
                 aggregate = arguments[0];
             } else { //C_AGGREGATE_REG
-                aggregate = B->CreateAlloca(info.returntype.type);
+                aggregate = CreateAlloca(info.returntype.type);
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
                 if(info.returntype.nargs == 1)
                     casted = B->CreateConstGEP2_32(casted, 0, 0);
@@ -855,6 +855,14 @@ struct CCallingConv {
         }
         
         return FunctionType::get(rt,arguments,isvararg);
+    }
+    AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = 0, const Twine &Name = "") {
+        BasicBlock * entry = &B->GetInsertBlock()->getParent()->getEntryBlock();
+        IRBuilder<> TmpB(entry,
+                         entry->begin()); //make sure alloca are at the beginning of the function
+                                          //this is needed because alloca's that do not dominate the
+                                          //function do weird things
+        return TmpB.CreateAlloca(Ty,ArraySize,Name);
     }
 };
 
@@ -962,10 +970,7 @@ struct TerraCompiler {
     }
     
     AllocaInst * allocVar(Obj * v) {
-        IRBuilder<> TmpB(&func->getEntryBlock(),
-                          func->getEntryBlock().begin()); //make sure alloca are at the beginning of the function
-                                                          //TODO: is this really needed? this is what llvm example code does...
-        AllocaInst * a = TmpB.CreateAlloca(typeOfValue(v)->type,0,v->asstring("name"));
+        AllocaInst * a = CC.CreateAlloca(typeOfValue(v)->type,0,v->asstring("name"));
         lua_pushlightuserdata(L,a);
         v->setfield("value");
         return a;
@@ -981,6 +986,9 @@ struct TerraCompiler {
             
             fn = CC.CreateFunction(&ftype, name);
             
+            if(funcobj->boolean("alwaysinline")) {
+                fn->addFnAttr(Attributes::AlwaysInline);
+            }
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
 
@@ -1136,7 +1144,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
             result = <b>;
         }
         */
-        Value * result = B->CreateAlloca(t->type);
+        Value * result = CC.CreateAlloca(t->type);
         Value * a = emitExp(ao);
         Value * acond = emitCond(a);
         BasicBlock * stmtB = createAndInsertBB("logicalcont");
@@ -1256,7 +1264,7 @@ if(baseT->isIntegerTy()) { \
         B->CreateStore(input,sv);
         
         //allocate temporary to hold output variable
-        Value * output = B->CreateAlloca(to->type);
+        Value * output = CC.CreateAlloca(to->type);
         
         Obj entries;
         exp->obj("entries",&entries);
@@ -1402,7 +1410,7 @@ if(baseT->isIntegerTy()) { \
                 Obj e;
                 exp->obj("expression",&e);
                 Value * v = emitExp(&e);
-                Value * r = B->CreateAlloca(v->getType());
+                Value * r = CC.CreateAlloca(v->getType());
                 B->CreateStore(v, r);
                 return r;
             } break;
@@ -1479,7 +1487,7 @@ if(baseT->isIntegerTy()) { \
                 //if the array is an rvalue type, we need to store it, then index it, and then reload it
                 //otherwise, if we have an  lvalue, we just calculate the offset
                 if(!pa) {
-                   Value * mem = B->CreateAlloca(valueExp->getType());
+                   Value * mem = CC.CreateAlloca(valueExp->getType());
                     B->CreateStore(valueExp, mem);
                     valueExp = mem;
                 }
@@ -1612,7 +1620,7 @@ if(baseT->isIntegerTy()) { \
                 if(exp->boolean("lvalue")) {
                     return emitStructSelect(&typ,v,offset);
                 } else {
-                    Value * mem = B->CreateAlloca(v->getType());
+                    Value * mem = CC.CreateAlloca(v->getType());
                     B->CreateStore(v,mem);
                     Value * addr = emitStructSelect(&typ,mem,offset);
                     return B->CreateLoad(addr);
@@ -1621,7 +1629,7 @@ if(baseT->isIntegerTy()) { \
             case T_constructor: case T_arrayconstructor: {
                 Obj expressions;
                 exp->obj("expressions",&expressions);
-                Value * result = B->CreateAlloca(typeOfValue(exp)->type);
+                Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
                 std::vector<Value *> values;
                 emitParameterList(&expressions,&values);
                 for(size_t i = 0; i < values.size(); i++) {
