@@ -145,6 +145,24 @@ Lift = function(op)
 	end)
 end
 
+LiftV = function(op)
+	local function opfn(...)
+		local args = terralib.newlist {...}
+		return `op(args)
+	end
+	return macro(function(ctx,tree,...)
+		local typ = MakeExpType(opfn,terralib.newlist{...})
+		assert(typ)
+		return `typ {}
+	end)
+end
+
+terra minS(a : vector(number,VL), b : vector(number,VL))
+	return terralib.select(a < b,a,b)
+end
+
+minV = LiftV(minS)
+
 setmetatable(Array.metamethods, metamethodtable)
 
 terra foo(a : double)
@@ -159,17 +177,14 @@ terra doit(s : int)
 		a.data[i] = s + i
 	end
 	var c,b  = Array.new(10), Array.new(10)
-	b:set(a - 4 + a + Lfoo(a))
+	b:set(a - 4 + minV(a,a+1) + Lfoo(a))
 	c:set(b + a)
 	for i = 0,10 do
 		print(i,c.data[i])
 	end
 end
 
-
-
-
-
+doit(0)
 
 
 

@@ -19,10 +19,20 @@ double cnd(double X) {
 }
 ]]
 
-local sqrt = Lift(C.sqrt)
-local log = Lift(C.log)
-local fabs = Lift(C.fabs)
-local exp = Lift(C.exp)
+trans = false
+if trans then
+	sqrt = Lift(C.sqrt)
+	log = Lift(C.log)
+	fabs = Lift(C.fabs)
+	exp = Lift(C.exp)
+else
+	local id = macro(function(_,_,exp) return exp end)
+	sqrt = id --Lift(C.sqrt)
+	log = id --Lift(C.log)
+	fabs = id --Lift(C.fabs)
+	exp = id --Lift(C.exp)
+end
+
 
 terra cnd(a : &Array, X : &Array, k : &Array, w : &Array)
 	k:set(1 / (1.0 + 0.2316419 * fabs(@X)))
