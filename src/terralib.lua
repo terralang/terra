@@ -4059,10 +4059,12 @@ function terra.defaultmetamethod(method)
 end
 
 function terra.defaultoperator(op)
-    return macro(function(ctx,tree,...)
+    return function(...)
+        --TODO: really should call createterraexpression rather than assuming these are quotes
         local exps = terra.newlist({...}):map(function(x) return x.tree end)
-        return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds[op], operands = exps })
-    end)
+        local tree = terra.newtree(terralib.newanchor(2), { kind = terra.kinds.operator, operator = terra.kinds[op], operands = exps })
+        return terra.newquote(tree)
+    end
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
