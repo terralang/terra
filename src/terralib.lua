@@ -1190,7 +1190,12 @@ do --construct type table that holds the singleton value representing each uniqu
                     end
                 end
                 local pa = self.parameters:map(getcstring)
-                pa = pa:mkstring("(",",",")")
+                pa = pa:mkstring("(",",","")
+                if self.isvararg then
+                    pa = pa .. ",...)"
+                else
+                    pa = pa .. ")"
+                end
                 local ntyp = uniquetypename("function")
                 local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
                 ffi.cdef(cdef)
@@ -1209,9 +1214,9 @@ do --construct type table that holds the singleton value representing each uniqu
         
         --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
         local ctype = ffi.typeof(self.cachedcstring)
-        types.ctypetoterra[tostring(ctype)] = self
+        types.ctypetoterra[tonumber(ctype)] = self
         local rctype = ffi.typeof(self.cachedcstring.."&")
-        types.ctypetoterra[tostring(rctype)] = self
+        types.ctypetoterra[tonumber(rctype)] = self
 
         return self.cachedcstring
     end
@@ -3821,7 +3826,7 @@ function terra.typeof(obj)
     if type(obj) ~= "cdata" then
         error("cannot get the type of a non cdata object")
     end
-    return terra.types.ctypetoterra[tostring(ffi.typeof(obj))]
+    return terra.types.ctypetoterra[tonumber(ffi.typeof(obj))]
 end
 
 terra.languageextension = {

@@ -11,7 +11,7 @@ C = terralib.includecstring [[
 local vectorize = true
 local optable = {}
 local number = double
-local VL = 4
+local VL = 2
 local VT = vector(number,VL)
 local VP = &VT --&number
 local LT
@@ -130,7 +130,8 @@ Lift = function(op)
 	local function opfn(arg)
 		if vectorize then
 			local terra liftimpl( a : VT ) : VT
-				return vector(op(a[0]),op(a[1]),op(a[2]),op(a[3]))
+				return vector(op(a[0]),op(a[1]))
+				--return vector(op(a[0]),op(a[1]),op(a[2]),op(a[3]))
 			end
 			return `liftimpl(arg)
 		else
