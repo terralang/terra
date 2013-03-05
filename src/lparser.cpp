@@ -67,7 +67,6 @@ typedef struct BlockCnt {
   struct BlockCnt *previous;  /* chain */
   StringSet defined;
   int isterra; /* does this scope describe a terra scope or a lua scope?*/
-  int laststatementwassplitapply;
 } BlockCnt;
 
 struct TerraCnt {
@@ -347,7 +346,6 @@ static void enterlevel (LexState *ls) {
 
 static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   bl->previous = fs->bl;
-  bl->laststatementwassplitapply = 0;
   bl->isterra = fs->ls->in_terra;
   fs->bl = bl;
   //printf("entering block %lld\n", (long long int)bl);
@@ -883,14 +881,21 @@ static void prefixexp (LexState *ls, expdesc *v) {
   }
 }
 
+static int issplitprimary(LexState * ls) {
+    if(ls->lastline != ls->linenumber) {
+        luaX_insertbeforecurrenttoken(ls, ';');
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
 static void primaryexp (LexState *ls, expdesc *v) {
   /* primaryexp ->
         prefixexp { `.' NAME | `[' exp `]' | `:' NAME funcargs | funcargs } */
   FuncState *fs = ls->fs;
   int line = ls->linenumber;
-
-  RETURNS_1(prefixexp(ls, v));  
+  RETURNS_1(prefixexp(ls, v));
   for (;;) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
@@ -902,8 +907,8 @@ static void primaryexp (LexState *ls, expdesc *v) {
         break;
       }
       case '[': {  /* `[' exp1 `]' */
-        if(line != ls->linenumber) /* potential for [a]\n[b] = ... ambiguity, mark it so we can report a helpful error */
-          fs->bl->laststatementwassplitapply = 1;
+        if(issplitprimary(ls))
+            return;
         expdesc key;
         //luaK_exp2anyregup(fs, v);
         
@@ -926,9 +931,11 @@ static void primaryexp (LexState *ls, expdesc *v) {
         
         break;
       }
-      case '(': case TK_STRING: case '{': {  /* funcargs */
-        if(line != ls->linenumber) /* potential for [a]\n[b] = ... ambiguity, mark it so we can report a helpful error */
-          fs->bl->laststatementwassplitapply = 1;
+      case '(': /* funcargs */
+        if(issplitprimary(ls))
+            return;
+        /* fallthrough */
+      case TK_STRING: case '{': {
         //luaK_exp2nextreg(fs, v);
         int tbl = new_table_before(ls,T_apply,true);
         add_field(ls,tbl,"value");
@@ -1952,8 +1959,6 @@ static void retstat (LexState *ls) {
 
 static int statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
-  int laststatementwassplitapply = ls->fs->bl->laststatementwassplitapply;
-  ls->fs->bl->laststatementwassplitapply = 0;
 
   enterlevel(ls);
   
@@ -2035,9 +2040,6 @@ static int statement (LexState *ls) {
       RETURNS_1(gotostat(ls));
       break;
     }
-    case '=': case ',': /* the user probably wrote  a + b\n(c)(d) =, give an error that suggests adding a ; */
-      if(laststatementwassplitapply)
-        luaX_syntaxerror(ls, "unexpected " LUA_QL(",") " or " LUA_QL("=") " at the beginning of a statement. a " LUA_QL(";") " may be needed on the previous line.");
       /*otherwise, fallthrough to the normal error message.*/
     default: {  /* stat -> func | assignment */
       RETURNS_1(exprstat(ls));
