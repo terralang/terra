@@ -29,13 +29,30 @@ Array.methods.new = terra(N : int)
 	return Array { N = N, data = [&number](C.malloc(sizeof(number)*N)) }
 end
 
-terra Array:sum()
-	var r = 0.0
-	for i = 0,self.N do
-		r = r + self.data[i]
+local function addred(name,init,q)
+	Array.methods[name] = terra(self : &Array)
+		var r = number(init)
+		for i = 0, self.N do
+			var input = self.data[i];
+			--C.printf("%f\n",input);
+			[q(r,input)]
+		end
+		return r
 	end
-	return r
 end
+
+addred("sum",0.0,function(r,input)
+	return quote
+		r = r + input
+	end
+end)
+
+addred("min",1000000000,function(r,input)
+	return quote
+		r = terralib.select(r < input,r,input)
+	end
+end)
+
 
 local metamethodtable
 local function MakeExpType(op,args)

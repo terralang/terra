@@ -32,6 +32,7 @@ static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doe
 static int terra_saveobjimpl(lua_State * L);
 static int terra_deletefunction(lua_State * L);
 static int terra_disassemble(lua_State * L);
+static int terra_linklibraryimpl(lua_State * L);
 
 #ifdef PRINT_LLVM_TIMING_STATS
 static llvm_shutdown_obj llvmshutdownobj;
@@ -121,6 +122,10 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_saveobjimpl,1);
     lua_setfield(T->L,-2,"saveobjimpl");
+    
+    lua_pushlightuserdata(T->L,(void*)T);
+    lua_pushcclosure(T->L,terra_linklibraryimpl,1);
+    lua_setfield(T->L,-2,"linklibraryimpl");
     
     lua_pushcfunction(T->L, terra_CurrentTimeInSeconds);
     lua_setfield(T->L,-2,"currenttimeinseconds");
@@ -2284,3 +2289,19 @@ static int terra_pointertolightuserdata(lua_State * L) {
     lua_pushlightuserdata(L, *cdata);
     return 1;
 }
+
+static int terra_linklibraryimpl(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    const char * filename = luaL_checkstring(L, -1);
+    
+    std::string Err;
+    if(sys::DynamicLibrary::LoadLibraryPermanently(filename,&Err)) {
+        terra_reporterror(T, "llvm: %s\n", Err.c_str());
+    }
+    
+    return 0;
+}
+
+
+

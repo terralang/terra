@@ -43,6 +43,7 @@
 #include "llvm/Transforms/Vectorize.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/Support/DynamicLibrary.h"
 
 #if LLVM_3_2
 

@@ -9,7 +9,6 @@ terra fill(a : &Array, v : double)
 end
 
 local sqrt = Lift(C.sqrt)
-local min = Lift(terra(x : double, y:double) return x end)
 
 terra main() 
 
@@ -26,9 +25,9 @@ terra main()
   var zc = Array.new(n);
   
 	for i = 0,n do
-		xc[i] = i;
-		yc[i] = i;
-		zc[i] = i;
+		xc.data[i] = i;
+		yc.data[i] = i;
+		zc.data[i] = i;
 	end
 
   var b = Array.new(n);
@@ -47,15 +46,12 @@ terra main()
   b:set( 2*(xd*(xo-xc)+yd*(yo-yc)+zd*(zo-zc)) )
   c:set( (xo-xc)*(xo-xc)+(yo-yc)*(yo-yc)+(zo-zc)*(zo-zc)-1 )
   disc:set( b*b-4*c )
-  res:set( terralib.select(disc>0,
-                           min( (-b - sqrt(disc))/2, (-b + sqrt(disc))/2 )
-  ,DBL_MAX) );
-
-	var r : double = res:min()
-
+  res:set( terralib.select(disc>0, (-b - sqrt(disc))/2,10000000) );
+  var r : double = res:min()
 	C.printf("%f\n",r);
 	C.printf("Elapsed: %f\n", C.CurrentTimeInSeconds()-begin);
 	return 0;
 end
 
 main()
+main:disas()

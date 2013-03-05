@@ -41,16 +41,32 @@ Array.methods.alloc = terra(N : int)
 	return self
 end
 
-terra Array:sum()
-	if self.ref ~= 0 then
-		self:flush()
+local function addred(name,init,q)
+	Array.methods[name] = terra(self : &Array)
+		if self.ref ~= 0 then
+			self:flush()
+		end
+		var r = number(init)
+		for i = 0, self.N do
+			var input = self.data[i];
+			--C.printf("%f\n",input);
+			[q(r,input)]
+		end
+		return r
 	end
-	var r = 0.0
-	for i = 0,self.N do
-		r = r + self.data[i]
-	end
-	return r
 end
+
+addred("sum",0.0,function(r,input)
+	return quote
+		r = r + input
+	end
+end)
+
+addred("min",0.0,function(r,input)
+	return quote
+		r = terralib.select(r < input,r,input)
+	end
+end)
 
 local optable = terralib.newlist()
 local instrs = terralib.newlist()

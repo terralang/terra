@@ -3829,6 +3829,10 @@ function terra.typeof(obj)
     return terra.types.ctypetoterra[tonumber(ffi.typeof(obj))]
 end
 
+function terra.linklibrary(filename)
+    terra.linklibraryimpl(filename)
+end
+
 terra.languageextension = {
     languages = terra.newlist();
     entrypoints = {}; --table mapping entry pointing tokens to the language that handles them

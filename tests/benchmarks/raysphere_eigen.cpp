@@ -32,10 +32,11 @@ int main() {
   ArrayXd b(n);
   ArrayXd c(n);
   ArrayXd disc(n);
+    ArrayXd res(n);
 	b.fill(0);
 	c.fill(0);
 	disc.fill(0);
-
+	res.fill(0);
 	double begin = current_time();
 
 	double a = 1;
@@ -45,7 +46,8 @@ int main() {
   b = 2*(xd*(xo-xc)+yd*(yo-yc)+zd*(zo-zc));
   c = (xo-xc)*(xo-xc)+(yo-yc)*(yo-yc)+(zo-zc)*(zo-zc)-1;
   disc = b*b-4*c;
-  r = ((disc>0).select(((-b - disc.sqrt())/2).min( (-b + disc.sqrt())/2),DBL_MAX)).minCoeff();
+  res = ((disc<0).select(((-b - disc.sqrt())/2),DBL_MAX)); //.min( (-b + disc)/2),DBL_MAX));
+  r = res.minCoeff();
 
 	printf("%f\n",r);
 	printf("Elapsed: %f\n", current_time()-begin);
