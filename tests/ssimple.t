@@ -431,7 +431,7 @@ end
 local notinscope = symbol()
 
 failit(function()
-	terra foo34()
+	local terra foo34()
 		return notinscope
 	end
 	foo34()

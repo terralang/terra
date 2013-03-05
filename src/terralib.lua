@@ -3732,9 +3732,9 @@ function terra.require(name)
     return unpack(terra.packages[name].results)
 end
 function terra.makeenvunstrict(env)
-    if getmetatable(env) and getmetatable(env).__Idle_declared then
+    if getmetatable(env) == Strict then
         return function(self,idx)
-            return (Strict.isDeclared(idx,env) and env[idx]) or nil
+            return rawget(env,idx)
         end
     else return env end
 end
