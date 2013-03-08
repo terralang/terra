@@ -3663,6 +3663,8 @@ function terra.funcdefinition:printpretty()
             else
                 emit("<constant:",e.type,">")
             end
+        elseif e:is "typedexpressionlist" then
+            emitParamList(e)
         else
             emit("<??"..terra.kinds[e.kind].."??>")
         end
@@ -3677,10 +3679,14 @@ function terra.funcdefinition:printpretty()
             emitExp(e)
         end
         emitList(pl.expressions,"",", ","",emitE)
-        if pl.funccall then
-            emit(" {")
-            emitExp(pl.funccall)
-            emit("}")
+        if pl.fncall then
+            if #pl.expressions > 0 then
+                emit(" #")
+                emitExp(pl.fncall)
+                emit("#")
+            else
+                emitExp(pl.fncall)
+            end
         end
     end
 

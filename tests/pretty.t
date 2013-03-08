@@ -41,6 +41,7 @@ terra foo()
 	var g = terralib.select(true,0,1)
 	var ee = sizeof(int)
 	var more = { a = 5, c = 4, 3}
+	baz()
 	return 3,4,ee,bar(1)
 end
 
