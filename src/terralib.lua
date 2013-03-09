@@ -3725,10 +3725,23 @@ function terra.saveobj(filename,env,arguments)
 end
 
 terra.packages = {} --table of packages loaded using terralib.require()
-
+terra.path = os.getenv("TERRA_PATH") or "?.t"
 function terra.require(name)
     if not terra.packages[name] then
-        local file = name .. ".t"
+        local fname = name:gsub("%.","/")
+        local file = nil
+        for template in terra.path:gmatch("([^;]+);?") do
+            local fpath = template:gsub("%?",fname)
+            local handle = io.open(fpath,"r")
+            if handle then
+                file = fpath
+                handle:close()
+                break
+            end
+        end
+        if not file then
+            error("terra module not in path: "..name,2)
+        end
         local fn, err = terra.loadfile(file)
         if not fn then
             error(err,0)

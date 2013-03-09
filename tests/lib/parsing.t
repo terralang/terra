@@ -62,7 +62,7 @@ function P.pratt:prefix(tokentype,rule)
 	return self
 end
 
-P.defaultinfix = function(parser)
+P.defaultprefix = function(parser)
 	parser:error("unexpected symbol")
 end
 --table-driven implementation, invoked when you call the Pratt parser object
