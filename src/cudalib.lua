@@ -37,23 +37,25 @@ end
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
 --since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 local terracode = terra.loadstring [[
-local C = terralib.includec("cuda.h")
-
-struct terralib.CUDAParams {
-	gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
-	blockDimX : uint, blockDimY : uint, blockDimZ : uint,
-	sharedMemBytes : uint, hStream :  C.CUstream
-}
+local C --load cuda header lazily to speed startup time
 
 function terralib.cudamakekernelwrapper(fn,funcdata)
+	if not C then
+		C = terralib.includec("cuda.h")
+		struct terralib.CUDAParams {
+			gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
+			blockDimX : uint, blockDimY : uint, blockDimZ : uint,
+			sharedMemBytes : uint, hStream :  C.CUstream
+		}
+	end
 	local _,typ = fn:peektype()
 	local arguments = typ.parameters:map(symbol)
 	
 	local paramctor = arguments:map(function(s) return `&s end)
 	return terra(params : &terralib.CUDAParams, [arguments])
 		
-		var func : &C.CUfunction = funcdata:as(&C.CUfunction)
-		var paramlist = arrayof(&uint8,[paramctor])
+		var func : &C.CUfunction = [&C.CUfunction](funcdata)
+		var paramlist = arrayof([&uint8],[paramctor])
 		return C.cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
 		                             params.blockDimX,params.blockDimY,params.blockDimZ,
 		                             params.sharedMemBytes, params.hStream,paramlist,nil)

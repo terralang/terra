@@ -3328,9 +3328,14 @@ terra.__wrappedluafunctions = {}
 -- END TYPECHECKER
 
 -- INCLUDEC
-
+terra.includepath = os.getenv("INCLUDE_PATH") or "."
 function terra.includecstring(code,...)
-    return terra.registercfile(code,{"-I",".","-O3",...})
+    local args = terralib.newlist {"-O3",...}
+    for p in terra.includepath:gmatch("([^;]+);?") do
+        args:insert("-I")
+        args:insert(p)
+    end
+    return terra.registercfile(code,args)
 end
 function terra.includec(fname,...)
     return terra.includecstring("#include \""..fname.."\"\n",...)

@@ -11,7 +11,6 @@ LLVM_COMPILER_BIN := $(shell llvm-config --bindir)
 CXX := $(LLVM_COMPILER_BIN)/clang++
 CC  := $(LLVM_COMPILER_BIN)/clang
 CUDA_HOME := /usr/local/cuda
-LIBNVVM_HOME := /usr/local/nvvm
 
 
 -include Makefile.inc
@@ -170,8 +169,8 @@ endif
 FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
 ifdef ENABLE_CUDA
-FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(LIBNVVM_HOME)
-LFLAGS += -L$(CUDA_HOME)/lib64 -L$(LIBNVVM_HOME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/lib64,-rpath,$(LIBNVVM_HOME)  
+FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
+LFLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
 endif
 
 LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp tcuda.cpp

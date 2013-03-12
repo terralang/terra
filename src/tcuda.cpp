@@ -9,7 +9,6 @@ extern "C" {
 
 #include <vector>
 
-#include "nvvm.h"
 #include "cuda.h"
 #include "cuda_runtime.h"
 #include "llvmheaders.h"
@@ -32,23 +31,14 @@ struct terra_CUDAState {
     } \
 } while(0)
 
-#define NVVM_DO(err) do { \
-    nvvmResult e = err; \
-    if(e != NVVM_SUCCESS) { \
-        terra_pusherror(T,"%s:%d: %s nvvm reported error %d",__FILE__,__LINE__,#err,e); \
-        return e; \
-    } \
-} while(0)
-
-
-static int initalizeCUDAState(terra_State * T) {
+CUresult initializeCUDAState(terra_State * T) {
     if (!T->cuda->initialized) {
         T->cuda->initialized = 1;
         CUDA_DO(cuInit(0));
         CUDA_DO(cuDeviceGet(&T->cuda->D,0));
         CUDA_DO(cuCtxCreate(&T->cuda->C, 0, T->cuda->D));
-        NVVM_DO(nvvmInit());
     }
+    return CUDA_SUCCESS;
 }
 static void markKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel) {
     std::vector<llvm::Value *> vals;
@@ -62,48 +52,40 @@ static void markKernel(terra_State * T, llvm::Module * M, llvm::Function * kerne
 }
 
 
-nvvmResult llvmTextToPTX(terra_State * T, const char * ll, size_t size, char ** result) {
-    nvvmCU cu;
-    NVVM_DO(nvvmCreateCU(&cu));
-    NVVM_DO(nvvmCUAddModule(cu, ll, size));
-    nvvmResult err = nvvmCompileCU(cu,  0, NULL);
+CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
+    llvm::raw_string_ostream output(*buf);
+    llvm::formatted_raw_ostream foutput(output);
     
-    if(NVVM_SUCCESS != err) {
-        printf("cuda compile failed:\n");
-        size_t logsize;
-        nvvmGetCompilationLogSize(cu, &logsize);
-        char * msg = (char *) malloc(logsize);
-        nvvmGetCompilationLog(cu,msg);
-        printf("%s\n",msg);
-        free(msg);
-        return err;
+    LLVMInitializeNVPTXTargetInfo();
+    LLVMInitializeNVPTXTarget();
+    LLVMInitializeNVPTXAsmPrinter();
+    
+    llvm::TargetRegistry::printRegisteredTargetsForVersion();
+    std::string err;
+    const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
+    
+    
+    llvm::TargetMachine * TM = 
+        TheTarget->createTargetMachine("nvptx64", "sm_20",
+                                       "", llvm::TargetOptions(),
+                                       llvm::Reloc::Default,llvm::CodeModel::Default,
+                                       llvm::CodeGenOpt::Aggressive);
+    
+    llvm::PassManager PM;
+    PM.add(new llvm::TARGETDATA()(*TM->TARGETDATA(get)()));
+    if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
+       printf("addPassesToEmitFile failed\n");
+       return CUDA_ERROR_UNKNOWN;
     }
     
-    size_t ptxsize;
-    NVVM_DO(nvvmGetCompiledResultSize(cu, &ptxsize));
-    *result = (char*) malloc(ptxsize);
-    NVVM_DO(nvvmGetCompiledResult(cu, *result));
-    
-    NVVM_DO(nvvmDestroyCU(&cu));
-    return NVVM_SUCCESS;
-}
-
-nvvmResult moduleToPTX(terra_State * T, llvm::Module * M, char ** ptx) {
-    std::string BitCodeBuf;
-    llvm::raw_string_ostream BitCodeBufStream(BitCodeBuf);
-    BitCodeBufStream << *M;
-    BitCodeBufStream.str(); // force flush to string.
-    NVVM_DO(llvmTextToPTX(T,BitCodeBuf.c_str(), BitCodeBuf.size(),ptx));
-    DEBUG_ONLY(T) {
-        printf("ptx\n%s\n",*ptx);
-    }
-    return NVVM_SUCCESS;
+    PM.run(*M);
+    return CUDA_SUCCESS;
 }
 
 int terra_cudacompile(lua_State * L) {
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
-    initalizeCUDAState(T);
+    initializeCUDAState(T);
 
     int tbl = lua_gettop(L);
     
@@ -126,13 +108,12 @@ int terra_cudacompile(lua_State * L) {
         markKernel(T,M,kernel);
     }
     
-    char * ptx;
-    NVVM_DO(moduleToPTX(T,M,&ptx));
+    std::string ptx;
+    CUDA_DO(moduleToPTX(T,M,&ptx));
     delete M;
-    
+    printf("what: %s\n",ptx.c_str());
     CUmodule cudaM;
-    CUDA_DO(cuModuleLoadDataEx(&cudaM, ptx, 0, 0, 0));
-    delete ptx;
+    CUDA_DO(cuModuleLoadDataEx(&cudaM, ptx.c_str(), 0, 0, 0));
 
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"cudamakekernelwrapper");
