@@ -3,8 +3,8 @@ if not terralib.cudacompile then
 	return
 end
 
-local tid = terralib.intrinsic("llvm.nvvm.read.ptx.sreg.tid.x",{} -> int)
-local ntid = terralib.intrinsic("llvm.nvvm.read.ptx.sreg.ntid.x",{} -> int)
+local tid = cudalib.nvvm_read_ptx_sreg_tid_x--terralib.intrinsic("llvm.nvvm.read.ptx.sreg.tid.x",{} -> int)
+local ntid = cudalib.nvvm_read_ptx_sreg_ntid_x -- terralib.intrinsic("llvm.nvvm.read.ptx.sreg.ntid.x",{} -> int)
 
 
 --our very simple cuda kernel
