@@ -876,11 +876,11 @@ function terra.intrinsic(str, typ)
     else
         error("expected a name and type or a function providing a name and type but found "..tostring(str) .. ", " .. tostring(typ))
     end
-    local function instrinsiccall(diag,tree,...)
+    local function intrinsiccall(diag,tree,...)
         local args = terra.newlist({...}):map(function(e) return e.tree end)
         return terra.newtree(tree, { kind = terra.kinds.intrinsic, typefn = typefn, arguments = args } )
     end
-    return macro(instrinsiccall)
+    return macro(intrinsiccall)
 end
     
 
@@ -2791,13 +2791,13 @@ function terra.funcdefinition:typecheck()
             diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
             return e:copy { type = terra.types.error }
         elseif intrinsictype == terra.types.error then
-            diag:reporterror(e,"instrinsic ",name," does not support arguments: ",unpack(paramtypes))
+            diag:reporterror(e,"intrinsic ",name," does not support arguments: ",unpack(paramtypes))
             return e:copy { type = terra.types.error }
         elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
             diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
             return e:copy { type = terra.types.error }
         elseif (#intrinsictype.type.returns == 0 and mustreturnatleast1) or (#intrinsictype.type.returns > 1) then
-            diag:reporterror(e,"instrinsic used in an expression must return 1 argument")
+            diag:reporterror(e,"intrinsic used in an expression must return 1 argument")
             return e:copy { type = terra.types.error }
         end
         

@@ -84,7 +84,7 @@ _(symbol, "symbol") \
 _(selectconst, "selectconst") \
 _(treelist, "treelist") \
 _(typedexpressionlist, "typedexpressionlist") \
-_(instrinsic, "intrinsic") \
+_(intrinsic, "intrinsic") \
 _(nametoken, "<name>") \
 _(numbertoken, "<number>") \
 _(stringtoken, "<string>") \

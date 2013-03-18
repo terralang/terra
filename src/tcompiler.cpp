@@ -1657,7 +1657,7 @@ if(baseT->isIntegerTy()) { \
                 }
                 return vec;
             } break;
-            case T_instrinsic: {
+            case T_intrinsic: {
                 Obj arguments;
                 exp->obj("arguments",&arguments);
                 std::vector<Value *> values;
