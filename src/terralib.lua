@@ -1109,6 +1109,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local next_type_id = 0 --used to generate uniq type names
     local function uniquetypename(base,name) --used to generate unique typedefs for C
+        base = base:gsub("%.","_")
         local r = base.."_"
         if name then
             r = r..name.."_"

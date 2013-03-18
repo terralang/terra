@@ -61,13 +61,16 @@ local function finalizelayout(self)
 				md.vtable.entries:insert { field = methodname, type = &typ }
 			end
 			md.methodimpl[methodname] = impldef
-			local symbols = typ.parameters:map(symbol)
-			local obj = symbols[1]
-			local terra wrapper([symbols]) : typ.returns
-				return obj.[vtablesym].[methodname]([symbols])
-			end
-			self.methods[methodname] = wrapper
 		end
+	end
+	for methodname,impl in pairs(md.methodimpl) do
+		local _,typ = impl:peektype()
+		local symbols = typ.parameters:map(symbol)
+		local obj = symbols[1]
+		local terra wrapper([symbols]) : typ.returns
+			return obj.[vtablesym].[methodname]([symbols])
+		end
+		self.methods[methodname] = wrapper
 	end
 	local obj = symbol()
 	local vtableinits = terralib.newlist()

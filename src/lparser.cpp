@@ -203,7 +203,7 @@ static void check_terra(LexState * ls, const char * thing) {
 /*
 ** prototypes for recursive non-terminal functions
 */
-static int statement (LexState *ls);
+static void statement (LexState *ls);
 static void expr (LexState *ls, expdesc *v);
 static void terratype(LexState * ls);
 static void luaexpr(LexState * ls);
@@ -452,14 +452,16 @@ static void statlist (LexState *ls) {
   int tbl = new_list(ls);
   while (!block_follow(ls, 1)) {
     if (ls->t.token == TK_RETURN) {
-      int r = statement(ls);
-      if(r)
-        add_entry(ls,tbl);
+      statement(ls);
+      add_entry(ls,tbl);
       return;  /* 'return' must be last statement */
     }
-    int r = statement(ls);
-    if(r)
-        add_entry(ls,tbl);
+    if (ls->t.token == ';') {
+      luaX_next(ls);
+    } else {
+      statement(ls);
+      add_entry(ls,tbl);
+    }
   }
 }
 
@@ -1448,12 +1450,6 @@ static void labelstat (LexState *ls) {
   /* create new entry for this label */
   /* skip other no-op statements */
   add_field(ls,tbl,"value");
-  while (ls->t.token == ';' /*|| ls->t.token == TK_DBCOLON*/) { //why does lua skip double labels?
-    statement(ls);
-    if(ls->in_terra)
-        lua_pop(ls->L,1); //discard the AST node
-  }
-
 }
 
 
@@ -1957,17 +1953,12 @@ static void retstat (LexState *ls) {
 }
 
 
-static int statement (LexState *ls) {
+static void statement (LexState *ls) {
   int line = ls->linenumber;  /* may be needed for error messages */
 
   enterlevel(ls);
   
   switch (ls->t.token) {
-    case ';': {  /* stat -> ';' (empty statement) */
-      luaX_next(ls);  /* skip ';' */
-      return 0;
-      break;
-    }
     case TK_IF: {  /* stat -> ifstat */
       RETURNS_1(ifstat(ls, line));
       break;
@@ -2047,7 +2038,6 @@ static int statement (LexState *ls) {
     }
   }
   leavelevel(ls);
-  return 1;
 }
 
 static int le_next(lua_State * L) {

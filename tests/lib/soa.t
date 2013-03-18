@@ -35,15 +35,15 @@ function Collection(members,format)
 		idx : int;
 		data : &collection;
 	}
-	collection:addentry("size",int)
+	collection.entries:insert { field = "size", type = int }
 	if format == "aos" then
-		collection:addentry("data",&obj)
+		collection.entries:insert { field = "data", type = &obj }
 	end
 
 	for k,t in pairs(members) do
 		print(k,t)
 		if format == "soa" then
-			collection:addentry(k,&t)
+			collection.entries:insert{ field = k, type = &t }
 			Proxy.methods["get"..k] = terra(self :&Proxy)
 				return self.data.[k][self.idx]
 			end
@@ -51,7 +51,7 @@ function Collection(members,format)
 				self.data.[k][self.idx] = v
 			end
 		else
-			obj:addentry(k,t)
+			obj.entries:insert { field = k, type = t }
 			Proxy.methods["get"..k] = terra(self :&Proxy)
 				return self.data.data[self.idx].[k]
 			end
@@ -65,13 +65,13 @@ function Collection(members,format)
 			local stmts = terralib.newlist()
 			for k,t in pairs(members) do
 				stmts:insert(quote
-					self.[k] = C.malloc(sizeof(t)*N):as(&t)
+					self.[k] = [&t](C.malloc(sizeof(t)*N))
 				end)
 			end
 			return stmts
 		else
 			return quote
-				self.data = C.malloc(sizeof(obj)*N):as(&obj)
+				self.data = [&obj](C.malloc(sizeof(obj)*N))
 			end
 		end		
 	end
@@ -137,7 +137,7 @@ terra main()
 	IO.fscanf(file,"%d %d\n",&nv,&nf);
 	
 	mesh:init(nv)
-	var tris = C.malloc(sizeof(Tri)*nf):as(&Tri)
+	var tris = [&Tri](C.malloc(sizeof(Tri)*nf))
 
 	for i = 0, nv do
 		var x : float,y : float,z : float
@@ -155,7 +155,7 @@ terra main()
 		tris[i].a = a - 1
 		tris[i].b = b - 1
 		tris[i].c = c - 1
-		IO.printf("%d %d %d\n",tris[i].a,tris[i].b,tris[i].c)
+		--IO.printf("%d %d %d\n",tris[i].a,tris[i].b,tris[i].c)
 	end
 
 	var times = 0
