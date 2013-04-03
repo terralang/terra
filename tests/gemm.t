@@ -92,36 +92,38 @@ end
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 
+local terra min(a : int, b : int)
+	return terralib.select(a < b, a, b)
+end
+function blockedloop(N,M,K,blocksizes,bodyfn)
+  local function generatelevel(n,ii,jj,kk,bb0,bb1,bb2)
+    if n > #blocksizes then
+      return bodyfn(ii,jj,kk)
+    end
+    local blocksize = blocksizes[n]
+    return quote for i = ii,min(ii+bb0,N),blocksize do
+                   for j = jj,min(jj+bb1,M),blocksize do
+                      for k = kk,min(kk+bb2,K),blocksize do
+                        [ generatelevel(n+1,i,j,k,blocksize,blocksize,blocksize) ]
+           end end end end
+  end
+  return generatelevel(1,0,0,0,N,M,K)
+end
+
 function generatedgemm(NB,NBF,RM,RN,V)
-	
-	if not isinteger(NB/(RN*V)) then
-		return false
-	end
-	if not isinteger(NB/RM) then
+	if not isinteger(NB/(RN*V)) or not isinteger(NB/RM) then
 		return false
 	end
 
 	local NB2 = NBF * NB
 	local l1dgemm0 = genkernel(NB,RM,RN,V,0,false)
 	local l1dgemm1 = genkernel(NB,RM,RN,V,1,false)
-
-
 	local l1dgemm0b = genkernel(NB,1,1,1,0,true)
 	local l1dgemm1b = genkernel(NB,1,1,1,1,true)
 
-	local terra min(a : int, b : int)
-		return terralib.select(a < b, a, b)
-	end
-
 	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : number, A : &number, lda : int, B : &number, ldb : int, 
 		           beta : number, C : &number, ldc : int)
-		for mm = 0,M,NB2 do
-			for nn = 0,N,NB2 do
-				for kk = 0,K, NB2 do
-					for m = mm,min(mm+NB2,M),NB do
-						for n = nn,min(nn+NB2,N),NB do
-							for k = kk,min(kk+NB2,K),NB do
-								--IO.printf("%d %d starting at %d\n",m,k,m*lda + NB*k)
+		[ blockedloop(N,M,K,{NB2,NB},function(m,n,k) return quote
 								var MM,NN,KK = min(M-m,NB),min(N-n,NB),min(K-k,NB)
 								var isboundary = MM < NB or NN < NB or KK < NB
 								var AA,BB,CC = A + (m*lda + k),B + (k*ldb + n),C + (m*ldc + n)
@@ -145,12 +147,7 @@ function generatedgemm(NB,NBF,RM,RN,V)
 										l1dgemm1(AA,BB,CC,lda,ldb,ldc)
 									end
 								end
-							end
-						end
-					end
-				end
-			end
-		end
+		end end) ]
 	end
 end
 
@@ -194,7 +191,6 @@ if dotune then
 		end
 	end
 end
-terralib.tree.printraw(best)
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 if number == double then
 	terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })

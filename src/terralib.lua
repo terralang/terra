@@ -57,7 +57,8 @@ end
 function terra.tree:printraw()
     local function header(key,t)
         if type(t) == "table" and (getmetatable(t) == nil or type(getmetatable(t).__index) ~= "function") then
-            return terra.kinds[t["kind"]] or ""
+            local kt = t["kind"]
+            return (type(kt) == "number" and terra.kinds[kt]) or (type(kt) == "string" and kt) or ""
         elseif (key == "type" or key == "operator") and type(t) == "number" then
             return terra.kinds[t] .. " (enum " .. tostring(t) .. ")"
         else
