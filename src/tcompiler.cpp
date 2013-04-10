@@ -1776,51 +1776,57 @@ if(baseT->isIntegerTy()) { \
         }
     }
     
-    std::vector<Obj *> fncallstack;
-    std::vector<Value*> fncallresultstack;
-    Value * ensureFunctionCall() {
-        Value * v = fncallresultstack.back();
-        if(v == NULL) {
-            Obj * fncall = fncallstack.back();
-            assert(fncall);
-            v = fncallresultstack.back() = emitCall(fncall);
+    Value * ensureFunctionCall(Obj * fncall) {
+        Value * fnresult = (Value*) fncall->ud("returnvalue");
+        if(fnresult == NULL) {
+            fnresult = emitCall(fncall);
+            lua_pushlightuserdata(L, fnresult);
+            fncall->setfield("returnvalue");
         }
-        return v;
+        return fnresult;
     }
     void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
         Obj params;
         Obj fncall;
         paramlist->obj("expressions",&params);
-        if(paramlist->obj("fncall",&fncall))
-            fncallstack.push_back(&fncall);
-        else
-            fncallstack.push_back(NULL); //make sure we fail fast when an extract return is called when there is not fncall
-        fncallresultstack.push_back(NULL);
+        bool hascall = paramlist->obj("fncall", &fncall);
+        
+        if(hascall)
+            fncall.clearfield("returnvalue");
         
         int sizeN = params.size();
-        //emit arguments before possible function call
+        //emit arguments, an extract return will cause the fncall associated
+        //with this parameter list to be emitted when needed
         for(int i = 0; i < sizeN; i++) {
             Obj v;
             params.objAt(i,&v);
             results->push_back(emitExp(&v));
         }
         
-        //if no emitreturn caused the function to be emitted, then emit it now
-        if(fncallstack.back()) {
-            ensureFunctionCall();
+        if(hascall) {
+            //if no extract returns were in the list,
+            //ensure we still emit a call to the function associated with this
+            //parameter list
+            ensureFunctionCall(&fncall);
+            //this node can be repeated elsewhere in the IR
+            //so we must clear returnvalue so ensureFunctionCall emits the call again
+            fncall.clearfield("returnvalue");
         }
-        
-        assert(fncallstack.back() == &fncall || fncallstack.back() == NULL);
-        fncallstack.pop_back();
-        fncallresultstack.pop_back();
     }
     
     Value * emitExtractReturn(Obj * exp) {
         int idx = exp->number("index");
-        Obj * fncall = fncallstack.back();
+        Obj fncall;
         Obj rtypes;
-        fncall->obj("returntypes",&rtypes);
-        return CC.EmitExtractReturn(ensureFunctionCall(),rtypes.size(),idx);
+        exp->obj("fncall", &fncall);
+        fncall.obj("returntypes",&rtypes);
+        //TODO: this is a bug, it is possible the user did something really wrong
+        //cause an extract return to escape the scope of the value, which will make this repeat the
+        //function call.
+        //we need to check this earlier in the pipeline
+        Value * fnresult = ensureFunctionCall(&fncall);
+        assert(fnresult);
+        return CC.EmitExtractReturn(fnresult,rtypes.size(),idx);
     }
     
     void emitStmt(Obj * stmt) {

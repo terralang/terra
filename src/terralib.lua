@@ -1989,8 +1989,8 @@ function terra.funcdefinition:typecheck()
         assert(terra.islist(explist))
         return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = typedexpressionkey, minsize = minsize or 0})
     end
-    local function createextractreturn(anchor, index, t)
-        return terra.newtree(anchor,{ kind = terra.kinds.extractreturn, index = index, type = t})
+    local function createextractreturn(fncall, index, t)
+        return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t, fncall = fncall})
     end
     local function createfunctionliteral(anchor,e)
         local fntyp = ctx:referencefunction(anchor,e)
@@ -2712,7 +2712,7 @@ function terra.funcdefinition:typecheck()
             local fncall = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, returntypes = returntypes, paramtypes = paramtypes })
             local expressions = terra.newlist()
             for i,rt in ipairs(returntypes) do
-                expressions[i] = createextractreturn(anchor,i-1, rt)
+                expressions[i] = createextractreturn(fncall,i-1, rt)
             end 
             return createtypedexpressionlist(anchor,expressions,fncall)
         end

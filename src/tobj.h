@@ -123,6 +123,12 @@ struct Obj {
         lua_setfield(L,-2,key);
         pop(2);
     }
+    void clearfield(const char * key) {
+        push();
+        lua_pushnil(L);
+        lua_setfield(L,-2,key);
+        pop(1);
+    }
     void addentry() {
         int s = size();
         push();
