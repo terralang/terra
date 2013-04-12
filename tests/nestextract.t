@@ -10,9 +10,9 @@ terra twoAs(a : int)
 	return A {a}, A { a }
 end
 
-function A.metamethods.__cast(ctx,tree,fromt,tot,exp)
+function A.metamethods.__cast(fromt,tot,exp)
 	if tot == A and fromt == int then
-		return true,`twoAs(exp)
+		return `twoAs(exp)
 	end
 	error("what")
 end

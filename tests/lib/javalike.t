@@ -133,17 +133,16 @@ local function implementsinterface(child,parent)
 	local md = metadata[child]
 	return md and md.interfaces[parent]
 end
-local function castoperator(diag,tree,from,to,exp)
+local function castoperator(from,to,exp)
 	if from:ispointer() and to:ispointer() then
 		if issubclass(from.type,to.type) then
-			return true, `to(exp)
+			return `to(exp)
 		elseif implementsinterface(from.type,to.type) then
 			local imd = interfacemetadata[to.type]
-			return true, `&exp.[imd.name]
+			return `&exp.[imd.name]
 		end
-	else
-		return false
 	end
+	error("not a subtype")
 end
 local function initialize(c)
 	if not metadata[c] then

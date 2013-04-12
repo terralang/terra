@@ -5,14 +5,14 @@ Interface.interface = {}
 Interface.interface.__index = Interface.interface
 Interface.defined = {}
 
-function Interface.castmethod(ctx,tree,from,to,exp)
+function Interface.castmethod(from,to,exp)
 	if to:isstruct() and from:ispointertostruct() then
 		local self = Interface.defined[to]
-		if not self then return false end
-		local cst = self:createcast(ctx,from.type,exp)
-		return true, cst
+		if not self then error("not a interface") end
+		local cst = self:createcast(from.type,exp)
+		return cst
 	end
-	return false
+	error("invalid cast")
 end
 function Interface.create(methods)
 	local self = setmetatable({},Interface.interface)
@@ -57,7 +57,7 @@ function Interface.create(methods)
 	return self.type
 end
 
-function Interface.interface:createcast(ctx,from,exp)
+function Interface.interface:createcast(from,exp)
 	if not self.implementedtypes[from] then
 		local instance = {}
 		instance.id = self.nextid

@@ -1,14 +1,13 @@
 
 struct A { a : int, b : float }
 
-function A.metamethods.__cast(ctx,tree,from,to,exp)
+function A.metamethods.__cast(from,to,exp)
     if from == int and to == A then
-        return true, `A {exp, 1.f }
+        return `A {exp, 1.f }
     elseif from == float and to == A then
-        return true, `A { 1, exp }
-    else
-        return false
+        return `A { 1, exp }
     end
+    error("invalid")
 end
 
 

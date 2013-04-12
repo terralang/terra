@@ -4,8 +4,8 @@ struct A {
 	a : int
 }
 
-function A.metamethods.__cast(_,_,from,to,exp)
-	return true,"a" 
+function A.metamethods.__cast(from,to,exp)
+	return "a" 
 end
 
 terra foobar()

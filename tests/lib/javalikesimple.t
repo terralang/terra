@@ -86,9 +86,9 @@ local function finalizelayout(self)
 	initializevtable(self)
 end
 
-local function castoperator(diag,tree,from,to,exp)
+local function castoperator(from,to,exp)
 	if from:ispointer() and to:ispointer() and issubclass(from.type,to.type) then
-		return true,`[to](exp)
+		return `[to](exp)
 	end
 	error("not a subtype")
 end

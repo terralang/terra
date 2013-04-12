@@ -2190,15 +2190,15 @@ function terra.funcdefinition:typecheck()
             for i,__cast in ipairs(cast_fns) do
                 local tel = createtypedexpressionlist(exp,terra.newlist{exp},nil)
                 local quotedexp = terra.newquote(tel)
-                local success,valid,result = terra.invokeuserfunction(exp, true,__cast,diag,exp,exp.type,typ,quotedexp)
-                if success and valid then
+                local success,result = terra.invokeuserfunction(exp, true,__cast,exp.type,typ,quotedexp)
+                if success then
                     local result = checkrvalue(terra.createterraexpression(diag,exp,result))
                     if result.type ~= typ then 
                         diag:reporterror(exp,"user-defined cast returned expression with the wrong type.")
                     end
                     return result
-                elseif not success then
-                    errormsgs:insert(valid)
+                else
+                    errormsgs:insert(result)
                 end
             end
 
