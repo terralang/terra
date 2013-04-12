@@ -26,7 +26,7 @@ if trans then
 	fabs = Lift(C.fabs)
 	exp = Lift(C.exp)
 else
-	local id = macro(function(_,_,exp) return exp end)
+	local id = macro(function(exp) return exp end)
 	sqrt = id --Lift(C.sqrt)
 	log = id --Lift(C.log)
 	fabs = id --Lift(C.fabs)

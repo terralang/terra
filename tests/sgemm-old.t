@@ -36,7 +36,7 @@ assert(isinteger(NB / BR ))
 
 
 
-blockregisters = macro(function(ctx,tree,C,A,B,K,lda,ldc,mm,nn,kk,m,n)
+blockregisters = macro(function(C,A,B,K,lda,ldc,mm,nn,kk,m,n)
 	local function mkmatrix(nm,I,J)
 		local r = {}
 		for i = 0,I-1 do

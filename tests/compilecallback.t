@@ -1,6 +1,6 @@
 
 local a = 0
-local foo = macro(function(diag,tree,arg)
+local foo = macro(function(arg)
 	bar:compile(function()
 		a = bar()
 	end)

@@ -739,8 +739,12 @@ end
 
 terra.macro = {}
 terra.macro.__index = terra.macro
-terra.macro.__call = function(self,...)
-    return self.fn(...)
+terra.macro.__call = function(self,ctx,tree,...)
+    if self._internal then
+        return self.fn(ctx,tree,...)
+    else
+        return self.fn(...)
+    end
 end
 
 function terra.ismacro(t)
@@ -750,6 +754,12 @@ end
 function terra.createmacro(fn)
     return setmetatable({fn = fn}, terra.macro)
 end
+function terra.internalmacro(fn) 
+    local m = terra.createmacro(fn)
+    m._internal = true
+    return m
+end
+
 _G["macro"] = terra.createmacro --introduce macro intrinsic into global namespace
 
 -- END MACRO
@@ -881,7 +891,7 @@ function terra.intrinsic(str, typ)
         local args = terra.newlist({...}):map(function(e) return e.tree end)
         return terra.newtree(tree, { kind = terra.kinds.intrinsic, typefn = typefn, arguments = args } )
     end
-    return macro(intrinsiccall)
+    return terra.internalmacro(intrinsiccall)
 end
     
 
@@ -2618,7 +2628,7 @@ function terra.funcdefinition:typecheck()
         else
             fnlike = objtyp.methods[methodname]
             if not fnlike and terra.ismacro(objtyp.metamethods.__methodmissing) then
-                fnlike = macro(function(ctx,tree,...)
+                fnlike = terra.internalmacro(function(ctx,tree,...)
                     return objtyp.metamethods.__methodmissing(ctx,tree,methodname,...)
                 end)
             end
@@ -2679,7 +2689,7 @@ function terra.funcdefinition:typecheck()
                     fnlike = fn.value
                     break
                 elseif terra.types.istype(fn.value) then
-                    local castmacro = macro(function(diag,tree,arg)
+                    local castmacro = terra.internalmacro(function(diag,tree,arg)
                         return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = fn.value })
                     end)
                     fnlike = castmacro
@@ -3354,10 +3364,10 @@ function terra.includetableindex(tbl,name)    --this is called when a table retu
 end
 
 -- GLOBAL MACROS
-_G["sizeof"] = macro(function(diag,tree,typ)
+_G["sizeof"] = terra.internalmacro(function(diag,tree,typ)
     return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype()})
 end)
-_G["vector"] = macro(function(diag,tree,...)
+_G["vector"] = terra.internalmacro(function(diag,tree,...)
     if not diag then
         error("nil first argument in vector constructor")
     end
@@ -3372,15 +3382,15 @@ _G["vector"] = macro(function(diag,tree,...)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
     
 end)
-_G["vectorof"] = macro(function(diag,tree,typ,...)
+_G["vectorof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, oftype = typ:astype(), expressions = exps })
 end)
-_G["array"] = macro(function(diag,tree,...)
+_G["array"] = terra.internalmacro(function(diag,tree,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, expressions = exps })
 end)
-_G["arrayof"] = macro(function(diag,tree,typ,...)
+_G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
@@ -3388,7 +3398,7 @@ end)
 _G["global"] = terra.global
 _G["constant"] = terra.constant
 
-terra.select = macro(function(diag,tree,guard,a,b)
+terra.select = terra.internalmacro(function(diag,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
 end)
 
@@ -3402,11 +3412,11 @@ local function annotatememory(arg,tbl)
     error("expected a dereference operator")
 end
 
-terra.nontemporal = macro( function(diag,tree,arg)
+terra.nontemporal = terra.internalmacro( function(diag,tree,arg)
     return annotatememory(arg,{nontemporal = true})
 end)
 
-terra.aligned = macro( function(diag,tree,arg,num)
+terra.aligned = terra.internalmacro( function(diag,tree,arg,num)
     local n = num:asvalue()
     if type(n) ~= "number" then
         error("expected a number for alignment")

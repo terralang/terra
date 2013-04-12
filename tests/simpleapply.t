@@ -4,7 +4,7 @@ Vec.metamethods.__apply = terra(self : &Vec, i : int)
 end
 
 struct Vec2 { data : int[4] }
-Vec2.metamethods.__apply = macro(function(ctx,tree,self,b)
+Vec2.metamethods.__apply = macro(function(self,b)
     return `self.data[b]
 end)
 

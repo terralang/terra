@@ -1,5 +1,5 @@
 
-local bar = macro(function(ctx,tree,typ,x)
+local bar = terralib.internalmacro(function(ctx,tree,typ,x)
 	return {terralib.newtree(typ.tree, { kind = terralib.kinds.literal, type = double, value = 4.0 }), x }
 end)
 

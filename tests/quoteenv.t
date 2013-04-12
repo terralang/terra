@@ -5,7 +5,7 @@
 --but a bunch exist for needing early-bound quotes, like below:
 
 
-function times5(ctx,tree,x)
+function times5(x)
 	local c = `0
 	for i = 1,5 do
 		c = `c + x

@@ -1,5 +1,5 @@
 
-local bar2 = macro(function(ctx,tree,typ)
+local bar2 = macro(function(typ)
 	return typ
 	
 end)

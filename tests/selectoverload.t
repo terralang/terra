@@ -4,7 +4,7 @@ Vec.metamethods.__get = {}
 Vec.metamethods.__get.x = terra(self : &Vec)
     return self.data[0]
 end
-Vec.metamethods.__get.y = macro(function(ctx,tree,self)
+Vec.metamethods.__get.y = macro(function(self)
     return `self.data[1]
 end)
     

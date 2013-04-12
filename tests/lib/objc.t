@@ -9,7 +9,7 @@ local mangleSelector
 --replace methods such as:   myobj:methodcall(arg0,arg1)
 --with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
 
-C.objc_object.metamethods.__methodmissing = macro(function(_,_,sel,obj,...)
+C.objc_object.metamethods.__methodmissing = macro(function(sel,obj,...)
 	local arguments = {...}
 	sel = mangleSelector(sel,#arguments)
 	return `C.objc_msgSend(&obj,C.sel_registerName(sel),arguments)

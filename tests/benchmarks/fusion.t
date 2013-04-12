@@ -74,7 +74,7 @@ local function MakeExpType(op,args)
 	return ExpType
 end
 
-Array.methods.set = macro(function(ctx,tree,self,exp)
+Array.methods.set = macro(function(self,exp)
 
 	local formal = terralib.newlist()
 	local actual = terralib.newlist()
@@ -136,7 +136,7 @@ metamethodtable = {
 			return Materialize
 		end
 		local op = terralib.defaultmetamethod(index)
-		return op and macro(function(ctx,tree,...)
+		return op and macro(function(...)
 			local typ = MakeExpType(op,terralib.newlist {...})
 			assert(typ)
 			return `typ {}			
@@ -155,7 +155,7 @@ Lift = function(op)
 			return `op(arg)
 		end
 	end
-	return macro(function(ctx,tree,...)
+	return macro(function(...)
 		local typ = MakeExpType(opfn,terralib.newlist{...})
 		assert(typ)
 		return `typ {}
@@ -167,7 +167,7 @@ LiftV = function(op)
 		local args = terralib.newlist {...}
 		return `op(args)
 	end
-	return macro(function(ctx,tree,...)
+	return macro(function(...)
 		local typ = MakeExpType(opfn,terralib.newlist{...})
 		assert(typ)
 		return `typ {}

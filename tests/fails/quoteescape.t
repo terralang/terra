@@ -2,7 +2,7 @@
 
 q = nil
 
-foo = macro(function(ctx,tree,a)
+foo = macro(function(a)
 	q = a
 	return `0
 end)

@@ -183,7 +183,7 @@ function Array.methods.flush(self)
 end
 
 local function createrecordforop(op)
-	return macro(function(ctx,tree,...)
+	return macro(function(...)
 		local args = terralib.newlist {...}
 		optable:insert(op)
 		local idx = #optable

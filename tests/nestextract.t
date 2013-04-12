@@ -26,7 +26,7 @@ terra takesAnA(a : A)
 	return a.a
 end
 
-dotwice = macro(function(ctx,tree,exp)
+dotwice = macro(function(exp)
 	return {exp,exp}
 end)
 

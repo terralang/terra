@@ -1,5 +1,5 @@
 
-what = macro(function(ctx) return "abcd" end)
+what = macro(function() return "abcd" end)
 
 terra foo()
   var a =   { [what()] = 4 }

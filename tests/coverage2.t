@@ -144,7 +144,7 @@ failit(erd,function()
 	foo()
 end)
 local saveit
-local foom = macro(function(ctx,tree,arg) saveit = arg; arg:astype();  end)
+local foom = macro(function(arg) saveit = arg; arg:astype();  end)
 failit(erd,function()
 	local terra foo()
 		return foom(4)

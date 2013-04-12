@@ -402,7 +402,7 @@ terra foo40()
 end
 
 assert(foo40() == 8 + 8 + 6 + 6 + 6 + 11 + 6 + 11 + 3 + 11)
-B.metamethods.__add = macro(function(ctx,tree,b,c) return `b.a + c.a + 1 end)
+B.metamethods.__add = macro(function(b,c) return `b.a + c.a + 1 end)
 terra foo41()
 	var b = B { 5,6 }
 	var c = C { 3 }
@@ -453,7 +453,7 @@ terra foo38()
 	C.printf("hello, world %f\n", 3.5f)
 end
 foo38()
-local twice = macro(function(ctx,tree,exp,call)
+local twice = macro(function(exp,call)
 	return quote
 		exp = exp + 1 + call
 		exp = exp + 1 + call

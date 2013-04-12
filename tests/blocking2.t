@@ -54,7 +54,7 @@ function Image(Spectrum)
 		self.data = [&float](stdlib.malloc(N*N*sizeof(Spectrum)))
 		self.N = N
 	end
-	ImageImpl.methods.pixel = macro(function(ctx,tree,self,x,y)
+	ImageImpl.methods.pixel = macro(function(self,x,y)
 		return `self.data[x*self.N + y]
 	end)
 	return ImageImpl
