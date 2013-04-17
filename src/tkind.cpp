@@ -1,3 +1,5 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
 #include "terrastate.h"
 #include "tkind.h"
 #include <assert.h>

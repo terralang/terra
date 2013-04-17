@@ -1,3 +1,5 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
 #include "tcwrapper.h"
 #include "terra.h"
 #include <assert.h>

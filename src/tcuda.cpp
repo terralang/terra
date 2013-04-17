@@ -1,3 +1,5 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
 #include "tcuda.h"
 #ifdef TERRA_ENABLE_CUDA
 

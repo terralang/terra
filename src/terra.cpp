@@ -1,3 +1,5 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
 #include "terra.h"
 #include "terrastate.h"
 #include "llex.h"

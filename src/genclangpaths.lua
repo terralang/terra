@@ -1,3 +1,6 @@
+--See Copyright Notice in ../LICENSE.txt
+
+
 local outputfile = arg[1]
 local file = io.open(outputfile,"w")
 

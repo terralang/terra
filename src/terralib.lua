@@ -1,3 +1,6 @@
+-- See Copyright Notice in ../LICENSE.txt
+
+
 --io.write("loading terra lib...")
 
 

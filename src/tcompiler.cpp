@@ -1,3 +1,5 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
 #include "tcompiler.h"
 #include "tkind.h"
 #include "terrastate.h"

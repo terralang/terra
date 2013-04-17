@@ -1,3 +1,6 @@
+/* See Copyright Notice in ../LICENSE.txt */
+
+
 #ifndef terra_h
 #define terra_h
 

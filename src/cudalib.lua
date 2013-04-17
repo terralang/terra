@@ -1,4 +1,4 @@
-
+-- See Copyright Notice in ../LICENSE.txt
 function terralib.cudacompile(module)
 	local tbl = {}
 	for k,v in pairs(module) do

@@ -1,3 +1,4 @@
+/* See Copyright Notice in ../LICENSE.txt */
 
 #include <math.h>
 #include <string.h>
