@@ -8,6 +8,7 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sstream>
 #include "llvmheaders.h"
 #include "tllvmutil.h"
@@ -992,7 +993,7 @@ struct TerraCompiler {
             fn = CC.CreateFunction(&ftype, name);
             
             if(funcobj->boolean("alwaysinline")) {
-                fn->addFnAttr(Attributes::AlwaysInline);
+                fn->ADDFNATTR(AlwaysInline);
             }
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");

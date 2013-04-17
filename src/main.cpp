@@ -2,7 +2,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include "terra.h"
-
+#include <unistd.h>
 
 static void printstats(lua_State * L) {
 #if 0
