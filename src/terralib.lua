@@ -3449,6 +3449,11 @@ function terra.func:printpretty()
         v:printpretty()
     end
 end
+
+function terra.func:__tostring()
+    return "<terra function>"
+end
+
 function terra.funcdefinition:printpretty()
     self:compile()
     if not self.typedtree then
