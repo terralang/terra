@@ -196,7 +196,7 @@ BIN2C = build/bin2c
 #put any install-specific stuff in here
 -include Makefile.inc
 
-.PHONY:	all clean purge test docs package
+.PHONY:	all clean purge test package
 all:	$(EXECUTABLE)
 
 test:	$(EXECUTABLE)
@@ -247,9 +247,6 @@ clean:
 
 purge:	clean
 	rm -rf build/*
-
-docs:	
-	make -C docs
  
 package:
 	git archive --prefix=terra/ HEAD | bzip2 > terra-`git rev-parse --short HEAD`.tar.bz2
