@@ -6,16 +6,18 @@
 # CUDA_HOME is your cuda installation
 # LIBNVVM_HOME is the directory where libnvvm.so and nvvm.h live
 
-LLVM_CONFIG := $(shell which llvm-config)
-LLVM_COMPILER_BIN := $(shell llvm-config --bindir)
-CXX := $(LLVM_COMPILER_BIN)/clang++
-CC  := $(LLVM_COMPILER_BIN)/clang
-CUDA_HOME := /usr/local/cuda
-
-
 -include Makefile.inc
 
+LLVM_CONFIG ?= $(shell which llvm-config)
+LLVM_COMPILER_BIN ?= $(shell llvm-config --bindir)
+LLVM_CXX ?= $(LLVM_COMPILER_BIN)/clang++
+LLVM_CC  ?= $(LLVM_COMPILER_BIN)/clang
+CUDA_HOME ?= /usr/local/cuda
+
 LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
+CXX := $(LLVM_CXX)
+CC := $(LLVM_CC)
+
 .SUFFIXES:
 .SECONDARY:
 UNAME := $(shell uname)
