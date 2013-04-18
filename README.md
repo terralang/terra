@@ -3,15 +3,13 @@ Getting Started with Terra
 
 _Zach DeVito_ (zdevito at cs dot stanford dot edu)
 
-<terralang.org>
+[terralang.org](http://terralang.org)
 
 Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua).
 
 Furthermore, you can use Lua to meta-program Terra code. The Lua meta-program handles details like conditional compilation, namespaces, and templating in Terra code that are normally special constructs in low-level languages. This coupling additionally enables more powerful features like function specialization, lisp-style macros, and manually controlled JIT compilation. Since Terra's compiler is also available at runtime, it makes it easy for libraries or embedded languages to generate low-level code dynamically.
 
 This guide serves as an introduction for programming in Terra. A general understanding of the Lua language is very helpful, but not strictly required.
-
-More information is availiable at the website:
 
 
 Installing Terra
@@ -389,7 +387,7 @@ Or look at a textual representation of the type-check code
 	end
 	
 \* The actual syntax sugar is slightly more complicated to support function declarations.
-See the [API reference](api.html#function) for the full behavior.
+See the [API reference](http://terralang.org/api.html#function) for the full behavior.
 
 ### Symbol Resolution ###
 
@@ -787,7 +785,7 @@ is equivalent to
         ...
     end
 
-Terra also support _metamethods_ similar to Lua's operators like `__add`, which will allow you to overload operators like `+` on Terra types, or specify custom type conversion rules. See the [API reference on structs](api.html#structs) for more information.
+Terra also support _metamethods_ similar to Lua's operators like `__add`, which will allow you to overload operators like `+` on Terra types, or specify custom type conversion rules. See the [API reference on structs](http://terralang.org/api.html#structs) for more information.
 
 Lua-Terra Interaction
 =====================
@@ -855,7 +853,7 @@ Escapes allow you to splice the result of a Lua expression into Terra code. Here
 	> 	return 6
 	> end
 	
-When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](api.html#compiletime_conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
+When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](http://terralang.org/api.html#compiletime_conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
 
 Escapes can appear where any expression or statement normally appears. When they appear as statements or at the end of en expression list, multiple values can be spliced in place by returning a Lua array:
 
@@ -1071,7 +1069,7 @@ You may be wondering why Terra includes both macros and escapes. They both allow
 More Information
 ================
 
-More details about the interaction of Terra and Lua can be found in the [API reference](apt.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
+More details about the interaction of Terra and Lua can be found in the [API reference](http://terralang.org/api.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
 
 If you are interested in the implementation, you can also look at the source code.  The compiler is implemented as a mixture of Lua code and C/C++. Passing the `-v` flag to the interpreter will cause it to give verbose debugging output. 
 
