@@ -1064,7 +1064,7 @@ You may be wondering why Terra includes both macros and escapes. They both allow
 More Information
 ================
 
-More details about the interaction of Terra and Lua can be found in the [API reference](apt.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
+More details about the interaction of Terra and Lua can be found in the [API reference](api.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
 
 If you are interested in the implementation, you can also look at the source code.  The compiler is implemented as a mixture of Lua code and C/C++. Passing the `-v` flag to the interpreter will cause it to give verbose debugging output. 
 
