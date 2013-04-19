@@ -332,10 +332,10 @@ Note that unlike C++ it is not necessary to give the type of `isodd` in the decl
 
 Like Lua function definitions, Terra function defintions can insert directly into Lua tables.
 
-local mytable = {}
-terra mytable.myfunction()
-	C.printf("myfunction in mytable\n")
-end
+    local mytable = {}
+    terra mytable.myfunction()
+    	C.printf("myfunction in mytable\n")
+    end
 
 ### Terra Functions Are Lua Objects ###
 
