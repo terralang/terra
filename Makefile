@@ -9,7 +9,7 @@
 -include Makefile.inc
 
 LLVM_CONFIG ?= $(shell which llvm-config)
-LLVM_COMPILER_BIN ?= $(shell llvm-config --bindir)
+LLVM_COMPILER_BIN ?= $(shell $(LLVM_CONFIG) --bindir)
 LLVM_CXX ?= $(LLVM_COMPILER_BIN)/clang++
 LLVM_CC  ?= $(LLVM_COMPILER_BIN)/clang
 CUDA_HOME ?= /usr/local/cuda

@@ -24,18 +24,25 @@ extern "C" {
 
 using namespace llvm;
 
-static int terra_codegen(lua_State * L);  //entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist
-static int terra_optimize(lua_State * L);  //entry point from lua into compiler to perform optimizations at the function level, passed an entire strongly connected component of functions
-                                           //all callee's of these functions that are not in this scc have already been optimized
-static int terra_jit(lua_State * L);  //entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction
 
-static int terra_createglobal(lua_State * L);
+#define TERRALIB_FUNCTIONS(_) \
+    _(codegen,1) /*entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist*/\
+    _(optimize,1) /*entry point from lua into compiler to perform optimizations at the function level, passed an entire strongly connected component of functions\
+                    all callee's of these functions that are not in this scc have already been optimized*/\
+    _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
+    _(createglobal,1) \
+    _(disassemble,1) \
+    _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
+    _(gcdebug,0) \
+    _(saveobjimpl,1) \
+    _(linklibraryimpl,1) \
+    _(currenttimeinseconds,0) \
+    _(dumpmodule,1)
 
-static int terra_pointertolightuserdata(lua_State * L); //because luajit ffi doesn't do this...
-static int terra_saveobjimpl(lua_State * L);
-static int terra_deletefunction(lua_State * L);
-static int terra_disassemble(lua_State * L);
-static int terra_linklibraryimpl(lua_State * L);
+
+#define DEF_LIBFUNCTION(nm,isclo) static int terra_##nm(lua_State * L);
+TERRALIB_FUNCTIONS(DEF_LIBFUNCTION)
+#undef DEF_LIBFUNCTION
 
 #ifdef PRINT_LLVM_TIMING_STATS
 static llvm_shutdown_obj llvmshutdownobj;
@@ -55,7 +62,7 @@ static double CurrentTimeInSeconds() {
     gettimeofday(&tv, NULL);
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
-static int terra_CurrentTimeInSeconds(lua_State * L) {
+static int terra_currenttimeinseconds(lua_State * L) {
     lua_pushnumber(L, CurrentTimeInSeconds());
     return 1;
 }
@@ -92,46 +99,22 @@ static int terra_gcdebug(lua_State * L) {
     return 0;
 }
 
+static void RegisterFunction(struct terra_State * T, const char * name, int isclo, lua_CFunction fn) {
+    if(isclo) {
+        lua_pushlightuserdata(T->L,(void*)T);
+        lua_pushcclosure(T->L,fn,1);
+    } else {
+        lua_pushcfunction(T->L, fn);
+    }
+    lua_setfield(T->L,-2,name);
+}
+
 int terra_compilerinit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_codegen,1);
-    lua_setfield(T->L,-2,"codegen");
-
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_optimize,1);
-    lua_setfield(T->L,-2,"optimize");
-
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_jit,1);
-    lua_setfield(T->L,-2,"jit");
-    
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_createglobal,1);
-    lua_setfield(T->L,-2,"createglobal");
-    
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_disassemble,1);
-    lua_setfield(T->L,-2,"disassemble");
-
-    
-    lua_pushcfunction(T->L, terra_pointertolightuserdata);
-    lua_setfield(T->L,-2,"pointertolightuserdata");
-
-    lua_pushcfunction(T->L, terra_gcdebug);
-    lua_setfield(T->L,-2,"gcdebug");
-    
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_saveobjimpl,1);
-    lua_setfield(T->L,-2,"saveobjimpl");
-    
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_linklibraryimpl,1);
-    lua_setfield(T->L,-2,"linklibraryimpl");
-    
-    lua_pushcfunction(T->L, terra_CurrentTimeInSeconds);
-    lua_setfield(T->L,-2,"currenttimeinseconds");
+    #define REGISTER_FN(name,isclo) RegisterFunction(T,#name,isclo,terra_##name);
+    TERRALIB_FUNCTIONS(REGISTER_FN)
+    #undef REGISTER_FN
 
 #ifdef LLVM_3_2
     lua_pushstring(T->L,"3.2");
@@ -956,6 +939,7 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
 }
 
 
+static int terra_deletefunction(lua_State * L);
 
 struct TerraCompiler {
     lua_State * L;
@@ -2309,6 +2293,13 @@ static int terra_linklibraryimpl(lua_State * L) {
         terra_reporterror(T, "llvm: %s\n", Err.c_str());
     }
     
+    return 0;
+}
+
+static int terra_dumpmodule(lua_State * L) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
+    assert(T->L == L);
+    T->C->m->dump();
     return 0;
 }
 
