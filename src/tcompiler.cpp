@@ -1500,8 +1500,9 @@ if(baseT->isIntegerTy()) { \
                 return result;
             } break;
             case T_literal: {
-                TType * t = typeOfValue(exp);
-                
+                Obj type;
+                exp->obj("type", &type);
+                TType * t = getType(&type);
                 if(t->islogical) {
                    bool b = exp->boolean("value"); 
                    return ConstantInt::get(t->type,b);
@@ -1512,25 +1513,28 @@ if(baseT->isIntegerTy()) { \
                     double dbl = exp->number("value");
                     return ConstantFP::get(t->type, dbl);
                 } else if(t->type->isPointerTy()) {
-                    PointerType * pt = (PointerType*) t->type;
-                    if(pt->getElementType()->isFunctionTy()) {
+                    PointerType * pt = cast<PointerType>(t->type);
+                    Obj objType;
+                    if(!type.obj("type",&objType)) {
+                        //null pointer type
+                        return ConstantPointerNull::get(pt);
+                    }
+                    Type * objT = getType(&objType)->type;
+                
+                    if(objT->isFunctionTy()) {
                         Obj func;
                         exp->obj("value",&func);
                         TType * ftyp;
                         Function * fn;
                         getOrCreateFunction(&func,&fn,&ftyp);
-                        return fn; 
-                    } else if(pt->getElementType()->isIntegerTy(8)) {
-                        if(exp->boolean("value")) { //string literal
-                            exp->pushfield("value");
-                            size_t len;
-                            const char * rawstr = lua_tolstring(L,-1,&len);
-                            Value * str = B->CreateGlobalString(StringRef(rawstr,len));
-                            lua_pop(L,1);
-                            return  B->CreateBitCast(str, pt);
-                        } else { //null pointer
-                            return ConstantPointerNull::get(pt);
-                        }
+                        return fn;
+                    } else if(objT->isIntegerTy(8)) {
+                        exp->pushfield("value");
+                        size_t len;
+                        const char * rawstr = lua_tolstring(L,-1,&len);
+                        Value * str = B->CreateGlobalString(StringRef(rawstr,len));
+                        lua_pop(L,1);
+                        return  B->CreateBitCast(str, pt);
                     } else {
                         assert(!"NYI - pointer literal");
                     }
@@ -1545,10 +1549,11 @@ if(baseT->isIntegerTy()) { \
                 return GetConstant(&CC,&value);
             } break;
             case T_luafunction: {
-                TType * typ = typeOfValue(exp);
-                PointerType *pt = cast<PointerType>(typ->type);
-                assert(pt);
-                FunctionType * fntyp = cast<FunctionType>(pt->getElementType());
+                Obj type,objType;
+                exp->obj("type",&type);
+                type.obj("type", &objType);
+                
+                FunctionType * fntyp = cast<FunctionType>(getType(&objType)->type);
                 assert(fntyp);
                 Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"", C->m);
                 void * ptr = exp->ud("fptr");
@@ -1649,11 +1654,13 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("arguments",&arguments);
                 std::vector<Value *> values;
                 emitParameterList(&arguments,&values);
+                Obj itypeObjPtr;
+                exp->obj("intrinsictype",&itypeObjPtr);
                 Obj itypeObj;
-                exp->obj("intrinsictype",&itypeObj);
+                itypeObjPtr.obj("type",&itypeObj);
                 TType * itype = getType(&itypeObj);
                 const char * name = exp->string("name");
-                FunctionType * fntype = cast<FunctionType>(cast<PointerType>(itype->type)->getElementType());
+                FunctionType * fntype = cast<FunctionType>(itype->type);
                 Value * fn = C->m->getOrInsertFunction(name, fntype);
                 return B->CreateCall(fn, values);
             }
