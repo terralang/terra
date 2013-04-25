@@ -183,6 +183,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
     Type * type;
     bool issigned;
     bool islogical;
+    bool incomplete; // does this aggregate type or its children include an incomplete struct
 };
 
 struct TerraCompiler;
@@ -234,29 +235,7 @@ struct CCallingConv {
         this->B = B;
     }
     
-     void LayoutStructs(Obj * deferred) {
-        for(int i = 0; i < deferred->size(); i++) {
-            Obj str;
-            deferred->objAt(i, &str);
-            TType * t = (TType*) str.ud("llvm_type");
-            assert(t->type->isStructTy());
-            StructType * st = cast<StructType>(t->type);
-            assert(st->isOpaque());
-            LayoutStruct(st,&str,deferred);
-        }
-    }
-    
-    TType * GetType(Obj * type) {
-        Obj deferred;
-        type->newlist(&deferred);
-        TType * t = GetTypeDuringTypeCreation(type, &deferred);
-        LayoutStructs(&deferred);
-        return t;
-    }
-    
-    //if deferred == NULL, generate the struct's type layout
-    //otherwise generate the named struct
-    void LayoutStruct(StructType * st, Obj * typ, Obj * deferred) {
+    void LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
         typ->obj("layout", &layout);
         int N = layout.size();
@@ -273,17 +252,16 @@ struct CCallingConv {
             Obj vt;
             v.obj("type",&vt);
             
-            Type * fieldtype = deferred == NULL ? GetTypeLayout(&vt) : GetTypeDuringTypeCreation(&vt,deferred)->type;
+            Type * fieldtype = GetType(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
-                Type * fieldlayout = GetTypeLayout(&vt);
-                unsigned align = C->td->getABITypeAlignment(fieldlayout);
+                unsigned align = C->td->getABITypeAlignment(fieldtype);
                 if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
                     unionAlign = align;
                     unionType = fieldtype;
-                    unionAlignSz = C->td->getTypeAllocSize(fieldlayout);
+                    unionAlignSz = C->td->getTypeAllocSize(fieldtype);
                 }
-                size_t allocSize = C->td->getTypeAllocSize(fieldlayout);
+                size_t allocSize = C->td->getTypeAllocSize(fieldtype);
                 if(allocSize > unionSz)
                     unionSz = allocSize;
                 
@@ -327,101 +305,46 @@ struct CCallingConv {
         }
         return true;
     }
-    void CreateNonRecursiveType(Obj * typ, TType * t) {
-        switch(typ->kind("kind")) {
-            case T_primitive: {
-                int bytes = typ->number("bytes");
-                switch(typ->kind("type")) {
-                    case T_float: {
-                        if(bytes == 4) {
-                            t->type = Type::getFloatTy(*C->ctx);
-                        } else {
-                            assert(bytes == 8);
-                            t->type = Type::getDoubleTy(*C->ctx);
-                        }
-                    } break;
-                    case T_integer: {
-                        t->issigned = typ->boolean("signed");
-                        t->type = Type::getIntNTy(*C->ctx,bytes * 8);
-                    } break;
-                    case T_logical: {
-                        t->type = Type::getInt8Ty(*C->ctx);
-                        t->islogical = true;
-                    } break;
-                    default: {
-                        printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
-                        terra_reporterror(T,"type not understood");
-                    } break;
+    void CreatePrimitiveType(Obj * typ, TType * t) {
+        int bytes = typ->number("bytes");
+        switch(typ->kind("type")) {
+            case T_float: {
+                if(bytes == 4) {
+                    t->type = Type::getFloatTy(*C->ctx);
+                } else {
+                    assert(bytes == 8);
+                    t->type = Type::getDoubleTy(*C->ctx);
                 }
             } break;
-            case T_niltype: {
-                t->type = Type::getInt8PtrTy(*C->ctx);
+            case T_integer: {
+                t->issigned = typ->boolean("signed");
+                t->type = Type::getIntNTy(*C->ctx,bytes * 8);
             } break;
-            case T_vector: {
-                Obj base;
-                typ->obj("type",&base);
-                int N = typ->number("N");
-                TType * ttype = GetTypeDuringTypeCreation(&base,NULL); //vectors can only contain primitives, so no deferred struct layouts will occur, hence it safe to pass NULL
-                Type * baseType = ttype->type;
-                t->issigned = ttype->issigned;
-                t->islogical = ttype->islogical;
-                t->type = VectorType::get(baseType, N);
+            case T_logical: {
+                t->type = Type::getInt8Ty(*C->ctx);
+                t->islogical = true;
             } break;
             default: {
-                printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
-                terra_reporterror(T,"type not understood or not primitive\n");
+                printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
+                terra_reporterror(T,"type not understood");
             } break;
         }
     }
-    StructType * CreateStruct(Obj * typ, Obj * deferred) {
+    StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
         StructType * st;
         if(typ->hasfield("llvm_name")) {
             const char * llvmname = typ->string("llvm_name");
             st = C->m->getTypeByName(llvmname);
         } else {
-            if(deferred == NULL) {
-                st = StructType::create(*C->ctx);
-                LayoutStruct(st, typ, NULL);
-            } else {
-                st = StructType::create(*C->ctx, typ->string("name"));
-                typ->push();
-                deferred->addentry();
-            }
+            st = StructType::create(*C->ctx);
         }
         return st;
     }
-    Type * GetTypeLayout(Obj * typ) {
-        Type * t = (Type*) typ->ud("llvm_typelayout");
-        if(t == NULL) {
-            switch(typ->kind("kind")) {
-                case T_pointer:
-                    t = Type::getInt8PtrTy(*C->ctx);
-                    break;
-                case T_array: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    t = ArrayType::get(GetTypeLayout(&base), typ->number("N"));
-                } break;
-                case T_struct:
-                    t = CreateStruct(typ,NULL);
-                    break;
-                case T_functype:
-                    assert(!"functype (not pointer) found in GetTypeLayout?");
-                    break;
-                default:
-                    TType tt;
-                    CreateNonRecursiveType(typ,&tt);
-                    t = tt.type;
-                    break;
-            }
-            lua_pushlightuserdata(L,t);
-            typ->setfield("llvm_typelayout");
-        }
-        assert(t != NULL);
-        return t;
+    Type * FunctionPointerType() {
+        return Ptr(Type::getInt8PtrTy(*C->ctx));
     }
-    TType * GetTypeDuringTypeCreation(Obj * typ, Obj * deferred) {
+    TType * GetTypeIncomplete(Obj * typ) {
         TType * t = NULL;
         if(!LookupTypeCache(typ, &t)) {
             assert(t);
@@ -429,28 +352,73 @@ struct CCallingConv {
                 case T_pointer: {
                     Obj base;
                     typ->obj("type",&base);
-                    Type * baset = GetTypeDuringTypeCreation(&base,deferred)->type;
-                    t->type = PointerType::getUnqual(baset);
+                    if(T_functype == base.kind("kind")) {
+                        t->type = FunctionPointerType();
+                    } else {
+                        TType * baset = GetTypeIncomplete(&base);
+                        t->type = PointerType::getUnqual(baset->type);
+                    }
                 } break;
                 case T_array: {
                     Obj base;
                     typ->obj("type",&base);
                     int N = typ->number("N");
-                    t->type = ArrayType::get(GetTypeDuringTypeCreation(&base,deferred)->type, N);
+                    TType * baset = GetTypeIncomplete(&base);
+                    t->type = ArrayType::get(baset->type, N);
+                    t->incomplete = baset->incomplete;
                 } break;
                 case T_struct: {
-                    t->type = CreateStruct(typ, deferred);
+                    StructType * st = CreateStruct(typ);
+                    t->type = st;
+                    t->incomplete = st->isOpaque();
                 } break;
                 case T_functype: {
-                    t->type = CreateFunctionType(typ,deferred);
+                    t->type = CreateFunctionType(typ);
                 } break;
-                default:
-                  CreateNonRecursiveType(typ,t);
-                  assert(t->type);
-                  break;
+                case T_vector: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    TType * ttype = GetTypeIncomplete(&base); //vectors can only contain primitives, so the type must be complete
+                    Type * baseType = ttype->type;
+                    t->issigned = ttype->issigned;
+                    t->islogical = ttype->islogical;
+                    t->type = VectorType::get(baseType, N);
+                } break;
+                case T_primitive: {
+                    CreatePrimitiveType(typ, t);
+                } break;
+                case T_niltype: {
+                    t->type = Type::getInt8PtrTy(*C->ctx);
+                } break;
+                default: {
+                    printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
+                    terra_reporterror(T,"type not understood or not primitive\n");
+                } break;
             }
         }
         assert(t && t->type);
+        return t;
+    }
+    
+    TType * GetType(Obj * typ) {
+        TType * t = GetTypeIncomplete(typ);
+        if(t->incomplete) {
+            assert(t->type->isAggregateType());
+            switch(typ->kind("kind")) {
+                case T_struct: {
+                    LayoutStruct(cast<StructType>(t->type), typ);
+                } break;
+                case T_array: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    GetType(&base); //force base type to be completed
+                } break;
+                default:
+                    terra_reporterror(T,"type marked incomplete is not an array or struct\n");
+            }
+        }
+        t->incomplete = false;
         return t;
     }
     
@@ -480,7 +448,7 @@ struct CCallingConv {
     }
     
     void MergeValue(RegisterClass * classes, size_t offset, Obj * type) {
-        Type * t = GetTypeLayout(type);
+        Type * t = GetType(type)->type;
         int entry = offset / 8;
         if(t->isVectorTy()) //we don't handle structures with vectors in them yet
             classes[entry] = C_MEMORY;
@@ -489,7 +457,7 @@ struct CCallingConv {
         else if(t->isIntegerTy() || t->isPointerTy())
             classes[entry] = Meet(classes[entry],C_INTEGER);
         else if(t->isStructTy()) {
-            StructType * st = cast<StructType>(GetTypeLayout(type));
+            StructType * st = cast<StructType>(GetType(type)->type);
             assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
             Obj layout;
@@ -505,7 +473,7 @@ struct CCallingConv {
                 MergeValue(classes, offset + structoffset, &entrytype);
             }
         } else if(t->isArrayTy()) {
-            ArrayType * at = cast<ArrayType>(GetTypeLayout(type));
+            ArrayType * at = cast<ArrayType>(GetType(type)->type);
             size_t elemsize = C->td->getTypeAllocSize(at->getElementType());
             size_t sz = at->getNumElements();
             Obj elemtype;
@@ -531,8 +499,8 @@ struct CCallingConv {
                 assert(!"unexpected class");
         }
     }
-    Argument ClassifyArgument(Obj * type, Obj * deferred, int * usedfloat, int * usedint) {
-        TType * t = GetTypeDuringTypeCreation(type,deferred);
+    Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
+        TType * t = GetType(type);
         
         if(!t->type->isAggregateType()) {
             if(t->type->isFloatingPointTy() || t->type->isVectorTy())
@@ -542,7 +510,7 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE,t->type);
         }
         
-        int sz = C->td->getTypeAllocSize(GetTypeLayout(type));
+        int sz = C->td->getTypeAllocSize(t->type);
         if(sz > 16) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
@@ -572,13 +540,7 @@ struct CCallingConv {
                         StructType::get(*C->ctx,elements));
     }
     
-    void Classify(Obj * ftype, Obj * params, Classification * info)  {
-        Obj deferred;
-        ftype->newlist(&deferred);
-        ClassifyDuringTypeCreation(ftype, params, &deferred, info);
-        LayoutStructs(&deferred);
-    }
-    void ClassifyDuringTypeCreation(Obj * ftype, Obj * params, Obj * deferred, Classification * info) {
+    void Classify(Obj * ftype, Obj * params, Classification * info) {
         Obj returns;
         ftype->obj("returns",&returns);
         info->nreturns = returns.size();
@@ -589,7 +551,7 @@ struct CCallingConv {
             Obj returnobj;
             ftype->obj("returnobj",&returnobj);
             int zero = 0;
-            info->returntype = ClassifyArgument(&returnobj, deferred, &zero, &zero);
+            info->returntype = ClassifyArgument(&returnobj, &zero, &zero);
         }
         
         int nfloat = 0;
@@ -598,19 +560,11 @@ struct CCallingConv {
         for(int i = 0; i < N; i++) {
             Obj elem;
             params->objAt(i,&elem);
-            info->paramtypes.push_back(ClassifyArgument(&elem,deferred,&nfloat,&nint));
+            info->paramtypes.push_back(ClassifyArgument(&elem,&nfloat,&nint));
         }
     }
     
-    //caches classification results for each function
     Classification * ClassifyFunction(Obj * fntyp) {
-        Obj deferred;
-        fntyp->newlist(&deferred);
-        Classification * c = ClassifyFunctionDuringTypeCreation(fntyp,&deferred);
-        LayoutStructs(&deferred);
-        return c;
-    }
-    Classification * ClassifyFunctionDuringTypeCreation(Obj * fntyp, Obj * deferred) {
         Classification * info  = (Classification*) fntyp->ud("llvm_ccinfo");
         if(!info) {
             info = new Classification();
@@ -618,7 +572,7 @@ struct CCallingConv {
             
             Obj params;
             fntyp->obj("parameters",&params);
-            ClassifyDuringTypeCreation(fntyp, &params, deferred, info);
+            Classify(fntyp, &params, info);
             Classification * oldinfo = (Classification*) fntyp->ud("llvm_ccinfo");
             assert(!oldinfo);
             fntyp->setfield("llvm_ccinfo");
@@ -771,6 +725,10 @@ struct CCallingConv {
         }
         
         //emit call
+        //function pointers are stored as &int8 to avoid calling convension issues
+        //cast it back to the real pointer type right before calling it
+        TType * llvmftype = GetType(ftype);
+        callee = B->CreateBitCast(callee,Ptr(llvmftype->type));
         CallInst * call = B->CreateCall(callee, arguments);
         //annotate call with byval and sret
         AttributeFnOrCall(call,&info);
@@ -809,12 +767,12 @@ struct CCallingConv {
             return aggregate;
         }
     }
-    Type * CreateFunctionType(Obj * typ, Obj * deferred) {
+    Type * CreateFunctionType(Obj * typ) {
 
         std::vector<Type*> arguments;
         bool isvararg = typ->boolean("isvararg");
         
-        Classification * info = ClassifyFunctionDuringTypeCreation(typ, deferred);
+        Classification * info = ClassifyFunction(typ);
         
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
@@ -847,6 +805,11 @@ struct CCallingConv {
         
         return FunctionType::get(rt,arguments,isvararg);
     }
+    
+    void EnsureTypeIsComplete(Obj * typ) {
+        GetType(typ);
+    }
+    
     AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = 0, const Twine &Name = "") {
         BasicBlock * entry = &B->GetInsertBlock()->getParent()->getEntryBlock();
         IRBuilder<> TmpB(entry,
@@ -1168,6 +1131,12 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     Value * emitPointerSub(TType * t, Value * a, Value * b) {
         return B->CreatePtrDiff(a, b);
     }
+    void EnsurePointsToCompleteType(Obj * ptrTy) {
+        Obj objTy;
+        if(ptrTy->obj("type",&objTy)) {
+            CC.EnsureTypeIsComplete(&objTy);
+        } //otherwise it is niltype and already complete
+    }
     Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
         TType * t = typeOfValue(exp);
         T_Kind kind = exp->kind("operator");
@@ -1188,11 +1157,15 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         Value * a = emitExp(ao);
         Value * b = emitExp(bo);
 
-        TType * at = typeOfValue(ao);
+        Obj aot;
+        ao->obj("type",&aot);
+        TType * at = getType(&aot);
         TType * bt = typeOfValue(bo);
+        //CC.EnsureTypeIsComplete(at) (not needed because typeOfValue(ao) ensure the type is complete)
         
         //check for pointer arithmetic first pointer arithmetic first
         if(at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
+            EnsurePointsToCompleteType(&aot);
             if(bt->type->isPointerTy()) {
                 return emitPointerSub(t,a,b);
             } else {
@@ -1256,6 +1229,9 @@ if(baseT->isIntegerTy()) { \
         B->CreateStore(input,sv);
         
         //allocate temporary to hold output variable
+        //type must be complete before we try to allocate space for it
+        //this is enforced by the callers
+        assert(!to->incomplete);
         Value * output = CC.CreateAlloca(to->type);
         
         Obj entries;
@@ -1276,8 +1252,7 @@ if(baseT->isIntegerTy()) { \
     }
     Value * emitArrayToPointer(TType * from, TType * to, Value * exp) {
         //typechecker ensures that input to array to pointer is an lvalue
-        int64_t idxs[] = {0,0};
-        return emitCGEP(exp,idxs,2);
+        return B->CreateConstGEP2_32(exp,0,0);
     }
     Type * getPrimitiveType(TType * t) {
         if(t->type->isVectorTy())
@@ -1341,9 +1316,11 @@ if(baseT->isIntegerTy()) { \
         return result;
     }
     Value * emitStructSelect(Obj * structType, Value * structPtr, int index) {
+
         assert(structPtr->getType()->isPointerTy());
         PointerType * objTy = cast<PointerType>(structPtr->getType());
         assert(objTy->getElementType()->isStructTy());
+        CC.EnsureTypeIsComplete(structType);
         
         Obj layout;
         structType->obj("layout",&layout);
@@ -1352,8 +1329,7 @@ if(baseT->isIntegerTy()) { \
         
         int allocindex = entry.number("allocation");
         
-        int64_t idxs[] = {0 , allocindex};
-        Value * addr = emitCGEP(structPtr,idxs,2);
+        Value * addr = B->CreateConstGEP2_32(structPtr,0,allocindex);
         
         if (entry.boolean("inunion")) {
             Obj entryType;
@@ -1391,6 +1367,9 @@ if(baseT->isIntegerTy()) { \
                 Obj e;
                 exp->obj("expression",&e);
                 Value * v = emitExp(&e);
+                Obj type;
+                exp->obj("type",&type);
+                CC.EnsureTypeIsComplete(&type);
                 LoadInst * l = B->CreateLoad(v);
                 if(e.hasfield("alignment")) {
                     int alignment = e.number("alignment");
@@ -1402,7 +1381,7 @@ if(baseT->isIntegerTy()) { \
                 Obj e;
                 exp->obj("expression",&e);
                 Value * v = emitExp(&e);
-                Value * r = CC.CreateAlloca(v->getType());
+                Value * r = CC.CreateAlloca(typeOfValue(exp)->type);
                 B->CreateStore(v, r);
                 return r;
             } break;
@@ -1458,10 +1437,12 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("value",&value);
                 exp->obj("index",&idx);
                 
+                Obj aggTypeO;
+                value.obj("type",&aggTypeO);
+                TType * aggType = getType(&aggTypeO);
                 Value * valueExp = emitExp(&value);
                 Value * idxExp = emitExp(&idx);
                 
-                TType * aggType = typeOfValue(&value);
                 //if this is a vector index, emit an extractElement
                 if(aggType->type->isVectorTy()) {
                     Value * result = B->CreateExtractElement(valueExp, idxExp);
@@ -1479,14 +1460,16 @@ if(baseT->isIntegerTy()) { \
                 //if the array is an rvalue type, we need to store it, then index it, and then reload it
                 //otherwise, if we have an  lvalue, we just calculate the offset
                 if(!pa) {
-                   Value * mem = CC.CreateAlloca(valueExp->getType());
+                   Value * mem = CC.CreateAlloca(aggType->type);
                     B->CreateStore(valueExp, mem);
                     valueExp = mem;
                 }
                 
                 std::vector<Value*> idxs;
                 
-                if(!typeOfValue(&value)->type->isPointerTy()) {
+                if(aggType->type->isPointerTy()) {
+                    EnsurePointsToCompleteType(&aggTypeO);
+                } else {
                     idxs.push_back(ConstantInt::get(Type::getInt32Ty(*C->ctx),0));
                 } //raw pointer types use the first GEP index, while arrays first do {0,idx}
                 idxs.push_back(idxExp);
@@ -1527,7 +1510,9 @@ if(baseT->isIntegerTy()) { \
                         TType * ftyp;
                         Function * fn;
                         getOrCreateFunction(&func,&fn,&ftyp);
-                        return fn;
+                        //functions are represented with &int8 pointers to avoid
+                        //calling convension issues, so cast the literal to this type now
+                        return B->CreateBitCast(fn,CC.FunctionPointerType());
                     } else if(objT->isIntegerTy(8)) {
                         exp->pushfield("value");
                         size_t len;
@@ -1609,6 +1594,7 @@ if(baseT->isIntegerTy()) { \
             case T_select: {
                 Obj obj,typ;
                 exp->obj("value",&obj);
+                TType * vt = typeOfValue(&obj);
                 Value * v = emitExp(&obj);
                 
                 obj.obj("type",&typ);
@@ -1617,7 +1603,7 @@ if(baseT->isIntegerTy()) { \
                 if(exp->boolean("lvalue")) {
                     return emitStructSelect(&typ,v,offset);
                 } else {
-                    Value * mem = CC.CreateAlloca(v->getType());
+                    Value * mem = CC.CreateAlloca(vt->type);
                     B->CreateStore(v,mem);
                     Value * addr = emitStructSelect(&typ,mem,offset);
                     return B->CreateLoad(addr);
@@ -1626,12 +1612,12 @@ if(baseT->isIntegerTy()) { \
             case T_constructor: case T_arrayconstructor: {
                 Obj expressions;
                 exp->obj("expressions",&expressions);
+                
                 Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
                 std::vector<Value *> values;
                 emitParameterList(&expressions,&values);
                 for(size_t i = 0; i < values.size(); i++) {
-                    int64_t idxs[] = { 0, i };
-                    Value * addr = emitCGEP(result,idxs,2);
+                    Value * addr = B->CreateConstGEP2_32(result,0,i);
                     B->CreateStore(values[i],addr);
                 }
                 return B->CreateLoad(result);
@@ -1731,13 +1717,6 @@ if(baseT->isIntegerTy()) { \
             lbl->setfield("basicblock");
         }
         return bb;
-    }
-    Value * emitCGEP(Value * st, int64_t * idxs, size_t N) {
-        std::vector<Value *> ivalues;
-        for(size_t i = 0; i < N; i++) {
-            ivalues.push_back(ConstantInt::get(Type::getInt32Ty(*C->ctx),idxs[i]));
-        }
-        return B->CreateGEP(st, ivalues);
     }
     Value * emitCall(Obj * call) {
         Obj paramlist;
