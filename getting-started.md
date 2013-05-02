@@ -374,7 +374,7 @@ You can also force a function to be compiled:
     
     add1:compile()
 
-Or look at a textual representation of the type-check code
+Or look at a textual representation of the type-checked code
 
     > add1:printpretty()
 	add1 = terra(a : double) : {double}
@@ -458,7 +458,7 @@ Additionally, you may want to declare a Terra function as a _locally_ scoped Lua
 Which is just sugar for:
 
     local foo; foo = terra()
-    end()
+    end
 
 Types and Operators
 ===================
@@ -500,8 +500,8 @@ Pointers behave similarly to C, including pointer arithmetic. The syntax is slig
     
     var a : int = 1
     var pa : &int = &a
-    @a = 4
-    var b = @a
+    @pa = 4
+    var b = @pa
     
 You can read `&int` as a value holding the _address_ of an `int`, and `@a` as the value _at_ address `a`. To get a pointer to heap-allocated memory you can use stdlib's `malloc`:
 
@@ -545,7 +545,7 @@ Vectors are like arrays, but also allow you to perform vector-wide operations:
     
 They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code. The constructors `vector` and `vectorof` create vectors, and behave similarly to arrays:
 
-    var a = vector(1,2,3,4) -- a has type vector(int,3)
+    var a = vector(1,2,3,4) -- a has type vector(int,4)
     var a = vectorof(int,3,4.5,4) -- a has type vector(int,3)
                                   -- 4.5 will be cast to an int
 
@@ -766,7 +766,7 @@ where `receiver` has type `T` is syntax sugar for:
     
 The statement `a:add(b)` will normally desugar to `Complex.methods.add(a,b)`. Notice that `a` is a `Complex` but the `add` function expects a `&Complex`. If necessary, Terra will insert one implicit address-of operator on the first argument of the method call. In this case `a:add(b)` will desugar to `Complex.methods.add(&a,b)`. 
 
-Like the `.` selection operator, the `:` method operator can also be used directly on pointers. In this case, the pointer is first dereferenced, and the normal rules for methods are applied. For instance, when using the `:` operator on a value of type `&Complex` (e.g. `ptra`), it will first insert a dereference and desugar to `Complex.methods.add(@a,b)`.  Then to match the of `add`, it will apply the implicit address-of operator to get `Complex.methods.add(&@a,b)`.  This allows a single method definition to take as an argument either a type `T` or a pointer `&T`, and still work when the method is called on value of type `T` or type `&T`.
+Like the `.` selection operator, the `:` method operator can also be used directly on pointers. In this case, the pointer is first dereferenced, and the normal rules for methods are applied. For instance, when using the `:` operator on a value of type `&Complex` (e.g. `ptra`), it will first insert a dereference and desugar to `Complex.methods.add(@a,b)`.  Then to match the type of `add`, it will apply the implicit address-of operator to get `Complex.methods.add(&@a,b)`.  This allows a single method definition to take as an argument either a type `T` or a pointer `&T`, and still work when the method is called on value of type `T` or type `&T`.
 
 To make defining methods easier, we provide a syntax sugar. 
 
@@ -785,7 +785,7 @@ Terra also support _metamethods_ similar to Lua's operators like `__add`, which 
 Lua-Terra Interaction
 =====================
 
-We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting_between_lua_values_and_terra_values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's FFI interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
+We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting_between_lua_values_and_terra_values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's foreign-function interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
 
     struct A { a : int, b : double }
 
@@ -799,7 +799,7 @@ We've already seen examples of Lua code calling Terra functions. In general, you
 
 More examples are in `tests/luabridge*.t`.  
 
-It is also possible to call terra functions from Lua. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primtive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
+It is also possible to call Lua functions from Terra. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primitive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
 
     function add1(a)
         a.real = a.real + 1
@@ -830,7 +830,7 @@ Meta-programming
 
 In this guide we've already encountered instances of meta-programming, such as using a Lua loop to create an array of  Terra `pow` functions. In fact, Terra includes several operators that it make it possible to generate _any_ code at runtime. For instance, you can implement an entire compiler by parsing an input string and constructing the Terra functions that implement the parsed code.
 
-The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operator in detail.
+The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
 
 ### Escapes ###
 
@@ -945,11 +945,11 @@ When a variable is used in an escape, it is sometimes ambiguous what value it sh
 For example, consider what value this function should return:
 
     
-    function makeexp(arg
+    function makeexp(arg)
         return quote 
             var a = 2
             return arg + a
-        end)
+        end
     end
     terra client()
         var a = 1;
@@ -973,7 +973,7 @@ In C, the function would return `4`. But this seems wrong -- `MAKEEXP` may have 
 Instead, Terra ensures that variable references are _hygienic_. The reference to `a` in `makeexp(a)` refers uniquely to the definition of `a` in the same [lexical scope](http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_and_dynamic_scoping) (in this case, the definition of `a` in the `client` function). This relationship is maintained regardless of where the symbol eventually ends up in the code, so the `scoping` function will correctly return the value `3`. 
 
 This hygiene problem occurs in all languages that have meta-programming. 
-Wikipedia has [more discussion](http://en.wikipedia.org/wiki/Hygienic_macro). By maintaining hygiene and using lexical scoping, we guarantee that you can always inspect a string of Terra code and match variables to their definitions without know how the functions will execute.
+Wikipedia has [more discussion](http://en.wikipedia.org/wiki/Hygienic_macro). By maintaining hygiene and using lexical scoping, we guarantee that you can always inspect a string of Terra code and match variables to their definitions without knowing how the functions will execute.
 
 ### Dynamically Generated Symbols ###
 
