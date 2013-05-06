@@ -32,11 +32,11 @@ You can **use** Terra and Lua as...
 
 **A scripting-language with high-performance extensions**. While the performance of Lua and other dynamic languages is always getting better, a low-level of abstraction gives you predictable control of performance when you need it. Terra programs use the same LLVM backend that Apple uses for its C compilers. This means that Terra code performs similarly to equivalent C code. For instance, our translations of the `nbody` and `fannhakunen` programs from the programming language shootout[<sup>1</sup>](#footnote1) perform within 5% of the speed of their C equivalents when compiled with Clang, LLVM's C frontend. Terra also includes built-in support for SIMD operations, and other low-level features like non-temporal writes and prefetches. You can use Lua to organize and configure your application, and then call into Terra code when you need controllable performance.
 
-**An embedded JIT-compiler for building languages**. We use techniques from multi-stage programming[<sup>2</sup>](#footnote2) to make it possible to **[meta-program](#generative_programming)** Terra using Lua.  Terra expressions, types, functions, and expressions are all first-class Lua values, making it possible to generate arbitrary programs at runtime. This allows you to **[compile domain-specific languages](#compiling_a_language)** (DSLs) written Lua into high-performance Terra code. Furthermore, since Terra is built on the Lua ecosystem, it is easy to **[embed](#embedding_and_interoperability)** Terra-Lua programs in other software as a library. This design allows you to add a JIT-compiler into your existing software. You can use it to add a JIT-compiled DSL to your application, or to auto-tune high-performance code dynamically.
+**An embedded JIT-compiler for building languages**. We use techniques from multi-stage programming[<sup>2</sup>](#footnote2) to make it possible to **[meta-program](#generative_programming)** Terra using Lua.  Terra expressions, types, functions, and expressions are all first-class Lua values, making it possible to generate arbitrary programs at runtime. This allows you to **[compile domain-specific languages](#compiling_a_language)** (DSLs) written in Lua into high-performance Terra code. Furthermore, since Terra is built on the Lua ecosystem, it is easy to **[embed](#embedding_and_interoperability)** Terra-Lua programs in other software as a library. This design allows you to add a JIT-compiler into your existing software. You can use it to add a JIT-compiled DSL to your application, or to auto-tune high-performance code dynamically.
 
-**A stand-alone low-level language**. Terra was designed so that it can run independently from Lua. In fact, if your final program doesn't need Lua, you can save Terra code into a .o file or executable. In addition to ensuring a clean separation between high- and low-level code, this design lets you use Terra as a stand-alone low-level language. In this use-case, Lua serves as a powerful meta-programming language.  You can think of it as a replacement for C++ template metaprogramming[<sup>3</sup>](#footnote3) or C preprocessor X-Macros[<sup>4</sup>](#footnote4) with better syntax and nicer properties such as hygiene[<sup>5</sup>](#footnote5). Since Terra exists *only* as code embedded in a Lua meta-program, features that are normally built into low-level languages can be implemented as Lua libraries. This design keeps the core of Terra simple, while enabling powerful behavior such as conditional compilation, namespaces, templating, and even **class systems** to be **[implemented as libraries](#simplicity)**.
+**A stand-alone low-level language**. Terra was designed so that it can run independently from Lua. In fact, if your final program doesn't need Lua, you can save Terra code into a .o file or executable. In addition to ensuring a clean separation between high- and low-level code, this design lets you use Terra as a stand-alone low-level language. In this use-case, Lua serves as a powerful meta-programming language.  You can think of it as a replacement for C++ template metaprogramming[<sup>3</sup>](#footnote3) or C preprocessor X-Macros[<sup>4</sup>](#footnote4) with better syntax and nicer properties such as hygiene[<sup>5</sup>](#footnote5). Since Terra exists *only* as code embedded in a Lua meta-program, features that are normally built into low-level languages can be implemented as Lua libraries. This design keeps the core of Terra simple, while enabling powerful behavior such as conditional compilation, namespaces, templating, and even **class systems** **[implemented as libraries](#simplicity)**.
 
-For more information about using Terra, see the **[getting started guide](getting-started.html)**, and **[API reference](api.html)**. Our **[publications](publications.html)** have a more in-depth look at its design. 
+For more information about using Terra, see the **[getting started guide](getting-started.html)** and **[API reference](api.html)**. Our **[publications](publications.html)** provide a more in-depth look at its design. 
 
 ---
 
@@ -51,7 +51,7 @@ For more information about using Terra, see the **[getting started guide](gettin
 Generative Programming
 ----------------------
 
-Terra entities such as functions, types, variables and expressions are first-class Lua values --- they can stored in Lua variables, and passed to/returned from Lua functions. Using constructs from multi-stage programming[<sup>2</sup>](#footnote2), you can write Lua code to programmatically generate arbitrary Terra code. 
+Terra entities such as functions, types, variables and expressions are first-class Lua values --- they can be stored in Lua variables and passed to or returned from Lua functions. Using constructs from multi-stage programming[<sup>2</sup>](#footnote2), you can write Lua code to programmatically generate arbitrary Terra code. 
 
 ### Multi-stage operators ###
 
@@ -62,7 +62,7 @@ Inside Terra code, you can use an _escape_ operator (`[]`) to splice the result 
         return [ math.sin(a) ]
     end
 
-An escape is evaluated when before a Terra function is _compiled_, and the result is spliced into the Terra code. In this example, this means that `math.sin(5)` will be evaluated _once_ and the code that implements the Terra function will return a constant. This can be verified by printing out the compiled version of the `sin5` function:
+An escape is evaluated when a Terra function is _compiled_, and the result is spliced into the Terra code. In this example, this means that `math.sin(5)` will be evaluated _once_ and the code that implements the Terra function will return a constant. This can be verified by printing out the compiled version of the `sin5` function:
 
     --output a prettified representation of what this function does
     sin5:printpretty() 
@@ -89,7 +89,7 @@ In this case, Terra will insert a call to the Terra function stored in the `add4
 
 In fact, _any_ name used in Terra code such as `add4` or `foo.bar` is treated as if it were escaped by default.
 
-Inside an escapes, you can refer to variables defined in Terra:
+Inside an escape, you can refer to variables defined in Terra:
 
     --a function to be called inside an escape
     function choosesecond(a,b)
@@ -259,13 +259,13 @@ We are using these generative programming constructs to implement domain-specifi
 Embedding and Interoperability
 ------------------------------
 
-Programming languages don't exist as a vacuum, and the generative programming features of Terra can be useful even in projects that are primarily implemented in other programming languages. We make it possible to integrate Terra with other projects so you can use it to generate low-level code, while keeping most of your project in a well-established language. 
+Programming languages don't exist in a vacuum, and the generative programming features of Terra can be useful even in projects that are primarily implemented in other programming languages. We make it possible to integrate Terra with other projects so you can use it to generate low-level code, while keeping most of your project in a well-established language. 
 
 First, we make it possible to pass values between Lua and Terra. Our implementation is built on top of LuaJIT's [foreign fuction interface](http://luajit.org/ext_ffi_tutorial.html). You can call Terra functions directly from Lua (or vice-versa), and access Terra objects directly from Lua (more details in the [API reference](http://localhost:4000/api.html#converting_between_lua_values_and_terra_values)). 
 
-Furthermore, Lua-Terra is backward compatible with  both pure Lua, as well as with C, which makes it easy to use already existing code. In Lua-Terra, you can use `require` or `loadfile` and it will treat the file as a Lua program (use `terralib.loadfile` to load a combined Lua-Terra file). You can use `terralib.includec` to import C functions from already existing header files.
+Furthermore, Lua-Terra is backwards compatible with both pure Lua and C, which makes it easy to use preexisting code. In Lua-Terra, you can use `require` or `loadfile` and it will treat the file as a Lua program (use `terralib.loadfile` to load a combined Lua-Terra file). You can use `terralib.includec` to import C functions from already existing header files.
 
-Finally, Lua-Terra can also be _embedded_ in pre-existing applications by linking the application against `libterra.a` and using Terra's C API. The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083). A simple example initializes Terra and then runs code from the file specified in each argument:
+Finally, Lua-Terra can also be _embedded_ in pre-existing applications by linking the application against `libterra.a` and using Terra's C API. The interface is very similar to that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083). A simple example initializes Terra and then runs code from the file specified in each argument:
 
     #include <stdio.h>
     #include "terra.h"
@@ -295,7 +295,7 @@ Normally conditional compilation is accomplished using preprocessor directives (
 or custom build systems. Using Lua-Terra, we can write Lua code to decide how to construct a Terra function.
 Since Lua is a full programming language, it can do things that most preprocessors cannot, such as call external programs.
 In this example, we conditionally compile a Terra function differently on OSX and Linux by first calling `uname` to discover
-the operating system, and then using a `if` statement to instantiate a different version of the Terra function depending on the result: 
+the operating system, and then using an `if` statement to instantiate a different version of the Terra function depending on the result: 
 
     --run uname to figure out what OS we are running
     local uname = io.popen("uname","r"):read("*a")
@@ -461,5 +461,4 @@ As shown in the templating example, Terra allows you to define methods on `struc
     end
 
 The functions `J.extends` and `J.implements` are Lua functions that generate the appropriate Terra code to implement a class system. More information is available in our [PLDI Paper](/publications.html). The file [lib/javalike.t](https://github.com/zdevito/terra/blob/master/tests/lib/javalike.t) has one possible implementation of a Java-like class system, while the file [lib/golike.t](https://github.com/zdevito/terra/blob/master/tests/lib/golike.t) is more similar to Google's Go language.
-
 
