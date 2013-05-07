@@ -26,7 +26,7 @@ mt.__newindex = function (t, n, v)
   if not mt.__declared[n] then
     local w = what()
     if w ~= "main" and w ~= "C" then
-      error("assign to undeclared variable '"..n.."'", 2)
+      error("Attempting to assign to previously undeclared global variable '"..n.."' from inside a function. If this variable is local to the function, it needs to be tagged with the 'local' keyword. If it is a global variable, it needs to be defined at the global scope before being used in a function.", 2)
     end
     mt.__declared[n] = true
   end
@@ -35,7 +35,7 @@ end
 
 mt.__index = function (t, n)
   if mt.strict and not mt.__declared[n] and what() ~= "C" then
-    error("variable '"..n.."' is not declared", 2)
+    error("Global variable '"..n.."' is not declared. Global variables must be 'declared' through a regular assignment (even to nil) at global scope before being used.", 2)
   end
   return rawget(t, n)
 end
