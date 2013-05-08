@@ -448,7 +448,7 @@ function terra.diagnostics:finish()
 end
 
 function terra.diagnostics:finishandabortiferrors(msg,depth)
-    local haderrors = self:finish()
+    local haderrors = table.remove(self._haserrors)
     if haderrors then
         self:clearfilecache()
         error(msg,depth+1)
