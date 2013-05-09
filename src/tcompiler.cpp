@@ -188,6 +188,15 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 
 struct TerraCompiler;
 
+
+static void GetStructEntries(Obj * typ, Obj * entries) {
+    Obj layout;
+    if(!typ->obj("cachedlayout",&layout)) {
+        assert(!"typechecked failed to complete type needed by the compiler, this is a bug.");
+    }
+    layout.obj("entries",entries);
+}
+
 //functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
 struct CCallingConv {
     terra_State * T;
@@ -237,7 +246,7 @@ struct CCallingConv {
     
     void LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
-        typ->obj("layout", &layout);
+        GetStructEntries(typ,&layout);
         int N = layout.size();
         std::vector<Type *> entry_types;
         
@@ -461,7 +470,7 @@ struct CCallingConv {
             assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
             Obj layout;
-            type->obj("layout", &layout);
+            GetStructEntries(type,&layout);
             int N = layout.size();
             for(int i = 0; i < N; i++) {
                 Obj entry;
@@ -1323,7 +1332,8 @@ if(baseT->isIntegerTy()) { \
         CC.EnsureTypeIsComplete(structType);
         
         Obj layout;
-        structType->obj("layout",&layout);
+        GetStructEntries(structType,&layout);
+        
         Obj entry;
         layout.objAt(index,&entry);
         
@@ -1408,6 +1418,7 @@ if(baseT->isIntegerTy()) { \
                         exps.objAt(2,&c);
                         return emitIfElse(&a,&b,&c);
                     }
+                    exp->dump();
                     assert(!"NYI - unimplemented operator?");
                     return NULL;
                 }

@@ -3,11 +3,12 @@ struct A {
 	b : int;
 }
 
-function A.metamethods.__finalizelayout(self)
-	print("ABOUT TO COMPILE")
+function A.metamethods.__getentries(self)
+	print("GET ENTRIES")
 	for i,e in ipairs(self.entries) do
 		e.field = "foo"..e.field
 	end
+	return self.entries
 end
 
 terra foo()

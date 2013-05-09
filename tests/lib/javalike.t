@@ -20,7 +20,7 @@ local function offsetinbytesfn(structtype,key)
     return offsetcalc
 end
 
-local function finalizelayout(self)
+local function getentries(self)
 	local md = metadata[self]
 
 	
@@ -31,7 +31,7 @@ local function finalizelayout(self)
 
 	local parentinterfaces
 	if md.parent then
-		md.parent:finalizelayout()
+		md.parent:getentries()
 		local pmd = metadata[md.parent]
 		for i,m in ipairs(pmd.vtable.entries) do
 			md.vtable.entries:insert(m)
@@ -100,8 +100,9 @@ local function finalizelayout(self)
     terra self:free()
         std.free(self)
     end
+    return self.entries
 end
-local function hasbeenfrozen(self)
+local function staticinitialize(self)
 	local md = metadata[self]
 	local vtbl = md.vtableglobal:get()
 	for methodname,impl in pairs(md.methodimpl) do
@@ -147,11 +148,11 @@ end
 local function initialize(c)
 	if not metadata[c] then
 		metadata[c] = { interfaces = {} }
-		assert(not c.metamethods.__finalizelayout)
-		assert(not c.metamethods.__hasbeenfrozen)
+		assert(not c.metamethods.__getentries)
+		assert(not c.metamethods.__staticinitialize)
 		assert(not c.metamethods.__cast)
-		c.metamethods.__finalizelayout = finalizelayout
-		c.metamethods.__hasbeenfrozen = hasbeenfrozen
+		c.metamethods.__getentries = getentries
+		c.metamethods.__staticinitialize = staticinitialize
 		c.metamethods.__cast = castoperator
 		terra c.methods.alloc()
         	var obj = [&c](std.malloc(sizeof(c)))

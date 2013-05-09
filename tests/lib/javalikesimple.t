@@ -69,7 +69,7 @@ local function finalizelayout(self)
 	md.methodimpl = {}
 	self.entries:insert(1, { field = "__vtable", type = &md.vtabletype })
 	if md.parent then
-		md.parent:finalizelayout()
+		md.parent:getentries()
 		copyparentlayout(self,md.parent)
 	end
 	for methodname,impl in pairs(self.methods) do
@@ -84,6 +84,7 @@ local function finalizelayout(self)
 		self.methods[methodname] = createstub(methodname,typ)
 	end
 	initializevtable(self)
+	return self.entries
 end
 
 local function castoperator(from,to,exp)
@@ -96,8 +97,8 @@ end
 local function registermetamethods(c)
 	if not metadata[c] then
 		metadata[c] = {}
-		c.metamethods.__finalizelayout = finalizelayout
-		c.metamethods.__hasbeenfrozen = hasbeenfrozen
+		c.metamethods.__getentries = finalizelayout
+		c.metamethods.__staticinitialize = hasbeenfrozen
 		c.metamethods.__cast = castoperator
 	end
 end
