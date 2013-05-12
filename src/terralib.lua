@@ -910,7 +910,7 @@ do  --constructor functions for terra functions and variables
     local function layoutstruct(st,tree,env)
         local diag = terra.newdiagnostics()
         diag:begin()
-        if st.tree then
+        if st.tree and st.tree ~= "undefined" then
             diag:reporterror(tree,"attempting to redefine struct")
             diag:reporterror(st.tree,"previous definition was here")
         end
@@ -948,12 +948,19 @@ do  --constructor functions for terra functions and variables
         for i = 1,N do
             local origv,name = args[idx], args[idx+1]
             results[i] = declfn(origv,name)
+            idx = idx + 2
         end
         return unpack(results)
     end
     function terra.declarestructs(N,...)
         return declareobjects(N,function(origv,name)
-            return (terra.types.istype(origv) and origv:isstruct() and origv) or terra.types.newstruct(name,2)
+            if terra.types.istype(origv) and origv:isstruct() then
+                return origv
+            else
+                local st = terra.types.newstruct(name,3)
+                st.tree = "undefined"
+                return st
+            end 
         end,...)
     end
     function terra.declarefunctions(N,...)
@@ -1116,7 +1123,7 @@ do --construct type table that holds the singleton value representing each uniqu
         local errorresult = { "<errorresult>" }
         local key = "cached"..name
         local inside = "inget"..name
-        return function(self,defererrors)
+        return function(self,anchor)
             if not self[key] then
                 local diag = terra.getcompilecontext().diagnostics
                 local haderrors = diag:haserrors()
@@ -1125,7 +1132,7 @@ do --construct type table that holds the singleton value representing each uniqu
                     diag:reporterror(self.anchor,erroronrecursion)
                 else 
                     self[inside] = true
-                    self[key] = getvalue(self,diag)
+                    self[key] = getvalue(self,diag,anchor or terralib.newanchor(1))
                     self[inside] = nil
                 end
                 if diag:haserrors() then
@@ -1133,7 +1140,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 elseif onsuccess then
                     onsuccess(self,diag)
                 end
-                if defererrors then
+                if anchor then
                     diag:finish() 
                 else
                     diag:finishandabortiferrors("Errors reported during struct property lookup.",2)
@@ -1141,7 +1148,7 @@ do --construct type table that holds the singleton value representing each uniqu
             end
             if self[key] == errorresult then
                 local msg = "Attempting to get a property of a type that previously resulted in an error."
-                if defererrors then
+                if anchor then
                     local diag = terra.getcompilecontext().diagnostics
                     if not diag:haserrors() then
                         diag:reporterror(self.anchor,msg)
@@ -1268,7 +1275,7 @@ do --construct type table that holds the singleton value representing each uniqu
         name = "entries";
         defaultvalue = terra.newlist();
         erroronrecursion = "recursively calling getentries on type";
-        getvalue = function(self,diag)
+        getvalue = function(self,diag,anchor)
             if not self:isstruct() then
                 error("attempting to get entries of non-struct type: ", tostring(self))
             end
@@ -1276,6 +1283,9 @@ do --construct type table that holds the singleton value representing each uniqu
             if type(self.metamethods.__getentries) == "function" then
                 local success,result = terra.invokeuserfunction(self.anchor,false,self.metamethods.__getentries,self)
                 entries = (success and result) or {}
+            elseif self.tree == "undefined" then
+                diag:reporterror(anchor,"attempting to use a type before it is defined")
+                diag:reporterror(self.anchor,"type was declared here.")
             end
             if not type(entries) == "table" then
                 diag:reporterror(self.anchor,"computed entries are not a table")
@@ -1303,9 +1313,9 @@ do --construct type table that holds the singleton value representing each uniqu
         name = "layout"; 
         defaultvalue = { entries = terra.newlist(), keytoindex = {} };
         erroronrecursion = "type recursively contains itself";
-        getvalue = function(self,diag)
+        getvalue = function(self,diag,anchor)
             local tree = self.anchor
-            local entries = self:getentries(true)
+            local entries = self:getentries(anchor)
             local nextallocation = 0
             local nextunnamed = 0
             local uniondepth = 0
@@ -1317,7 +1327,7 @@ do --construct type table that holds the singleton value representing each uniqu
             }
 
             local function addentry(k,t)
-                local entry = { type = t:complete(true), key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
+                local entry = { type = t:complete(anchor), key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
                 if not k then
                     entry.hasname = false
                     entry.key = "_"..tostring(nextunnamed)
@@ -1376,27 +1386,27 @@ do --construct type table that holds the singleton value representing each uniqu
             end
         end
     }
-    function types.type:complete(defererrors) 
+    function types.type:complete(anchor) 
         if self.incomplete then
             if self:isarray() then
-                self.type:complete(defererrors)
+                self.type:complete(anchor)
                 self.incomplete = self.type.incomplete
             elseif self:isfunction() then
                 local incomplete = nil
                 for i,p in ipairs(self.parameters) do
-                    incomplete = incomplete or p:complete(defererrors).incomplete
+                    incomplete = incomplete or p:complete(anchor).incomplete
                 end
                 for i,r in ipairs(self.returns) do
-                    incomplete = incomplete or r:complete(defererrors).incomplete
+                    incomplete = incomplete or r:complete(anchor).incomplete
                 end
                 if self.returnobj then
-                    incomplete = incomplete or self.returnobj:complete(defererrors).incomplete
+                    incomplete = incomplete or self.returnobj:complete(anchor).incomplete
                 end
                 self.incomplete = incomplete
             else
                 assert(self:isstruct())
                 --getlayout will clear self.incomplete on success
-                self:getlayout(defererrors)
+                self:getlayout(anchor)
             end
         end
         return self
@@ -2010,7 +2020,7 @@ function terra.funcdefinition:typecheck()
 
     --tree constructors for trees created in the typechecking process
     local function createcast(exp,typ)
-        return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ:complete(true), expression = exp })
+        return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ:complete(exp), expression = exp })
     end
     local typedexpressionkey = {} --unique for this call to typecheck
     local function createtypedexpressionlist(anchor, explist, fncall, minsize)
@@ -2018,7 +2028,7 @@ function terra.funcdefinition:typecheck()
         return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = typedexpressionkey, minsize = minsize or 0})
     end
     local function createextractreturn(fncall, index, t)
-        return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t:complete(true), fncall = fncall})
+        return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t:complete(fncall), fncall = fncall})
     end
     local function createfunctionliteral(anchor,e)
         local fntyp = ctx:referencefunction(anchor,e)
@@ -2062,26 +2072,26 @@ function terra.funcdefinition:typecheck()
             --function pointer dereference does nothing, return the input
             return e
         else
-            ret.type = e.type.type:complete(true)
+            ret.type = e.type.type:complete(e)
         end
         return ret
     end
     
     local function insertvar(anchor, typ, name, definition)
-        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(true), name = name, definition = definition, lvalue = true }) 
+        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(anchor), name = name, definition = definition, lvalue = true }) 
     end
 
     local function insertselect(v, field)
         local tree = terra.newtree(v, { type = terra.types.error, kind = terra.kinds.select, field = field, value = v, lvalue = v.lvalue })
         assert(v.type:isstruct())
-        local layout = v.type:getlayout(true)
+        local layout = v.type:getlayout(v)
         local index = layout.keytoindex[field]
         
         if index == nil then
             return nil,false
         end
         tree.index = index
-        tree.type = layout.entries[index+1].type:complete(true)
+        tree.type = layout.entries[index+1].type:complete(v)
         return tree,true
     end
 
@@ -2112,8 +2122,8 @@ function terra.funcdefinition:typecheck()
     --this is used to see if an overloaded function can apply to the argument list
 
     function structcast(cast,exp,typ, speculative) 
-        local from = exp.type:getlayout(true)
-        local to = typ:getlayout(true)
+        local from = exp.type:getlayout(exp)
+        local to = typ:getlayout(exp)
 
         local valid = true
         local function err(...)
@@ -2123,7 +2133,7 @@ function terra.funcdefinition:typecheck()
             end
         end
         
-        cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = exp.type:complete(true) })
+        cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = exp.type:complete(exp) })
         local var_ref = insertvar(exp,exp.type,cast.structvariable.name,cast.structvariable)
         
         local indextoinit = {}
@@ -2365,7 +2375,7 @@ function terra.funcdefinition:typecheck()
             return t:ispointer() or t:isarray()
         end
         local function ascompletepointer(exp) --convert pointer like things into pointers to _complete_ types
-            exp.type.type:complete(true)
+            exp.type.type:complete(exp)
             return (insertcast(exp,terra.types.pointer(exp.type.type))) --parens are to truncate to 1 argument
         end
         -- subtracting 2 pointers
@@ -2632,7 +2642,7 @@ function terra.funcdefinition:typecheck()
 
     local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, isstatement)
         local objtyp
-        reciever.type:complete(true)
+        reciever.type:complete(anchor)
         if reciever.type:isstruct() then
             objtyp = reciever.type
         elseif reciever.type:ispointertostruct() then
@@ -2738,7 +2748,7 @@ function terra.funcdefinition:typecheck()
         end
 
         local function createcall(callee, paramlist)
-            callee.type.type:complete(true)
+            callee.type.type:complete(anchor)
             local returntypes = callee.type.type.returns
             local paramtypes = paramlist.expressions:map(function(x) return x.type end)
             local fncall = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, returntypes = returntypes, paramtypes = paramtypes })
@@ -2836,7 +2846,7 @@ function terra.funcdefinition:typecheck()
         
         insertcasts(intrinsictype.type.parameters,params)
         local rt = intrinsictype.type.returns[1]
-        return e:copy { type = rt and rt:complete(true), name = name, arguments = params, intrinsictype = intrinsictype }
+        return e:copy { type = rt and rt:complete(e), name = name, arguments = params, intrinsictype = intrinsictype }
     end
 
     local function truncateexpressionlist(tel)
@@ -2956,7 +2966,7 @@ function terra.funcdefinition:typecheck()
             elseif e:is "explicitcast" then
                 return insertexplicitcast(checkrvalue(e.value),e.totype)
             elseif e:is "sizeof" then
-                e.oftype:complete(true)
+                e.oftype:complete(e)
                 return e:copy { type = uint64 }
             elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
                 local entries = checkparameterlist(e,e.expressions)
@@ -2964,7 +2974,7 @@ function terra.funcdefinition:typecheck()
                          
                 local typ
                 if e.oftype ~= nil then
-                    typ = e.oftype:complete(true)
+                    typ = e.oftype:complete(e)
                 else
                     if N == 0 then
                         diag:reporterror(e,"cannot determine type of empty aggregate")
@@ -3041,7 +3051,7 @@ function terra.funcdefinition:typecheck()
                     typ.entries:insert({field = k, type = v.type})
                 end
 
-                return e:copy { expressions = entries, type = typ:complete(true) }
+                return e:copy { expressions = entries, type = typ:complete(e) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)
             else
@@ -3058,12 +3068,12 @@ function terra.funcdefinition:typecheck()
             for i,e in ipairs(result.expressions) do
                 if not e:is "luaobject" then
                     assert(terra.types.istype(e.type))
-                    e.type:complete(true)
+                    e.type:complete(e)
                 end
             end
         elseif not result:is "luaobject" then
             assert(terra.types.istype(result.type))
-            result.type:complete(true)
+            result.type:complete(result)
         end
 
         --remove any lua objects if they are not allowed in this context
@@ -3123,7 +3133,7 @@ function terra.funcdefinition:typecheck()
             assert(terra.issymbol(p.symbol))
             if p.type then
                 assert(terra.types.istype(p.type))
-                p.type:complete(true)
+                p.type:complete(p)
             end
         end
         --copy the entries since we mutate them and this list could appear multiple times in the tree
@@ -3336,7 +3346,7 @@ function terra.funcdefinition:typecheck()
             
         end
     end
-    local fntype = terra.types.functype(parameter_types,return_types):complete(true)
+    local fntype = terra.types.functype(parameter_types,return_types):complete(ftree)
 
     --now cast each return expression to the expected return type
     for _,stmt in ipairs(return_stmts) do

@@ -346,7 +346,7 @@ struct CCallingConv {
             const char * llvmname = typ->string("llvm_name");
             st = C->m->getTypeByName(llvmname);
         } else {
-            st = StructType::create(*C->ctx);
+            st = StructType::create(*C->ctx,typ->asstring("displayname"));
         }
         return st;
     }
