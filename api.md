@@ -248,7 +248,7 @@ Terra constants represent constant values used in Terra code. For instance, if y
 
     constant([type],init)
 
-Create a new constant. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If the optional [type](#types) is specified, then `init` is converted to that `type` explicitly. [Freezes](#types) the type.
+Create a new constant. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If the optional [type](#types) is specified, then `init` is converted to that `type` explicitly. [Completes](#types) the type.
 
 ---
 
@@ -267,25 +267,25 @@ Global variables are Terra values that are shared among all Terra functions.
 
     global([type], [init])
 
-Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If `init` is specified, this [freezes](#types) the type.
+Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If `init` is specified, this [completes](#types) the type.
 
 ---
 
     globalvar:getpointer()
 
-Returns the `ctype` object that is the pointer to this global variable in memory. [Freezes](#types) the type.
+Returns the `ctype` object that is the pointer to this global variable in memory. [Completes](#types) the type.
 
 ---
 
     globalvar:get()
 
-Gets the value of this global as a LuaJIT `ctype` object. [Freezes](#types) the type.
+Gets the value of this global as a LuaJIT `ctype` object. [Completes](#types) the type.
 
 ---
 
     globalvar:set(v)
 
-Converts `v` to a Terra values using the normal conversion [rules](#converting_between_lua_values_and_terra_values), and the global variable to this value. [Freezes](#types) the type.
+Converts `v` to a Terra values using the normal conversion [rules](#converting_between_lua_values_and_terra_values), and the global variable to this value. [Completes](#types) the type.
 
 Macro
 -----
@@ -416,7 +416,7 @@ Construct a new symbol. This symbol will be unique from any other symbol. `typ` 
 Types
 -----
 
-Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked listes, [Struct](#struct) can be declared before their members and methods are fully specified. A type is _frozen_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). 
+Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [Struct](#struct) can be declared before their members and methods are fully specified.When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
 
 ---
     
@@ -542,9 +542,9 @@ True if `type` is an array or a struct (any type that can hold arbitrary types).
 
 ---
 
-    type:isfrozen()
+    type:iscomplete()
 
-True if the `type` has been previously frozen.
+True if the `type` is fully defined and ready to use in code. This is always true for non-aggregate types. For aggregate types, this is true if all types that they contain have been defined. Call type:complete() to force a type to become complete.
 
 ---
 
@@ -559,16 +559,10 @@ True if the `type` is a vector. `type.N` is the length. `type.type` is the eleme
 True if the type is a primitive type we the requested property, or if it is a vector of a primitive type of the requested property.
 
 ---
-	type:finalizelayout()
-	
-Forces the type to calculate its layout. This call does nothing for non-struct types. For struct types, it will call the `__finializelayout` metamethod. After the call, it is no longer possible to modify the `entry` or `method` tables for the type.
 
----
+    type:complete()
 
-    type:freeze(async)
-
-Forces the type to be frozen. This will both finalize the layout, and recursively free any types that this type references. Can be called [asynchronously](#asynchronous_compilation).
-
+Forces the type to be complete. For structs, this will calculate the layout of the struct (possibly calling `__getentries` and `__staticinitialize` if defined), and recursively complete any types that this type references.
 
 Structs 
 -------
@@ -620,8 +614,9 @@ The `methods` field is a table mapping strings or [symbols](#symbol) to function
 
 The `metamethods` field can be used to extend the behavior of structs by definition the following fields:
 
-* `__finializelayout(self)` -- a _Lua_ function called right before the compiler freezes the type. Since the type is not yet frozen, this is the last opportunity to change the layout of the type. Doing anything in this method that requires the type to be frozen will result in an error.
-* `__hasbeenfrozen(self)` -- a _Lua_ function called right after the compiler freeze type. Since the type is frozen, you can now do things like create vtables, or examine offsets using the `terralib.offsetof`.
+* `entries = __getentries(self)` -- a _Lua_ function that overrides the default behavior that determines the fields in a struct. By default, `__getentries` just returns the `self.entries` table. It can be overridden to determine the fields in the struct computationally. The `__getentries` function will be called by the compiler once when it first requires the list of entries in the struct. Since the type is not yet complete during this call, doing anything in this method that requires the type to be complete will result in an error.
+* `method = __getmethod(self,methodname)` -- a _Lua_ function that overrides the default behavior that looks up a method for a struct statically. By default, `__getmethod(self,methodname)` will return `self.methods[methodname]`. If the resulting value is `nil` then it will call `__methodmissing` as described below. By defining `__getmethod`, you can change the behavior of method lookup. This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls. 
+* `__staticinitialize(self)` -- a _Lua_ function called after the type is complete but before the compiler returns to user-defined code. Since the type is complete, you can now do things that require a complete type such as create vtables, or examine offsets using the `terralib.offsetof`. The static initializers for entries in a struct will run before the static initializer for the struct itself.
 * `castedexp = __cast(from,to,exp)` -- a _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works.
 * `__methodmissing(methodname,arg0,...,argN)` -- A terra macro that is called when `methodname` is not found in the method table of the type. It should return a Terra expression to use in place of the method call.
 * custom operators: `__sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,`
@@ -673,13 +668,13 @@ Wrapper around LuaJIT's `ffi.new`. Allocates a new object with the type `terraty
 
     terralib.sizeof(terratype)
 
-Wrapper around `ffi.typeof`. Freezes the `terratype` and returns its size in bytes.
+Wrapper around `ffi.typeof`. Completes the `terratype` and returns its size in bytes.
 
 ---
 
     terralib.offsetof(terratype,field)
 
-Wrapper around `ffi.offsetof`. Freezes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
+Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
 
 
 ---
@@ -770,11 +765,11 @@ When converting Terra values back into Lua values (e.g. from the results of a fu
 Asynchronous Compilation
 ------------------------
 
-When the Terra compiler encounters a [macro](#macros) or [metamethod](#structs), it calls calls back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or freeze a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the request. However, it is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs to compilation to be finished before the compiler returns control to user code that called it synchronously.
+When the Terra compiler encounters a [macro](#macros) or [metamethod](#structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
 
-If the `async` argument to a compilation function is not `nil` or `false`, then the function may return before the compilation is complete. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately). 
+If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately). 
 
-Situations requiring callbacks arise when building class systems that have virtual function tables (vtables). To build a vtable, you need to compile the concrete implementations and then fill in the vtable. However, it is possible that these functions were already being compiled. In this case, we still need to compile these functions, and then fill-in the vtable. We can accomplish this by calling compile asynchronously and registering a callback that fills in the vtable. Callbacks are guaranteed to be invoked before returning to user-defined code that invoked the compiler synchronously. So we know that the vtable will be initialized before any of this newly compiled code is run.
+Situations requiring callbacks arise when building class systems that have virtual function tables (vtables). To build a vtable, you need to compile the concrete implementations of the type's methods and then fill in the vtable with these values. However, it is possible that these functions were already being compiled. In this case, we still need to compile these functions and fill-in the vtable, but cannot finish this task inside the type's `__staticinitialize` metamethod.  By calling compile asynchronously and registering a callback that fills in the vtable, we can guarantee that the vtable is filled in before the call to the compiler returns while allowing `__staticinitialize` to return before the vtable is complete. Callbacks are guaranteed to be invoked before returning to user-defined code that invoked the compiler synchronously. So we know that the vtable will be initialized before any of this newly compiled code is run.
 
 Embedded Language API
 =====================
