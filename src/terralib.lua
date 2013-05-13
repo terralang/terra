@@ -1118,7 +1118,6 @@ do --construct type table that holds the singleton value representing each uniqu
         local defaultvalue = data.defaultvalue
         local erroronrecursion = data.erroronrecursion
         local getvalue = data.getvalue
-        local onsuccess = data.onsuccess
 
         local errorresult = { "<errorresult>" }
         local key = "cached"..name
@@ -1137,14 +1136,13 @@ do --construct type table that holds the singleton value representing each uniqu
                 end
                 if diag:haserrors() then
                     self[key] = errorresult
-                elseif onsuccess then
-                    onsuccess(self,diag)
                 end
                 if anchor then
                     diag:finish() 
                 else
                     diag:finishandabortiferrors("Errors reported during struct property lookup.",2)
                 end
+
             end
             if self[key] == errorresult then
                 local msg = "Attempting to get a property of a type that previously resulted in an error."
@@ -1311,7 +1309,7 @@ do --construct type table that holds the singleton value representing each uniqu
     }
     types.type.getlayout = memoize {
         name = "layout"; 
-        defaultvalue = { entries = terra.newlist(), keytoindex = {} };
+        defaultvalue = { entries = terra.newlist(), keytoindex = {}, invalid = true };
         erroronrecursion = "type recursively contains itself";
         getvalue = function(self,diag,anchor)
             local tree = self.anchor
@@ -1327,7 +1325,15 @@ do --construct type table that holds the singleton value representing each uniqu
             }
 
             local function addentry(k,t)
-                local entry = { type = t:complete(anchor), key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
+                local function ensurelayout(t)
+                    if t:isstruct() then
+                        t:getlayout(anchor)
+                    elseif t:isarray() then
+                        ensurelayout(t.type)
+                    end
+                end
+                ensurelayout(t)
+                local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
                 if not k then
                     entry.hasname = false
                     entry.key = "_"..tostring(nextunnamed)
@@ -1376,15 +1382,11 @@ do --construct type table that holds the singleton value representing each uniqu
             
             dbprint(2,"Resolved Named Struct To:")
             dbprintraw(2,self)
+            if not diag:haserrors() then
+                definecstruct(self:cstring(),layout)
+            end
             return layout
         end;
-        onsuccess = function(self,diag)
-            definecstruct(self:cstring(),self.cachedlayout)
-            self.incomplete = nil
-            if type(self.metamethods.__staticinitialize) == "function" then
-                terra.invokeuserfunction(self.anchor,false,self.metamethods.__staticinitialize,self)
-            end
-        end
     }
     function types.type:complete(anchor) 
         if self.incomplete then
@@ -1405,8 +1407,18 @@ do --construct type table that holds the singleton value representing each uniqu
                 self.incomplete = incomplete
             else
                 assert(self:isstruct())
-                --getlayout will clear self.incomplete on success
-                self:getlayout(anchor)
+                local layout = self:getlayout(anchor)
+                if not layout.invalid then
+                    self.incomplete = nil --static initializers run only once
+                                          --if one of the members of this struct recursively
+                                          --calls complete on this type, then it will return before the static initializer has run
+                    for i,e in ipairs(layout.entries) do
+                        e.type:complete(anchor)
+                    end
+                    if type(self.metamethods.__staticinitialize) == "function" then
+                        terra.invokeuserfunction(self.anchor,false,self.metamethods.__staticinitialize,self)
+                    end
+                end
             end
         end
         return self
