@@ -180,9 +180,9 @@ The function `body` is responsible for generating body of the BF program given t
             elseif c == "," then
                 stmt = quote data[ptr] = C.getchar() end
             elseif c == "[" then
-                error("NYI")
+                error("Implemented below")
             elseif c == "]" then
-                error("NYI")
+                error("Implemented below")
             else
                 error("unknown character "..c)
             end
