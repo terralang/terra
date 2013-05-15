@@ -265,7 +265,7 @@ Terra includes goto statements. Use them wisely. They are included since they ca
 Functions
 =========
 
-We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
+We have already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
     terra sort2(a : int, b : int) : {int,int} --the return type is optional
         if a < b then   
@@ -325,8 +325,8 @@ You solve this by connecting the definitions with an `and`. This causes both `is
     
 Alternatively, you can declare a function before defining it:
 
-	terra isodd
-	terra iseven(n : uint32)
+    terra isodd
+    terra iseven(n : uint32)
         ...
     end 
     terra isodd(n : uint32)
@@ -337,10 +337,10 @@ Note that unlike C++ it is not necessary to give the type of `isodd` in the decl
 
 Like Lua function definitions, Terra function defintions can insert directly into Lua tables.
 
-local mytable = {}
-terra mytable.myfunction()
-	C.printf("myfunction in mytable\n")
-end
+    local mytable = {}
+    terra mytable.myfunction()
+    C.printf("myfunction in mytable\n")
+    end
 
 ### Terra Functions Are Lua Objects ###
 
