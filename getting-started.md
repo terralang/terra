@@ -16,7 +16,7 @@ Terra currently runs Mac OS X and Linux. Terra uses LLVM 3.2, Clang 3.2 (the C/C
 Unzip the tar-ball and then copy it into `/usr/local` (or somewhere else that is in your `$PATH`):
 
     $ tar -xf clang+llvm-3.2-x86_64-apple-darwin11.tar.gz
-    $ cp -r clang+llvm-3.2-x86_64-apple-darwin11/ /usr/local
+    $ cp -r clang+llvm-3.2-x86_64-apple-darwin11/* /usr/local
 
 Clang should now report being version 3.2:
 
