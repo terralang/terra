@@ -24,11 +24,19 @@ Clang should now report being version 3.2:
 	clang version 3.2 (tags/RELEASE_32/final)
 	Target: x86_64-apple-darwin12.2.1
 	Thread model: posix
-
     
 Run make in the `terra` directory to download LuaJIT and build Terra:
 
     $ make
+
+By default, the Makefile will look for the LLVM config script and Clang using these values:
+
+    LLVM_CONFIG = $(shell which llvm-config)
+    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
+    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
+    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
+
+If your installation has these files in a different place, you can override these defaults by creating a file `Makefile.inc` in the `terra` directory with the values you want to override.
 
 Running Terra
 =============
@@ -260,7 +268,7 @@ Terra includes goto statements. Use them wisely. They are included since they ca
 Functions
 =========
 
-We've already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
+We have already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
     terra sort2(a : int, b : int) : {int,int} --the return type is optional
         if a < b then   
