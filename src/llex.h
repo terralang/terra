@@ -39,12 +39,7 @@ typedef struct {
       luaP_Number r;
       TString * ts;
   };
-  enum {
-    F_ISINTEGER = 1,
-    F_ISUNSIGNED = 2,
-    F_IS8BYTES = 4,
-  };
-  int flags;
+  int flags; //same as ReadNumber flags
   uint64_t i; //integer value, for terra
   int linebegin; //line on which we _started_ parsing this token
   int buffer_begin; //position in buffer where we _started_ parsing this token

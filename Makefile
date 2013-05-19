@@ -175,7 +175,7 @@ FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
 LFLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
 endif
 
-LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp tcuda.cpp
+LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp treadnumber.cpp tcuda.cpp
 LIBLUA = terralib.lua strict.lua cudalib.lua
 
 EXESRC = main.cpp linenoise.cpp
