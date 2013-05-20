@@ -22,7 +22,9 @@ static void doerror(lua_State * L) {
 }
 const char * progname = NULL;
 static void dotty (lua_State *L);
-void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive);
+void parse_args(lua_State * L, int argc, char ** argv, bool * interactive, int * begin_script);
+static int getargs (lua_State *L, char **argv, int n);
+
 int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
@@ -30,24 +32,21 @@ int main(int argc, char ** argv) {
     if(terra_init(L))
         doerror(L);
     bool interactive = false;
-    
-    parse_args(L,&argc,&argv,&interactive);
-    
-    // store the command line arguments in global 'arg'
-    lua_newtable(L);
-    for(int i = 0; i < argc; i++) {
-      lua_pushnumber(L, i);
-      lua_pushstring(L,argv[i]);
-      lua_rawset(L, -3); 
-    }
-    lua_setglobal(L, "arg");
+    int scriptidx;
 
-    if(argc > 0) {
-      if(terra_dofile(L,argv[0]))
+    parse_args(L,argc,argv,&interactive,&scriptidx);
+    
+    if(scriptidx < argc) {
+      int narg = getargs(L, argv, scriptidx);  
+      lua_setglobal(L, "arg");
+      if(terra_loadfile(L,argv[scriptidx]))
+        doerror(L);
+      lua_insert(L, -(narg + 1));
+      if(lua_pcall(L, narg, LUA_MULTRET, 0))
         doerror(L);
     }
     
-    if(isatty(0) && (interactive || argc == 0)) {
+    if(isatty(0) && (interactive || scriptidx == argc)) {
         progname = NULL;
         dotty(L);
     }
@@ -60,14 +59,14 @@ int main(int argc, char ** argv) {
 static void print_welcome();
 void usage() {
     print_welcome();
-    printf("terra [OPTIONS] [source-files]\n"
+    printf("terra [OPTIONS] [source-file] [arguments-to-source-file]\n"
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
            "    -l <language_file> specify a module that defines a language extension (can be repeated)\n");
 }
 
-void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
+void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int * begin_script) {
     int ch;
     static struct option longopts[] = {
         { "help",      0,     NULL,           'h' },
@@ -79,7 +78,7 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
     int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(*argc, *argv, "hvil:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvil:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
                 verbose++;
@@ -100,8 +99,7 @@ void parse_args(lua_State * L, int * argc, char *** argv, bool * interactive) {
                 break;
         }
     }
-    *argc -= optind;
-    *argv += optind;
+    *begin_script = optind;
 }
 //this stuff is from lua's lua.c repl implementation:
 
@@ -139,6 +137,23 @@ static int incomplete (lua_State *L, int status) {
     }
   }
   return 0;  /* else... */
+}
+
+static int getargs (lua_State *L, char **argv, int n) {
+  int narg;
+  int i;
+  int argc = 0;
+  while (argv[argc]) argc++;  /* count total number of arguments */
+  narg = argc - (n + 1);  /* number of arguments to the script */
+  luaL_checkstack(L, narg + 3, "too many arguments to script");
+  for (i=n+1; i < argc; i++)
+    lua_pushstring(L, argv[i]);
+  lua_createtable(L, narg, n + 1);
+  for (i=0; i < argc; i++) {
+    lua_pushstring(L, argv[i]);
+    lua_rawseti(L, -2, i - n);
+  }
+  return narg;
 }
 
 #define LUA_MAXINPUT 512
