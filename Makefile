@@ -155,7 +155,7 @@ endif
 # LFLAGS += -lLLVM-3.1
 
 ifeq ($(UNAME), Linux)
-LFLAGS += -ldl -pthread
+LFLAGS += -ldl -pthread -Wl,-export-dynamic
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
