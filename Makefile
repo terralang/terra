@@ -1,22 +1,37 @@
 
-# if the defaults for LLVM_CONFIG are not right for your installation
+# If the defaults for LLVM_CONFIG are not right for your installation
 # create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-# you may also need to reassign the CXX and CC compilers if they are not valid
-# if you want to enable cuda compiler support set ENABLE_CUDA to 1 in your Makefile.inc
+# you may also need to reassign the TERRA_CXX and TERRA_CC compilers if they are not valid.
+# If you want to enable cuda compiler support set ENABLE_CUDA to 1 in your Makefile.inc
 # CUDA_HOME is your cuda installation
-# LIBNVVM_HOME is the directory where libnvvm.so and nvvm.h live
 
 -include Makefile.inc
 
 LLVM_CONFIG ?= $(shell which llvm-config)
-LLVM_COMPILER_BIN ?= $(shell $(LLVM_CONFIG) --bindir)
-LLVM_CXX ?= $(LLVM_COMPILER_BIN)/clang++
-LLVM_CC  ?= $(LLVM_COMPILER_BIN)/clang
+
+LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
+
+#if clang is not installed in the same prefix as llvm
+#then use the clang in the caller's path
+ifeq ($(wildcard $(LLVM_PREFIX)/bin/clang),)
+CLANG_PREFIX ?= $(dir $(shell which clang))..
+else
+CLANG_PREFIX ?= $(LLVM_PREFIX)
+endif
+
+#path to the clang binary, must be specifically clang
+CLANG ?= $(CLANG_PREFIX)/bin/clang
+
+#path to the compiler you want to use to compile libterra
+#can be any c/c++ compiler
+TERRA_CXX ?= $(CLANG)++
+TERRA_CC  ?= $(CLANG)
+
 CUDA_HOME ?= /usr/local/cuda
 
-LLVM_PREFIX=$(shell $(LLVM_CONFIG) --prefix)
-CXX := $(LLVM_CXX)
-CC := $(LLVM_CC)
+
+CXX := $(TERRA_CXX)
+CC := $(TERRA_CC)
 
 .SUFFIXES:
 .SECONDARY:
@@ -37,9 +52,9 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
 LFLAGS += -Lbuild -lluajit -lterra
-INCLUDE_PATH += -I $(LUAJIT_DIR)/src
+INCLUDE_PATH += -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
-FLAGS += -I $(shell $(LLVM_CONFIG) --includedir) -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
@@ -48,7 +63,7 @@ LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -e s/\\./_/)
 FLAGS += -D$(LLVM_VERSION)
 # LLVM LIBS (STATIC, slow to link against but built by default)
 
-LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir)
+LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir) -L$(CLANG_PREFIX)/lib
 
 # CLANG LIBS
 LFLAGS  += -lclangFrontend -lclangDriver \
@@ -168,7 +183,7 @@ LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 #so header include paths can be correctly configured on linux
-FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(LLVM_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
+FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
 ifdef ENABLE_CUDA
 FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
@@ -239,7 +254,7 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(LLVM_PREFIX)/bin/clang -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(FLAGS)
+	$(CLANG) -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(FLAGS)
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
