@@ -599,9 +599,19 @@ function terra.func:emitllvm(cont)
 end
 
 function terra.func:__call(...)
+    if self.fastcall then
+        return self.fastcall(...)
+    end
     self:compile()
-    if #self.definitions == 1 then --fast path for the non-overloaded case
-        return self.definitions[1](...)
+    if #self.definitions == 1 then --generate fast path for the non-overloaded case
+        local defn = self.definitions[1]
+        local NR = #defn.type.returns
+        if NR <= 1 then
+            self.fastcall = defn.ffiwrapper
+        else
+            self.fastcall = defn
+        end
+        return self.fastcall(...)
     end
     
     local results
@@ -619,6 +629,7 @@ function terra.func:__call(...)
 end
 
 function terra.func:adddefinition(v)
+    self.fastcall = nil
     self.definitions:insert(v)
 end
 
