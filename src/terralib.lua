@@ -3396,7 +3396,7 @@ terra.__wrappedluafunctions = {}
 -- INCLUDEC
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
 function terra.includecstring(code,...)
-    local args = terralib.newlist {"-O3",...}
+    local args = terralib.newlist {"-O3","-Wno-deprecated",...}
     for p in terra.includepath:gmatch("([^;]+);?") do
         args:insert("-I")
         args:insert(p)

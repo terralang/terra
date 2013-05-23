@@ -446,6 +446,9 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     TheCompInst->createDiagnostics(0, 0);
     
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
+    //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
+    //this cannot go before CreateFromArgs
+    TheCompInst->createDiagnostics(argbegin - argend, argbegin);
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), TheCompInst->getTargetOpts());
     TheCompInst->setTarget(TI);
