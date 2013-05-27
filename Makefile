@@ -51,7 +51,7 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
-LFLAGS += -Lbuild -lluajit -lterra
+LFLAGS += -Lbuild -lluajit
 INCLUDE_PATH += -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0  -fno-exceptions -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
@@ -61,12 +61,12 @@ LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -e s/\\./_/)
 
 FLAGS += -D$(LLVM_VERSION)
-# LLVM LIBS (STATIC, slow to link against but built by default)
 
-LFLAGS += -L$(shell $(LLVM_CONFIG) --libdir) -L$(CLANG_PREFIX)/lib
+# LLVM LIBS (STATIC, slow to link against but built by default)
+SO_FLAGS += -L$(shell $(LLVM_CONFIG) --libdir) -L$(CLANG_PREFIX)/lib
 
 # CLANG LIBS
-LFLAGS  += -lclangFrontend -lclangDriver \
+SO_FLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
            -lclangAnalysis \
            -lclangEdit -lclangAST -lclangLex -lclangBasic
@@ -75,7 +75,7 @@ LFLAGS  += -lclangFrontend -lclangDriver \
            #-lclangFrontendTool \
            #-lclangARCMigrate
            
-LFLAGS_MANUAL += \
+LLVM_FLAGS_MANUAL += \
 -lLLVMAsmParser \
 -lLLVMInstrumentation \
 -lLLVMLinker \
@@ -161,16 +161,19 @@ LFLAGS_MANUAL += \
 
 
 ifeq ($(LLVM_VERSION), LLVM_3_1)
-LFLAGS += $(LFLAGS_MANUAL) -lclangRewrite
+SO_FLAGS += $(LLVM_FLAGS_MANUAL) -lclangRewrite
 else
-LFLAGS += $(shell $(LLVM_CONFIG) --libs) -lclangRewriteCore
+SO_FLAGS += $(shell $(LLVM_CONFIG) --libs) -lclangRewriteCore
 endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
 # LFLAGS += -lLLVM-3.1
 
 ifeq ($(UNAME), Linux)
-LFLAGS += -ldl -pthread -Wl,-export-dynamic
+LFLAGS += -ldl -pthread -Wl,-export-dynamic 
+DYNFLAGS = -shared -fPIC
+else
+DYNFLAGS = -dynamiclib -single_module -undefined dynamic_lookup -fPIC
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
@@ -187,24 +190,22 @@ FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VE
 
 ifdef ENABLE_CUDA
 FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
-LFLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
+SO_FLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
 endif
 
-LIBSRC = tkind.cpp tcompiler.cpp tllvmutil.cpp tcwrapper.cpp tinline.cpp terra.cpp lparser.cpp lstring.cpp main.cpp lobject.cpp lzio.cpp llex.cpp lctype.cpp treadnumber.cpp tcuda.cpp
+LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o
 LIBLUA = terralib.lua strict.lua cudalib.lua
 
-EXESRC = main.cpp linenoise.cpp
+EXEOBJS = main.o linenoise.o
 
-LIBOBJS = $(LIBSRC:.cpp=.o)
-EXEOBJS = $(EXESRC:.cpp=.o)
 LUAHEADERS = $(addprefix build/,$(LIBLUA:.lua=.h))
-GENERATEDHEADERS = $(LUAHEADERS) build/clangpaths.h build/llvmheaders.h.pch
+GENERATEDHEADERS = $(LUAHEADERS) build/clangpaths.h
 
 OBJS = $(LIBOBJS) $(EXEOBJS)
-SRC = $(LIBSRC) $(EXESRC)
 
 EXECUTABLE = terra
 LIBRARY = build/libterra.a
+DYNLIBRARY = build/libterra.so
 
 BIN2C = build/bin2c
 
@@ -212,16 +213,16 @@ BIN2C = build/bin2c
 -include Makefile.inc
 
 .PHONY:	all clean purge test package
-all:	$(EXECUTABLE)
+all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	$(EXECUTABLE)
 	(cd tests; ./run)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
-	$(CXX) $(FLAGS) -include-pch build/llvmheaders.h.pch $< -c -o $@
+	$(CXX) $(FLAGS) $< -c -o $@
 
-build/llvmheaders.h.pch:	src/llvmheaders.h
-	$(CXX) $(FLAGS) -x c++-header $< -o $@ 
+build/%.o:	src/%.c $(PACKAGE_DEPS)
+	$(CC) $(FLAGS) $< -c -o $@
 
 build/$(LUAJIT_TAR):
 ifeq ($(UNAME), Darwin)
@@ -239,8 +240,11 @@ $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
 	$(AR) -cq $@ $^
 
+$(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
+	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
+
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
-	$(CXX) $^ -o $@ $(LFLAGS)
+	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
@@ -269,7 +273,9 @@ package:
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
-	@g++ $(FLAGS)  -MM -MT '$@ $(@:.d=.o)' $< -o $@
+	@g++ $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
+build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
+	@gcc $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
 #if we are cleaning, then don't include dependencies (which would require the header files are built)	
 ifeq ($(findstring $(MAKECMDGOALS),purge clean),)

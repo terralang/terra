@@ -1,6 +1,8 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <signal.h>
 #include <getopt.h>
 #include "terra.h"

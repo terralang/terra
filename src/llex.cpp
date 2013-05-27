@@ -369,19 +369,19 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
      2. if the number ends in an 'f' and isn't a hexidecimal number, it is treated as a single-precision floating point number
   */
   seminfo->flags = num.flags;
-  if(num.flags & ReadNumber::F_ISINTEGER) {
+  if(num.flags & F_ISINTEGER) {
     seminfo->i = num.i;
     if(issinglefloat) {
         seminfo->r = seminfo->i;
         seminfo->flags = 0;
     } else if(hasdecpoint) {
         seminfo->r = seminfo->i;
-        seminfo->flags = ReadNumber::F_IS8BYTES;
+        seminfo->flags = F_IS8BYTES;
     }
   } else {
     seminfo->r = num.d;
     if (!issinglefloat)
-        seminfo->flags = ReadNumber::F_IS8BYTES;
+        seminfo->flags = F_IS8BYTES;
   }
   
 }
