@@ -3905,7 +3905,7 @@ function terra.constant(a0,a1)
         if type(init) == "cdata" then
             typ = terra.typeof(init)
         elseif type(init) == "number" then
-            typ = (math.floor(init) == init and int) or double
+            typ = (terralib.isintegral(init) and int) or double
         elseif type(init) == "boolean" then
             typ = bool
         elseif type(init) == "string" then

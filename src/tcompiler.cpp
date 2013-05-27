@@ -11,6 +11,7 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <cmath>
 #include <sstream>
 #include "llvmheaders.h"
 #include "tllvmutil.h"
@@ -37,6 +38,7 @@ using namespace llvm;
     _(saveobjimpl,1) \
     _(linklibraryimpl,1) \
     _(currenttimeinseconds,0) \
+    _(isintegral,0) \
     _(dumpmodule,1)
 
 
@@ -2277,6 +2279,12 @@ static int terra_pointertolightuserdata(lua_State * L) {
     void ** cdata = (void**) lua_topointer(L,-1);
     assert(cdata);
     lua_pushlightuserdata(L, *cdata);
+    return 1;
+}
+static int terra_isintegral(lua_State * L) {
+    double v = luaL_checknumber(L,-1);
+    bool integral = std::isfinite(v) && (double)(int)v == v; 
+    lua_pushboolean(L,integral);
     return 1;
 }
 
