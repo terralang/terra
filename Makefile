@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -g $(INCLUDE_PATH)
+FLAGS = -g $(INCLUDE_PATH) -fPIC
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -171,7 +171,7 @@ endif
 
 ifeq ($(UNAME), Linux)
 LFLAGS += -ldl -pthread -Wl,-export-dynamic 
-DYNFLAGS = -shared -fPIC
+DYNFLAGS = -shared -fPIC -Wl,-export-dynamic -ldl -pthread
 else
 DYNFLAGS = -dynamiclib -single_module -undefined dynamic_lookup -fPIC
 endif
