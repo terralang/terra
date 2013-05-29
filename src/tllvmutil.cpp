@@ -1,5 +1,9 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
+#if defined(_WIN32) || defined(__CYGWIN__)
+#include <stdio.h>
+#endif
+
 #include "tllvmutil.h"
 #include "llvm/Target/TargetLibraryInfo.h"
 #include "llvm-c/Disassembler.h"

@@ -440,39 +440,48 @@ private:
     IncludeCVisitor Visitor;
 };
 
-static void dorewrite(terra_State * T, const char * code, const char ** argbegin, const char ** argend, std::string * output, Obj * result) {
+static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, const char ** argbegin, const char ** argend, CompilerInstance * TheCompInst) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
-    CompilerInstance TheCompInst;
-    TheCompInst.createDiagnostics(0, 0);
+    TheCompInst->createDiagnostics(0, 0);
     
-    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
+    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
+    //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
+    //this cannot go before CreateFromArgs
+    TheCompInst->createDiagnostics(argbegin - argend, argbegin);
     
-    TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
-    TheCompInst.setTarget(TI);
+    TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), TheCompInst->getTargetOpts());
+    TheCompInst->setTarget(TI);
     
-    TheCompInst.createFileManager();
-    FileManager &FileMgr = TheCompInst.getFileManager();
-    TheCompInst.createSourceManager(FileMgr);
-    SourceManager &SourceMgr = TheCompInst.getSourceManager();
-    TheCompInst.createPreprocessor();
-    TheCompInst.createASTContext();
-
-    // A Rewriter helps us manage the code rewriting task.
-    Rewriter TheRewriter;
-    TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
+    TheCompInst->createFileManager();
+    FileManager &FileMgr = TheCompInst->getFileManager();
+    TheCompInst->createSourceManager(FileMgr);
+    SourceManager &SourceMgr = TheCompInst->getSourceManager();
+    TheCompInst->createPreprocessor();
+    TheCompInst->createASTContext();
 
     // Set the main file handled by the source manager to the input file.
-    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(code, "<buffer>");
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
-    TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
-    Preprocessor &PP = TheCompInst.getPreprocessor();
+    TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
+    Preprocessor &PP = TheCompInst->getPreprocessor();
     PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
                                            PP.getLangOpts());
-                                           
+    
+}
+
+static void dorewrite(terra_State * T, const char * code, const char ** argbegin, const char ** argend, std::string * output, Obj * result) {
+    
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(code, "<buffer>");
+    CompilerInstance TheCompInst;
+    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
+    
     // Create an AST consumer instance which is going to get called by
     // ParseAST.
-  
+    // A Rewriter helps us manage the code rewriting task.
+    SourceManager & SourceMgr = TheCompInst.getSourceManager();
+    Rewriter TheRewriter;
+    TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
+    
     std::stringstream dummy;
     IncludeCConsumer TheConsumer(TheRewriter,dummy,result);
 
@@ -500,32 +509,8 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
-    TheCompInst.createDiagnostics(0, 0);
-    
-    CompilerInvocation::CreateFromArgs(TheCompInst.getInvocation(), argbegin, argend, TheCompInst.getDiagnostics());
-    
-    TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst.getDiagnostics(), TheCompInst.getTargetOpts());
-    
-    TheCompInst.setTarget(TI);
-    
-    TheCompInst.createFileManager();
-    FileManager &FileMgr = TheCompInst.getFileManager();
-    TheCompInst.createSourceManager(FileMgr);
-    SourceManager &SourceMgr = TheCompInst.getSourceManager();
-    TheCompInst.createPreprocessor();
-    TheCompInst.createASTContext();
-
-    // A Rewriter helps us manage the code rewriting task.
-    Rewriter TheRewriter;
-    TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
-
-    // Set the main file handled by the source manager to the input file.
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, "<buffer>");
-    SourceMgr.createMainFileIDForMemBuffer(membuffer);
-    TheCompInst.getDiagnosticClient().BeginSourceFile(TheCompInst.getLangOpts(),&TheCompInst.getPreprocessor());
-    Preprocessor &PP = TheCompInst.getPreprocessor();
-    PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
-                                           PP.getLangOpts());
+    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
                                            
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), llvm::getGlobalContext() );
 
@@ -580,6 +565,14 @@ int include_c(lua_State * L) {
         args.push_back(*cpaths);
         cpaths++;
     }
+
+#ifdef _WIN32
+	args.push_back("-fms-extensions");
+	args.push_back("-fms-compatibility");
+#define __stringify(x) #x
+#define __indirect(x) __stringify(x)
+	args.push_back("-fmsc-version=" __indirect(_MSC_VER));
+#endif
     
     args.push_back("-I");
     args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);

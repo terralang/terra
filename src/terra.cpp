@@ -14,7 +14,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#ifndef _WIN32
 #include <sys/mman.h>
+#endif
 
 
 static char * vstringf(const char * fmt, va_list ap) {
@@ -81,10 +83,20 @@ static int opensourcefile(lua_State * L) {
     }
     fseek(f,0, SEEK_END);
     size_t filesize = ftell(f);
+#ifndef _MSC_VER
     char * mapped_file = (char*) mmap(0,filesize, PROT_READ, MAP_SHARED, fileno(f), 0);
     if(mapped_file == MAP_FAILED) {
         terra_reporterror(getterra(L),"failed to map file %s\n",filename);
     }
+#else
+    fseek(f,0,SEEK_SET);
+    char *mapped_file = (char*)malloc(filesize);
+	size_t sz = fread(mapped_file, 1, filesize, f);
+    //if(mapped_file == nullptr || sz != filesize ) {
+    //    terra_reporterror(getterra(L),"failed to map file %s\n",filename);
+    //}
+	filesize = sz;
+#endif
     lua_pop(L,1);
     
     SourceInfo * si = (SourceInfo*) lua_newuserdata(L,sizeof(SourceInfo));
@@ -131,7 +143,12 @@ static int printlocation(lua_State * L) {
 static int closesourcefile(lua_State * L) {
     SourceInfo * si = (SourceInfo*) lua_touserdata(L,-1);
     assert(si);
+#ifndef _MSC_VER
     munmap(si->mapped_file,si->len);
+#else
+    free(si->mapped_file);
+    si->mapped_file = nullptr;
+#endif
     fclose(si->file);
     return 0;
 }

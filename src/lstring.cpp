@@ -49,8 +49,14 @@ TString * luaS_vstringf(terra_State * L, const char * fmt, va_list ap) {
     char stack_buf[128];
     char * buf = stack_buf;
     while(1) {
-	va_list cur;
+		va_list cur;
+#ifdef _WIN32
+		// Apparently this is fine for the MSVC x64 compiler.
+		// See: http://www.bailopan.net/blog/?p=51
+		cur = ap;
+#else
         va_copy(cur,ap);
+#endif
         int n = vsnprintf(buf, N, fmt, cur);
         va_end(cur);
         if(n > -1 && n < N) {

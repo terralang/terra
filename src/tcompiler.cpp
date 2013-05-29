@@ -10,7 +10,11 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 #include <sstream>
 #include "llvmheaders.h"
 #include "tllvmutil.h"
@@ -18,7 +22,12 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
+#ifdef _WIN32
+#include <Windows.h>
+#include <time.h>
+#else
 #include <sys/time.h>
+#endif
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
@@ -58,9 +67,13 @@ struct DisassembleFunctionListener : public JITEventListener {
 };
 
 static double CurrentTimeInSeconds() {
+#ifdef _WIN32
+	return time(NULL);
+#else
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec + tv.tv_usec / 1000000.0;
+#endif
 }
 static int terra_currenttimeinseconds(lua_State * L) {
     lua_pushnumber(L, CurrentTimeInSeconds());
@@ -484,34 +497,22 @@ struct CCallingConv {
             assert(!"unexpected value in classification");
     }
     
-    Type * TypeForClass(size_t size, RegisterClass clz) {
-        switch(clz) {
-             case C_SSE:
-                switch(size) {
-                    case 4: return Type::getFloatTy(*C->ctx);
-                    case 8: return Type::getDoubleTy(*C->ctx);
-                    default: assert(!"unexpected size for floating point class");
-                }
-            case C_INTEGER:
-                assert(size <= 8);
-                return Type::getIntNTy(*C->ctx, size * 8);
-            default:
-                assert(!"unexpected class");
-        }
+	Type * TypeForClass(size_t size, RegisterClass clz) {
+		assert(size <= 8);
+		return Type::getIntNTy(*C->ctx, size * 8);
     }
     Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
         TType * t = GetType(type);
         
-        if(!t->type->isAggregateType()) {
-            if(t->type->isFloatingPointTy() || t->type->isVectorTy())
-                ++*usedfloat;
-            else
-                ++*usedint;
-            return Argument(C_PRIMITIVE,t->type);
+		if(!t->type->isAggregateType()) {
+			++*usedint;
+			++*usedfloat;
+			return Argument(C_PRIMITIVE,t->type);
         }
         
         int sz = C->td->getTypeAllocSize(t->type);
-        if(sz > 16) {
+		bool isPow2 = sz && !(sz & (sz - 1));
+        if(sz > 8 || !isPow2) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
         
@@ -524,12 +525,12 @@ struct CCallingConv {
         }
         int nfloat = (classes[0] == C_SSE) + (classes[1] == C_SSE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
-        if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
+        if (sz > 8 && (*usedfloat + nfloat > 4 || *usedint + nint > 4)) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
         
-        *usedfloat += nfloat;
-        *usedint += nint;
+        *usedfloat += nfloat + nint;
+        *usedint += nfloat + nint;
         
         std::vector<Type*> elements;
         elements.push_back(TypeForClass(sizes[0], classes[0]));
@@ -610,7 +611,7 @@ struct CCallingConv {
         for(int i = 0; i < info->paramtypes.size(); i++) {
             Argument * v = &info->paramtypes[i];
             if(v->kind == C_AGGREGATE_MEM) {
-                r->addAttribute(argidx,ByValAttr());
+                //r->addAttribute(argidx,ByValAttr());
             }
             argidx += v->nargs;
         }
@@ -2169,16 +2170,28 @@ static int terra_saveobjimpl(lua_State * L) {
     int ref_table = lobj_newreftable(T->L);
     
 
-
-    char tmpnamebuf[20];
+#ifdef _WIN32
+	char tmpnamebuf[256];
+#else
+	char tmpnamebuf[20];
+#endif
     const char * objname = NULL;
     
     if(isexe) {
+#ifndef _WIN32
         const char * tmp = "/tmp/terraXXXX.o";
         strcpy(tmpnamebuf, tmp);
         int fd = mkstemps(tmpnamebuf,2);
         close(fd);
-        objname = tmpnamebuf;
+#else
+		char firstbuf[256];
+		DWORD tmpdirlen = GetTempPath(256, firstbuf);
+		assert(tmpdirlen < 256-14);	// Enough space in the buffer to accomodate the tmp filename
+		sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
+		_mktemp(firstbuf);
+		sprintf(tmpnamebuf, "%s.o", firstbuf);
+#endif
+		objname = tmpnamebuf;
     } else {
         objname = filename;
     }
@@ -2223,14 +2236,19 @@ static int terra_saveobjimpl(lua_State * L) {
         M = NULL;
         
         if(isexe) {
-            sys::Path gcc = sys::Program::FindProgramByName("gcc");
-            if (gcc.isEmpty()) {
+			sys::Path linker;
+#ifndef _WIN32
+            linker = sys::Program::FindProgramByName("gcc");
+            if (linker.isEmpty()) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: Failed to find gcc");
             }
+#else
+			linker = sys::Path(CLANG_EXECUTABLE);
+#endif
             
             std::vector<const char *> args;
-            args.push_back(gcc.c_str());
+            args.push_back(linker.c_str());
             args.push_back(objname);
             args.push_back("-o");
             args.push_back(filename);
@@ -2245,7 +2263,7 @@ static int terra_saveobjimpl(lua_State * L) {
             }
 
             args.push_back(NULL);
-            int c = sys::Program::ExecuteAndWait(gcc, &args[0], 0, 0, 0, 0, &err);
+            int c = sys::Program::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
             if(0 != c) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);

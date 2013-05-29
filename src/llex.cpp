@@ -351,7 +351,11 @@ static void buffreplace (LexState *ls, char from, char to) {
 int buff2d(Mbuffer * b, SemInfo * seminfo) {
     int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
     char * end;
+#ifdef _WIN32
+	seminfo->i = _strtoui64(luaZ_buffer(b),&end,0);
+#else
     seminfo->i = strtoull(luaZ_buffer(b),&end,0);
+#endif
     if(*end == '\0') {
         seminfo->flags |= SemInfo::F_ISINTEGER;
     }

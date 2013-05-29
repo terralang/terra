@@ -7,7 +7,11 @@
 
 #include <string.h>
 #include <assert.h>
+#ifdef _WIN32
+#include "ext/setjmp.h"
+#else
 #include <setjmp.h>
+#endif
 
 #define lparser_c
 #define LUA_CORE
@@ -1850,7 +1854,8 @@ static void terrastats(LexState * ls, bool emittedlocal) {
                 if(ls->t.token == '(') {
                     body(ls, &b, ismethod, ls->linenumber);
                     int tree = store_value(ls);
-                    defs.push_back( (TDefn) {ismethod ? 'm' : 'f', idx, tree});
+					TDefn tdefn = {ismethod ? 'm' : 'f', idx, tree};
+                    defs.push_back(tdefn);
                 }
             } break;
             case TK_STRUCT: {
@@ -1858,7 +1863,8 @@ static void terrastats(LexState * ls, bool emittedlocal) {
                 if(ls->t.token == '{') {
                     structconstructor(ls,T_struct);
                     int tree = store_value(ls);
-                    defs.push_back( (TDefn) { 's', idx, tree});
+					TDefn tdefn = { 's', idx, tree};
+                    defs.push_back(tdefn);
                 }
             } break;
         }

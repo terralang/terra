@@ -10,7 +10,11 @@
 //#include "lobject.h"
 #include "lzio.h"
 #include "lutil.h"
+#ifdef _WIN32
+#include "ext/setjmp.h"
+#else
 #include <setjmp.h>
+#endif
 #include <vector>
 
 #define FIRST_RESERVED  257
