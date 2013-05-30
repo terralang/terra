@@ -465,27 +465,9 @@ function terra.funcdefinition:gettype(cont)
     return self.type
 end
 
-function terra.funcdefinition:makewrapper()
-    local fntyp = self.type
-    
-    local success,cfntyp = pcall(fntyp.cstring,fntyp)
-    
-    if not success then
-        dbprint(1,"cstring error: ",cfntyp)
-        self.ffiwrapper = function()
-            error("function not callable directly from lua")
-        end
-        return
-    end
-    
-    self.ffiwrapper = ffi.cast(cfntyp,self.fptr)
-
-end
-
-function terra.funcdefinition:jitandmakewrapper()
+function terra.funcdefinition:jit()
     if self.state == "emittedllvm" then
         terra.jit({ func = self, flags = {} })
-        self:makewrapper()
         self.state = "compiled"
     end
 end
@@ -500,21 +482,20 @@ function terra.funcdefinition:compile(cont)
     
     if cont then 
         self:emitllvm(function()
-            self:jitandmakewrapper()
+            self:jit()
             if type(cont) == "function" then
                 cont(self)
             end
         end)
     else
         self:emitllvm()
-        self:jitandmakewrapper()
+        self:jit()
     end
 end
 
 function terra.funcdefinition:initializecfunction()
     assert(self.state == "uninitializedc")
     terra.registercfunction(self)
-    self:makewrapper()
     self.state = "compiled"
 end
 
@@ -549,13 +530,13 @@ function terra.funcdefinition:emitllvm(cont)
 end
 
 function terra.funcdefinition:__call(...)
-    self:compile()
+    local ffiwrapper = self:getpointer()
     local NR = #self.type.returns
     if NR <= 1 then --fast path
-        return self.ffiwrapper(...)
+        return ffiwrapper(...)
     else
         --multireturn
-        local rs = self.ffiwrapper(...)
+        local rs = ffiwrapper(...)
         local rl = {}
         for i = 0,NR-1 do
             table.insert(rl,rs["_"..i])
@@ -565,7 +546,9 @@ function terra.funcdefinition:__call(...)
 end
 function terra.funcdefinition:getpointer()
     self:compile()
-    assert(type(self.ffiwrapper) == "cdata")
+    if not self.ffiwrapper then
+        self.ffiwrapper = ffi.cast(self.type:cstring(),self.fptr)
+    end
     return self.ffiwrapper
 end
 
@@ -602,12 +585,12 @@ function terra.func:__call(...)
     if self.fastcall then
         return self.fastcall(...)
     end
-    self:compile()
     if #self.definitions == 1 then --generate fast path for the non-overloaded case
         local defn = self.definitions[1]
+        local ptr = defn:getpointer() --forces compilation
         local NR = #defn.type.returns
         if NR <= 1 then
-            self.fastcall = defn.ffiwrapper
+            self.fastcall = ptr
         else
             self.fastcall = defn
         end
