@@ -100,6 +100,9 @@
     <PostBuildEvent>
       <Command>copy $(SolutionDir)$(Platform)\$(Configuration)\$(TargetFileName) $(TERRA_ROOT)</Command>
     </PostBuildEvent>
+    <PreLinkEvent>
+      <Command>del $(SolutionDir)$(Platform)\$(Configuration)\$(TargetFilename)</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -137,6 +140,9 @@
     <PostBuildEvent>
       <Command>copy $(SolutionDir)$(Platform)\$(Configuration)\$(TargetFileName) $(TERRA_ROOT)</Command>
     </PostBuildEvent>
+    <PreLinkEvent>
+      <Command>del $(SolutionDir)$(Platform)\$(Configuration)\$(TargetFilename)</Command>
+    </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\..\src\main.cpp" />

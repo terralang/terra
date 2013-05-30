@@ -129,9 +129,7 @@
       <FileType>Document</FileType>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cd $(TERRA_ROOT)\build
-tar -xf $(LUAJIT_VERSION).tar.gz
-cd $(LUAJIT_DIR)\src
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cd $(LUAJIT_DIR)\src
 call msvcbuild.bat</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </Outputs>
@@ -141,9 +139,7 @@ call msvcbuild.bat</Command>
       <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz</AdditionalInputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
       </Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cd $(TERRA_ROOT)\build
-tar -xf $(LUAJIT_VERSION).tar.gz
-cd $(LUAJIT_DIR)\src
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cd $(LUAJIT_DIR)\src
 call msvcbuild.bat</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
       </Outputs>
@@ -158,13 +154,17 @@ call msvcbuild.bat</Command>
       <FileType>Document</FileType>
       <Command Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">curl http://luajit.org/download/$(LUAJIT_VERSION).tar.gz -o $(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">curl http://luajit.org/download/$(LUAJIT_VERSION).tar.gz -o $(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz
+cd $(TERRA_ROOT)\build
+tar -xf $(LUAJIT_VERSION).tar.gz</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz</Outputs>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
       </Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">curl http://luajit.org/download/$(LUAJIT_VERSION).tar.gz -o $(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">curl http://luajit.org/download/$(LUAJIT_VERSION).tar.gz -o $(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz
+cd $(TERRA_ROOT)\build
+tar -xf $(LUAJIT_VERSION).tar.gz</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
       </Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TERRA_ROOT)\build\$(LUAJIT_VERSION).tar.gz</Outputs>
