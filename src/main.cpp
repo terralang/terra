@@ -132,8 +132,8 @@ static int incomplete (lua_State *L, int status) {
   if (status == LUA_ERRSYNTAX) {
     size_t lmsg;
     const char *msg = lua_tolstring(L, -1, &lmsg);
-    const char *tp = msg + lmsg - (sizeof("<eof>") - 1);
-    if (strstr(msg, "<eof>") == tp) {
+    const char *tp = msg + lmsg - (sizeof("'<eof>'") - 1);
+    if (strstr(msg, "'<eof>'") == tp) {
       lua_pop(L, 1);
       return 1;
     }

@@ -143,10 +143,7 @@ const char * luaX_token2str (LexState *ls, int token) {
   }
   else {
     const char *s = luaX_tokens[token - FIRST_RESERVED];
-    if (token < TK_EOS) //TODO: why is this check here?
-      return luaS_cstringf(ls->LP,LUA_QS,s);
-    else
-      return s;
+    return luaS_cstringf(ls->LP,LUA_QS,s);
   }
 }
 
