@@ -34,6 +34,7 @@
 #include <vector>
 #include <set>
 #include "llvm/ADT/SmallSet.h"
+#include "treadnumber.h"
 
 static void dump_stack(lua_State * L, int elem);
 
@@ -1007,10 +1008,10 @@ static void simpleexp (LexState *ls, expdesc *v) {
     case TK_NUMBER: {
       //v->u.nval = ls->t.seminfo.r;
       int flags = ls->t.seminfo.flags;
-      if(flags & SemInfo::F_ISINTEGER) {
+      if(flags & F_ISINTEGER) {
         push_integer(ls,ls->t.seminfo.i);
-        const char * sign = (flags & SemInfo::F_ISUNSIGNED) ? "u" : "";
-        const char * sz = (flags & SemInfo::F_IS8BYTES) ? "64" : "";
+        const char * sign = (flags & F_ISUNSIGNED) ? "u" : "";
+        const char * sz = (flags & F_IS8BYTES) ? "64" : "";
         char buf[128];
         sprintf(buf,"%sint%s",sign,sz);
         push_literal(ls,buf);
@@ -1019,7 +1020,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
         add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
         push_double(ls,ls->t.seminfo.r);
-        if(flags & SemInfo::F_IS8BYTES)
+        if(flags & F_IS8BYTES)
             push_literal(ls,"double");
         else
             push_literal(ls,"float");

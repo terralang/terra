@@ -20,10 +20,10 @@ end)
 A = terralib.types.newstruct()
 A.entries:insert{ field = "a", type = int[2] }
 
-A.metamethods.__finalizelayout = function() error("NOPE") end
+A.metamethods.__getentries = function() error("NOPE") end
 
 failit(erd,function()
-	A:freeze()
+	A:complete()
 end)
 local terra foo()
 	var a : int[2]
@@ -62,34 +62,34 @@ NSE = terralib.types.newstruct()
 
 failit(erd,function()
 	NSE.entries:insert { field = "a", type = "b" }
-	NSE:freeze()
+	NSE:complete()
 end)
 
 SICS = terralib.types.newstruct()
 SICS.entries:insert { field = symbol(), type = int }
+a = 1
+SICS.metamethods.__staticinitialize = function() a = a + 1 end
 print(terralib.new(SICS,{3}))
 
 NSF = terralib.types.newstruct()
 NSF.entries:insert { type = int , field = 3 }
 
 failit(erd,function()
-	NSF:freeze()
+	NSF:complete()
 end)
-SICS:freeze(function()
-	a = a + 1
-end)
+SICS:complete()
 assert(a == 2)
 struct SF {
 	a : SF2
 } and struct SF2 {
 	a : int
 }
-SF2.metamethods.__finalizelayout = function(self) SF:freeze() end
+SF2.metamethods.__getentries = function(self) SF:complete() end
 failit(erd,function()
-SF:freeze()
+SF:complete()
 end)
-failit("attempting to freeze a type which already has an error",function()
-SF:freeze()
+failit("Attempting to get a property of a type that previously resulted in an error.",function()
+SF:complete()
 end)
 
 failit(erd,function()
@@ -177,7 +177,7 @@ struct ATF {
 	a : int
 }
 
-ATF.metamethods.__finalizelayout = function(self) 
+ATF.metamethods.__getentries = function(self) 
 	local terra foo()
 		var a : ATF
 		return a.a
@@ -186,7 +186,7 @@ ATF.metamethods.__finalizelayout = function(self)
 end
 
 failit(erd,function()
-	ATF:freeze()
+	ATF:complete()
 end)
 
 struct FA {
@@ -195,13 +195,13 @@ struct FA {
 	a : int
 }
 
-FA2.metamethods.__finalizelayout = function(self)
-	FA:freeze(function()
-		a = a + 1
-	end)
+FA.metamethods.__staticinitialize = function() a = a + 1 end
+
+FA2.metamethods.__staticinitialize = function(self)
+	FA:complete()
 end
 
-FA:freeze()
+FA:complete()
 
 assert(a == 3)
 --[[

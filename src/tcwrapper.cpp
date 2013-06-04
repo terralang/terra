@@ -387,17 +387,27 @@ public:
             SetErrorReport(FuncName.c_str());
             return true;
         }
+        std::string InternalName = FuncName;
+        AsmLabelAttr * asmlabel = f->getAttr<AsmLabelAttr>();
+        if(asmlabel) {
+            InternalName = asmlabel->getLabel();
+            #ifndef __linux__
+                //In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
+                InternalName.insert(InternalName.begin(), '\01');
+            #endif
+        }
+        CreateFunction(FuncName,InternalName,&typ);
+        
         //make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
         output << "    (void)" << FuncName << ";\n";         
-        CreateFunction(FuncName,&typ);
         
         return true;
     }
-    void CreateFunction(const std::string & name, Obj * typ) {
+    void CreateFunction(const std::string & name, const std::string & internalname, Obj * typ) {
         lua_getfield(L, LUA_GLOBALSINDEX, "terra");
         lua_getfield(L, -1, "newcfunction");
         lua_remove(L,-2); //terra table
-        lua_pushstring(L, name.c_str());
+        lua_pushstring(L, internalname.c_str());
         typ->push();
         lua_call(L, 2, 1);
         result->setfield(name.c_str());
@@ -608,11 +618,6 @@ int register_c_function(lua_State * L) {
         fn.initFromStack(L,ref_table);
         const char * name = fn.string("name");
         llvm::Function * llvmfn = T->C->m->getFunction(name);
-        if(!llvmfn) {
-            std::stringstream ss;
-            ss << "\x01_" << name;
-            llvmfn = T->C->m->getFunction(ss.str());
-        }
         assert(llvmfn);
         lua_pushlightuserdata(L, llvmfn);
         fn.setfield("llvm_function");

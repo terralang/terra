@@ -25,11 +25,11 @@
 #include "lstring.h"
 //#include "ltable.h"
 #include "lzio.h"
+#include "treadnumber.h"
 
 extern "C" {
     #include "lua.h"
 }
-
 
 int next(LexState * ls) {
     ls->current = zgetc(ls->z);
@@ -143,10 +143,7 @@ const char * luaX_token2str (LexState *ls, int token) {
   }
   else {
     const char *s = luaX_tokens[token - FIRST_RESERVED];
-    if (token < TK_EOS) //TODO: why is this check here?
-      return luaS_cstringf(ls->LP,LUA_QS,s);
-    else
-      return s;
+    return luaS_cstringf(ls->LP,LUA_QS,s);
   }
 }
 
@@ -329,105 +326,61 @@ static int check_next (LexState *ls, const char *set) {
   return 1;
 }
 
-
-/*
-** change all characters 'from' in buffer to 'to'
-*/
-static void buffreplace (LexState *ls, char from, char to) {
-  size_t n = luaZ_bufflen(ls->buff);
-  char *p = luaZ_buffer(ls->buff);
-  while (n--)
-    if (p[n] == from) p[n] = to;
-}
-
-
-#if !defined(getlocaledecpoint)
-#define getlocaledecpoint() (localeconv()->decimal_point[0])
-#endif
-
-
-//#define buff2d(b,e)   luaO_str2d(luaZ_buffer(b), luaZ_bufflen(b) - 1, e)
-
-int buff2d(Mbuffer * b, SemInfo * seminfo) {
-    int r = luaO_str2d(luaZ_buffer(b),luaZ_bufflen(b) - 1, &seminfo->r);
-    char * end;
-#ifdef _WIN32
-	seminfo->i = _strtoui64(luaZ_buffer(b),&end,0);
-#else
-    seminfo->i = strtoull(luaZ_buffer(b),&end,0);
-#endif
-    if(*end == '\0') {
-        seminfo->flags |= SemInfo::F_ISINTEGER;
-    }
-    return r;
-}
-
-/*
-** in case of format error, try to change decimal point separator to
-** the one defined in the current locale and check again
-*/
-static void trydecpoint (LexState *ls, SemInfo *seminfo) {
-  char old = ls->decpoint;
-  ls->decpoint = getlocaledecpoint();
-  buffreplace(ls, old, ls->decpoint);  /* try new decimal separator */
-  if (!buff2d(ls->buff, seminfo)) {
-    /* format error with correct decimal point: no more options */
-    buffreplace(ls, ls->decpoint, '.');  /* undo change (for error message) */
-    lexerror(ls, "malformed number", TK_NUMBER);
-  }
-}
-
-static bool tislalnum(LexState * ls) {
-    return lislalnum(ls->current) && ls->current != 'f' && ls->current != 'L' && ls->current != 'U';
-}
-
-
 /* LUA_NUMBER */
+
 static void read_numeral (LexState *ls, SemInfo *seminfo) {
   assert(lisdigit(ls->current));
-  seminfo->flags = 0;
-  do {
+  bool hasdecpoint = false;
+ 
+  bool endsinf = false;
+  int c, xp = 'e';
+  assert(lisdigit(ls->current));
+  if ((c = ls->current) == '0') {
     save_and_next(ls);
-    if (check_next(ls, "EePp"))  /* exponent part? */
-      check_next(ls, "+-");  /* optional exponent sign */
-  } while ( tislalnum(ls) || ls->current == '.');
+    if ((ls->current | 0x20) == 'x') xp = 'p';
+  }
+  while (lislalnum(ls->current) || ls->current == '.' ||
+	 ((ls->current == '-' || ls->current == '+') && (c | 0x20) == xp)) {
+    if(ls->current == '.')
+        hasdecpoint = true;
+    c = ls->current;
+    save_and_next(ls);
+  }
   save(ls, '\0');
-  buffreplace(ls, '.', ls->decpoint);  /* follow locale for decimal point */
-  if (!buff2d(ls->buff, seminfo))  /* format error? */
-    trydecpoint(ls, seminfo); /* try to update decimal point separator */
+  
+  /* string ends in 'f' but is not hexidecimal.
+        this means that we have a single precision float */
+  bool issinglefloat = ls->in_terra && c == 'f' && xp != 'p';
 
-  if(seminfo->flags & SemInfo::F_ISINTEGER) {
-    if(ls->current == 'L') {
-        next(ls);
-        if(ls->current == 'L') {
-            next(ls);
-            //LL suffix
-            seminfo->flags |= SemInfo::F_IS8BYTES;
-        } else {
-            lexerror(ls, "malformed number", TK_NUMBER);
-        }
-    } else if(ls->current == 'U') {
-        next(ls);
-        if(ls->current == 'L') {
-            next(ls);
-            if(ls->current == 'L') {
-                next(ls);
-                seminfo->flags |= SemInfo::F_IS8BYTES;
-                seminfo->flags |= SemInfo::F_ISUNSIGNED;
-            } else {
-                lexerror(ls, "malformed number", TK_NUMBER);
-            }
-        } else {
-            lexerror(ls, "malformed number", TK_NUMBER);
-        }
+  if(issinglefloat) {
+    /* clear the 'f' so that treadnumber succeeds */
+    ls->buff->buffer[luaZ_bufflen(ls->buff)-2] = '\0';
+  }
+  
+  ReadNumber num;
+  if(treadnumber(ls->buff->buffer, &num, !issinglefloat, !ls->in_terra))
+    lexerror(ls, "malformed number", TK_NUMBER);
+  
+  /* Terra handles 2 things differently from LuaJIT:
+     1. if the number had a decimal place, it is always a floating point number. In constrast, treadnumber will convert it to an int if it can be represented as an int.
+     2. if the number ends in an 'f' and isn't a hexidecimal number, it is treated as a single-precision floating point number
+  */
+  seminfo->flags = num.flags;
+  if(num.flags & F_ISINTEGER) {
+    seminfo->i = num.i;
+    if(issinglefloat) {
+        seminfo->r = seminfo->i;
+        seminfo->flags = 0;
+    } else if(hasdecpoint) {
+        seminfo->r = seminfo->i;
+        seminfo->flags = F_IS8BYTES;
     }
   } else {
-    if(ls->current == 'f' && ls->in_terra) {
-        next(ls);
-    } else {
-        seminfo->flags |= SemInfo::F_IS8BYTES;
-    }
+    seminfo->r = num.d;
+    if (!issinglefloat)
+        seminfo->flags = F_IS8BYTES;
   }
+  
 }
 
 

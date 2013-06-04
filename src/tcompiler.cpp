@@ -10,11 +10,16 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
+
 #ifdef _WIN32
 #include <io.h>
+#include <time.h>
+#include <Windows.h>
 #else
 #include <unistd.h>
 #endif
+
+#include <cmath>
 #include <sstream>
 #include "llvmheaders.h"
 #include "tllvmutil.h"
@@ -22,12 +27,7 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
-#ifdef _WIN32
-#include <Windows.h>
-#include <time.h>
-#else
 #include <sys/time.h>
-#endif
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
@@ -46,6 +46,7 @@ using namespace llvm;
     _(saveobjimpl,1) \
     _(linklibraryimpl,1) \
     _(currenttimeinseconds,0) \
+    _(isintegral,0) \
     _(dumpmodule,1)
 
 
@@ -68,7 +69,7 @@ struct DisassembleFunctionListener : public JITEventListener {
 
 static double CurrentTimeInSeconds() {
 #ifdef _WIN32
-	return time(NULL);
+    return time(NULL);
 #else
     struct timeval tv;
     gettimeofday(&tv, NULL);
@@ -201,6 +202,15 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 
 struct TerraCompiler;
 
+
+static void GetStructEntries(Obj * typ, Obj * entries) {
+    Obj layout;
+    if(!typ->obj("cachedlayout",&layout)) {
+        assert(!"typechecked failed to complete type needed by the compiler, this is a bug.");
+    }
+    layout.obj("entries",entries);
+}
+
 //functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
 struct CCallingConv {
     terra_State * T;
@@ -250,7 +260,7 @@ struct CCallingConv {
     
     void LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
-        typ->obj("layout", &layout);
+        GetStructEntries(typ,&layout);
         int N = layout.size();
         std::vector<Type *> entry_types;
         
@@ -350,7 +360,7 @@ struct CCallingConv {
             const char * llvmname = typ->string("llvm_name");
             st = C->m->getTypeByName(llvmname);
         } else {
-            st = StructType::create(*C->ctx);
+            st = StructType::create(*C->ctx,typ->asstring("displayname"));
         }
         return st;
     }
@@ -474,7 +484,7 @@ struct CCallingConv {
             assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
             Obj layout;
-            type->obj("layout", &layout);
+            GetStructEntries(type,&layout);
             int N = layout.size();
             for(int i = 0; i < N; i++) {
                 Obj entry;
@@ -496,23 +506,49 @@ struct CCallingConv {
         } else
             assert(!"unexpected value in classification");
     }
-    
-	Type * TypeForClass(size_t size, RegisterClass clz) {
-		assert(size <= 8);
-		return Type::getIntNTy(*C->ctx, size * 8);
+#ifndef _WIN32
+    Type * TypeForClass(size_t size, RegisterClass clz) {
+        switch(clz) {
+             case C_SSE:
+                switch(size) {
+                    case 4: return Type::getFloatTy(*C->ctx);
+                    case 8: return Type::getDoubleTy(*C->ctx);
+                    default: assert(!"unexpected size for floating point class");
+                }
+            case C_INTEGER:
+                assert(size <= 8);
+                return Type::getIntNTy(*C->ctx, size * 8);
+            default:
+                assert(!"unexpected class");
+        }
     }
+    bool ValidAggregateSize(size_t sz) {
+        return sz <= 16;
+    }
+#else
+    Type * TypeForClass(size_t size, RegisterClass clz) {
+        assert(size <= 8);
+        return Type::getIntNTy(*C->ctx, size * 8); 
+    }
+    bool ValidAggregateSize(size_t sz) {
+        bool isPow2 = sz && !(sz & (sz - 1));
+        return sz <= 8 && isPow2;
+    }
+#endif
+    
     Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
         TType * t = GetType(type);
         
-		if(!t->type->isAggregateType()) {
-			++*usedint;
-			++*usedfloat;
-			return Argument(C_PRIMITIVE,t->type);
+        if(!t->type->isAggregateType()) {
+            if(t->type->isFloatingPointTy() || t->type->isVectorTy())
+                ++*usedfloat;
+            else
+                ++*usedint;
+            return Argument(C_PRIMITIVE,t->type);
         }
         
         int sz = C->td->getTypeAllocSize(t->type);
-		bool isPow2 = sz && !(sz & (sz - 1));
-        if(sz > 8 || !isPow2) {
+        if(!ValidAggregateSize(sz)) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
         
@@ -525,12 +561,12 @@ struct CCallingConv {
         }
         int nfloat = (classes[0] == C_SSE) + (classes[1] == C_SSE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
-        if (sz > 8 && (*usedfloat + nfloat > 4 || *usedint + nint > 4)) {
+        if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
         
-        *usedfloat += nfloat + nint;
-        *usedint += nfloat + nint;
+        *usedfloat += nfloat;
+        *usedint += nint;
         
         std::vector<Type*> elements;
         elements.push_back(TypeForClass(sizes[0], classes[0]));
@@ -611,7 +647,9 @@ struct CCallingConv {
         for(int i = 0; i < info->paramtypes.size(); i++) {
             Argument * v = &info->paramtypes[i];
             if(v->kind == C_AGGREGATE_MEM) {
-                //r->addAttribute(argidx,ByValAttr());
+                #ifndef _WIN32
+                r->addAttribute(argidx,ByValAttr());
+                #endif
             }
             argidx += v->nargs;
         }
@@ -1324,7 +1362,8 @@ if(baseT->isIntegerTy()) { \
         CC.EnsureTypeIsComplete(structType);
         
         Obj layout;
-        structType->obj("layout",&layout);
+        GetStructEntries(structType,&layout);
+        
         Obj entry;
         layout.objAt(index,&entry);
         
@@ -1409,6 +1448,7 @@ if(baseT->isIntegerTy()) { \
                         exps.objAt(2,&c);
                         return emitIfElse(&a,&b,&c);
                     }
+                    exp->dump();
                     assert(!"NYI - unimplemented operator?");
                     return NULL;
                 }
@@ -2161,6 +2201,25 @@ static int terra_disassemble(lua_State * L) {
     return 0;
 }
 
+#ifndef _WIN32
+static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
+    const char * tmp = "/tmp/terraXXXX.o";
+    strcpy(tmpnamebuf, tmp);
+    int fd = mkstemps(tmpnamebuf,2);
+    close(fd);
+    return tmpnamebuf;
+} 
+#else
+static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
+    char firstbuf[256];
+    DWORD tmpdirlen = GetTempPath(256, firstbuf);
+    assert(tmpdirlen < 256-14);    // Enough space in the buffer to accomodate the tmp filename
+    sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
+    _mktemp(firstbuf);
+    sprintf(tmpnamebuf, "%s.o", firstbuf);
+}
+#endif
+
 static int terra_saveobjimpl(lua_State * L) {
     const char * filename = luaL_checkstring(L, -4);
     int tbl = lua_gettop(L) - 2;
@@ -2169,29 +2228,10 @@ static int terra_saveobjimpl(lua_State * L) {
     assert(T->L == L);
     int ref_table = lobj_newreftable(T->L);
     
-
-#ifdef _WIN32
-	char tmpnamebuf[256];
-#else
-	char tmpnamebuf[20];
-#endif
+    char tmpnamebuf[256];
     const char * objname = NULL;
-    
     if(isexe) {
-#ifndef _WIN32
-        const char * tmp = "/tmp/terraXXXX.o";
-        strcpy(tmpnamebuf, tmp);
-        int fd = mkstemps(tmpnamebuf,2);
-        close(fd);
-#else
-		char firstbuf[256];
-		DWORD tmpdirlen = GetTempPath(256, firstbuf);
-		assert(tmpdirlen < 256-14);	// Enough space in the buffer to accomodate the tmp filename
-		sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
-		_mktemp(firstbuf);
-		sprintf(tmpnamebuf, "%s.o", firstbuf);
-#endif
-		objname = tmpnamebuf;
+        objname = GetTemporaryFile(tmpnamebuf,256);
     } else {
         objname = filename;
     }
@@ -2200,7 +2240,6 @@ static int terra_saveobjimpl(lua_State * L) {
         lua_pushvalue(L,-2);
         Obj arguments;
         arguments.initFromStack(L,ref_table);
-    
     
         std::vector<Function *> livefns;
         std::vector<std::string> names;
@@ -2236,7 +2275,7 @@ static int terra_saveobjimpl(lua_State * L) {
         M = NULL;
         
         if(isexe) {
-			sys::Path linker;
+            sys::Path linker;
 #ifndef _WIN32
             linker = sys::Program::FindProgramByName("gcc");
             if (linker.isEmpty()) {
@@ -2244,7 +2283,7 @@ static int terra_saveobjimpl(lua_State * L) {
                 terra_reporterror(T,"llvm: Failed to find gcc");
             }
 #else
-			linker = sys::Path(CLANG_EXECUTABLE);
+            linker = sys::Path(CLANG_EXECUTABLE);
 #endif
             
             std::vector<const char *> args;
@@ -2284,6 +2323,12 @@ static int terra_pointertolightuserdata(lua_State * L) {
     void ** cdata = (void**) lua_topointer(L,-1);
     assert(cdata);
     lua_pushlightuserdata(L, *cdata);
+    return 1;
+}
+static int terra_isintegral(lua_State * L) {
+    double v = luaL_checknumber(L,-1);
+    bool integral = std::isfinite(v) && (double)(int)v == v; 
+    lua_pushboolean(L,integral);
     return 1;
 }
 

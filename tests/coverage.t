@@ -31,12 +31,12 @@ local struct A {
 	a : int
 }
 
-A.metamethods.__finalizelayout = function(self)
+A.metamethods.__getentries = function(self)
 	error("I AM BAD")
 end
 
 failit(erd,function()
-	A:freeze()
+	A:complete()
 end)
 
 failit(erd,function()

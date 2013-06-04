@@ -14,17 +14,15 @@ terra foo()
 	return a.a + a.b
 end
 
-function A.metamethods.__hasbeenfrozen(self)
+function A.metamethods.__staticinitialize(self)
 	print("A")
-	assert(A.state == "frozen")
-	assert(B.state == "frozen")
+	assert(A:iscomplete())
 	a:get().a = 4
 end
 
-function B.metamethods.__hasbeenfrozen(self)
+function B.metamethods.__staticinitialize(self)
 	print("B")
-	assert(A.state == "frozen")
-	assert(B.state == "frozen")
+	assert(B:iscomplete())
 	a:get().b = 3
 	foo:compile(function()
 		assert(foo() == 7)
