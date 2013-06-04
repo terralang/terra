@@ -181,15 +181,15 @@ tar -xf $(LUAJIT_VERSION).tar.gz</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Generating Terra headers</Message>
       <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(LUAJIT_DIR)\src\luajit.exe</AdditionalInputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TERRA_ROOT)\build\clangpaths.h;$(TERRA_ROOT)\build\terralib.h;$(TERRA_ROOT)\build\cudalib.h;$(TERRA_ROOT)\build\strict.h;$(TERRA_ROOT)\build\dummy.o;%(Outputs)</Outputs>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cd $(TERRA_ROOT)\src
-$(LUAJIT_DIR)\src\luajit.exe genclangpaths_win.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">cd $(TERRA_ROOT)
+$(LUAJIT_DIR)\src\luajit.exe src\genclangpaths.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
 
 SET LUA_PATH=$(LUAJIT_DIR)\src\?.lua
 $(LUAJIT_DIR)\src\luajit.exe -bg terralib.lua $(TERRA_ROOT)\build\terralib.h
 $(LUAJIT_DIR)\src\luajit.exe -bg cudalib.lua $(TERRA_ROOT)\build\cudalib.h
 $(LUAJIT_DIR)\src\luajit.exe -bg strict.lua $(TERRA_ROOT)\build\strict.h</Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cd $(TERRA_ROOT)\src
-$(LUAJIT_DIR)\src\luajit.exe genclangpaths_win.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cd $(TERRA_ROOT)
+$(LUAJIT_DIR)\src\luajit.exe src\genclangpaths.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
 
 SET LUA_PATH=$(LUAJIT_DIR)\src\?.lua
 $(LUAJIT_DIR)\src\luajit.exe -bg terralib.lua $(TERRA_ROOT)\build\terralib.h

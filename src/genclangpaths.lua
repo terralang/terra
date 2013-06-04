@@ -1,28 +1,38 @@
 --See Copyright Notice in ../LICENSE.txt
-
-
-local outputfile = arg[1]
-local file = io.open(outputfile,"w")
-
-file:write("static const char * clang_paths[] = {\n")
-
-local function endswith(string,suffix)
-	return suffix == "" or string.sub(string,-string.len(suffix)) == suffix
+--usage: genclangpaths.lua output /path/to/clang  [addition args to parse]
+local ffi = require("ffi")
+local outputfile,clang = unpack(arg)
+local handle = assert(io.popen(clang .. " -v src/dummy.c -o build/dummy.o 2>&1", "r"))
+local theline
+for s in handle:lines() do
+	if s:find("-cc1") then
+		theline = s
+		break
+	end
 end
+assert(theline)
+
+local file = io.open(outputfile,"w")
 local function emitStr(str)
-	--TODO: this doesn't handled quotes in the string...
 	file:write(("\"%s\",\n"):format(str))
 end
+file:write("static const char * clang_paths[] = {\n")
 
-local function isincludearg(a)
-	return    (a:sub(1,1) == "-" and endswith(a,"isystem"))
-	       or (a == "-I")
-end
-
-for i,a in ipairs(arg) do
-	if isincludearg(a) and i+1 <= #arg and arg[i+1]:sub(1,1) == "/" then
+--also parse command line arguments to this script
+theline = theline .. " " .. table.concat(arg," ",3) .. " -"
+local accumStr
+for a in theline:gmatch("([^ ]+) ?") do
+	if a:find("^-") and accumStr then
+		emitStr(accumStr:gsub("\\\\", "/")
+		                :match("^%s*(.+%S)%s*$")
+	                    :match("^\"?([^\"]+)\"?$"))
+		accumStr = nil
+	end
+	if a == "-I" or a:find("isystem$") then
 		emitStr(a)
-		emitStr(arg[i+1])
+	    accumStr = ""
+	elseif accumStr then
+		accumStr = accumStr .. a .. " "
 	end
 end
 

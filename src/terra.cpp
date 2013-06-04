@@ -91,11 +91,7 @@ static int opensourcefile(lua_State * L) {
 #else
     fseek(f,0,SEEK_SET);
     char *mapped_file = (char*)malloc(filesize);
-	size_t sz = fread(mapped_file, 1, filesize, f);
-    //if(mapped_file == nullptr || sz != filesize ) {
-    //    terra_reporterror(getterra(L),"failed to map file %s\n",filename);
-    //}
-	filesize = sz;
+	filesize = fread(mapped_file, 1, filesize, f);
 #endif
     lua_pop(L,1);
     

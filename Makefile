@@ -258,7 +258,7 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(CLANG) -v src/dummy.c -o build/dummy.o 2>&1 | grep -- -cc1 | head -n 1 | xargs $(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(FLAGS)
+	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(FLAGS)
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
