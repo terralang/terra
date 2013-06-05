@@ -1172,14 +1172,17 @@ static BinOpr getbinopr (int op) {
   }
 }
 static void check_lua_operator(LexState * ls, int op) {
-    if(!ls->in_terra) {
-        switch(op) {
-            case '@': case TK_LSHIFT: case TK_RSHIFT:
+    switch(op) {
+        case '@': case TK_LSHIFT: case TK_RSHIFT:
+            if(!ls->in_terra)
                 luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"@, <<, and >> operators not supported in Lua code."));
-                break;
-            default:
-                break;
-        }
+            break;
+        case '#':
+            if(ls->in_terra)
+                luaX_syntaxerror(ls,luaS_cstringf(ls->LP,"# operator not supported in Terra code."));
+            break;
+        default:
+            break;
     }
 }
 
