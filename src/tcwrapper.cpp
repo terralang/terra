@@ -617,7 +617,6 @@ int register_c_function(lua_State * L) {
         lua_pushvalue(L, -2);
         fn.initFromStack(L,ref_table);
         const char * name = fn.string("name");
-		printf("%s\n", name);
         llvm::Function * llvmfn = T->C->m->getFunction(name);
         assert(llvmfn);
         lua_pushlightuserdata(L, llvmfn);
