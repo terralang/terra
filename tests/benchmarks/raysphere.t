@@ -1,6 +1,4 @@
-terralib.require("fusion")
-
-DBL_MAX = 1000000000000
+terralib.require("benchmarks/fusion")
 
 terra fill(a : &Array, v : double)
 	for i = 0, a.N do

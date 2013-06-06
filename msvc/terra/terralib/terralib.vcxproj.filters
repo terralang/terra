@@ -15,43 +15,46 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\src\lctype.cpp">
+    <ClCompile Include="..\..\..\src\lctype.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\llex.cpp">
+    <ClCompile Include="..\..\..\src\llex.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\lobject.cpp">
+    <ClCompile Include="..\..\..\src\lobject.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\lparser.cpp">
+    <ClCompile Include="..\..\..\src\lparser.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\lstring.cpp">
+    <ClCompile Include="..\..\..\src\lstring.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\lzio.cpp">
+    <ClCompile Include="..\..\..\src\lzio.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tcompiler.cpp">
+    <ClCompile Include="..\..\..\src\tcompiler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tcuda.cpp">
+    <ClCompile Include="..\..\..\src\tcuda.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tcwrapper.cpp">
+    <ClCompile Include="..\..\..\src\tcwrapper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\terra.cpp">
+    <ClCompile Include="..\..\..\src\terra.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tinline.cpp">
+    <ClCompile Include="..\..\..\src\tinline.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tkind.cpp">
+    <ClCompile Include="..\..\..\src\tkind.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\..\src\tllvmutil.cpp">
+    <ClCompile Include="..\..\..\src\tllvmutil.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\treadnumber.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

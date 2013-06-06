@@ -1,3 +1,8 @@
+local ffi = require("ffi")
+if ffi.os == "Windows" then
+  return
+end
+
 C = terralib.includecstring [[
 #include <pthread.h>
 #include <stdio.h>

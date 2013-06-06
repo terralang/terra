@@ -185,16 +185,16 @@ tar -xf $(LUAJIT_VERSION).tar.gz</Command>
 $(LUAJIT_DIR)\src\luajit.exe src\genclangpaths.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
 
 SET LUA_PATH=$(LUAJIT_DIR)\src\?.lua
-$(LUAJIT_DIR)\src\luajit.exe -bg terralib.lua $(TERRA_ROOT)\build\terralib.h
-$(LUAJIT_DIR)\src\luajit.exe -bg cudalib.lua $(TERRA_ROOT)\build\cudalib.h
-$(LUAJIT_DIR)\src\luajit.exe -bg strict.lua $(TERRA_ROOT)\build\strict.h</Command>
+$(LUAJIT_DIR)\src\luajit.exe -bg src\terralib.lua $(TERRA_ROOT)\build\terralib.h
+$(LUAJIT_DIR)\src\luajit.exe -bg src\cudalib.lua $(TERRA_ROOT)\build\cudalib.h
+$(LUAJIT_DIR)\src\luajit.exe -bg src\strict.lua $(TERRA_ROOT)\build\strict.h</Command>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">cd $(TERRA_ROOT)
 $(LUAJIT_DIR)\src\luajit.exe src\genclangpaths.lua $(TERRA_ROOT)\build\clangpaths.h $(CLANG_EXECUTABLE)
 
 SET LUA_PATH=$(LUAJIT_DIR)\src\?.lua
-$(LUAJIT_DIR)\src\luajit.exe -bg terralib.lua $(TERRA_ROOT)\build\terralib.h
-$(LUAJIT_DIR)\src\luajit.exe -bg cudalib.lua $(TERRA_ROOT)\build\cudalib.h
-$(LUAJIT_DIR)\src\luajit.exe -bg strict.lua $(TERRA_ROOT)\build\strict.h</Command>
+$(LUAJIT_DIR)\src\luajit.exe -bg src\terralib.lua $(TERRA_ROOT)\build\terralib.h
+$(LUAJIT_DIR)\src\luajit.exe -bg src\cudalib.lua $(TERRA_ROOT)\build\cudalib.h
+$(LUAJIT_DIR)\src\luajit.exe -bg src\strict.lua $(TERRA_ROOT)\build\strict.h</Command>
     </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

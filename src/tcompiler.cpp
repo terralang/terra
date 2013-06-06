@@ -15,8 +15,10 @@ extern "C" {
 #include <io.h>
 #include <time.h>
 #include <Windows.h>
+#undef interface
 #else
 #include <unistd.h>
+#include <sys/time.h>
 #endif
 
 #include <cmath>
@@ -27,7 +29,6 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
-#include <sys/time.h>
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
@@ -2217,6 +2218,7 @@ static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
     sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
     _mktemp(firstbuf);
     sprintf(tmpnamebuf, "%s.o", firstbuf);
+	return tmpnamebuf;
 }
 #endif
 
@@ -2325,9 +2327,14 @@ static int terra_pointertolightuserdata(lua_State * L) {
     lua_pushlightuserdata(L, *cdata);
     return 1;
 }
+#ifdef _WIN32
+#define ISFINITE(v) _finite(v)
+#else
+#define ISFINITE(v) std::isfinite(v)
+#endif
 static int terra_isintegral(lua_State * L) {
     double v = luaL_checknumber(L,-1);
-    bool integral = std::isfinite(v) && (double)(int)v == v; 
+    bool integral = ISFINITE(v) && (double)(int)v == v; 
     lua_pushboolean(L,integral);
     return 1;
 }

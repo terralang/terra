@@ -1,3 +1,8 @@
+local ffi = require("ffi")
+if ffi.os == "Windows" then
+	return
+end
+
 local C = terralib.includecstring [[
 	#include <objc/objc.h>
 	#include <objc/message.h>

@@ -2,11 +2,19 @@ C = terralib.includecstring [[
 	#include <stdio.h>
 	#include <stdlib.h>
 	#include <math.h>
-	double CurrentTimeInSeconds() {
-	  struct timeval tv;
-	  gettimeofday(&tv, NULL);
-	  return tv.tv_sec + tv.tv_usec / 1000000.0;
+	#ifndef _WIN32
+	#include <sys/time.h>
+	static double CurrentTimeInSeconds() {
+	    struct timeval tv;
+	    gettimeofday(&tv, NULL);
+	    return tv.tv_sec + tv.tv_usec / 1000000.0;
 	}
+	#else
+	#include <time.h>
+	static double CurrentTimeInSeconds() {
+		return time(NULL);
+	}
+	#endif
 ]]
 local vectorize = true
 local number = double

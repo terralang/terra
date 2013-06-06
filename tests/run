@@ -29,6 +29,8 @@ local failed = {}
 
 for line in io.popen(lscmd):lines() do
     if ffi.os == "Windows" then
+        local cwd = io.popen("cmd /c echo %cd%"):read()
+        line = line:sub(cwd:len()+2)
         line = line:gsub("\\","/")
     end
     local file = line:match("^([^/]*%.t)$") or line:match("^(fails/[^/]*%.t)$")

@@ -145,7 +145,7 @@
     </PreLinkEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\..\src\main.cpp" />
+    <ClCompile Include="..\..\..\src\main.cpp" />
     <ClCompile Include="..\ext\getopt.c" />
     <ClCompile Include="..\ext\getopt_long.c" />
   </ItemGroup>

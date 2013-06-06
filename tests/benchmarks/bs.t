@@ -1,6 +1,6 @@
 
 
-terralib.require("fusion")
+terralib.require("benchmarks/fusion")
 
 
 

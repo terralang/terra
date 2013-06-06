@@ -18,6 +18,22 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\src\lctype.cpp" />
+    <ClCompile Include="..\..\..\src\llex.cpp" />
+    <ClCompile Include="..\..\..\src\lobject.cpp" />
+    <ClCompile Include="..\..\..\src\lparser.cpp" />
+    <ClCompile Include="..\..\..\src\lstring.cpp" />
+    <ClCompile Include="..\..\..\src\lzio.cpp" />
+    <ClCompile Include="..\..\..\src\tcompiler.cpp" />
+    <ClCompile Include="..\..\..\src\tcuda.cpp" />
+    <ClCompile Include="..\..\..\src\tcwrapper.cpp" />
+    <ClCompile Include="..\..\..\src\terra.cpp" />
+    <ClCompile Include="..\..\..\src\tinline.cpp" />
+    <ClCompile Include="..\..\..\src\tkind.cpp" />
+    <ClCompile Include="..\..\..\src\tllvmutil.cpp" />
+    <ClCompile Include="..\..\..\src\treadnumber.c" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{D3A86153-B51F-454B-8546-0048F2680F39}</ProjectGuid>
     <RootNamespace>terralib</RootNamespace>
@@ -98,6 +114,9 @@
       <SDLCheck>
       </SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir);$(TERRA_ROOT)\build;$(TERRA_ROOT)\src;$(LLVM_ROOT)/include;$(LLVM_BUILD_ROOT)/include;$(LLVM_ROOT)/tools/clang/include;$(LLVM_BUILD_ROOT)/tools/clang/include;$(LUAJIT_DIR)\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -130,6 +149,9 @@
       </SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir);$(TERRA_ROOT)\build;$(TERRA_ROOT)\src;$(LLVM_ROOT)/include;$(LLVM_BUILD_ROOT)/include;$(LLVM_ROOT)/tools/clang/include;$(LLVM_BUILD_ROOT)/tools/clang/include;$(LUAJIT_DIR)\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <WholeProgramOptimization>false</WholeProgramOptimization>
+      <DisableLanguageExtensions>false</DisableLanguageExtensions>
+      <UndefinePreprocessorDefinitions>
+      </UndefinePreprocessorDefinitions>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -143,21 +165,6 @@
       <LinkTimeCodeGeneration>false</LinkTimeCodeGeneration>
     </Lib>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="..\..\..\..\src\lctype.cpp" />
-    <ClCompile Include="..\..\..\..\src\llex.cpp" />
-    <ClCompile Include="..\..\..\..\src\lobject.cpp" />
-    <ClCompile Include="..\..\..\..\src\lparser.cpp" />
-    <ClCompile Include="..\..\..\..\src\lstring.cpp" />
-    <ClCompile Include="..\..\..\..\src\lzio.cpp" />
-    <ClCompile Include="..\..\..\..\src\tcompiler.cpp" />
-    <ClCompile Include="..\..\..\..\src\tcuda.cpp" />
-    <ClCompile Include="..\..\..\..\src\tcwrapper.cpp" />
-    <ClCompile Include="..\..\..\..\src\terra.cpp" />
-    <ClCompile Include="..\..\..\..\src\tinline.cpp" />
-    <ClCompile Include="..\..\..\..\src\tkind.cpp" />
-    <ClCompile Include="..\..\..\..\src\tllvmutil.cpp" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

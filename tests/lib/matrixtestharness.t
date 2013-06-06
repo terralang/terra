@@ -1,4 +1,7 @@
 local ffi = require("ffi")
+if ffi.os == "Windows" then
+	return
+end
 local adjust = 0
 local acc = terralib.includecstring[[
 	void cblas_dgemm(int, int,

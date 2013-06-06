@@ -1,16 +1,22 @@
-
 local C = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 
 local T = terralib.includecstring [[
 #include<stdio.h>
 #include<stdlib.h>
+#ifndef _WIN32
 #include <sys/time.h>
 static double CurrentTimeInSeconds() {
     struct timeval tv;
     gettimeofday(&tv, NULL);
     return tv.tv_sec + tv.tv_usec / 1000000.0;
 }
+#else
+#include <time.h>
+static double CurrentTimeInSeconds() {
+	return time(NULL);
+}
+#endif
 
 int CalcTime(int * times, double * start) {
 	if(*times == 0) {
@@ -131,6 +137,10 @@ struct Tri {
 
 terra main() 
 	var file = IO.fopen("/Users/zdevito/Downloads/b1p2.obj","r")
+	-- This file is not in the repo
+	if file == nil then
+		return
+	end
 	var nv : int, nf : int
 	var mesh : Mesh
 
