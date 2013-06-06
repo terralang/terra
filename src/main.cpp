@@ -126,6 +126,12 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
     if (lua_strlen(L,idx) > 0)  /* non-empty line? */ \
       linenoiseHistoryAdd(lua_tostring(L, idx));  /* add it to history */
 #define lua_freeline(L,b)    ((void)L, free(b))
+#else
+#define lua_readline(L,b,p)     \
+        ((void)L, fputs(p, stdout), fflush(stdout),  /* show prompt */ \
+        fgets(b, LUA_MAXINPUT, stdin) != NULL)  /* get line */
+#define lua_saveline(L,idx)     { (void)L; (void)idx; }
+#define lua_freeline(L,b)       { (void)L; (void)b; }
 #endif
 
 static void l_message (const char *pname, const char *msg) {
@@ -187,34 +193,6 @@ static const char *get_prompt (lua_State *L, int firstline) {
   return p;
 }
 
-#ifdef _WIN32
-static void write_prompt(lua_State *L, int firstline)
-{
-  const char *p;
-  lua_getfield(L, LUA_GLOBALSINDEX, firstline ? "_PROMPT" : "_PROMPT2");
-  p = lua_tostring(L, -1);
-  if (p == NULL) p = firstline ? LUA_PROMPT : LUA_PROMPT2;
-  fputs(p, stdout);
-  fflush(stdout);
-  lua_pop(L, 1);  /* remove global */
-}
-static int pushline(lua_State *L, int firstline)
-{
-  char buf[LUA_MAXINPUT];
-  write_prompt(L, firstline);
-  if (fgets(buf, LUA_MAXINPUT, stdin)) {
-    size_t len = strlen(buf);
-    if (len > 0 && buf[len-1] == '\n')
-      buf[len-1] = '\0';
-    if (firstline && buf[0] == '=')
-      lua_pushfstring(L, "return %s", buf+1);
-    else
-      lua_pushstring(L, buf);
-    return 1;
-  }
-  return 0;
-}
-#else
 static int pushline (lua_State *L, int firstline) {
   char buffer[LUA_MAXINPUT];
   char *b = buffer;
@@ -232,7 +210,6 @@ static int pushline (lua_State *L, int firstline) {
   lua_freeline(L, b);
   return 1;
 }
-#endif
 
 static int loadline (lua_State *L) {
   int status;
@@ -248,9 +225,7 @@ static int loadline (lua_State *L) {
     lua_insert(L, -2);  /* ...between the two lines */
     lua_concat(L, 3);  /* join them */
   }
-#ifndef _WIN32
   lua_saveline(L, 1);
-#endif
   lua_remove(L, 1);  /* remove line */
   return status;
 }
