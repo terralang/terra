@@ -10,10 +10,10 @@ title: Getting Started
 Installing Terra
 ================
 
-Terra currently runs Mac OS X and Linux. Terra uses LLVM 3.2, Clang 3.2 (the C/C++ frontend for LLVM), and LuaJIT 2.0 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM. The easiest way to do this is to the download the _Clang Binaries_ (which also include LLVM binaries) from the
-[LLVM download](http://llvm.org/releases/download.html) page.
+Terra currently runs Mac OS X, Linux, and 64-bit Windows. Terra uses LLVM 3.2, Clang 3.2 (the C/C++ frontend for LLVM), and LuaJIT 2.0 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM. The easiest way to do this is to the download the _Clang Binaries_ (which also include LLVM binaries) from the
+[LLVM download](http://llvm.org/releases/download.html) page. For tips on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md).
 
-Unzip the tar-ball and then copy it into `/usr/local` (or somewhere else that is in your `$PATH`):
+To install on Mac OS X or Linux, unzip the tar-ball and then copy it into `/usr/local` (or somewhere else that is in your `$PATH`):
 
     $ tar -xf clang+llvm-3.2-x86_64-apple-darwin11.tar.gz
     $ cp -r clang+llvm-3.2-x86_64-apple-darwin11/* /usr/local
