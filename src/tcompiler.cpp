@@ -1156,8 +1156,21 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         setInsertBlock(mergeB);
         return B->CreateLoad(result, "logicalop");
     }
-    
-    Value * emitPointerArith(T_Kind kind, Value * pointer, Value * number){
+    Value * convertToIndex(TType * type, Value * number, int tobits) {
+        int frombits = type->type->getPrimitiveSizeInBits(); 
+        Type * totype = Type::getIntNTy(*C->ctx,tobits);
+        if(frombits > tobits) {
+            return B->CreateTrunc(number,totype);
+        } else if(frombits == tobits) {
+            return number;
+        } else if(type->issigned) {
+            return B->CreateSExt(number,totype);
+        } else {
+            return B->CreateZExt(number,totype);
+        }
+    }
+    Value * emitPointerArith(T_Kind kind, Value * pointer, TType * numTy, Value * number) {
+        number = convertToIndex(numTy,number,64);
         if(kind == T_add) {
             return B->CreateGEP(pointer,number);
         } else if(kind == T_sub) {
@@ -1210,7 +1223,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
                 return emitPointerSub(t,a,b);
             } else {
                 assert(bt->type->isIntegerTy());
-                return emitPointerArith(kind, a, b);
+                return emitPointerArith(kind, a, bt, b);
             }
         }
         
@@ -1301,6 +1314,7 @@ if(baseT->isIntegerTy()) { \
             return t->type;
     }
     Value * emitPrimitiveCast(TType * from, TType * to, Value * exp) {
+        
         Type * fBase = getPrimitiveType(from);
         Type * tBase = getPrimitiveType(to);
         
@@ -1479,14 +1493,17 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("value",&value);
                 exp->obj("index",&idx);
                 
+                
+                
                 Obj aggTypeO;
                 value.obj("type",&aggTypeO);
                 TType * aggType = getType(&aggTypeO);
                 Value * valueExp = emitExp(&value);
-                Value * idxExp = emitExp(&idx);
+                Value * idxExp = emitExp(&idx); 
                 
                 //if this is a vector index, emit an extractElement
                 if(aggType->type->isVectorTy()) {
+                    idxExp = convertToIndex(typeOfValue(&idx),idxExp,32);
                     Value * result = B->CreateExtractElement(valueExp, idxExp);
                     if(aggType->islogical) {
                         TType * rType = typeOfValue(exp);
@@ -1494,7 +1511,7 @@ if(baseT->isIntegerTy()) { \
                     }
                     return result;
                 }
-                
+                idxExp = convertToIndex(typeOfValue(&idx),idxExp,64);
                 //otherwise we have an array or pointer access, both of which will use a GEP instruction
                 
                 bool pa = exp->boolean("lvalue");
