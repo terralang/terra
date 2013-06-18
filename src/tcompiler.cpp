@@ -1156,21 +1156,15 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         setInsertBlock(mergeB);
         return B->CreateLoad(result, "logicalop");
     }
-    Value * convertToIndex(TType * type, Value * number, int tobits) {
-        int frombits = type->type->getPrimitiveSizeInBits(); 
-        Type * totype = Type::getIntNTy(*C->ctx,tobits);
-        if(frombits > tobits) {
-            return B->CreateTrunc(number,totype);
-        } else if(frombits == tobits) {
-            return number;
-        } else if(type->issigned) {
-            return B->CreateSExt(number,totype);
-        } else {
-            return B->CreateZExt(number,totype);
-        }
+    Value * emitIndex(TType * ftype, int tobits, Value * number) {
+        TType ttype;
+        memset(&ttype,0,sizeof(ttype));
+        ttype.type = Type::getIntNTy(*C->ctx,tobits);
+        ttype.issigned = ftype->issigned;
+        return emitPrimitiveCast(ftype,&ttype,number);
     }
     Value * emitPointerArith(T_Kind kind, Value * pointer, TType * numTy, Value * number) {
-        number = convertToIndex(numTy,number,64);
+        number = emitIndex(numTy,64,number);
         if(kind == T_add) {
             return B->CreateGEP(pointer,number);
         } else if(kind == T_sub) {
@@ -1503,7 +1497,7 @@ if(baseT->isIntegerTy()) { \
                 
                 //if this is a vector index, emit an extractElement
                 if(aggType->type->isVectorTy()) {
-                    idxExp = convertToIndex(typeOfValue(&idx),idxExp,32);
+                    idxExp = emitIndex(typeOfValue(&idx),32,idxExp);
                     Value * result = B->CreateExtractElement(valueExp, idxExp);
                     if(aggType->islogical) {
                         TType * rType = typeOfValue(exp);
@@ -1511,7 +1505,7 @@ if(baseT->isIntegerTy()) { \
                     }
                     return result;
                 }
-                idxExp = convertToIndex(typeOfValue(&idx),idxExp,64);
+                idxExp = emitIndex(typeOfValue(&idx),64,idxExp);
                 //otherwise we have an array or pointer access, both of which will use a GEP instruction
                 
                 bool pa = exp->boolean("lvalue");
