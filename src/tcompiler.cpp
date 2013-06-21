@@ -148,7 +148,7 @@ int terra_compilerinit(struct terra_State * T) {
     AddLLVMOptions(1,"-time-passes");
 #endif
 
-    AddLLVMOptions(1,"-x86-asm-syntax=intel");
+    //AddLLVMOptions(1,"-x86-asm-syntax=intel");
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
