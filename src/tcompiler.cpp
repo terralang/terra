@@ -31,6 +31,7 @@ extern "C" {
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Support/Atomic.h"
 
 using namespace llvm;
 
@@ -124,9 +125,40 @@ static void RegisterFunction(struct terra_State * T, const char * name, int iscl
     lua_setfield(T->L,-2,name);
 }
 
+static llvm::sys::Mutex terrainitlock;
+static int terrainitcount;
+bool OneTimeInit(struct terra_State * T) {
+    bool success = true;
+    terrainitlock.acquire();
+    terrainitcount++;
+    if(terrainitcount == 1) {
+        #ifdef PRINT_LLVM_TIMING_STATS
+            AddLLVMOptions(1,"-time-passes");
+        #endif
+
+        AddLLVMOptions(1,"-x86-asm-syntax=intel");
+        InitializeNativeTarget();
+        InitializeNativeTargetAsmPrinter();
+        InitializeNativeTargetAsmParser();
+    } else { 
+        if(!llvm_is_multithreaded()) {
+            if(!llvm_start_multithreaded()) {
+                terra_pusherror(T,"llvm failed to start multi-threading\n");
+                success = false;
+            }
+        }
+    }
+    terrainitlock.release();
+    return success;
+}
+
 int terra_compilerinit(struct terra_State * T) {
+    
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
+    if(!OneTimeInit(T))
+        return LUA_ERRRUN;
+
     #define REGISTER_FN(name,isclo) RegisterFunction(T,#name,isclo,terra_##name);
     TERRALIB_FUNCTIONS(REGISTER_FN)
     #undef REGISTER_FN
@@ -144,16 +176,7 @@ int terra_compilerinit(struct terra_State * T) {
     T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
     memset(T->C, 0, sizeof(terra_CompilerState));
     
-#ifdef PRINT_LLVM_TIMING_STATS
-    AddLLVMOptions(1,"-time-passes");
-#endif
-
-    AddLLVMOptions(1,"-x86-asm-syntax=intel");
-    InitializeNativeTarget();
-    InitializeNativeTargetAsmPrinter();
-    InitializeNativeTargetAsmParser();
-    
-    T->C->ctx = &getGlobalContext();
+    T->C->ctx = new LLVMContext();
     T->C->m = new Module("terra",*T->C->ctx);
     
     TargetOptions options;

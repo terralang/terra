@@ -522,7 +522,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, "<buffer>");
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
                                            
-    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), llvm::getGlobalContext() );
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *T->C->ctx );
 
     ParseAST(TheCompInst.getPreprocessor(),
             codegen,
