@@ -3622,7 +3622,7 @@ function terra.funcdefinition:printpretty()
     end
 
     local prectable = makeprectable(
-     "+",7,"-",7,"*",7,"/",8,"%",8,
+     "+",7,"-",7,"*",8,"/",8,"%",8,
      "^",11,"..",6,"<<",4,">>",4,
      "==",3,"<",3,"<=",3,
      "~=",3,">",3,">=",3,
