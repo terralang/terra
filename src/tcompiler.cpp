@@ -152,6 +152,19 @@ bool OneTimeInit(struct terra_State * T) {
     return success;
 }
 
+//LLVM 3.1 doesn't enable avx even if it is present, we detect and force it here
+namespace llvm {
+    namespace X86_MC {
+      bool GetCpuIDAndInfo(unsigned value, unsigned *rEAX,
+                           unsigned *rEBX, unsigned *rECX, unsigned *rEDX);
+    }
+}
+bool HostHasAVX() {
+    unsigned EAX,EBX,ECX,EDX;
+    llvm::X86_MC::GetCpuIDAndInfo(1,&EAX,&EBX,&ECX,&EDX);
+    return (ECX >> 28) & 1;
+}
+
 int terra_compilerinit(struct terra_State * T) {
     
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
@@ -184,7 +197,7 @@ int terra_compilerinit(struct terra_State * T) {
     std::string Triple = llvm::sys::getDefaultTargetTriple();
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
-    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", "+avx", options,Reloc::Default,CodeModel::Default,OL);
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
     
     
