@@ -1127,7 +1127,7 @@ do --construct type table that holds the singleton value representing each uniqu
                     diag:reporterror(self.anchor,erroronrecursion)
                 else 
                     self[inside] = true
-                    self[key] = getvalue(self,diag,anchor or terralib.newanchor(1))
+                    self[key] = getvalue(self,diag,anchor or terra.newanchor(1))
                     self[inside] = nil
                 end
                 if diag:haserrors() then
@@ -1462,8 +1462,9 @@ do --construct type table that holds the singleton value representing each uniqu
             if not s then
                 name = "u"..name
             end
-            registertype(name,
-                         mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s})
+            local typ = mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s}
+            registertype(name,typ)
+            typ:cstring() -- force registration of integral types so calls like terralib.typeof(1LL) work
         end
     end  
     
@@ -1872,10 +1873,12 @@ function terra.specialize(origtree, luaenv, depth)
         end
         
         local function mkop(op,a,b)
+           a = (type(a) == "string" and mkvar(a)) or a
+           b = (type(b) == "string" and mkvar(b)) or b
            return terra.newtree(s, {
             kind = terra.kinds.operator;
             operator = terra.kinds[op];
-            operands = terra.newlist { mkvar(a), mkvar(b) };
+            operands = terra.newlist { a, b };
             })
         end
 
@@ -1884,8 +1887,13 @@ function terra.specialize(origtree, luaenv, depth)
             variables = mkdefs("<i>","<limit>","<step>");
             initializers = terra.newlist({s.initial,s.limit,s.step})
         })
-        
+        local zero = terra.createterraexpression(diag,s,0LL)
         local lt = mkop("<","<i>","<limit>")
+        local gt = mkop(">","<i>","<limit>")
+        local slt = mkop("<","<step>",zero)
+        local sgt = mkop(">","<step>",zero)
+        local cond = mkop("or",mkop("and",sgt,lt),
+                               mkop("and",slt,gt))
         
         local newstmts = terra.newlist()
 
@@ -1915,7 +1923,7 @@ function terra.specialize(origtree, luaenv, depth)
         
         local wh = terra.newtree(s, {
             kind = terra.kinds["while"];
-            condition = lt;
+            condition = cond;
             body = nbody;
         })
     
