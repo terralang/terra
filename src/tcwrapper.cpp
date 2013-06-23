@@ -38,10 +38,10 @@ public:
           L(res->getState()),
           ref_table(res->getRefTable()) {
         
-        //create tables for errors messages, functions, and types
+        //create tables for errors messages, general namespace, and the tagged namespace
         InitTable(&error_table,"errors");
-        InitTable(&functions,"functions");
-        InitTable(&types,"types");
+        InitTable(&general,"general");
+        InitTable(&tagged,"tagged");
     }
     void InitTable(Obj * tbl, const char * name) {
         lua_newtable(L);
@@ -110,10 +110,11 @@ public:
             if(rd->isStruct() || rd->isUnion()) {
                 std::string name = rd->getName();
                 //TODO: why do some types not have names?
-                
+                Obj * thenamespace = &tagged;
                 if(name == "") {
                     TypedefNameDecl * decl = rd->getTypedefNameForAnonDecl();
-                    if(decl) { 
+                    if(decl) {
+                        thenamespace = &general;
                         name = decl->getName();
                     } else {
                         name = "anon";
@@ -122,14 +123,14 @@ public:
 
                 assert(name != "");
 
-                if(!types.obj(name.c_str(),tt)) {
+                if(!thenamespace->obj(name.c_str(),tt)) {
                     //create new blank struct, fill in with members
                     PushTypeFunction("newstruct");
                     lua_pushstring(L, name.c_str());
                     lua_call(L,1,1);
                     tt->initFromStack(L,ref_table);
                     tt->push();
-                    types.setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                    thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
                     
                     Obj entries;
                     tt->newlist(&entries);
@@ -303,7 +304,7 @@ public:
             Obj typ;
             if(GetType(QT,&typ)) {
                 typ.push();
-                types.setfield(name.str().c_str());
+                general.setfield(name.str().c_str());
                 //make sure it stays live
                 output << "(void)(" << name.str() << "*) (void*) 0;\n";
             } else {
@@ -396,7 +397,7 @@ public:
         lua_pushstring(L, internalname.c_str());
         typ->push();
         lua_call(L, 2, 1);
-        functions.setfield(name.c_str());
+        general.setfield(name.c_str());
     }
     void SetContext(ASTContext * ctx) {
         Context = ctx;
@@ -409,8 +410,8 @@ public:
     int ref_table;
     ASTContext * Context;
     Obj error_table; //name -> related error message
-    Obj functions; //name -> terra function
-    Obj types; //name -> terra type
+    Obj general; //name -> function or type in the general namespace
+    Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
     
     std::string error_message;
 };

@@ -3399,16 +3399,16 @@ function terra.includecstring(code,...)
         args:insert(p)
     end
     local result = terra.registercfile(code,args)
-    local functions,types,errors = result.functions,result.types,result.errors
+    local general,tagged,errors = result.general,result.tagged,result.errors
     local mt = { __index = includetableindex, errors = result.errors }
-    for k,v in pairs(types) do
-        if not functions[k] then
-            functions[k] = v
+    for k,v in pairs(tagged) do
+        if not general[k] then
+            general[k] = v
         end
     end
-    setmetatable(functions,mt)
-    setmetatable(types,mt)
-    return functions,types
+    setmetatable(general,mt)
+    setmetatable(tagged,mt)
+    return general,tagged
 end
 function terra.includec(fname,...)
     return terra.includecstring("#include \""..fname.."\"\n",...)
