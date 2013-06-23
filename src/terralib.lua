@@ -3381,20 +3381,7 @@ terra.__wrappedluafunctions = {}
 -- END TYPECHECKER
 
 -- INCLUDEC
-terra.includepath = os.getenv("INCLUDE_PATH") or "."
-function terra.includecstring(code,...)
-    local args = terralib.newlist {"-O3","-Wno-deprecated",...}
-    for p in terra.includepath:gmatch("([^;]+);?") do
-        args:insert("-I")
-        args:insert(p)
-    end
-    return terra.registercfile(code,args)
-end
-function terra.includec(fname,...)
-    return terra.includecstring("#include \""..fname.."\"\n",...)
-end
-
-function terra.includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry
+local function includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry
     local v = getmetatable(tbl).errors[name]  --it is used to report why a function or type couldn't be included
     if v then
         error("includec: error importing symbol '"..name.."': "..v, 2)
@@ -3403,6 +3390,30 @@ function terra.includetableindex(tbl,name)    --this is called when a table retu
     end
     return nil
 end
+
+terra.includepath = os.getenv("INCLUDE_PATH") or "."
+function terra.includecstring(code,...)
+    local args = terralib.newlist {"-O3","-Wno-deprecated",...}
+    for p in terra.includepath:gmatch("([^;]+);?") do
+        args:insert("-I")
+        args:insert(p)
+    end
+    local result = terra.registercfile(code,args)
+    local functions,types,errors = result.functions,result.types,result.errors
+    local mt = { __index = includetableindex, errors = result.errors }
+    for k,v in pairs(types) do
+        if not functions[k] then
+            functions[k] = v
+        end
+    end
+    setmetatable(functions,mt)
+    setmetatable(types,mt)
+    return functions,types
+end
+function terra.includec(fname,...)
+    return terra.includecstring("#include \""..fname.."\"\n",...)
+end
+
 
 -- GLOBAL MACROS
 _G["sizeof"] = terra.internalmacro(function(diag,tree,typ)
