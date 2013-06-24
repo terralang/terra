@@ -132,9 +132,28 @@ public:
                     tt->push();
                     thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
                     
+                    std::stringstream ss;
+                    if(rd->isStruct())
+                        ss << "struct.";
+                    else if(rd->isUnion())
+                        ss << "union.";
+                    else
+                        assert(!"not struct or union?");
+                    ss << name.c_str();
+
+                    lua_pushstring(L,ss.str().c_str());
+                    tt->setfield("llvm_name");
+                }
+
+                // Defer loading entries until we have a
+                // complete definition of the structure.
+                RecordDecl* actual = rd->getDefinition();
+                if (actual && !tt->boolean("entriescomplete")) {
+                    lua_pushboolean(L, 1);
+                    tt->setfield("entriescomplete");
                     Obj entries;
                     tt->newlist(&entries);
-                    if(GetFields(rd, &entries)) {
+                    if(GetFields(actual, &entries)) {
                         if(!rd->isUnion()) {
                             //structtype.entries = {entry1, entry2, ... }
                             entries.push();
@@ -148,19 +167,8 @@ public:
                             allentries.addentry();
                         }
                     }
-
-                    std::stringstream ss;
-                    if(rd->isStruct())
-                        ss << "struct.";
-                    else if(rd->isUnion())
-                        ss << "union.";
-                    else
-                        assert(!"not struct or union?");
-                    ss << name.c_str();
-                    
-                    lua_pushstring(L,ss.str().c_str());
-                    tt->setfield("llvm_name");
                 }
+
                 return true;
             } else {
                 return ImportError("non-struct record types are not supported");

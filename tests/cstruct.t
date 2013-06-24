@@ -1,5 +1,10 @@
 local C = terralib.includecstring [[
 
+// Generate an empty struct record and verify
+// it will be skipped and the actual struct
+// definition record is used instead.
+typedef struct teststruct teststruct;
+
 struct teststruct {
   int idata;
   float fdata;
