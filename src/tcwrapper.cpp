@@ -96,7 +96,76 @@ public:
         }
         return !opaque;
 
-    } 
+    }
+    
+    bool GetRecordTypeFromDecl(RecordDecl * rd, Obj * tt, std::string * fullname) {
+        if(rd->isStruct() || rd->isUnion()) {
+            std::string name = rd->getName();
+            //TODO: why do some types not have names?
+            Obj * thenamespace = &tagged;
+            if(name == "") {
+                TypedefNameDecl * decl = rd->getTypedefNameForAnonDecl();
+                if(decl) {
+                    thenamespace = &general;
+                    name = decl->getName();
+                } else {
+                    name = "anon";
+                }
+            }
+
+            assert(name != "");
+
+            if(!thenamespace->obj(name.c_str(),tt)) {
+                //create new blank struct, fill in with members
+                PushTypeFunction("newstruct");
+                lua_pushstring(L, name.c_str());
+                lua_call(L,1,1);
+                tt->initFromStack(L,ref_table);
+                tt->push();
+                thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                
+                std::stringstream ss;
+                ss << (rd->isStruct() ? "struct." : "union.") << name;
+                lua_pushstring(L,ss.str().c_str());
+                tt->setfield("llvm_name");
+                lua_pushboolean(L, true);
+                tt->setfield("undefined");
+            }
+            
+            if(tt->boolean("undefined") && rd->getDefinition() != NULL) {
+                tt->clearfield("undefined");
+                RecordDecl * defn = rd->getDefinition();
+                Obj entries;
+                tt->newlist(&entries);
+                if(GetFields(defn, &entries)) {
+                    if(!defn->isUnion()) {
+                        //structtype.entries = {entry1, entry2, ... }
+                        entries.push();
+                        tt->setfield("entries");
+                    } else {
+                        //add as a union:
+                        //structtype.entries = { {entry1,entry2,...} }
+                        Obj allentries;
+                        tt->obj("entries",&allentries);
+                        entries.push();
+                        allentries.addentry();
+                    }
+                }
+            }
+            
+            if(fullname) {
+                std::stringstream ss;
+                if(thenamespace == &tagged)
+                    ss << (rd->isStruct() ? "struct " : "union ");
+                ss << name;
+                *fullname = ss.str();
+            }
+            
+            return true;
+        } else {
+            return ImportError("non-struct record types are not supported");
+        }
+    }
 
     bool GetType(QualType T, Obj * tt) {
         
@@ -107,64 +176,7 @@ public:
           case Type::Record: {
             const RecordType *RT = dyn_cast<RecordType>(Ty);
             RecordDecl * rd = RT->getDecl();
-            if(rd->isStruct() || rd->isUnion()) {
-                std::string name = rd->getName();
-                //TODO: why do some types not have names?
-                Obj * thenamespace = &tagged;
-                if(name == "") {
-                    TypedefNameDecl * decl = rd->getTypedefNameForAnonDecl();
-                    if(decl) {
-                        thenamespace = &general;
-                        name = decl->getName();
-                    } else {
-                        name = "anon";
-                    }
-                }
-
-                assert(name != "");
-
-                if(!thenamespace->obj(name.c_str(),tt)) {
-                    //create new blank struct, fill in with members
-                    PushTypeFunction("newstruct");
-                    lua_pushstring(L, name.c_str());
-                    lua_call(L,1,1);
-                    tt->initFromStack(L,ref_table);
-                    tt->push();
-                    thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
-                    
-                    Obj entries;
-                    tt->newlist(&entries);
-                    if(GetFields(rd, &entries)) {
-                        if(!rd->isUnion()) {
-                            //structtype.entries = {entry1, entry2, ... }
-                            entries.push();
-                            tt->setfield("entries");
-                        } else {
-                            //add as a union:
-                            //structtype.entries = { {entry1,entry2,...} }
-                            Obj allentries;
-                            tt->obj("entries",&allentries);
-                            entries.push();
-                            allentries.addentry();
-                        }
-                    }
-
-                    std::stringstream ss;
-                    if(rd->isStruct())
-                        ss << "struct.";
-                    else if(rd->isUnion())
-                        ss << "union.";
-                    else
-                        assert(!"not struct or union?");
-                    ss << name.c_str();
-                    
-                    lua_pushstring(L,ss.str().c_str());
-                    tt->setfield("llvm_name");
-                }
-                return true;
-            } else {
-                return ImportError("non-struct record types are not supported");
-            }
+            return GetRecordTypeFromDecl(rd, tt,NULL);
           }  break; //TODO
           case Type::Builtin:
             switch (cast<BuiltinType>(Ty)->getKind()) {
@@ -297,6 +309,10 @@ public:
         lua_pushstring(L,error_message.c_str());
         error_table.setfield(field);
     }
+    void KeepTypeLive(llvm::StringRef name) {
+         //make sure it stays live through llvm translation
+        output << "(void)(" << name.str() << "*) (void*) 0;\n";
+    }
     bool VisitTypedefDecl(TypedefDecl * TD) {
         if(TD == TD->getCanonicalDecl() && TD->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
             llvm::StringRef name = TD->getName();
@@ -305,10 +321,19 @@ public:
             if(GetType(QT,&typ)) {
                 typ.push();
                 general.setfield(name.str().c_str());
-                //make sure it stays live
-                output << "(void)(" << name.str() << "*) (void*) 0;\n";
+               KeepTypeLive(name);
             } else {
                 SetErrorReport(name.str().c_str());
+            }
+        }
+        return true;
+    }
+    bool VisitRecordDecl(RecordDecl * rd) {
+        if(rd->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
+            Obj type;
+            std::string name;
+            if(GetRecordTypeFromDecl(rd, &type,&name)) {
+                KeepTypeLive(name);
             }
         }
         return true;

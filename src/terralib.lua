@@ -906,10 +906,11 @@ do  --constructor functions for terra functions and variables
     local function layoutstruct(st,tree,env)
         local diag = terra.newdiagnostics()
         diag:begin()
-        if st.tree and st.tree ~= "undefined" then
+        if st.tree then
             diag:reporterror(tree,"attempting to redefine struct")
             diag:reporterror(st.tree,"previous definition was here")
         end
+        st.undefined = nil
 
         local function getstructentry(v)
             local success,resolvedtype = terra.evalluaexpression(diag,env,v.type)
@@ -954,7 +955,7 @@ do  --constructor functions for terra functions and variables
                 return origv
             else
                 local st = terra.types.newstruct(name,3)
-                st.tree = "undefined"
+                st.undefined = true
                 return st
             end 
         end,...)
@@ -1277,7 +1278,7 @@ do --construct type table that holds the singleton value representing each uniqu
             if type(self.metamethods.__getentries) == "function" then
                 local success,result = terra.invokeuserfunction(self.anchor,false,self.metamethods.__getentries,self)
                 entries = (success and result) or {}
-            elseif self.tree == "undefined" then
+            elseif self.undefined then
                 diag:reporterror(anchor,"attempting to use a type before it is defined")
                 diag:reporterror(self.anchor,"type was declared here.")
             end
