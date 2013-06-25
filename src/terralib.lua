@@ -326,9 +326,12 @@ terra.environment = {}
 terra.environment.__index = terra.environment
 
 function terra.environment:enterblock()
-    self._localenv = setmetatable({},{ __index = self._localenv })
+    local e = {}
+    self._containedenvs[e] = true
+    self._localenv = setmetatable(e,{ __index = self._localenv })
 end
 function terra.environment:leaveblock()
+    self._containedenvs[self._localenv] = nil
     self._localenv = getmetatable(self._localenv).__index
 end
 function terra.environment:localenv()
@@ -340,11 +343,14 @@ end
 function terra.environment:combinedenv()
     return self._combinedenv
 end
+function terra.environment:insideenv(env)
+    return self._containedenvs[env]
+end
 
 function terra.newenvironment(_luaenv)
-    local self = {}
+    local self = setmetatable({},terra.environment)
     self._luaenv = _luaenv
-    self._localenv = {}
+    self._containedenvs = {} --map from env -> true for environments we are inside
     self._combinedenv = setmetatable({}, {
         __index = function(_,idx)
             return self._localenv[idx] or self._luaenv[idx]
@@ -353,7 +359,8 @@ function terra.newenvironment(_luaenv)
             error("cannot define global variables or assign to upvalues in an escape")
         end;
     })
-    return setmetatable(self, terra.environment)
+    self:enterblock()
+    return self
 end
 
 
@@ -2039,10 +2046,10 @@ function terra.funcdefinition:typecheck()
     local function createcast(exp,typ)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ:complete(exp), expression = exp })
     end
-    local typedexpressionkey = {} --unique for this call to typecheck
+    
     local function createtypedexpressionlist(anchor, explist, fncall, minsize)
         assert(terra.islist(explist))
-        return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = typedexpressionkey, minsize = minsize or 0})
+        return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = symbolenv:localenv(), minsize = minsize or 0})
     end
     local function createextractreturn(fncall, index, t)
         return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t:complete(fncall), fncall = fncall})
@@ -2949,9 +2956,9 @@ function terra.funcdefinition:typecheck()
                     return e:copy { type = terra.types.error }
                 end
             elseif e:is "typedexpressionlist" then --expressionlist that has been previously typechecked and re-injected into the compiler
-                if e.key ~= typedexpressionkey then --if it went through a macro, it could have been retained by lua code and returned to a different function
-                                                    --we check that this didn't happen by checking that it has an expression key unique to this function
-                    diag:reporterror(e,"cannot use a typed expression from one function in another")
+                if not symbolenv:insideenv(e.key) then --if it went through a macro, it could have been retained by lua code and returned to a different scope or even a different function
+                                                       --we check that this didn't happen by checking that we are still inside the same scope where the expression was created
+                    diag:reporterror(e,"cannot use a typed expression from one scope/function in another")
                     diag:reporterror(ftree,"typed expression used in this function.")
                 end
                 return e
