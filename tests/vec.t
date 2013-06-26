@@ -23,5 +23,5 @@ end
 
 local test = require("test")
 
-test.eq(foo(3), 1)
+test.eq(foo(3), true)
 test.eq(foo2(3,4), 3.5)

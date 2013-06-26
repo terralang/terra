@@ -31,7 +31,7 @@ end
 local lor = mkor(bool)
 local aor = mkor(int)
 
-test.eq(lor(1,2),1)
+test.eq(lor(1,2),true)
 test.eq(aor(1,2),3)
 
 

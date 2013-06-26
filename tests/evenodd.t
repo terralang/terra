@@ -14,7 +14,7 @@ terra isodd(a : uint) : bool
 end
 
 local test = require("test")
-test.eq(iseven(3),0)
-test.eq(iseven(2),1)
-test.eq(isodd(3),1)
-test.eq(isodd(2),0)
+test.eq(iseven(3),false)
+test.eq(iseven(2),true)
+test.eq(isodd(3),true)
+test.eq(isodd(2),false)

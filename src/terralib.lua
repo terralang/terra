@@ -1187,7 +1187,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 local value = self.type:cstring()
                 cstring = definetype(value,"ptr",value .. "*")
             elseif self:islogical() then
-                cstring = "uint8_t"
+                cstring = "bool"
             elseif self:isstruct() then
                 local nm = uniquetypename(self.name)
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type

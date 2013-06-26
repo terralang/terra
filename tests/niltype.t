@@ -6,4 +6,4 @@ terra foo()
 end
 
 local test = require("test")
-test.eq(foo(),1)
+test.eq(foo(),true)
