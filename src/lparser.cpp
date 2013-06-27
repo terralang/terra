@@ -444,7 +444,7 @@ static void dump_stack(lua_State * L, int elem) {
 static int block_follow (LexState *ls, int withuntil) {
   switch (ls->t.token) {
     case TK_ELSE: case TK_ELSEIF:
-    case TK_END: case TK_EOS:
+    case TK_END: case TK_EOS: case TK_IN:
       return 1;
     case TK_UNTIL: return withuntil;
     default: return 0;
@@ -759,6 +759,7 @@ static void parlist (LexState *ls) {
   for(size_t i = 0; i < vnames.size(); i++)
     definevariable(ls, vnames[i]);
 }
+static void block (LexState *ls);
 
 static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
@@ -780,9 +781,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
     RETURNS_1(terratype(ls));
     add_field(ls,tbl,"return_types");
   }
-  int blk = new_table(ls,T_block);
-  RETURNS_1(statlist(ls));
-  add_field(ls,blk,"statements");
+  RETURNS_1(block(ls));
   add_field(ls,tbl,"body");
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
@@ -972,8 +971,6 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
     OutputBuffer_printf(&ls->output_buffer," }, { __index = terra.makeenvunstrict(getfenv()) }) end");
 }
 
-static void block (LexState *ls);
-
 static void doquote(LexState * ls, bool isexp) {
     check_no_terra(ls, isexp ? "`" : "quote");
     
@@ -987,8 +984,19 @@ static void doquote(LexState * ls, bool isexp) {
         expdesc exp;
         RETURNS_1(expr(ls,&exp));
     } else {
-        RETURNS_1(block(ls));
+        FuncState * fs = ls->fs;
+        BlockCnt bc;
+        enterblock(fs, &bc, 0);
+        int let = new_table(ls, T_treelist);
+        RETURNS_1(statlist(ls));
+        add_field(ls, let, "statements");
+        if(testnext(ls, TK_IN)) {
+            expdesc v;
+            RETURNS_1(explist(ls, &v));
+            add_field(ls, let, "expressions");
+        }
         check_match(ls, TK_END, TK_QUOTE, line);
+        leaveblock(fs);
     }
     int tbl = lua_gettop(ls->L);
     
@@ -1373,10 +1381,12 @@ static void block (LexState *ls) {
   FuncState *fs = ls->fs;
   BlockCnt bl;
   int blk = new_table(ls,T_block);
+  int treelist = new_table(ls,T_treelist);
   enterblock(fs, &bl, 0);
   RETURNS_1(statlist(ls));
-  add_field(ls,blk,"statements");
   leaveblock(fs);
+  add_field(ls,treelist,"statements");
+  add_field(ls,blk,"body");
 }
 
 
@@ -1489,17 +1499,20 @@ static void repeatstat (LexState *ls, int line) {
   enterblock(fs, &bl1, 1);  /* loop block */
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
-  int tbl = new_table(ls,T_repeat);
   int blk = new_table(ls,T_block);
+  int tbl = new_table(ls,T_repeat);
+  int treelist = new_table(ls,T_treelist);
   RETURNS_1(statlist(ls));
-  add_field(ls,blk,"statements");
+  add_field(ls,treelist,"statements");
   add_field(ls,tbl,"body");
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   expdesc c;
   RETURNS_1(cond(ls,&c));
   add_field(ls,tbl,"condition");
+  add_field(ls,blk,"body"); //assign body of block to repeat
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
+  //repeat is translated into { kind = block; body = { kind = repeat; body = { kind = treelist, statements = <bodystmts>}; cond = <cond> } }
 }
 
 
@@ -1603,35 +1616,8 @@ static void test_then_block (LexState *ls) {
   RETURNS_1(cond(ls, &v));  /* read condition */
   add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
-  int discard_remainder = 0;
-  if (ls->t.token == TK_GOTO || ls->t.token == TK_BREAK) {
-    enterblock(fs, &bl, 0);  /* must enter block before 'goto' */
-    int blk = new_table(ls,T_block);
-    int stmts = new_list(ls);
-    RETURNS_1(gotostat(ls));  /* handle goto/break */
-    add_entry(ls,stmts);
-    add_field(ls,blk,"statements");
-    add_field(ls,tbl,"body");
-    if (block_follow(ls, 0)) {  /* 'goto' is the entire block? */
-      leaveblock(fs);
-      return;  /* and that is it */
-    }
-    else {  /* must skip over 'then' part if condition is false */
-      discard_remainder = 1;
-    }
-  }
-  else {  /* regular case (not goto/break) */
-    enterblock(fs, &bl, 0);
-  }
-  int blk = new_table(ls,T_block);
-  RETURNS_1(statlist(ls));  /* `then' part */
-  add_field(ls,blk,"statements");
-  if(!discard_remainder) {
-    add_field(ls,tbl,"body");
-  } else {
-    if(ls->in_terra) lua_pop(ls->L,1); //discard block after goto
-  }
-  leaveblock(fs);
+  RETURNS_1(block(ls));
+  add_field(ls,tbl,"body");
 }
 
 static void ifstat (LexState *ls, int line) {

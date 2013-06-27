@@ -1,5 +1,5 @@
 local a = quote
-    while true do end
+    while false do end
 end
 terra foo()
   return  a

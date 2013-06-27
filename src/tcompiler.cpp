@@ -1903,6 +1903,11 @@ if(baseT->isIntegerTy()) { \
         }
         switch(kind) {
             case T_block: {
+                Obj treelist;
+                stmt->obj("body",&treelist);
+                emitStmt(&treelist);
+            } break;
+            case T_treelist: {
                 Obj stmts;
                 stmt->obj("statements",&stmts);
                 int N = stmts.size();

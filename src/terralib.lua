@@ -169,21 +169,6 @@ function terra.list:map(fn)
     end 
     return l
 end
-function terra.list:flatmap(fn)
-    local l = terra.newlist()
-    for i,v in ipairs(self) do
-        local tmp = fn(v)
-        if terra.islist(tmp) then
-            for _,v2 in ipairs(tmp) do
-                l:insert(v2)
-            end
-        else
-            l:insert(tmp)
-        end
-    end 
-    return l
-end
-
 
 function terra.list:printraw()
     for i,v in ipairs(self) do
@@ -1655,11 +1640,7 @@ function terra.createterraexpression(diag,anchor,v)
             return terra.newtree(anchor, { kind = terra.kinds["var"], value = v, name = name or tostring(v), lvalue = true }) 
         elseif terra.isquote(v) then
             assert(terra.istree(v.tree))
-            if v.tree:is "block" then
-                return terra.newtree(anchor, { kind = terra.kinds.treelist, values = v.tree.statements })
-            else
-                return v.tree
-            end
+            return v.tree
         elseif terra.istree(v) then
             --if this is a raw tree, we just drop it in place and hope the user knew what they were doing
             return v
@@ -1683,7 +1664,7 @@ function terra.createterraexpression(diag,anchor,v)
         for _,i in ipairs(v) do
             values:insert(createsingle(i))
         end
-        return terra.newtree(anchor, { kind = terra.kinds.treelist, values = values})
+        return terra.newtree(anchor, { kind = terra.kinds.treelist, trees = values})
     else
         return createsingle(v)
     end
@@ -1769,22 +1750,30 @@ function terra.specialize(origtree, luaenv, depth)
         elseif e:is "fornum" then
             --we desugar this early on so that we don't have to have special handling for the definitions/scoping
             return translatetree(desugarfornum(e))
-        elseif e:is "repeat" then
-            --special handling of scope for
-            env:enterblock()
-            local b = translategenerictree(e.body)
-            local c = translatetree(e.condition)
-            env:leaveblock()
-            if b ~= e.body or c ~= e.condition then
-                return e:copy { body = b, condition = c }
-            else
-                return e
-            end
         elseif e:is "block" then
             env:enterblock()
             local r = translategenerictree(e)
             env:leaveblock()
             return r
+        elseif e:is "repeat" then
+            --special handling for order of repeat
+            local nb = translatetree(e.body)
+            local nc = translatetree(e.condition)
+            if nb ~= e.body or nc ~= e.condition then
+                return e:copy { body = nb, condition = nc }
+            else
+                return e
+            end
+        elseif e:is "treelist" then
+            --special handling for ordering of treelist
+            local ns = e.statements and translatelist(e.statements)
+            local nt = e.trees and translatelist(e.trees)
+            local ne = e.expressions and translatelist(e.expressions)
+            if ns ~= e.statements or nt ~= e.trees or ne ~= e.expressions then
+                return e:copy { statements = ns, trees = nt, expressions = ne }
+            else
+                return e
+            end
         else
             return translategenerictree(e)
         end
@@ -1911,7 +1900,7 @@ function terra.specialize(origtree, luaenv, depth)
             initializers = terra.newlist{mkvar("<i>")}
         })
         newstmts:insert(newvaras)
-        for _,v in pairs(s.body.statements) do
+        for _,v in pairs(s.body.body.statements) do
             newstmts:insert(v)
         end
         
@@ -1926,7 +1915,7 @@ function terra.specialize(origtree, luaenv, depth)
         
         local nbody = terra.newtree(s, {
             kind = terra.kinds.block;
-            statements = newstmts;
+            body = terra.newtree(s, { kind = terra.kinds.treelist, statements = newstmts });
         })
         
         local wh = terra.newtree(s, {
@@ -1934,8 +1923,10 @@ function terra.specialize(origtree, luaenv, depth)
             condition = cond;
             body = nbody;
         })
+
+        local newlist = terra.newtree(s, { kind = terra.kinds.treelist, statements = terra.newlist {dv,wh} } )
     
-        return terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist {dv,wh} } )
+        return terra.newtree(s, { kind = terra.kinds.block, body = newlist } )
     end
     --recursively translate any tree or list of trees.
     --new objects are only created when we find a new value
@@ -2905,7 +2896,8 @@ function terra.funcdefinition:typecheck()
         --checkexp then makes the return value consistent with the notruncate argument
         local function docheck(e)
             if not terra.istree(e) then
-                print("NOT A TREE: ",terra.isquote(e))
+                print("not a tree?")
+                print(debug.traceback())
                 terra.tree.printraw(e)
             end
             if e:is "luaobject" then
@@ -3027,7 +3019,7 @@ function terra.funcdefinition:typecheck()
                 
                 --insert the casts to the right type in the parameter list
                 local typs = entries.expressions:map(function(x) return typ end)
-                
+
                 insertcasts(typs,entries)
                 
                 return e:copy { type = aggtype, expressions = entries }
@@ -3041,17 +3033,19 @@ function terra.funcdefinition:typecheck()
             elseif e:is "treelist" then
                 local results = terra.newlist()
                 local fncall = nil
-                for i,v in ipairs(e.values) do
-                    if v:is "luaobject" then
-                        results:insert(v)
-                    elseif i == #e.values then
-                        local tel = checkexp(v,true)
-                        for i,e in ipairs(tel.expressions) do
-                            results:insert(e)
+                if e.trees then
+                    for i,v in ipairs(e.trees) do
+                        if v:is "luaobject" then
+                            results:insert(v)
+                        elseif i == #e.trees then
+                            local tel = checkexp(v,true)
+                            for i,e in ipairs(tel.expressions) do
+                                results:insert(e)
+                            end
+                            fncall = tel.fncall
+                        else
+                            results:insert(checkexp(v))
                         end
-                        fncall = tel.fncall
-                    else
-                        results:insert(checkexp(v))
                     end
                 end
                 return createtypedexpressionlist(e,results,fncall)
@@ -3188,9 +3182,9 @@ function terra.funcdefinition:typecheck()
     function checkstmt(s)
         if s:is "block" then
             symbolenv:enterblock()
-            local r = s.statements:flatmap(checkstmt)
+            local r = checkstmt(s.body)
             symbolenv:leaveblock()
-            return s:copy {statements = r}
+            return s:copy {body = r}
         elseif s:is "return" then
             local rstmt = s:copy { expressions = checkparameterlist(s,s.expressions) }
             return_stmts:insert( rstmt )
@@ -3237,16 +3231,14 @@ function terra.funcdefinition:typecheck()
             return r
         elseif s:is "if" then
             local br = s.branches:map(checkcondbranch)
-            local els = (s.orelse and checkstmt(s.orelse)) or terra.newtree(s, { kind = terra.kinds.block, statements = terra.newlist() })
+            local els = (s.orelse and checkstmt(s.orelse)) or terra.newtree(s,{ kind = terra.kinds.treelist, statements = terra.newlist() })
             return s:copy{ branches = br, orelse = els }
         elseif s:is "repeat" then
             local breaktable = enterloop()
-            symbolenv:enterblock() --we don't use block here because, unlike while loops, the condition needs to be checked in the scope of the loop
-            local new_blk = s.body:copy { statements = s.body.statements:map(checkstmt) }
+            local new_body = checkstmt(s.body)
             local e = checkexptyp(s.condition,bool)
-            symbolenv:leaveblock()
             leaveloop()
-            return s:copy { body = new_blk, condition = e, breaktable = breaktable }
+            return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
             local res
             
@@ -3298,7 +3290,17 @@ function terra.funcdefinition:typecheck()
         elseif s:is "method" then
             return checkmethod(s,true)
         elseif s:is "treelist" then
-            return s.values:flatmap(checkstmt)
+            local ns = terra.newlist()
+            local function addtrees(src)
+                if src then
+                    for i,t in ipairs(src) do
+                        ns:insert(checkstmt(t))
+                    end
+                end
+            end
+            addtrees(s.statements)
+            addtrees(s.trees)
+            return s:copy { statements = ns }
         elseif s:is "intrinsic" then
             return checkintrinsic(s,false)
         else
@@ -3566,21 +3568,21 @@ function terra.funcdefinition:printpretty()
     function emitStmt(s)
         if s:is "block" then
             enterblock()
-            local function emitStatList(lst) --nested statements (e.g. from quotes need "do" appended)
+            emitStmt(s.body)
+            leaveblock()
+        elseif s:is "treelist" then
+            local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
                 for i,ss in ipairs(lst) do
                     if ss:is "block" then
                         begin("do\n")
-                        enterblock()
-                        emitStatList(ss.statements)
-                        leaveblock()
+                        emitStmt(ss)
                         begin("end\n")
                     else
                         emitStmt(ss)
                     end
                 end
             end
-            emitStatList(s.statements)
-            leaveblock()
+            emitStmtList(s.statements)
         elseif s:is "return" then
             begin("return ")
             emitParamList(s.expressions)
