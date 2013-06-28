@@ -2601,27 +2601,32 @@ function terra.funcdefinition:typecheck()
             paramlist.expressions = results
             return 1
         else
-            local function matchmeet(a,b)
+            local function meetwith(a,b)
                 local ale, ble = true,true
                 local meet = terra.newlist()
                 for i = 1,size do
                     local m = math.min(a[i] or TOP,b[i] or TOP)
-                    meet[i] = m
                     ale = ale and a[i] == m
                     ble = ble and b[i] == m
+                    a[i] = m
                 end
-                return meet,ale,ble --meet of both list, a <= b, b <= a
+                return ale,ble --a = a meet b, a <= b, b <= a
             end
 
-            local results,matches,ale,ble = terralib.newlist(),terralib.newlist()
+            local results,matches = terralib.newlist(),terralib.newlist()
             for i,typelist in ipairs(typelists) do
                 local valid,nr,nm = trylist(typelist,true)
                 if valid then
-                    matches,ale,ble = matchmeet(matches,nm)
+                    local ale,ble = meetwith(matches,nm)
                     if ale == ble then
+                        if ale and not matches.exists then
+                            results = terra.newlist()
+                        end
                         results:insert( { expressions = nr, idx = i } )
+                        matches.exists = ale
                     elseif ble then
                         results = terra.newlist { { expressions = nr, idx = i } }
+                        matches.exists = true
                     end
                 end
             end
