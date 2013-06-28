@@ -2131,7 +2131,6 @@ function terra.funcdefinition:typecheck()
     local insertexplicitcast --handles casts performed explicitly (e.g. var a = int(3.5))
     local structcast -- handles casting from an anonymous structure type to another struct type (e.g. StructFoo { 3, 5 })
     local insertrecievercast -- handles casting for method recievers, which allows for an implicit addressof operator to be inserted
-
     -- all implicit casts (struct,reciever,generic) take a speculative argument
     --if speculative is true, then errors will not be reported (caller must check)
     --this is used to see if an overloaded function can apply to the argument list
@@ -2240,7 +2239,7 @@ function terra.funcdefinition:typecheck()
                     if result.type ~= typ then 
                         diag:reporterror(exp,"user-defined cast returned expression with the wrong type.")
                     end
-                    return result
+                    return result,true
                 else
                     errormsgs:insert(result)
                 end
@@ -2558,66 +2557,75 @@ function terra.funcdefinition:typecheck()
 
     local function tryinsertcasts(typelists,castbehavior, speculate, allowambiguous, paramlist)
         local size = #paramlist.expressions
+        local PERFECT_MATCH,CAST_MATCH,TOP = 1,2,math.huge
+        
         local function trylist(typelist, speculate)
-            local allvalid = true
             if #typelist ~= size then
-                allvalid = false
                 if not speculate then
                     diag:reporterror(paramlist,"expected "..#typelist.." parameters, but found "..size)
                 end
+                return false
             end
             
-            local results = terra.newlist{}
-            
+            local results,matches = terra.newlist(),terra.newlist()
             for i,param in ipairs(paramlist.expressions) do
                 local typ = typelist[i]
-                
-                local result,valid
-                if typ == nil or typ == "passthrough" then
-                    result,valid = param,true 
-                elseif castbehavior == "all" or (i == 1 and castbehavior == "first") then
-                    result,valid = insertrecievercast(param,typ,speculate)
-                elseif typ == "vararg" then
-                    result,valid = insertvarargpromotions(param),true
+                local result,match,valid
+                if typ == "passthrough" or typ == param.type then
+                    result,match = param,PERFECT_MATCH
                 else
-                    result,valid = insertcast(param,typ,speculate)
+                    match = CAST_MATCH 
+                    if castbehavior == "all" or (i == 1 and castbehavior == "first") then
+                        result,valid = insertrecievercast(param,typ,speculate)
+                    elseif typ == "vararg" then
+                        result,valid = insertvarargpromotions(param),true
+                    else
+                        result,valid = insertcast(param,typ,speculate)
+                    end
+                    if not valid then
+                        return false
+                    end
                 end
-                results[i] = result
-                allvalid = allvalid and valid
+                results[i],matches[i] = result,match
             end
-            
-            return results,allvalid
+            return true,results,matches
         end
 
         if #typelists == 1 then
-            local typelist = typelists[1]    
-            local results,allvalid = trylist(typelist,false)
+            local typelist = typelists[1]
+            local valid,results = trylist(typelist,false)
+            if not valid then
+                return nil
+            end
             assert(#results == size)
             paramlist.expressions = results
             return 1
         else
-            --evaluate each potential list
-            local valididx,validcasts
+            local function matchmeet(a,b)
+                local ale, ble = true,true
+                local meet = terra.newlist()
+                for i = 1,size do
+                    local m = math.min(a[i] or TOP,b[i] or TOP)
+                    meet[i] = m
+                    ale = ale and a[i] == m
+                    ble = ble and b[i] == m
+                end
+                return meet,ale,ble --meet of both list, a <= b, b <= a
+            end
+
+            local results,matches,ale,ble = terralib.newlist(),terralib.newlist()
             for i,typelist in ipairs(typelists) do
-                local results,allvalid = trylist(typelist,true)
-                if allvalid then
-                    if valididx == nil then
-                        valididx = i
-                        validcasts = results
-                        if allowambiguous then
-                            break
-                        end
-                    else
-                        local optiona = typelists[valididx]:mkstring("(",",",")")
-                        local optionb = typelist:mkstring("(",",",")")
-                        diag:reporterror(paramlist,"call to overloaded function is ambiguous. can apply to both ", optiona, " and ", optionb)
-                        break
+                local valid,nr,nm = trylist(typelist,true)
+                if valid then
+                    matches,ale,ble = matchmeet(matches,nm)
+                    if ale == ble then
+                        results:insert( { expressions = nr, idx = i } )
+                    elseif ble then
+                        results = terra.newlist { { expressions = nr, idx = i } }
                     end
                 end
-            end       
-            if valididx then
-               paramlist.expressions = validcasts
-            else
+            end
+            if #results == 0 then
                 --no options were valid and our caller wants us to, lets emit some errors
                 if not speculate then
                     diag:reporterror(paramlist,"call to overloaded function does not apply to any arguments")
@@ -2626,8 +2634,15 @@ function terra.funcdefinition:typecheck()
                         trylist(typelist,false)
                     end
                 end
+                return nil
+            else
+                if #results > 1 and not allowambiguous then
+                    local strings = results:map(function(x) return typelists[x.idx]:mkstring("type list (",",",") ") end)
+                    diag:reporterror(paramlist,"call to overloaded function is ambiguous. can apply to ",unpack(strings))
+                end 
+                paramlist.expressions = results[1].expressions
+                return results[1].idx
             end
-            return valididx
         end
     end
     

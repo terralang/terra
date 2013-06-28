@@ -12,4 +12,4 @@ terra doit()
 end
 
 local test = require("test")
-test.eq(doit(),3)
+test.eq(doit(),2)
