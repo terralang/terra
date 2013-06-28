@@ -31,7 +31,7 @@ dotwice = macro(function(exp)
 end)
 
 terra doit()
-	return dotwice(takesAnA(twoInts())) 
+	return dotwice(takesAnA((twoInts()))) 
 end
 
 

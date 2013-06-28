@@ -2038,9 +2038,9 @@ function terra.funcdefinition:typecheck()
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ:complete(exp), expression = exp })
     end
     
-    local function createtypedexpressionlist(anchor, explist, fncall, minsize)
+    local function createtypedexpressionlist(anchor, explist, fncall)
         assert(terra.islist(explist))
-        return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = symbolenv:localenv(), minsize = minsize or 0})
+        return terra.newtree(anchor, { kind = terra.kinds.typedexpressionlist, expressions = explist, fncall = fncall, key = symbolenv:localenv() })
     end
     local function createextractreturn(fncall, index, t)
         return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t:complete(fncall), fncall = fncall})
@@ -2530,27 +2530,22 @@ function terra.funcdefinition:typecheck()
     --functions to handle typecheck invocations (functions,methods,macros,operator overloads)
 
     function checkparameterlist(anchor,params) --individual params may be already typechecked (e.g. if they were a method call receiver) 
-                                                                --in this case they are treated as single expressions
+                                               --in this case they are treated as single expressions
         local exps = terra.newlist()
         local fncall = nil
         
-        local minsize = #params --minsize is either the number of explicitly listed parameters (a,b,c) minsize == 3
-                                --or 1 less than this number if 'c' is a macro/quotelist that has 0 elements
         for i,p in ipairs(params) do
             if i ~= #params then
                 exps:insert(checkrvalue(p))
             else
                 local explist = checkexp(p,true,false)
                 fncall = explist.fncall
-                if #explist.expressions == 0 then
-                    minsize = minsize - 1
-                end
                 for i,a in ipairs(explist.expressions) do
                     exps:insert(asrvalue(a))
                 end
             end
         end
-        return createtypedexpressionlist(anchor, exps, fncall, minsize)
+        return createtypedexpressionlist(anchor, exps, fncall)
     end
 
     local function insertvarargpromotions(param)
@@ -2562,18 +2557,13 @@ function terra.funcdefinition:typecheck()
     end
 
     local function tryinsertcasts(typelists,castbehavior, speculate, allowambiguous, paramlist)
-        local minsize, maxsize = paramlist.minsize, #paramlist.expressions
+        local size = #paramlist.expressions
         local function trylist(typelist, speculate)
             local allvalid = true
-            if #typelist > maxsize then
+            if #typelist ~= size then
                 allvalid = false
                 if not speculate then
-                    diag:reporterror(paramlist,"expected at least "..#typelist.." parameters, but found "..maxsize)
-                end
-            elseif #typelist < minsize then
-                allvalid = false
-                if not speculate then
-                    diag:reporterror(paramlist,"expected no more than "..#typelist.." parameters, but found at least "..minsize)
+                    diag:reporterror(paramlist,"expected "..#typelist.." parameters, but found "..size)
                 end
             end
             
@@ -2598,22 +2588,12 @@ function terra.funcdefinition:typecheck()
             
             return results,allvalid
         end
-        
-        local function shortenparamlist(size)
-            if #paramlist.expressions > size then --could already be shorter on error
-                for i = size+1,maxsize do
-                    paramlist.expressions[i] = nil
-                end
-                assert(#paramlist.expressions == size) 
-            end
-        end
 
         if #typelists == 1 then
             local typelist = typelists[1]    
             local results,allvalid = trylist(typelist,false)
-            assert(#results == maxsize)
+            assert(#results == size)
             paramlist.expressions = results
-            shortenparamlist(#typelist)
             return 1
         else
             --evaluate each potential list
@@ -2634,11 +2614,9 @@ function terra.funcdefinition:typecheck()
                         break
                     end
                 end
-            end
-            
+            end       
             if valididx then
                paramlist.expressions = validcasts
-               shortenparamlist(#typelists[valididx])
             else
                 --no options were valid and our caller wants us to, lets emit some errors
                 if not speculate then
@@ -2846,7 +2824,7 @@ function terra.funcdefinition:typecheck()
         for i,p in ipairs(params.expressions) do
             paramtypes:insert(p.type)
         end
-        local name,intrinsictype = e.typefn(paramtypes,params.minsize)
+        local name,intrinsictype = e.typefn(paramtypes)
         if type(name) ~= "string" then
             diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
             return e:copy { type = terra.types.error }
@@ -3252,8 +3230,6 @@ function terra.funcdefinition:typecheck()
                     vtypes:insert(v.type or "passthrough")
                 end
                 
-
-
                 insertcasts(vtypes,params)
                 
                 for i,v in ipairs(lhs) do
@@ -3337,41 +3313,15 @@ function terra.funcdefinition:typecheck()
     dbprint(2,"Return Stmts:")
     
     --calculate the return type based on either the declared return type, or the return statements
-
     local return_types
     if ftree.return_types then --take the return types to be as specified
         return_types = ftree.return_types
     else --calculate the meet of all return type to calculate the actual return type
-        if #return_stmts == 0 then
-            return_types = terra.newlist()
-        else
-            local minsize,maxsize
-            for _,stmt in ipairs(return_stmts) do
-                if return_types == nil then
-                    return_types = terra.newlist()
-                    for i,exp in ipairs(stmt.expressions.expressions) do
-                        return_types[i] = exp.type
-                    end
-                    minsize = stmt.expressions.minsize
-                    maxsize = #stmt.expressions.expressions
-                else
-                    minsize = math.max(minsize,stmt.expressions.minsize)
-                    maxsize = math.min(maxsize,#stmt.expressions.expressions)
-                    if minsize > maxsize then
-                        diag:reporterror(stmt,"returning a different length from previous return")
-                    else
-                        for i,exp in ipairs(stmt.expressions.expressions) do
-                            if i <= maxsize then
-                                return_types[i] = typemeet(exp,return_types[i],exp.type)
-                            end
-                        end
-                    end
-                end
-            end
-            while #return_types > maxsize do
-                table.remove(return_types)
-            end
-            
+        return_types = terra.newlist()
+        for _,stmt in ipairs(return_stmts) do
+            for i,exp in ipairs(stmt.expressions.expressions) do
+                return_types[i] = (return_types[i] and typemeet(exp,return_types[i],exp.type)) or exp.type
+            end 
         end
     end
     local fntype = terra.types.functype(parameter_types,return_types):complete(ftree)

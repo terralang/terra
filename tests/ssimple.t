@@ -305,7 +305,7 @@ local terra returns2() return 1,2 end
 
 terra foo29(a : int)
 	if a > 1 then
-		return returns2()
+		return (returns2())
 	else
 		return 5
 	end
@@ -336,12 +336,11 @@ terra foo35()
 	return definedtwice(3) + definedtwice(3,4)
 end
 
-failit(function()
-	local terra foo36()
-		return definedtwice(returns2())
-	end
-	foo36()
-end)
+
+local terra foo36()
+	return definedtwice(returns2())
+end
+assert(3 == foo36())
 
 assert(foo35() == 10)
 

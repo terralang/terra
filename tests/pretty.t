@@ -18,7 +18,7 @@ terra foo()
 	::what::
 	goto what
 	while 4 < 3 do
-		return 3,4,bar(aa.data)
+		return 3,4,4,bar(aa.data)
 	end
 	var a = 0.0
 	if a < 3 then
