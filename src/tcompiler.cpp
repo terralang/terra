@@ -985,7 +985,6 @@ struct TerraCompiler {
     terra_State * T;
     terra_CompilerState * C;
     IRBuilder<> * B;
-    BasicBlock * BB; //current basic block
     Obj funcobj;
     Function * func;
     TType * func_type;
@@ -1051,9 +1050,9 @@ struct TerraCompiler {
         
         getOrCreateFunction(&funcobj,&func,&func_type);
         
-        BB = BasicBlock::Create(*C->ctx,"entry",func);
+        BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
         
-        B->SetInsertPoint(BB);
+        B->SetInsertPoint(entry);
         
         Obj typedtree;
         Obj parameters;
@@ -1077,9 +1076,10 @@ struct TerraCompiler {
         Obj body;
         typedtree.obj("body",&body);
         emitStmt(&body);
-        if(BB) { //no terminating return statment, we need to insert one
-            emitReturnUndef();
-        }
+        //if there no terminating return statment, we need to insert one
+        //if there was a Return, then this block is dead and will be cleaned up
+        emitReturnUndef();
+        
         DEBUG_ONLY(T) {
             func->dump();
         }
@@ -1779,16 +1779,14 @@ if(baseT->isIntegerTy()) { \
         setInsertBlock(thenBB);
         
         emitStmt(&body);
-        if(BB)
-            B->CreateBr(footer);
+        B->CreateBr(footer);
         insertBB(continueif);
         setInsertBlock(continueif);
         
     }
     
     void setInsertBlock(BasicBlock * bb) {
-        BB = bb;
-        B->SetInsertPoint(BB);
+        B->SetInsertPoint(bb);
     }
     void setBreaktable(Obj * loop, BasicBlock * exit) {
         //set the break table for this loop to point to the loop exit
@@ -1890,17 +1888,13 @@ if(baseT->isIntegerTy()) { \
         assert(fnresult);
         return CC.EmitExtractReturn(fnresult,rtypes.size(),idx);
     }
+    void startDeadCode() {
+        BasicBlock * bb = createAndInsertBB("dead");
+        setInsertBlock(bb);
+    }
     
     void emitStmt(Obj * stmt) {
         T_Kind kind = stmt->kind("kind");
-        if(!BB) { //dead code, no emitting
-            if(kind == T_label) { //unless there is a label, then someone can jump here
-                BasicBlock * bb = getOrCreateBlockForLabel(stmt);
-                insertBB(bb);
-                setInsertBlock(bb);
-            }
-            return;
-        }
         switch(kind) {
             case T_block: {
                 Obj treelist;
@@ -1926,7 +1920,7 @@ if(baseT->isIntegerTy()) { \
                 Obj ftype;
                 funcobj.obj("type",&ftype);
                 CC.EmitReturn(&ftype,func,&results);
-                BB = NULL;
+                startDeadCode();
             } break;
             case T_label: {
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt);
@@ -1939,7 +1933,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("definition",&lbl);
                 BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
                 B->CreateBr(bb);
-                BB = NULL;
+                startDeadCode();
             } break;
             case T_break: {
                 Obj def;
@@ -1947,7 +1941,7 @@ if(baseT->isIntegerTy()) { \
                 BasicBlock * breakpoint = (BasicBlock *) def.ud("value");
                 assert(breakpoint);
                 B->CreateBr(breakpoint);
-                BB = NULL;
+                startDeadCode();
             } break;
             case T_while: {
                 Obj cond,body;
@@ -1972,8 +1966,7 @@ if(baseT->isIntegerTy()) { \
                 
                 emitStmt(&body);
                 
-                if(BB)
-                    B->CreateBr(condBB);
+                B->CreateBr(condBB);
                 
                 insertBB(merge);
                 setInsertBlock(merge);
@@ -1991,8 +1984,7 @@ if(baseT->isIntegerTy()) { \
                 Obj orelse;
                 stmt->obj("orelse",&orelse);
                 emitStmt(&orelse);
-                if(BB)
-                    B->CreateBr(footer);
+                B->CreateBr(footer);
                 insertBB(footer);
                 setInsertBlock(footer);
             } break;
@@ -2009,10 +2001,8 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
                 emitStmt(&body);
-                if(BB) {
-                    Value * c = emitCond(&cond);
-                    B->CreateCondBr(c, merge, loopBody);
-                }
+                Value * c = emitCond(&cond);
+                B->CreateCondBr(c, merge, loopBody);
                 insertBB(merge);
                 setInsertBlock(merge);
                 
