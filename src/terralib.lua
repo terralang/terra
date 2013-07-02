@@ -750,10 +750,10 @@ function terra.quote:astype()
 end
 
 function terra.quote:gettypes()
-    if not self.tree:is "typedexpressions" or self.tree.expression:is "luaobject" then
+    if not self.tree:is "typedexpression" or self.tree.expression:is "luaobject" then
         error("not a typed quote")
     end
-    local types = self.tree.expression:is "treelist" and self.tree.types or { self.tree.type }
+    local types = self.tree.expression:is "treelist" and self.tree.types or { self.tree.expression.type }
     return types
 end
 function terra.quote:gettype()
@@ -3414,7 +3414,7 @@ end)
 
 local function createattributetable(q)
     local attr = q:asvalue()
-    if not type(attr) == "table" then
+    if type(attr) ~= "table" then
         error("attributes must be a table")
     end
     local cleanattr = { nontemporal = attr.nontemporal and true,
