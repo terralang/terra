@@ -1534,6 +1534,17 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
+    local llvmnametostruct = {} --map from llvm_name -> terra type used to make c structs unique per llvm_name
+    function types.getorcreatecstruct(displayname,llvm_name)
+        local typ = llvmnametostruct[llvm_name]
+        if not typ then
+            typ = types.newstruct(displayname)
+            typ.llvm_name = llvm_name
+            typ.undefined = true
+            llvmnametostruct[llvm_name] = typ
+        end
+        return typ
+    end
     function types.newstructwithanchor(displayname,anchor)
         
         assert(displayname ~= "")

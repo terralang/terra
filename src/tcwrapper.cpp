@@ -117,19 +117,15 @@ public:
 
             if(!thenamespace->obj(name.c_str(),tt)) {
                 //create new blank struct, fill in with members
-                PushTypeFunction("newstruct");
+                std::stringstream ss;
+                ss << (rd->isStruct() ? "struct." : "union.") << name;
+                PushTypeFunction("getorcreatecstruct");
                 lua_pushstring(L, name.c_str());
-                lua_call(L,1,1);
+                lua_pushstring(L,ss.str().c_str());
+                lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
                 tt->push();
                 thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
-                
-                std::stringstream ss;
-                ss << (rd->isStruct() ? "struct." : "union.") << name;
-                lua_pushstring(L,ss.str().c_str());
-                tt->setfield("llvm_name");
-                lua_pushboolean(L, true);
-                tt->setfield("undefined");
             }
             
             if(tt->boolean("undefined") && rd->getDefinition() != NULL) {
