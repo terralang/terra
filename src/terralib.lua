@@ -1636,7 +1636,14 @@ function terra.createterraexpression(diag,anchor,v)
         elseif terra.istree(v) then
             --if this is a raw tree, we just drop it in place and hope the user knew what they were doing
             return v
-        elseif type(v) == "cdata" or type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
+        elseif type(v) == "cdata" then
+            local typ = terralib.typeof(v)
+            if typ:isaggregate() then --when an aggregate is directly referenced from Terra we get its pointer
+                                      --a constant would make an entire copy of the object
+                typ = terra.types.pointer(typ)
+            end
+            return createsingle(terra.constant(typ,v))
+        elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
             return createsingle(terra.constant(v))
         elseif terra.isconstant(v) then
             if type(v.object) == "string" then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
