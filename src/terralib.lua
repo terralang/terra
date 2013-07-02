@@ -2035,14 +2035,14 @@ function terra.funcdefinition:typecheck()
     local validkeystack = { {} }
     local validexpressionkeys = { [validkeystack[1]] = true}
     local function entermacroscope()
-    	local k = {}
-    	validexpressionkeys[k] = true
- 		table.insert(validkeystack,k)
- 	end
- 	local function leavemacroscope()
- 		local k = table.remove(validkeystack)
- 		validexpressionkeys[k] = nil
- 	end
+        local k = {}
+        validexpressionkeys[k] = true
+        table.insert(validkeystack,k)
+    end
+    local function leavemacroscope()
+        local k = table.remove(validkeystack)
+        validexpressionkeys[k] = nil
+    end
     local function createtypedexpression(exp)
         return terra.newtree(exp, { kind = terra.kinds.typedexpression, expression = exp, key = validkeystack[#validkeystack] })
     end
@@ -2217,7 +2217,7 @@ function terra.funcdefinition:typecheck()
 
             local errormsgs = terra.newlist()
             for i,__cast in ipairs(cast_fns) do
-            	entermacroscope()
+                entermacroscope()
                 local quotedexp = terra.newquote(createtypedexpression(exp))
                 local success,result = terra.invokeuserfunction(exp, true,__cast,exp.type,typ,quotedexp)
                 if success then
@@ -2228,7 +2228,7 @@ function terra.funcdefinition:typecheck()
                     leavemacroscope()
                     return result,true
                 else
-                	leavemacroscope()
+                    leavemacroscope()
                     errormsgs:insert(result)
                 end
             end
@@ -2514,7 +2514,7 @@ function terra.funcdefinition:typecheck()
     --functions to handle typecheck invocations (functions,methods,macros,operator overloads)
     local function removeluaobject(e)
         if not e:is "luaobject" or e.type == terra.types.error then 
-        	return e --don't repeat error messages
+            return e --don't repeat error messages
         elseif terra.isfunction(e.value) then
             local definitions = e.value:getdefinitions()
             if #definitions ~= 1 then
@@ -2529,10 +2529,10 @@ function terra.funcdefinition:typecheck()
     end
     local function truncateexpression(tel,N)
         if not tel:is "treelist" then 
-        	if N ~= 1 then
-        		diag:reporterror(tel, "attempting to truncate single expression to ", N, " values")
-        	end
-        	return tel
+            if N ~= 1 then
+                diag:reporterror(tel, "attempting to truncate single expression to ", N, " values")
+            end
+            return tel
         elseif #tel.types == N then
             return tel
         elseif #tel.types < N then
@@ -2547,20 +2547,20 @@ function terra.funcdefinition:typecheck()
     end
 
     function checklet(anchor,statements,expressions)
-    	local types = terra.newlist()
+        local types = terra.newlist()
         local ns = statements and statements:map(checkstmt)
         local ne,next
         if expressions then
-        	ne = terra.newlist()
-        	for i,e in ipairs(expressions) do
-        		local exp = checkexp(e,true)
-        		if i == #expressions and exp:is "treelist" then 
-        			next = exp
+            ne = terra.newlist()
+            for i,e in ipairs(expressions) do
+                local exp = checkexp(e,true)
+                if i == #expressions and exp:is "treelist" then 
+                    next = exp
                     for i,t in ipairs(next.types) do
                         types:insert(t)
                     end
                 else
-                	ne:insert(truncateexpression(exp,1))
+                    ne:insert(truncateexpression(exp,1))
                     types:insert(exp.type)
                 end
             end
@@ -2600,34 +2600,34 @@ function terra.funcdefinition:typecheck()
             local results,castedtypes,matches = terra.newlist(),terra.newlist(),terra.newlist()
             local treelist,resultidx,typeidx = paramlist,1,1
             repeat
-            	if treelist.expressions then
-            		local resultfortree = terra.newlist()
-            		for expidx,param in ipairs(treelist.expressions) do
-            			local typ,result,match,valid = typelist[typeidx]
-		                if typ == nil or typ == "passthrough" or typ == param.type then
-		                    result,match = param,PERFECT_MATCH
-		                else
-		                    match = CAST_MATCH 
-		                    if castbehavior == "all" or (typeidx == 1 and castbehavior == "first") then
-		                        result,valid = insertrecievercast(param,typ,speculate)
-		                    elseif typ == "vararg" then
-		                        result,valid = insertvarargpromotions(param),true
-		                    else
-		                        result,valid = insertcast(param,typ,speculate)
-		                    end
-		                    if not valid then
-		                        return false
-		                    end
-		                end
-		                resultfortree[expidx] = result
+                if treelist.expressions then
+                    local resultfortree = terra.newlist()
+                    for expidx,param in ipairs(treelist.expressions) do
+                        local typ,result,match,valid = typelist[typeidx]
+                        if typ == nil or typ == "passthrough" or typ == param.type then
+                            result,match = param,PERFECT_MATCH
+                        else
+                            match = CAST_MATCH 
+                            if castbehavior == "all" or (typeidx == 1 and castbehavior == "first") then
+                                result,valid = insertrecievercast(param,typ,speculate)
+                            elseif typ == "vararg" then
+                                result,valid = insertvarargpromotions(param),true
+                            else
+                                result,valid = insertcast(param,typ,speculate)
+                            end
+                            if not valid then
+                                return false
+                            end
+                        end
+                        resultfortree[expidx] = result
                         if typeidx <= size then
                             castedtypes[typeidx],matches[typeidx] = result.type,match
                         end
-            			typeidx = typeidx + 1
-            		end
-            		results[resultidx] = resultfortree
-            	end
-            	resultidx,treelist = resultidx + 1,treelist.next
+                        typeidx = typeidx + 1
+                    end
+                    results[resultidx] = resultfortree
+                end
+                resultidx,treelist = resultidx + 1,treelist.next
             until treelist == nil
             return true,castedtypes,results,matches
         end
@@ -2638,7 +2638,7 @@ function terra.funcdefinition:typecheck()
             if not valid then
                 return paramlist,nil
             else
-            	return createcasted(paramlist,types,results), 1
+                return createcasted(paramlist,types,results), 1
             end
         else
             local function meetwith(a,b)
@@ -2846,8 +2846,8 @@ function terra.funcdefinition:typecheck()
 
         if fnlike then
             if terra.ismacro(fnlike) then
-            	entermacroscope()
-            	local quotes = arguments:map(function(e) return terra.newquote(createtypedexpression(e)) end)
+                entermacroscope()
+                local quotes = arguments:map(function(e) return terra.newquote(createtypedexpression(e)) end)
                 local success, result = terra.invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
@@ -3043,7 +3043,7 @@ function terra.funcdefinition:typecheck()
             elseif e:is "method" then
                 return checkmethod(e,false)
             elseif e:is "truncate" then
-            	local size = e.size or 1
+                local size = e.size or 1
                 return truncateexpression(checkexp(e.value, true),size)
             elseif e:is "treelist" then
                 symbolenv:enterblock()
@@ -3398,12 +3398,12 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
 _G["truncate"] = terra.internalmacro(function(diag,tree,nexp,...)
-	local N = nexp:asvalue()
-	if type(N) ~= "number" then
-		error("first argument to truncate must be a number")
-	end
-	local exp = terra.createterraexpression(diag,tree,{...})
-	return terra.newtree(tree, { kind = terra.kinds.truncate, value = exp, size = N })
+    local N = nexp:asvalue()
+    if type(N) ~= "number" then
+        error("first argument to truncate must be a number")
+    end
+    local exp = terra.createterraexpression(diag,tree,{...})
+    return terra.newtree(tree, { kind = terra.kinds.truncate, value = exp, size = N })
 end)
 _G["global"] = terra.global
 _G["constant"] = terra.constant

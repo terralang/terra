@@ -2242,7 +2242,7 @@ static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
     sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
     _mktemp(firstbuf);
     sprintf(tmpnamebuf, "%s.o", firstbuf);
-	return tmpnamebuf;
+    return tmpnamebuf;
 }
 #endif
 
