@@ -2574,6 +2574,11 @@ function terra.funcdefinition:typecheck()
     local function insertvarargpromotions(param)
         if param.type == float then
             return insertcast(param,double)
+        elseif param.type:isarray() then
+            --varargs are only possible as an interface to C (or Lua) where arrays are not value types
+            --this can cause problems (e.g. calling printf) when Terra passes the value
+            --so we degrade the array into pointer when it is an argument to a vararg parameter
+            return insertcast(param,terra.types.pointer(param.type.type))
         end
         --TODO: do we need promotions for integral data types or does llvm already do that?
         return param
