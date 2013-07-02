@@ -57,7 +57,6 @@ _(functype,"functype") \
 _(float,"float") \
 _(integer,"integer") \
 _(logical,"logical") \
-_(ltor,"ltor") \
 _(cast,"cast") \
 _(extractreturn,"extractreturn") \
 _(globalvar, "globalvar") \
@@ -66,7 +65,6 @@ _(structentry, "structentry") \
 _(type, "type") \
 _(proxy, "proxy") \
 _(array, "array") \
-_(rtol, "rtol") \
 _(explicitcast, "explicitcast") \
 _(sizeof, "sizeof") \
 _(niltype, "niltype") \
@@ -83,14 +81,16 @@ _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
 _(selectconst, "selectconst") \
 _(treelist, "treelist") \
-_(typedexpressionlist, "typedexpressionlist") \
+_(typedexpression, "typedexpression") \
 _(intrinsic, "intrinsic") \
 _(nametoken, "<name>") \
 _(numbertoken, "<number>") \
 _(stringtoken, "<string>") \
 _(eostoken, "<eof>") \
 _(constant,"constant") \
-_(truncate, "truncate")
+_(truncate, "truncate") \
+_(attrload,"attrload") \
+_(attrstore,"attrstore")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

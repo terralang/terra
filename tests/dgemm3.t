@@ -13,7 +13,13 @@ local function isinteger(x) return math.floor(x) == x end
 
 llvmprefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
 
-
+local function alignedload(addr)
+	return `terralib.attrload(addr, { align = 8 })
+end
+local function alignedstore(addr,v)
+	return `terralib.attrstore(addr,v, { align = 8 })
+end
+alignedload,alignedstore = macro(alignedload),macro(alignedstore)
 function genkernel(NB, RM, RN, V,alpha,boundary)
 
 	local M,N,K, boundaryargs
@@ -37,10 +43,10 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 		for n = 0, RN-1 do
 			loadc:insert(quote
 				var [caddr[m][n]] = C + m*ldc + n*V
-				var [c[m][n]] = alpha * terralib.aligned(@VP([caddr[m][n]]),8)
+				var [c[m][n]] = alpha * alignedload(VP([caddr[m][n]]))
 			end)
 			storec:insert(quote
-				terralib.aligned(@VP([caddr[m][n]]),8) = [c[m][n]]
+				alignedstore(VP([caddr[m][n]]),[c[m][n]])
 			end)
 		end
 	end
@@ -49,7 +55,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	
 	for n = 0, RN-1 do
 		calcc:insert(quote
-			var [b[n]] = terralib.aligned(@VP(&B[n*V]),8)
+			var [b[n]] = alignedload(VP(&B[n*V]))
 		end)
 	end
 	for m = 0, RM-1 do

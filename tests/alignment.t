@@ -1,7 +1,7 @@
-
+local alignment = 16
 local aligned = terralib.aligned
 terra foobar(a : &float)
-	aligned(@a,4) = aligned(a[3],4)
+	terralib.attrstore(a,terralib.attrload(a+3,{ align = alignment }), { align = alignment })
 end
 
-foobar:compile()
+foobar:disas()

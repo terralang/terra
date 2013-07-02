@@ -1091,12 +1091,27 @@ struct TerraCompiler {
         delete B;
     }
     
+    Value * emitAddressOf(Obj * exp) {
+        Value * v = emitExp(exp,false);
+        if(exp->boolean("lvalue"))
+            return v;
+        Value * addr = CC.CreateAlloca(typeOfValue(exp)->type);
+        B->CreateStore(v,addr);
+        return addr;
+    }
+    
     Value * emitUnary(Obj * exp, Obj * ao) {
+        T_Kind kind = exp->kind("operator");
+        if (T_addressof == kind)
+            return emitAddressOf(ao);
+        
         TType * t = typeOfValue(exp);
         Type * baseT = getPrimitiveType(t);
         Value * a = emitExp(ao);
-        T_Kind kind = exp->kind("operator");
         switch(kind) {
+            case T_dereference:
+                return a; /* no-op, a is a pointer and lvalue is true for this expression */
+                break;
             case T_not:
                 return B->CreateNot(a);
                 break;
@@ -1106,13 +1121,6 @@ struct TerraCompiler {
                 } else {
                     return B->CreateFNeg(a);
                 }
-                break;
-            case T_addressof: /*fallthrough*/
-            case T_dereference:
-                //addressof and dereference are no-ops since 
-                //typechecking inserted l-to-r values for when
-                //where the pointers need to be dereferenced
-                return a;
                 break;
             default:
                 printf("NYI - unary %s\n",tkindtostr(kind));
@@ -1333,9 +1341,9 @@ if(baseT->isIntegerTy()) { \
         }
         return B->CreateLoad(output);
     }
-    Value * emitArrayToPointer(TType * from, TType * to, Value * exp) {
-        //typechecker ensures that input to array to pointer is an lvalue
-        return B->CreateConstGEP2_32(exp,0,0);
+    Value * emitArrayToPointer(Obj * exp) {
+        Value * v = emitAddressOf(exp);
+        return B->CreateConstGEP2_32(v,0,0);
     }
     Type * getPrimitiveType(TType * t) {
         if(t->type->isVectorTy())
@@ -1443,32 +1451,24 @@ if(baseT->isIntegerTy()) { \
             return v;
         }
     }
-    Value * emitExp(Obj * exp) {
+    Value * emitExp(Obj * exp, bool loadlvalue = true) {
+        Value * raw = emitExpRaw(exp);
+        if(loadlvalue && exp->boolean("lvalue")) {
+            Obj type;
+            exp->obj("type",&type);
+            CC.EnsureTypeIsComplete(&type);
+            raw = B->CreateLoad(raw);
+        }
+        return raw;
+    }
+    /* alignment for load
+
+    */
+    
+    Value * emitExpRaw(Obj * exp) {
         switch(exp->kind("kind")) {
             case T_var:  {
                 return variableFromDefinition(exp);
-            } break;
-            case T_ltor: {
-                Obj e;
-                exp->obj("expression",&e);
-                Value * v = emitExp(&e);
-                Obj type;
-                exp->obj("type",&type);
-                CC.EnsureTypeIsComplete(&type);
-                LoadInst * l = B->CreateLoad(v);
-                if(e.hasfield("alignment")) {
-                    int alignment = e.number("alignment");
-                    l->setAlignment(alignment);
-                }
-                return l;
-            } break;
-            case T_rtol: {
-                Obj e;
-                exp->obj("expression",&e);
-                Value * v = emitExp(&e);
-                Value * r = CC.CreateAlloca(typeOfValue(exp)->type);
-                B->CreateStore(v, r);
-                return r;
             } break;
             case T_operator: {
                 
@@ -1523,8 +1523,6 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("value",&value);
                 exp->obj("index",&idx);
                 
-                
-                
                 Obj aggTypeO;
                 value.obj("type",&aggTypeO);
                 TType * aggType = getType(&aggTypeO);
@@ -1535,41 +1533,17 @@ if(baseT->isIntegerTy()) { \
                 if(aggType->type->isVectorTy()) {
                     idxExp = emitIndex(typeOfValue(&idx),32,idxExp);
                     Value * result = B->CreateExtractElement(valueExp, idxExp);
-                    if(aggType->islogical) {
-                        TType * rType = typeOfValue(exp);
-                        result = B->CreateZExt(result, rType->type);
-                    }
+                    return result;
+                } else {
+                    idxExp = emitIndex(typeOfValue(&idx),64,idxExp);
+                    //otherwise we have a pointer access which will use a GEP instruction
+                    std::vector<Value*> idxs;
+                    EnsurePointsToCompleteType(&aggTypeO);
+                    Value * result = B->CreateGEP(valueExp, idxExp);
+                    if(!exp->boolean("lvalue"))
+                        result = B->CreateLoad(result);
                     return result;
                 }
-                idxExp = emitIndex(typeOfValue(&idx),64,idxExp);
-                //otherwise we have an array or pointer access, both of which will use a GEP instruction
-                
-                bool pa = exp->boolean("lvalue");
-                
-                //if the array is an rvalue type, we need to store it, then index it, and then reload it
-                //otherwise, if we have an  lvalue, we just calculate the offset
-                if(!pa) {
-                   Value * mem = CC.CreateAlloca(aggType->type);
-                    B->CreateStore(valueExp, mem);
-                    valueExp = mem;
-                }
-                
-                std::vector<Value*> idxs;
-                
-                if(aggType->type->isPointerTy()) {
-                    EnsurePointsToCompleteType(&aggTypeO);
-                } else {
-                    idxs.push_back(ConstantInt::get(Type::getInt32Ty(*C->ctx),0));
-                } //raw pointer types use the first GEP index, while arrays first do {0,idx}
-                idxs.push_back(idxExp);
-                
-                Value * result = B->CreateGEP(valueExp, idxs);
-                
-                if(!pa) {
-                    result = B->CreateLoad(result);
-                }
-                
-                return result;
             } break;
             case T_literal: {
                 Obj type;
@@ -1642,11 +1616,12 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("from",&from);
                 TType * fromT = getType(&from);
                 TType * toT = getType(&to);
+                if(fromT->type->isArrayTy()) {
+                    return emitArrayToPointer(&a);
+                }
                 Value * v = emitExp(&a);
                 if(fromT->type->isStructTy()) {
                     return emitStructCast(exp,fromT,&to,toT,v);
-                } else if(fromT->type->isArrayTy()) {
-                    return emitArrayToPointer(fromT,toT,v);
                 } else if(fromT->type->isPointerTy()) {
                     if(toT->type->isPointerTy()) {
                         return B->CreateBitCast(v, toT->type);
@@ -1675,28 +1650,24 @@ if(baseT->isIntegerTy()) { \
             case T_extractreturn: {
                 return emitExtractReturn(exp);
             } break;
-            case T_typedexpressionlist: {
+            case T_treelist: {
                 std::vector<Value*> values;
-                emitParameterList(exp, &values);
+                emitTreeList(exp, false, &values);
                 return (values.size() == 0) ? NULL : values[0];
             } break;
             case T_select: {
                 Obj obj,typ;
                 exp->obj("value",&obj);
                 TType * vt = typeOfValue(&obj);
-                Value * v = emitExp(&obj);
                 
                 obj.obj("type",&typ);
                 int offset = exp->number("index");
                 
-                if(exp->boolean("lvalue")) {
-                    return emitStructSelect(&typ,v,offset);
-                } else {
-                    Value * mem = CC.CreateAlloca(vt->type);
-                    B->CreateStore(v,mem);
-                    Value * addr = emitStructSelect(&typ,mem,offset);
-                    return B->CreateLoad(addr);
-                }
+                Value * v = emitAddressOf(&obj);
+                Value * result = emitStructSelect(&typ,v,offset);
+                if(!exp->boolean("lvalue"))
+                   result = B->CreateLoad(result);
+                return result;
             } break;
             case T_constructor: case T_arrayconstructor: {
                 Obj expressions;
@@ -1704,7 +1675,7 @@ if(baseT->isIntegerTy()) { \
                 
                 Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
                 std::vector<Value *> values;
-                emitParameterList(&expressions,&values);
+                emitTreeList(&expressions,true,&values);
                 for(size_t i = 0; i < values.size(); i++) {
                     Value * addr = B->CreateConstGEP2_32(result,0,i);
                     B->CreateStore(values[i],addr);
@@ -1715,7 +1686,7 @@ if(baseT->isIntegerTy()) { \
                 Obj expressions;
                 exp->obj("expressions",&expressions);
                 std::vector<Value *> values;
-                emitParameterList(&expressions,&values);
+                emitTreeList(&expressions,true,&values);
                 TType * vecType = typeOfValue(exp);
                 Value * vec = UndefValue::get(vecType->type);
                 Type * intType = Type::getInt32Ty(*C->ctx);
@@ -1728,7 +1699,7 @@ if(baseT->isIntegerTy()) { \
                 Obj arguments;
                 exp->obj("arguments",&arguments);
                 std::vector<Value *> values;
-                emitParameterList(&arguments,&values);
+                emitTreeList(&arguments,true,&values);
                 Obj itypeObjPtr;
                 exp->obj("intrinsictype",&itypeObjPtr);
                 Obj itypeObj;
@@ -1739,7 +1710,21 @@ if(baseT->isIntegerTy()) { \
                 Value * fn = C->m->getOrInsertFunction(name, fntype);
                 return B->CreateCall(fn, values);
             }
+            case T_attrload: {
+                Obj addr,type,attr;
+                exp->obj("type",&type);
+                exp->obj("address",&addr);
+                exp->obj("attributes",&attr);
+                CC.EnsureTypeIsComplete(&type);
+                LoadInst * l = B->CreateLoad(emitExp(&addr));
+                if(attr.hasfield("alignment")) {
+                    int alignment = attr.number("alignment");
+                    l->setAlignment(alignment);
+                }
+                return l;
+            } break;
             default: {
+                exp->dump();
                 assert(!"NYI - exp");
             } break;
         }
@@ -1822,7 +1807,7 @@ if(baseT->isIntegerTy()) { \
         fnptrtyp.obj("type",&fntyp);
         
         std::vector<Value*> actuals;
-        emitParameterList(&paramlist,&actuals);
+        emitTreeList(&paramlist,true,&actuals);
         
         return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
     }
@@ -1835,43 +1820,35 @@ if(baseT->isIntegerTy()) { \
             B->CreateRet(UndefValue::get(rt));
         }
     }
-    
-    Value * ensureFunctionCall(Obj * fncall) {
-        Value * fnresult = (Value*) fncall->ud("returnvalue");
-        if(fnresult == NULL) {
-            fnresult = emitCall(fncall);
-            lua_pushlightuserdata(L, fnresult);
-            fncall->setfield("returnvalue");
-        }
-        return fnresult;
-    }
-    void emitParameterList(Obj * paramlist, std::vector<Value*> * results) {
-        Obj params;
-        Obj fncall;
-        paramlist->obj("expressions",&params);
-        bool hascall = paramlist->obj("fncall", &fncall);
-        
-        if(hascall)
-            fncall.clearfield("returnvalue");
-        
-        int sizeN = params.size();
-        //emit arguments, an extract return will cause the fncall associated
-        //with this parameter list to be emitted when needed
-        for(int i = 0; i < sizeN; i++) {
-            Obj v;
-            params.objAt(i,&v);
-            results->push_back(emitExp(&v));
-        }
-        
-        if(hascall) {
-            //if no extract returns were in the list,
-            //ensure we still emit a call to the function associated with this
-            //parameter list
-            ensureFunctionCall(&fncall);
-            //this node can be repeated elsewhere in the IR
-            //so we must clear returnvalue so ensureFunctionCall emits the call again
-            fncall.clearfield("returnvalue");
-        }
+    void emitTreeList(Obj * treelist, bool loadlvalue, std::vector<Value*> * results) {
+        Obj types;
+        treelist->obj("types",&types);
+        int N = types.size();
+        Obj next;
+        treelist->push();
+        treelist->fromStack(&next);
+        do {
+            Obj stmts;
+            if(next.obj("statements",&stmts)) {
+                int NS = stmts.size();
+                for(int i = 0; i < NS; i++) {
+                    Obj s;
+                    stmts.objAt(i,&s);
+                    emitStmt(&s);
+                }
+            }
+            Obj exprs;
+            if(next.obj("expressions",&exprs)) {
+                int NE = exprs.size();
+                for(int i = 0; i < NE; i++) {
+                    Obj e;
+                    exprs.objAt(i,&e);
+                    Value * r = emitExp(&e,loadlvalue);
+                    if(results && results->size() < N)
+                        results->push_back(r);
+                }
+            }
+        } while(next.obj("next", &next));
     }
     
     Value * emitExtractReturn(Obj * exp) {
@@ -1884,7 +1861,7 @@ if(baseT->isIntegerTy()) { \
         //cause an extract return to escape the scope of the value, which will make this repeat the
         //function call.
         //we need to check this earlier in the pipeline
-        Value * fnresult = ensureFunctionCall(&fncall);
+        Value * fnresult = (Value*) fncall.ud("returnvalue");
         assert(fnresult);
         return CC.EmitExtractReturn(fnresult,rtypes.size(),idx);
     }
@@ -1902,21 +1879,14 @@ if(baseT->isIntegerTy()) { \
                 emitStmt(&treelist);
             } break;
             case T_treelist: {
-                Obj stmts;
-                stmt->obj("statements",&stmts);
-                int N = stmts.size();
-                for(int i = 0; i < N; i++) {
-                    Obj s;
-                    stmts.objAt(i,&s);
-                    emitStmt(&s);
-                }
+                emitTreeList(stmt, false, NULL);
             } break;
             case T_return: {
                 Obj exps;
                 stmt->obj("expressions",&exps);
                 
                 std::vector<Value *> results;
-                emitParameterList(&exps, &results);
+                emitTreeList(&exps, true, &results);
                 Obj ftype;
                 funcobj.obj("type",&ftype);
                 CC.EmitReturn(&ftype,func,&results);
@@ -1982,8 +1952,8 @@ if(baseT->isIntegerTy()) { \
                     emitIfBranch(&branch,footer);
                 }
                 Obj orelse;
-                stmt->obj("orelse",&orelse);
-                emitStmt(&orelse);
+                if(stmt->obj("orelse",&orelse))
+                    emitStmt(&orelse);
                 B->CreateBr(footer);
                 insertBB(footer);
                 setInsertBlock(footer);
@@ -2013,7 +1983,7 @@ if(baseT->isIntegerTy()) { \
                 Obj inits;
                 bool has_inits = stmt->obj("initializers",&inits);
                 if(has_inits)
-                    emitParameterList(&inits, &rhs);
+                    emitTreeList(&inits, true, &rhs);
                 
                 Obj vars;
                 stmt->obj("variables",&vars);
@@ -2030,26 +2000,38 @@ if(baseT->isIntegerTy()) { \
                 std::vector<Value *> rhsexps;
                 Obj rhss;
                 stmt->obj("rhs",&rhss);
-                emitParameterList(&rhss,&rhsexps);
+                emitTreeList(&rhss,true,&rhsexps);
+                std::vector<Value *> lhsexps;
                 Obj lhss;
                 stmt->obj("lhs",&lhss);
-                int N = lhss.size();
-                for(int i = 0; i < N; i++) {
-                    Obj lhs;
-                    lhss.objAt(i,&lhs);
-                    Value * lhsexp = emitExp(&lhs);
-                    StoreInst * store = B->CreateStore(rhsexps[i],lhsexp);
-                    if(lhs.hasfield("alignment")) {
-                        int alignment = lhs.number("alignment");
-                        store->setAlignment(alignment);
-                    }
-                    if(lhs.hasfield("nontemporal")) {
-                        store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
-                    }
+                emitTreeList(&lhss,false,&lhsexps);
+                int N = lhsexps.size();
+                for(int i = 0; i < N; i++)
+                    B->CreateStore(rhsexps[i],lhsexps[i]);
+            } break;
+            case T_attrstore: {
+                Obj addr,attr,value;
+                stmt->obj("address",&addr);
+                stmt->obj("attributes",&attr);
+                stmt->obj("value",&value);
+                Value * addrexp = emitExp(&addr);
+                Value * valueexp = emitExp(&value);
+                StoreInst * store = B->CreateStore(valueexp,addrexp);
+                if(attr.hasfield("alignment")) {
+                    int alignment = attr.number("alignment");
+                    store->setAlignment(alignment);
+                }
+                if(attr.hasfield("nontemporal")) {
+                    store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
                 }
             } break;
+            case T_apply: {
+                Value * fnresult = emitCall(stmt);
+                lua_pushlightuserdata(L, fnresult);
+                stmt->setfield("returnvalue");
+            } break;
             default: {
-                emitExp(stmt);
+                emitExp(stmt,false);
             } break;
         }
     }
