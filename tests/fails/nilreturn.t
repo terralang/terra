@@ -1,0 +1,2 @@
+terra foo() : bar
+end

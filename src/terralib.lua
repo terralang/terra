@@ -1266,7 +1266,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 diag:reporterror(anchor,"attempting to use a type before it is defined")
                 diag:reporterror(self.anchor,"type was declared here.")
             end
-            if not type(entries) == "table" then
+            if type(entries) ~= "table" then
                 diag:reporterror(self.anchor,"computed entries are not a table")
                 return
             end
@@ -2562,8 +2562,8 @@ function terra.funcdefinition:typecheck()
                 else
                 	ne:insert(truncateexpression(exp,1))
                     types:insert(exp.type)
-        		end
-        	end
+                end
+            end
         end
         return createtypedtreelist(anchor,ns,ne,types,next)
     end
@@ -3043,7 +3043,8 @@ function terra.funcdefinition:typecheck()
             elseif e:is "method" then
                 return checkmethod(e,false)
             elseif e:is "truncate" then
-                return checkexp(e.value, false)
+            	local size = e.size or 1
+                return truncateexpression(checkexp(e.value, true),size)
             elseif e:is "treelist" then
                 symbolenv:enterblock()
                 local result = checklet(e,e.statements, e.trees or e.expressions)
@@ -3396,7 +3397,14 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
-
+_G["truncate"] = terra.internalmacro(function(diag,tree,nexp,...)
+	local N = nexp:asvalue()
+	if type(N) ~= "number" then
+		error("first argument to truncate must be a number")
+	end
+	local exp = terra.createterraexpression(diag,tree,{...})
+	return terra.newtree(tree, { kind = terra.kinds.truncate, value = exp, size = N })
+end)
 _G["global"] = terra.global
 _G["constant"] = terra.constant
 

@@ -1,4 +1,4 @@
-#!../build/LuaJIT-2.0.0/src/luajit
+#!../build/LuaJIT-2.0.1/src/luajit
 
 local terralib = io.open("../src/terralib.lua","r")
 local lineinfo = loadfile("coverageinfo.lua")()
