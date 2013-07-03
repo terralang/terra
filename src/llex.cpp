@@ -368,11 +368,10 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
   seminfo->flags = num.flags;
   if(num.flags & F_ISINTEGER) {
     seminfo->i = num.i;
+    seminfo->r = seminfo->i;
     if(issinglefloat) {
-        seminfo->r = seminfo->i;
         seminfo->flags = 0;
     } else if(hasdecpoint) {
-        seminfo->r = seminfo->i;
         seminfo->flags = F_IS8BYTES;
     }
   } else {
