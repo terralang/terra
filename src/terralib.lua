@@ -1651,7 +1651,8 @@ function terra.createterraexpression(diag,anchor,v)
             local typ = terralib.typeof(v)
             if typ:isaggregate() then --when an aggregate is directly referenced from Terra we get its pointer
                                       --a constant would make an entire copy of the object
-                typ = terra.types.pointer(typ)
+                local ptrobj = createsingle(terra.constant(terra.types.pointer(typ),v))
+                return terra.newtree(anchor, { kind = terra.kinds.operator, operator = terra.kinds["@"], operands = terra.newlist { ptrobj } }) 
             end
             return createsingle(terra.constant(typ,v))
         elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
@@ -3877,7 +3878,10 @@ function terra.constant(a0,a1)
 
         --if the  object is not already cdata, we need to convert it
         if  type(c.object) ~= "cdata" or terra.typeof(c.object) ~= c.type then
-            c.object = terra.cast(c.type,c.object)
+            local obj = c.object
+            c.object = terra.cast(c.type,obj)
+            c.origobject = type(obj) == "cdata" and obj --conversion from obj -> &obj
+                                                        --need to retain reference to obj or it can be GC'd
         end
         return c
     else
