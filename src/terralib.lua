@@ -3530,25 +3530,36 @@ function terra.funcdefinition:printpretty()
         emit("%s : %s",p.name,p.type)
     end
     local emitStmt, emitExp,emitParamList
-
+    local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
+        for i,ss in ipairs(lst) do
+            if ss:is "block" then
+                begin("do\n")
+                emitStmt(ss)
+                begin("end\n")
+            else
+                emitStmt(ss)
+            end
+        end
+    end
     function emitStmt(s)
         if s:is "block" then
             enterblock()
             emitStmt(s.body)
             leaveblock()
         elseif s:is "treelist" then
-            local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
-                for i,ss in ipairs(lst) do
-                    if ss:is "block" then
-                        begin("do\n")
-                        emitStmt(ss)
-                        begin("end\n")
-                    else
-                        emitStmt(ss)
-                    end
-                end
+            if s.statements then
+                emitStmtList(s.statements)
             end
-            emitStmtList(s.statements)
+            if s.expressions then
+                emitStmtList(s.expressions)
+            end
+            if s.next then
+                emitStmt(s.next)
+            end
+        elseif s:is "apply" then
+            begin("r%s = ",tostring(s):match("(0x.*)$"))
+            emitExp(s)
+            emit("\n")
         elseif s:is "return" then
             begin("return ")
             emitParamList(s.expressions)
@@ -3583,7 +3594,9 @@ function terra.funcdefinition:printpretty()
             end
         elseif s:is "repeat" then
             begin("repeat\n")
+            enterblock()
             emitStmt(s.body)
+            leaveblock()
             begin("until ")
             emitExp(s.condition)
             emit("\n")
@@ -3597,7 +3610,7 @@ function terra.funcdefinition:printpretty()
             emit("\n")
         elseif s:is "assignment" then
             begin("")
-            emitList(s.lhs,"",", ","",emitExp)
+            emitParamList(s.lhs)
             emit(" = ")
             emitParamList(s.rhs)
             emit("\n")
@@ -3696,7 +3709,7 @@ function terra.funcdefinition:printpretty()
             emitParamList(e.arguments)
             emit(")")
         elseif e:is "extractreturn" then
-            emit("<extract%d>",e.index)
+            emit("<exp %d from r%s>",e.index,tostring(e.fncall):match("(0x.*)$"))
         elseif e:is "select" then
             doparens(e,e.value)
             emit(".")
@@ -3713,6 +3726,7 @@ function terra.funcdefinition:printpretty()
             emit("{")
             local anon = 0
             local keys = e.type:getlayout().entries:map(function(e) return e.key end)
+            emitList(keys,"",", "," = ",emit)
             emitParamList(e.expressions,keys)
             emit("}")
         elseif e:is "constant" then
@@ -3721,30 +3735,58 @@ function terra.funcdefinition:printpretty()
             else
                 emit("<constant:",e.type,">")
             end
-        elseif e:is "typedexpressionlist" then
+        elseif e:is "treelist" then
             emitParamList(e)
         else
             emit("<??"..terra.kinds[e.kind].."??>")
         end
     end
 
-    function emitParamList(pl,keys)
-        local function emitE(e,i)
-            if keys and keys[i] then
-                emit(keys[i])
-                emit(" = ")
+    function emitParamList(pl)
+        local function issimplefunctioncall(pl)
+            if not pl.statements or 
+               #pl.statements ~= 1 or 
+               not pl.statements[1]:is "apply" or
+               not pl.expressions then
+               return false
             end
-            emitExp(e)
+            for i,exp in ipairs(pl.expressions) do
+                if not exp:is "extractreturn" then
+                    return false
+                end
+            end
+            return true
         end
-        emitList(pl.expressions,"",", ","",emitE)
-        if pl.fncall then
-            if #pl.expressions > 0 then
-                emit(" #")
-                emitExp(pl.fncall)
-                emit("#")
-            else
-                emitExp(pl.fncall)
+        local hasstmts = pl.statements and #pl.statements > 0
+        local hasexps = #pl.types > 0
+        if hasstmts then
+            if issimplefunctioncall(pl) then
+                emitExp(pl.statements[1])
+                return
             end
+            emit("let\n")
+            enterblock()
+            emitStmtList(pl.statements)
+            leaveblock()
+            if hasexps then
+                begin("in\n")
+                enterblock()
+                begin("")
+            end
+        end
+        if pl.expressions then
+            emitList(pl.expressions,"",", ","",emitExp)
+        end
+        if pl.next then
+            if pl.expressions and #pl.expressions > 0 then
+                emit(", ")
+            end
+            emitParamList(pl.next)
+        end
+        if hasstmts then
+            leaveblock()
+            emit("\n")
+            begin("end")
         end
     end
 

@@ -3,6 +3,9 @@
 terra bar(a : int)
 	return 4,5
 end
+terra takebar(a : double, b : int)
+	return 1
+end
 terra baz()
 end
 function whatwhat()
@@ -42,6 +45,7 @@ terra foo()
 	var ee = sizeof(int)
 	var more = { a = 5, c = 4, 3}
 	baz()
+	var bb = takebar(bar(1))
 	return 3,4,ee,bar(1)
 end
 
