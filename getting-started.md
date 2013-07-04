@@ -718,23 +718,49 @@ Here are some example literals:
 Expression Lists
 ================
 
-In cases where multiple expressions can appear in a list, functions that return multiple will append all of their values to the list if they are the final member of the list.
+In cases where multiple expressions can appear in a list, a function that returns multiple values will append _all_ of its values to the list if it is the final member of the list.
 This behavior occurs in declarations, assignments, return statements, and struct initializers.
 
 Here are some examples (adapted from the Lua reference manual):
 
-     f()                -- adjusted to 0 results
-     g(f(), x)          -- f() is adjusted to 1 result
-     g(x, f())          -- g gets x plus all results from f()
-     a,b = f(), x       -- f() is adjusted to 1 result
-     a,b,c = x, f()     -- f() is adjusted to 2 results
-     a,b,c = f()        -- f() is adjusted to 3 results
-     return f()         -- returns all results from f()
-     return x,y,f()     -- returns x, y, and all results from f()
-     {f()}              -- creates a struct with all results from f()
-     {f(), nil}         -- f() is adjusted to 1 result
-     {(f())}            -- f adjusted to 1 result
+    terra f()
+        return 1,2 --returns 2 values
+    end
+    terra g(a : int, b : int)
+        return 1
+    end
+    terra h(a : int, b : int, c : int)
+        return 2
+    end
+    terra examples()
+        f()                -- statement, return values are ignored
+        
+        g(f(), x)          -- f() is adjusted to 1 result
 
+        g(x, f())          -- error! passing 3 parameters to a
+                           -- function that takes only 2 arguments
+        h(x, f())          -- ok! h takes 3 arguments
+        
+        a,b = f(), x       -- f() is adjusted to 1 result
+        a,b,c = x, f()     -- f() has 2 results
+        a,b,c = f()        -- error! f() only returns two values
+
+        return f()         -- returns all results from f()
+        return x,y,f()     -- returns x, y, and all results from f()
+        
+        {f()}              -- creates a struct with all results from f()
+        {f(), nil}         -- f() is adjusted to 1 result
+    end
+     
+You can also truncate an expression that creates more than 1 result:
+
+    terra three() return 1,2,3 end
+    terra examples()
+        g(x, (three()) )          -- parens cause f() to 
+                                  -- truncate to 1 result
+        h(x, truncate(2,three())) --'truncate' macro truncates 
+                                  --'three' to 2 results.
+    end
 Methods
 =======
 
@@ -948,6 +974,21 @@ If you want to create a group of statements rather than expressions, you can usi
 		printit
 		printit
 	end
+
+The `quote` keyword can also include an optional `in` statement that creates a list of expressions:
+
+    myquote = quote
+        var a = foo()
+        var b = bar()
+    in 
+        a + b, a - b
+    end
+
+When used as an expression this quote will produce two values:
+
+    terra doit()
+        var one,two = myquote
+    end
 
 When a variable is used in an escape, it is sometimes ambiguous what value it should have.
 For example, consider what value this function should return:

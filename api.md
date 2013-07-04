@@ -332,7 +332,7 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
         bar(3,4,[luaexpr])
     end
     
-`[luaexpr]` is a multiple-expression escape since it occurs as the last expression in a list of expressions. It has the same behavior as a single expression escape, except when the conversion of `luaexpr` results in a list of Terra values. In this case, the values are appended to the end of the expression list (in this case, the list of arguments to the call to `bar`).
+`[luaexpr]` is a multiple-expression escape since it occurs as the last expression in a list of expressions. It has the same behavior as a single expression escape, except when the conversion of `luaexpr` results in multiple Terra expressions. In this case, the values are appended to the end of the expression list (in this case, the list of arguments to the call to `bar`).
 
 ---
     
@@ -376,6 +376,16 @@ The backtick operator creates a quotation that contains a single terra _expressi
 
 The `quote` operator creates a quotation that contains a list of terra _statements_. These can only be spliced into Terra code where a statement would normally appear.
  
+
+---
+    quote
+        terrastmts
+    in
+        terraexp1,terraexp2,...,terraexpN
+    end
+
+The `quote` operation can also include an optional `in` statement that creates several expressions. This `quote` can be spliced into Terra code where an expression would normally appear and behaves like a function that returns multiple values.
+
 ---
 
     terralib.isquote(t)
@@ -390,9 +400,21 @@ Try to interpret this quote as if it were a Terra type object. This is normally 
 
 ---
 
+    typ = quoteobj:gettypes()
+
+If the quote object is a typed expression that was passed as an argument to a macro, this will return the list of types for the values that will result when it is evaluated. For simple quotes (e.g. with the backtick operator) this will return exactly one type. But for more complicated expressions (e.g. `quote var a = 1 in a, 2 * a end`), this may return zero or more types. 
+
+---
+    
+    typ = quoteobj:gettype()
+
+If the quote object is a typed expression that was passed as an argument to a macro, this returns the type of the value that will result when it is evaluated. Equivalent to `quoteobj:gettypes()[1]`. It is an error if the quoted expression results in no values.
+
+---
+
     luaval = quoteobj:asvalue()
 
-Try to interpret this quote as if it were a simple Lua value. This is normally used in [macros](#macros) that expect constants as an argument (e.g. the macro that specifies the  alignment of a memory access `terralib.aligned(@a,4)`). Currently only support very simple constants (e.g. numbers). Consider using an escape rather than a macro when you want to pass more complicated data structures to generative code.
+Try to interpret this quote as if it were a simple Lua value. This is normally used in [macros](#macros) that expect constants as an argument (e.g. the macro that truncates expressions `truncate(2,foo())`). Currently only supports very simple constants (e.g. numbers). Consider using an escape rather than a macro when you want to pass more complicated data structures to generative code.
 
 
 Symbol
@@ -748,12 +770,13 @@ When a Lua value is used as the result of an [escape](#escapes) operator in a Te
 
 * [Global Variable](#global_variable) -- value becomes a lvalue reference to the global variable in Terra code.
 * [Symbol](#symbol) -- value becomes a lvalue reference to the variable defined using the symbol. If the variable is not in scope, this will become a compile-time error.
-* [Quote](#quote) -- the code defined in the quote will be spliced into the Terra code. If the quote contains a statement, it can only be spliced in where a statement appears.
+* [Quote](#quote) -- the code defined in the quote will be spliced into the Terra code. If the quote contains only statements, it can only be spliced in where a statement appears.
 * [Constant](#constant) -- the constant is spliced into the Terra code.
 * Lua Function -- If used in a function call, the lua function is `terralib.cast` to the Terra function type that has no return values, and whose parameters are the Terra types of the actual parameters of the function call. If not use in a function call, results in an error.
 * [Macro](#macro) -- If used as a function call, the macro will be run at compile time. The result of the macro will then be convert to Terra using the compile-time conversion rules and spliced in place.
 * [Type](#types) -- If used as an argument to a macro call, it will be passed-through such that calling `arg:astype()` will return the value. If used as a function call (e.g. `[&int](v)`, it acts as an explicit cast to that type.
 * [List](#list) or a rawlist (as classified by `terralib.israwlist`) -- Each member of the list is recursively converted to a Lua value using compile-time conversions (excluding the conversions for Lists). If used as a statement or where multiple expressions can appear, all values of the list are spliced in place. Otherwise, if used where only a single expression can appear, the list is truncated to 1 value.
+* `cdata` aggregates (structs and arrays) -- If a Lua `cdata` aggregate of Terra type `T` is referenced directly in Terra code, the value in Terra code will be an lvalue reference of type `T` to the Lua-allocated memory that holds that aggregate. 
 * otherwise -- the value is first converted to a Terra vlue using the standard rules for converting Lua to Terra values with unknown type. The resulting value is then spliced in place as a _constant_.
 
 
