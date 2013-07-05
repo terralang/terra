@@ -344,6 +344,8 @@ int terra_loadfile(lua_State * L, const char * file) {
         do {
             c = fgetc(ctx.fp);   
         } while(c != '\n' && c != EOF);
+        if(c == '\n')
+            ungetc(c,ctx.fp); /* keep line count accurate */
     }
 
     int r = terra_load(L,reader_file,&ctx,file);

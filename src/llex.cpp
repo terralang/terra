@@ -165,7 +165,7 @@ static const char *txtToken (LexState *ls, int token) {
 
 l_noret luaX_reporterror(LexState * ls, const char * err) {
     lua_pushstring(ls->L, err);
-    siglongjmp(*ls->error_dest, LUA_ERRSYNTAX);
+    throw LUA_ERRSYNTAX;
     abort(); //quiet warnings about noret
 }
 
