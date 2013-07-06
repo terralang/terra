@@ -1711,8 +1711,8 @@ function terra.specialize(origtree, luaenv, depth)
                 value = value.methods
             end
 
-            local selected = value[field]
-            if selected == nil then
+            local success,selected = terra.invokeuserfunction(e,false,function() return value[field] end)
+            if not success or selected == nil then
                 diag:reporterror(e,"no field ", field," in lua object")
                 return ee
             end

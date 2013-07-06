@@ -384,11 +384,16 @@ public:
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
-        
         const FunctionType * fntyp = f->getType()->getAs<FunctionType>();
         
         if(!fntyp)
             return true;
+        
+        if(f->getStorageClass() == clang::SC_Static) {
+            ImportError("cannot import static functions.");
+            SetErrorReport(FuncName.c_str());
+            return true;
+        }
         
         Obj typ;
         if(!GetFuncType(fntyp,&typ)) {
