@@ -1,10 +1,9 @@
 
-local add = terralib.defaultoperator("+")
-local addm = terralib.defaultmetamethod("__add")
-
-
+local a = "+"
+local b = "__sub"
+local ops =  {4,5}
 terra foobar()
-	return [add(`3,addm(`4,`5))]
+	return operator(b,operator(a,3,operator("+",ops)))
 end
 
-assert(foobar() == 12)
+assert(foobar() == -12)

@@ -2871,7 +2871,42 @@ function terra.funcdefinition:typecheck()
         if fnlike then
             if terra.ismacro(fnlike) then
                 entermacroscope()
-                local quotes = arguments:map(function(e) return terra.newquote(createtypedexpression(e)) end)
+                
+                local quotes = terra.newlist()
+                local function addquote(a)
+                    quotes:insert(terra.newquote(createtypedexpression(a)))
+                end
+                local function addtreelist(tl,N)
+                    if not tl then return end
+                    if tl.statements or N == 0 then
+                        addquote(truncateexpression(tl,N))
+                    else
+                        local NE = tl.expressions and #tl.expressions or 0
+                        if NE <= N then
+                            for i = 1,NE do
+                                addquote(tl.expressions[i])
+                            end
+                            addtreelist(tl.next,N - NE)
+                        else
+                            for i = 1,N do
+                                addquote(tl.expressions[i])
+                            end
+                            local exps = terra.newlist()
+                            for i = N+1,NE do
+                                exps:insert(tl.expressions[i])
+                            end
+                            addquote(createtypedtreelist(tl,nil,exps,terra.newlist(),tl.next))
+                        end
+                    end
+                end
+                for i,a in ipairs(arguments) do
+                    if i == #arguments and a:is "treelist" then
+                        addtreelist(a,#a.types)
+                    else
+                        addquote(a)
+                    end
+                end
+
                 local success, result = terra.invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
@@ -4165,7 +4200,7 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
     return constructor,names,lex._references
 end
 
-function terra.defaultmetamethod(method)
+_G["operator"] = terra.internalmacro(function(diag,anchor,op,...)
         local tbl = {
             __sub = "-";
             __add = "+";
@@ -4186,20 +4221,14 @@ function terra.defaultmetamethod(method)
             __rshift = ">>";
             __select = "select";
         }
-    return tbl[method] and terra.defaultoperator(tbl[method])
-end
-
-function terra.defaultoperator(op)
-    return function(...)
-        --TODO: really should call createterraexpression rather than assuming these are quotes
-        local exps = terra.newlist({...}):map(function(x) 
-            assert(terralib.isquote(x))
-            return x.tree 
-        end)
-        local tree = terra.newtree(terralib.newanchor(2), { kind = terra.kinds.operator, operator = terra.kinds[op], operands = exps })
-        return terra.newquote(tree)
+    local opv = op:asvalue()
+    opv = tbl[opv] or opv --operator can be __add or +
+    local operands= terralib.newlist()
+    for i = 1,select("#",...) do
+        operands:insert(select(i,...).tree)
     end
-end
+    return terralib.newtree(anchor, { kind = terra.kinds.operator, operator = terra.kinds[opv], operands = operands })
+end)
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")
