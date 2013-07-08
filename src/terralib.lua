@@ -376,8 +376,9 @@ end
 
 function terra.diagnostics:reporterror(anchor,...)
     self._haserrors[#self._haserrors] = true
-    if not anchor then
+    if not anchor or not anchor.filename or not anchor.linenumber then
         print(debug.traceback())
+        print(terralib.tree.printraw(anchor))
         error("nil anchor")
     end
     io.write(anchor.filename..":"..anchor.linenumber..": ")
