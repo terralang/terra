@@ -1,4 +1,4 @@
-#!../terra -llib/examplelanguage.t
+import "lib/examplelanguage"
 
 local a,b = 1,2
 c = 3

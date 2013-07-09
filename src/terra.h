@@ -18,7 +18,6 @@ int terra_loadfile(lua_State * L, const char * file);
 int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *name);
 int terra_loadstring(lua_State *L, const char *s);
 int terra_setverbose(lua_State * L, int v);
-int terra_loadlanguage(lua_State * L);
 
 #define terra_dofile(L, fn) \
     (terra_loadfile(L, fn) || lua_pcall(L, 0, LUA_MULTRET, 0))

@@ -3992,14 +3992,12 @@ function terra.linklibrary(filename)
 end
 
 terra.languageextension = {
-    languages = terra.newlist();
-    entrypoints = {}; --table mapping entry pointing tokens to the language that handles them
     tokentype = {}; --metatable for tokentype objects
     tokenkindtotoken = {}; --map from token's kind id (terra.kind.name), to the singleton table (terra.languageextension.name) 
 }
 
-function terra.loadlanguage(lang)
-    local E = terra.languageextension
+function terra.importlanguage(languages,entrypoints,langstring)
+    local lang = terra.require(langstring)
     if not lang or type(lang) ~= "table" then error("expected a table to define language") end
     lang.name = lang.name or "anonymous"
     local function haslist(field,typ)
@@ -4016,20 +4014,29 @@ function terra.loadlanguage(lang)
     haslist("entrypoints","string")
     
     for i,e in ipairs(lang.entrypoints) do
-        if E.entrypoints[e] then
-            error(("language %s uses entrypoint %s already defined by language %s"):format(lang.name,e,E.entrypoints[e].name))
+        if entrypoints[e] then
+            error(("language '%s' uses entrypoint '%s' already defined by language '%s'"):format(lang.name,e,entrypoints[e].name),-1)
         end
-        E.entrypoints[e] = lang
+        entrypoints[e] = lang
     end
-    lang.keywordtable = {} --keyword => true
-    for i,k in ipairs(lang.keywords) do
-        lang.keywordtable[k] = true
-    end
-    for i,k in ipairs(lang.entrypoints) do
-        lang.keywordtable[k] = true
-    end
-
-    E.languages:insert(lang)
+    if not lang.keywordtable then
+	    lang.keywordtable = {} --keyword => true
+	    for i,k in ipairs(lang.keywords) do
+	        lang.keywordtable[k] = true
+	    end
+	    for i,k in ipairs(lang.entrypoints) do
+	        lang.keywordtable[k] = true
+	    end
+	end
+	table.insert(languages,lang)
+end
+function terra.unimportlanguages(languages,N,entrypoints)
+    for i = 1,N do
+		local lang = table.remove(languages)
+		for i,e in ipairs(lang.entrypoints) do
+			entrypoints[e] = nil
+		end
+	end
 end
 
 function terra.languageextension.tokentype:__tostring()
