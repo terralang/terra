@@ -2050,6 +2050,7 @@ static void statement (LexState *ls) {
       }
       luaX_next(ls); /* skip string */
       luaX_patchbegin(ls, &begin);
+      OutputBuffer_printf(&ls->output_buffer, "do end");
       luaX_patchend(ls, &begin);
       break;
     }
