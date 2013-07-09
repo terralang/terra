@@ -12,7 +12,7 @@ Prism.languages.terra = {
 		pattern: /--.*?(\r?\n|$)/g
 	},
 	'string': /("|')(\\?.)*?\1/g,
-	'keyword': /\b(break|do|end|else|elseif|function|if|local|nil|not|or|repeat|return|and|then|until|while|self|struct|terra|quote|var|in)\b/g,
+	'keyword': /\b(break|do|end|else|elseif|function|if|local|nil|not|or|repeat|return|and|then|until|while|self|struct|terra|quote|var|in|import)\b/g,
 	'boolean': /\b(true|false)\b/g,
 	'number': /\b-?(0x[\da-fA-F]|\d+\.?|\d*\.\d+f?)\b/g
 };;

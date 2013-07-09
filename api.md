@@ -56,12 +56,6 @@ Sets the verbosity for Terra libraries. Valid values are 0 (no debug output) to 
 
 ---
 
-    int terra_loadlanguage(lua_State * L);
-
-The top of the Lua stack must be a table describing a [language extension](#embedded_language_api). Removes the table and registers it as an extension to the Lua-Terra parser. Subsequent calls to `terra_load*` will use this extension during parsing.
-
----
-
     terra_dofile(L, file)
     
 Loads and runs the file `file`. Equivalent to
@@ -713,12 +707,6 @@ These functions allow you to load chunks of mixed Terra-Code code at runtime.
 
 ---
 
-    terralib.loadlanguage(lang)
-
-Lua equivalent of C API call `terra_loadlanguage`.
-
----
-
     terralib.load(readerfn)
 
 Lua equivalent of C API call `terra_load`. `readerfn` behaves the same as in Lua's `load` function.
@@ -848,16 +836,32 @@ The file `tests/lib/sumlanguage.t` contains the code for this example, and `test
 
 Loading and Running the Language
 --------------------------------
-In order to use our language extension, it needs to be registered with Terra runtime. If you are using the `terra` interpreter you can load language extensions with the `-l` flag:
+In order to use our language extension, it needs to be _imported_.
+The language extension mechanism includes an `import` statment to load the language extension:
 
-	./terra -l tests/lib/sumlanguage.t tests/sumlanguage1.t
+    import "lib/sumlanguage" --active the new parsing rules
+    result = sum 1,2,3 done
 
+Since `import` statements are evaluated at _parse_ time, the argument must be a string literal. 
+The parser will then call `terralib.require` on the string literal to load the language extension file.
 The file specified should _return_ the Lua table describing your language:
 
 	local sumlanguage = { ... } --fill in your table
 	return sumlanguage
 
-You can also register language extensions using Terra's C-API by calling `terra_loadlanguage(lua_State * L)` with the language table on the top of the Lua stack. From Lua, you can call `terralib.loadlanguage(mylang)`. However, since a file is parsed _before_ it is run, `terralib.loadlanguage` will only affect subsequent calls to `terra.loadfile`, not the current file.
+The imported language will be enabled only in the local scope where the import statement occured:
+
+    do
+        import "lib/sumlanguage"
+        result = sum 1,2,3 done --ok, in scope
+        if result == 6 then
+            result = sum 4,5 done -- ok, still in scope
+        end
+    end
+    result = sum 6,7 done --error! sumlanguage is not in scope
+
+Multiple languages can be imported in the same scope as long as their `entrypoints` do not overlap.
+If their entrypoints do overlap, the languages can still be imported in the same file as long as the `import` statements occur in different scopes.
 
 Interacting with Lua symbols
 ----------------------------
