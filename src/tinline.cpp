@@ -24,9 +24,7 @@
 #endif
 
 #include "llvmheaders.h"
-#include "llvm/Module.h"
-#include "llvm/Instructions.h"
-#include "llvm/IntrinsicInst.h"
+
 #include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/InlineCost.h"
 
@@ -559,32 +557,65 @@ bool ManualInliner::removeDeadFunctions(ArrayRef<Function*> & Funcs, bool Always
 namespace {
 
   class SimpleManualInliner : public ManualInliner {
+    #if defined LLVM_3_1 || defined LLVM_3_2
     InlineCostAnalyzer CA;
+    #else
+    PassManager PM;
+    InlineCostAnalysis * CA;
+    #endif
+    TargetMachine * TM;
   public:
-    SimpleManualInliner(const TARGETDATA() * td) : TD(td), ManualInliner(td) {
+    SimpleManualInliner(TargetMachine * tm) : TM(tm), ManualInliner(tm->TARGETDATA(get)()) {
     }
-    SimpleManualInliner(const TARGETDATA() * td, int Threshold) : TD(td), ManualInliner(td,Threshold,
+    SimpleManualInliner(TargetMachine * tm, int Threshold) : TM(tm), ManualInliner(tm->TARGETDATA(get)(),Threshold,
                                            /*InsertLifetime*/true) {
     }
     InlineCost getInlineCost(CallSite CS) {
+    #if defined LLVM_3_1 || defined LLVM_3_2
       return CA.getInlineCost(CS, getInlineThreshold(CS));
+    #else
+      return CA->getInlineCost(CS, getInlineThreshold(CS));
+    #endif
     }
     virtual bool doInitialization();
-  private:
-    const TARGETDATA() * TD;
   };
 }
 
 
-ManualInliner * createManualFunctionInliningPass(const TARGETDATA() * td) { return new SimpleManualInliner(td); }
+ManualInliner * createManualFunctionInliningPass(TargetMachine *  tm) { return new SimpleManualInliner(tm); }
 
-ManualInliner * createManualFunctionInliningPass(const TARGETDATA() * td, int Threshold) {
+ManualInliner * createManualFunctionInliningPass(TargetMachine * td, int Threshold) {
   return new SimpleManualInliner(td,Threshold);
 }
+class PassManagerWrapper : public PassManagerBase {
+public:
+    PassManager * PM;
+    std::vector<Pass *> passes;
+    virtual void add(Pass *P) {
+        passes.push_back(P);
+        PM->add(P);
+    }
+};
 
 // doInitialization - Initializes the vector of functions that have been
 // annotated with the noinline attribute.
 bool SimpleManualInliner::doInitialization() {
-  CA.TARGETDATA(set)(TD);
+#ifdef LLVM_3_3
+    PassManagerWrapper W;
+    W.PM = &PM;
+    W.add(new DataLayout(*TM->getDataLayout()));
+    TM->addAnalysisPasses(W);
+    
+    for(int i = 0; i < W.passes.size(); i++) {
+        W.passes[i]->doInitialization(*(Module*)NULL);
+    }
+    
+    CA = new InlineCostAnalysis();
+    CA->setResolver(W.passes[W.passes.size()-1]->getResolver());
+    CA->runOnSCC(*(CallGraphSCC*)NULL);
+
+#else
+    CA.TARGETDATA(set)(TM->TARGETDATA(get)());
+#endif
   return false;
 }

@@ -24,12 +24,10 @@
 #include "clang/AST/ASTContext.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Analysis/Verifier.h"
-#include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
-#include "llvm/LLVMContext.h"
+
 #include "llvm/Linker.h"
-#include "llvm/Module.h"
 #include "llvm/PassManager.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetSelect.h"
@@ -45,31 +43,14 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/Support/DynamicLibrary.h"
 
-#if LLVM_3_2
-
-#include "llvm/IRBuilder.h"
-#include "llvm/DataLayout.h"
-#include "clang/Rewrite/Core/Rewriter.h"
-#include "clang/Rewrite/Frontend/Rewriters.h"
-
-#define HASFNATTR(attr) getFnAttributes().hasAttribute(Attributes :: attr)
-#define ADDFNATTR(attr) addFnAttr(Attributes :: attr)
-#define ATTRIBUTE Attributes
-#define TARGETDATA(nm) nm##DataLayout
-
+#if LLVM_3_1
+#include "llvmheaders_31.h"
+#elif LLVM_3_2
+#include "llvmheaders_32.h"
+#elif LLVM_3_3
+#include "llvmheaders_33.h"
 #else
-
-
-#include "llvm/Support/IRBuilder.h"
-#include "llvm/Target/TargetData.h"
-#include "clang/Rewrite/Rewriter.h"
-#include "clang/Rewrite/Rewriters.h"
-
-#define HASFNATTR(attr) hasFnAttr(Attribute :: attr)
-#define ADDFNATTR(attr) addFnAttr(Attribute :: attr)
-#define ATTRIBUTE Attribute
-#define TARGETDATA(nm) nm##TargetData
-
+#error "unsupported LLVM version"
 #endif
 
 #endif

@@ -13,6 +13,8 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
 #ifdef LLVM_3_2
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));
+#elif LLVM_3_3
+    TM->addAnalysisPasses(*fpm);
 #endif
 }
 
@@ -91,6 +93,7 @@ void llvmutil_addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * o
 
 void llvmutil_disassemblefunction(void * data, size_t sz) {
 #ifndef __linux__
+    InitializeNativeTargetDisassembler();
     printf("assembly for function at address %p\n",data);
     LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
     assert(disasm != NULL);

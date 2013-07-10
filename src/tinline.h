@@ -16,7 +16,7 @@
 #ifndef LLVM_TRANSFORMS_IPO_INLINERPASS_H
 #define LLVM_TRANSFORMS_IPO_INLINERPASS_H
 
-#include "llvm/CallGraphSCCPass.h"
+#include "llvmheaders.h"
 
 namespace llvm {
   class CallSite;
@@ -84,8 +84,8 @@ private:
 
 } // End llvm namespace
 
-llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TARGETDATA() * td);
+llvm::ManualInliner * createManualFunctionInliningPass(llvm::TargetMachine * td);
 
-llvm::ManualInliner * createManualFunctionInliningPass(const llvm::TARGETDATA() * td, int Threshold);
+llvm::ManualInliner * createManualFunctionInliningPass(llvm::TargetMachine * td, int Threshold);
 
 #endif

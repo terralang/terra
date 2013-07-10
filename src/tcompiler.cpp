@@ -222,7 +222,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     
     T->C->tm = TM;
-    T->C->mi = createManualFunctionInliningPass(T->C->td);
+    T->C->mi = createManualFunctionInliningPass(T->C->tm);
     T->C->mi->doInitialization();
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
@@ -654,23 +654,30 @@ struct CCallingConv {
         return info;
     }
     
-    Attributes SRetAttr() {
+    template<typename FnOrCall>
+    void addSRetAttr(FnOrCall * r, int idx) {
         #ifdef LLVM_3_2
             AttrBuilder builder;
             builder.addAttribute(Attributes::StructRet);
             builder.addAttribute(Attributes::NoAlias);
-            return Attributes::get(*C->ctx,builder);
+            r->addAttribute(idx,Attributes::get(*C->ctx,builder));
+        #elif LLVM_3_1
+            r->addAttribute(idx,Attributes(Attribute::StructRet | Attribute::NoAlias));
         #else
-            return Attributes(Attribute::StructRet | Attribute::NoAlias);
+            r->addAttribute(idx,Attribute::StructRet);
+            r->addAttribute(idx,Attribute::NoAlias);
         #endif
     }
-    Attributes ByValAttr() {
+    template<typename FnOrCall>
+    void addByValAttr(FnOrCall * r, int idx) {
         #ifdef LLVM_3_2
             AttrBuilder builder;
             builder.addAttribute(Attributes::ByVal);
-            return Attributes::get(*C->ctx,builder);
+            r->addAttribute(idx,Attributes::get(*C->ctx,builder));
+        #elif LLVM_3_1
+            r->addAttribute(idx,Attributes(Attribute::ByVal));
         #else
-            return Attributes(Attribute::ByVal);
+            r->addAttribute(idx,Attribute::ByVal);
         #endif
     }
     
@@ -678,14 +685,14 @@ struct CCallingConv {
     void AttributeFnOrCall(FnOrCall * r, Classification * info) {
         int argidx = 1;
         if(info->returntype.kind == C_AGGREGATE_MEM) {
-            r->addAttribute(argidx,SRetAttr());
+            addSRetAttr(r, argidx);
             argidx++;
         }
         for(int i = 0; i < info->paramtypes.size(); i++) {
             Argument * v = &info->paramtypes[i];
             if(v->kind == C_AGGREGATE_MEM) {
                 #ifndef _WIN32
-                r->addAttribute(argidx,ByValAttr());
+                addByValAttr(r, argidx);
                 #endif
             }
             argidx += v->nargs;
@@ -696,6 +703,7 @@ struct CCallingConv {
         TType * llvmtyp = GetType(ftype);
         Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,name, C->m);
         Classification * info = ClassifyFunction(ftype);
+        
         AttributeFnOrCall(fn,info);
         return fn;
     }
