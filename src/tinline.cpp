@@ -73,6 +73,53 @@ ManualInliner::ManualInliner(const TARGETDATA() * td,int Threshold, bool InsertL
 typedef DenseMap<ArrayType*, std::vector<AllocaInst*> >
 InlinedArrayAllocasTy;
 
+#ifdef LLVM_3_3
+/// \brief If the inlined function had a higher stack protection level than the
+/// calling function, then bump up the caller's stack protection level.
+static void AdjustCallerSSPLevel(Function *Caller, Function *Callee) {
+  // If upgrading the SSP attribute, clear out the old SSP Attributes first.
+  // Having multiple SSP attributes doesn't actually hurt, but it adds useless
+  // clutter to the IR.
+  AttrBuilder B;
+  B.addAttribute(Attribute::StackProtect)
+    .addAttribute(Attribute::StackProtectStrong);
+  AttributeSet OldSSPAttr = AttributeSet::get(Caller->getContext(),
+                                              AttributeSet::FunctionIndex,
+                                              B);
+  AttributeSet CallerAttr = Caller->getAttributes(),
+               CalleeAttr = Callee->getAttributes();
+
+  if (CalleeAttr.hasAttribute(AttributeSet::FunctionIndex,
+                              Attribute::StackProtectReq)) {
+    Caller->removeAttributes(AttributeSet::FunctionIndex, OldSSPAttr);
+    Caller->addFnAttr(Attribute::StackProtectReq);
+  } else if (CalleeAttr.hasAttribute(AttributeSet::FunctionIndex,
+                                     Attribute::StackProtectStrong) &&
+             !CallerAttr.hasAttribute(AttributeSet::FunctionIndex,
+                                      Attribute::StackProtectReq)) {
+    Caller->removeAttributes(AttributeSet::FunctionIndex, OldSSPAttr);
+    Caller->addFnAttr(Attribute::StackProtectStrong);
+  } else if (CalleeAttr.hasAttribute(AttributeSet::FunctionIndex,
+                                     Attribute::StackProtect) &&
+           !CallerAttr.hasAttribute(AttributeSet::FunctionIndex,
+                                    Attribute::StackProtectReq) &&
+           !CallerAttr.hasAttribute(AttributeSet::FunctionIndex,
+                                    Attribute::StackProtectStrong))
+    Caller->addFnAttr(Attribute::StackProtect);
+}
+#else
+static void AdjustCallerSSPLevel(Function *Caller, Function *Callee) {
+  // If the inlined function had a higher stack protection level than the
+  // calling function, then bump up the caller's stack protection level.
+  if (Callee->HASFNATTR(StackProtectReq))
+    Caller->ADDFNATTR(StackProtectReq);
+  else if (Callee->HASFNATTR(StackProtect) &&
+           !Caller->HASFNATTR(StackProtectReq))
+    Caller->ADDFNATTR(StackProtect);
+
+}
+#endif
+
 /// InlineCallIfPossible - If it is possible to inline the specified call site,
 /// do so and update the CallGraph for this operation.
 ///
@@ -92,14 +139,8 @@ static bool InlineCallIfPossible(CallSite CS, InlineFunctionInfo &IFI,
   if (!InlineFunction(CS, IFI, InsertLifetime))
     return false;
 
-  // If the inlined function had a higher stack protection level than the
-  // calling function, then bump up the caller's stack protection level.
-  if (Callee->HASFNATTR(StackProtectReq))
-    Caller->ADDFNATTR(StackProtectReq);
-  else if (Callee->HASFNATTR(StackProtect) &&
-           !Caller->HASFNATTR(StackProtectReq))
-    Caller->ADDFNATTR(StackProtect);
-
+  AdjustCallerSSPLevel(Caller, Callee);
+  
   // Look at all of the allocas that we inlined through this call site.  If we
   // have already inlined other allocas through other calls into this function,
   // then we know that they have disjoint lifetimes and that we can merge them.
@@ -203,19 +244,25 @@ static bool InlineCallIfPossible(CallSite CS, InlineFunctionInfo &IFI,
 }
 
 unsigned ManualInliner::getInlineThreshold(CallSite CS) const {
-  int thres = InlineThreshold;
+  int thres = InlineThreshold; // -inline-threshold or else selected by
+                               // overall opt level
 
-  // Listen to optsize when -inline-limit is not given.
+  // If -inline-threshold is not given, listen to the optsize attribute when it
+  // would decrease the threshold.
   Function *Caller = CS.getCaller();
-  if (Caller && !Caller->isDeclaration() &&
-      Caller->HASFNATTR(OptimizeForSize) &&
-      InlineLimit.getNumOccurrences() == 0)
+  bool OptSize = Caller && !Caller->isDeclaration() &&
+    Caller->HASFNATTR(OptimizeForSize);
+  if (!(InlineLimit.getNumOccurrences() > 0) && OptSize &&
+      OptSizeThreshold < thres)
     thres = OptSizeThreshold;
 
-  // Listen to inlinehint when it would increase the threshold.
+  // Listen to the inlinehint attribute when it would increase the threshold
+  // and the caller does not need to minimize its size.
   Function *Callee = CS.getCalledFunction();
-  if (HintThreshold > thres && Callee && !Callee->isDeclaration() &&
-      Callee->HASFNATTR(InlineHint))
+  bool InlineHint = Callee && !Callee->isDeclaration() &&
+    Callee->HASFNATTR(InlineHint);
+  if (InlineHint && HintThreshold > thres
+      && !Caller->HASFNATTR(MinSize))
     thres = HintThreshold;
 
   return thres;

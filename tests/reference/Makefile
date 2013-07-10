@@ -3,7 +3,7 @@ CXX = $(CLANG_PREFIX)/bin/clang++
 CC = $(CLANG_PREFIX)/bin/clang
 
 #FLAGS = -O3
-FLAGS = -O3 -I/usr/local/atlasgccavx/include
+FLAGS = -g -O3 -I/usr/local/atlasgccavx/include
 #FLAGS = -O3 -I/opt/intel/composer_xe_2013.0.088/mkl/include
 #LIBS = -framework Accelerate
 #LIBS = -L/usr/local/atlasgccavx/lib -latlas -lcblas
