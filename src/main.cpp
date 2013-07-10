@@ -78,7 +78,8 @@ void usage() {
     printf("terra [OPTIONS] [source-file] [arguments-to-source-file]\n"
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
-           "    -i enter the REPL after processing source files\n");
+           "    -i enter the REPL after processing source files\n"
+           "    -p <terra path> set the terralib.path search path to <terra path>\n");
 }
 
 void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int * begin_script) {
@@ -87,12 +88,13 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
         { "help",      0,     NULL,           'h' },
         { "verbose",   0,     NULL,           'v' },
         { "interactive",     0,     NULL,     'i' },
+        { "path",      0,     NULL,           'p' },
         { NULL,        0,     NULL,            0 }
     };
     int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(argc, argv, "+hvil:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvip:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
                 verbose++;
@@ -100,6 +102,12 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
                 break;
             case 'i':
                 *interactive = true;
+                break;
+            case 'p':
+                lua_getglobal(L,"terra");
+                lua_pushstring(L,optarg);
+                lua_setfield(L,-2,"path");
+                lua_pop(L,1);
                 break;
             case ':':
             case 'h':
