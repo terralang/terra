@@ -50,5 +50,11 @@ terra foo()
 end
 
 foo:compile()
-foo:printpretty()
+foo:printpretty(false) --before compilation
+foo:printpretty() --after compilation
 
+local a = `1 + 2
+local b = quote var c = a + a in a + 1 end
+
+a:printpretty()
+b:printpretty()

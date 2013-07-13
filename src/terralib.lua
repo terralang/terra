@@ -881,6 +881,7 @@ do  --constructor functions for terra functions and variables
         local starttime = terra.currenttimeinseconds() 
         fn.untypedtree = terra.specialize(fn.untypedtree,env,3)
         fn.stats.specialize = terra.currenttimeinseconds() - starttime
+
         return fn
     end
     
@@ -3514,24 +3515,11 @@ function terra.printf(s,...)
     return io.write(tostring(s):format(unpack(strs)))
 end
 
-function terra.func:printpretty()
-    for i,v in ipairs(self.definitions) do
-        v:compile()
-        terra.printf("%s = ",v.name,v.type)
-        v:printpretty()
-    end
-end
-
 function terra.func:__tostring()
     return "<terra function>"
 end
 
-function terra.funcdefinition:printpretty()
-    self:compile()
-    if not self.typedtree then
-        terra.printf("<extern : %s>\n",self.type)
-        return
-    end
+local function printpretty(toptree,returntypes)
     local indent = 0
     local function enterblock()
         indent = indent + 1
@@ -3563,9 +3551,12 @@ function terra.funcdefinition:printpretty()
     end
 
     local function emitParam(p)
-        emit("%s : %s",p.name,p.type)
+        emit("%s",p.name)
+        if p.type then 
+            emit(" : %s",p.type)
+        end
     end
-    local emitStmt, emitExp,emitParamList
+    local emitStmt, emitExp,emitParamList,emitTreeList
     local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
         for i,ss in ipairs(lst) do
             if ss:is "block" then
@@ -3577,6 +3568,9 @@ function terra.funcdefinition:printpretty()
             end
         end
     end
+    local function emitAttr(a)
+        emit("{ nontemporal = %s, align = %s }",a.nontemporal or "false",a.align or "native")
+    end
     function emitStmt(s)
         if s:is "block" then
             enterblock()
@@ -3585,6 +3579,9 @@ function terra.funcdefinition:printpretty()
         elseif s:is "treelist" then
             if s.statements then
                 emitStmtList(s.statements)
+            end
+            if s.trees then
+                emitStmtList(s.trees)
             end
             if s.expressions then
                 emitStmtList(s.expressions)
@@ -3601,9 +3598,9 @@ function terra.funcdefinition:printpretty()
             emitParamList(s.expressions)
             emit("\n")
         elseif s:is "label" then
-            begin("::%s::\n",s.labelname)
+            begin("::%s::\n",s.labelname or s.value)
         elseif s:is "goto" then
-            begin("goto %s\n",s.definition.labelname)
+            begin("goto %s\n",s.definition and s.definition.labelname or s.label)
         elseif s:is "break" then
             begin("break\n")
         elseif s:is "while" then
@@ -3650,6 +3647,14 @@ function terra.funcdefinition:printpretty()
             emit(" = ")
             emitParamList(s.rhs)
             emit("\n")
+        elseif s:is "attrstore" then
+            begin("attrstore(")
+            emitExp(s.address)
+            emit(", ")
+            emitExp(s.value)
+            emit(", ")
+            emitAttr(s.attributes)
+            emit(")\n")
         else
             begin("")
             emitExp(s)
@@ -3729,14 +3734,13 @@ function terra.funcdefinition:printpretty()
                 emit("%s",e.value)
             end
         elseif e:is "luafunction" then
-            emit("<luafunction>")
-        elseif e:is "cast" then
+            emit("<lua %s>",tostring(e.callback))
+        elseif e:is "cast" or e:is "explicitcast" then
             emit("[")
-            emitType(e.to)
+            emitType(e.to or e.totype)
             emit("](")
-            emitExp(e.expression)
+            emitExp(e.expression or e.value)
             emit(")")
-
         elseif e:is "sizeof" then
             emit("sizeof(%s)",e.oftype)
         elseif e:is "apply" then
@@ -3760,10 +3764,19 @@ function terra.funcdefinition:printpretty()
             emit(")")
         elseif e:is "constructor" then
             emit("{")
-            local anon = 0
-            local keys = e.type:getlayout().entries:map(function(e) return e.key end)
-            emitList(keys,"",", "," = ",emit)
-            emitParamList(e.expressions,keys)
+            if e.type then
+                local keys = e.type:getlayout().entries:map(function(e) return e.key end)
+                emitList(keys,"",", "," = ",emit)
+                emitParamList(e.expressions,keys)
+            else
+                local function emitRec(r)
+                    if r.key then
+                        emit("%s = ",r.key)
+                    end
+                    emitExp(r.value)
+                end
+                emitList(e.records,"",", ","",emitRec)
+            end
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
@@ -3772,13 +3785,59 @@ function terra.funcdefinition:printpretty()
                 emit("<constant:",e.type,">")
             end
         elseif e:is "treelist" then
-            emitParamList(e)
+            emitTreeList(e)
+        elseif e:is "attrload" then
+            emit("attrload(")
+            emitExp(e.address)
+            emit(", ")
+            emitAttr(e.attributes)
+            emit(")")
+        elseif e:is "intrinsic" then
+            emit("intrinsic<%s>(",e.name)
+            emitParamList(e.arguments)
+            emit(")")
+        elseif e:is "luaobject" then
+            if terra.types.istype(e.value) then
+                emit("[%s]",e.value)
+            elseif terra.ismacro(e.value) then
+                emit("<macro>")
+            elseif terra.isfunction(e.value) then
+                emit("%s",e.value.name or e.value:getdefinitions()[1].name or "<anonfunction>")
+            else
+                emit("<lua value: %s>",tostring(e.value))
+            end
+        elseif e:is "method" then
+             doparens(e,e.value)
+             emit(":%s",e.name)
+             emit("(")
+             emitParamList(e.arguments)
+             emit(")")
+        elseif e:is "truncate" then
+            if e.size and e.size ~= 1 then
+                emit("truncate(%d,",e.size)
+                emitExp(e.value)
+                emit(")")
+            else
+                emit("(")
+                emitExp(e.value)
+                emit(")")
+            end
+        elseif e:is "typedexpression" then
+            emitExp(e.expression)
         else
             emit("<??"..terra.kinds[e.kind].."??>")
         end
     end
-
     function emitParamList(pl)
+        if terra.islist(pl) then
+            --untyped case:
+            emitList(pl,"",", ","",emitExp)
+        else
+            --typed case:
+            emitTreeList(pl)
+        end
+    end
+    function emitTreeList(pl)
         local function issimplefunctioncall(pl)
             if not pl.statements or 
                #pl.statements ~= 1 or 
@@ -3793,9 +3852,7 @@ function terra.funcdefinition:printpretty()
             end
             return true
         end
-        local hasstmts = pl.statements and #pl.statements > 0
-        local hasexps = #pl.types > 0
-        if hasstmts then
+        if pl.statements then
             if issimplefunctioncall(pl) then
                 emitExp(pl.statements[1])
                 return
@@ -3804,35 +3861,67 @@ function terra.funcdefinition:printpretty()
             enterblock()
             emitStmtList(pl.statements)
             leaveblock()
-            if hasexps then
-                begin("in\n")
-                enterblock()
-                begin("")
-            end
+            begin("in\n")
+            enterblock()
+            begin("")
         end
-        if pl.expressions then
-            emitList(pl.expressions,"",", ","",emitExp)
+        local exps = pl.expressions or pl.trees
+        if exps then
+            emitList(exps,"",", ","",emitExp)
         end
         if pl.next then
-            if pl.expressions and #pl.expressions > 0 then
+            if exps and #exps > 0 then
                 emit(", ")
             end
             emitParamList(pl.next)
         end
-        if hasstmts then
+        if pl.statements then
             leaveblock()
             emit("\n")
             begin("end")
         end
     end
 
-    emit("terra")
-    emitList(self.typedtree.parameters,"(",",",") : ",emitParam)
-    emitList(self.type.returns,"{",", ","}",emitType)
-    emit("\n")
-    emitStmt(self.typedtree.body)
-    emit("end\n")
+    if toptree:is "function" then
+        emit("terra")
+        emitList(toptree.parameters,"(",",",") ",emitParam)
+        if returntypes then
+            emitList(returntypes,": {",", ","}",emitType)
+        end
+        emit("\n")
+        emitStmt(toptree.body)
+        emit("end\n")
+    else
+        emitExp(toptree)
+        emit("\n")
+    end
 end
+
+function terra.func:printpretty(printcompiled)
+    printcompiled = (printcompiled == nil) or printcompiled
+    for i,v in ipairs(self.definitions) do
+        terra.printf("%s = ",v.name)
+        v:printpretty(printcompiled)
+    end
+end
+
+function terra.funcdefinition:printpretty(printcompiled)
+    printcompiled = (printcompiled == nil) or printcompiled
+    if not self.untypedtree then
+        terra.printf("<extern : %s>\n",self.type)
+        return
+    end
+    if printcompiled then
+        self:compile()
+        return printpretty(self.typedtree,self.type.returns)
+    else
+        return printpretty(self.untypedtree,self.return_types)
+    end
+end
+function terra.quote:printpretty()
+    printpretty(self.tree)
+end
+
 
 -- END DEBUG
 
