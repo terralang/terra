@@ -181,6 +181,13 @@ Disassembles all of the function definitions into x86 assembly and optimized LLV
 
 ---
 
+    func:printpretty([printcompiled])
+
+Print out a visual representation of the code in this function. If `printcompiled` is `false`, then this will print out an untyped version of the function. Otherwise, this will cause the function
+definitions to compile, and print out a type-checked representation of the function (with all macros and method invocations expanded).
+
+---
+
     terralib.isfunction(obj)
 
 True if `obj` is a Terra function.
@@ -410,6 +417,11 @@ If the quote object is a typed expression that was passed as an argument to a ma
 
 Try to interpret this quote as if it were a simple Lua value. This is normally used in [macros](#macros) that expect constants as an argument (e.g. the macro that truncates expressions `truncate(2,foo())`). Currently only supports very simple constants (e.g. numbers). Consider using an escape rather than a macro when you want to pass more complicated data structures to generative code.
 
+---
+
+    quoteobj:printpretty()
+
+Print out a visual representation of the code in this quote. Because quotes are not type-checked until they are placed into a function, this will print an untyped representation of the function.
 
 Symbol
 ------
