@@ -7,7 +7,7 @@ function symmat(name,I,...)
   end
   return r
 end
-prefetch = terralib.intrinsic("llvm.prefetch",{&uint8,int,int,int} -> {})
+prefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
 
 
 function genkernel(NB, RM, RN, V,alpha)

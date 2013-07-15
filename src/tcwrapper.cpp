@@ -178,7 +178,7 @@ public:
           case Type::Builtin:
             switch (cast<BuiltinType>(Ty)->getKind()) {
             case BuiltinType::Void:
-              InitType("uint8",tt);
+              InitType("opaque",tt);
                 return true;
             case BuiltinType::Bool:
                 assert(!"bool?");

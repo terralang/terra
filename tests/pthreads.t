@@ -10,7 +10,7 @@ C = terralib.includecstring [[
 
 acc = global(int[4])
 
-terra forkedFn(args : &uint8) : &uint8
+terra forkedFn(args : &opaque) : &opaque
   var threadid = @[&int](args)
   C.printf("threadid %d\n",threadid)
   acc[threadid] = threadid

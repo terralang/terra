@@ -1209,6 +1209,8 @@ do --construct type table that holds the singleton value representing each uniqu
                 local nilname = uniquetypename("niltype")
                 ffi.cdef("typedef void * "..nilname..";")
                 cstring = nilname
+            elseif self == types.opaque then
+                cstring = "void"
             elseif self == types.error then
                 cstring = "int"
             else
@@ -1290,6 +1292,17 @@ do --construct type table that holds the singleton value representing each uniqu
             return entries
         end
     }
+    local function reportopaque(anchor)
+        local msg = "attempting to use an opaque type where the layout of the type is needed"
+        if anchor then
+            local diag = terra.getcompilecontext().diagnostics
+            if not diag:haserrors() then
+                terra.getcompilecontext().diagnostics:reporterror(anchor,msg)
+            end
+        else
+            error(msg,4)
+        end
+    end
     types.type.getlayout = memoize {
         name = "layout"; 
         defaultvalue = { entries = terra.newlist(), keytoindex = {}, invalid = true };
@@ -1313,6 +1326,8 @@ do --construct type table that holds the singleton value representing each uniqu
                         t:getlayout(anchor)
                     elseif t:isarray() then
                         ensurelayout(t.type)
+                    elseif t == types.opaque then
+                        reportopaque(tree)    
                     end
                 end
                 ensurelayout(t)
@@ -1388,6 +1403,8 @@ do --construct type table that holds the singleton value representing each uniqu
                     incomplete = incomplete or self.returnobj:complete(anchor).incomplete
                 end
                 self.incomplete = incomplete
+            elseif self == types.opaque then
+                reportopaque(anchor)
             else
                 assert(self:isstruct())
                 local layout = self:getlayout(anchor)
@@ -1461,7 +1478,9 @@ do --construct type table that holds the singleton value representing each uniqu
     
     types.error   = registertype("error",  mktyp { kind = terra.kinds.error })
     types.niltype = registertype("niltype",mktyp { kind = terra.kinds.niltype}) -- the type of the singleton nil (implicitly convertable to any pointer type)
-    
+    types.opaque = registertype("opaque", mkincomplete { kind = terra.kinds.opaque }) -- an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type
+                                                                               -- equivalent to "void *"
+
     local function checkistype(typ)
         if not types.istype(typ) then 
             error("expected a type but found "..type(typ))
@@ -1629,6 +1648,7 @@ do --construct type table that holds the singleton value representing each uniqu
     _G["intptr"] = uint64
     _G["ptrdiff"] = int64
     _G["niltype"] = types.niltype
+    _G["opaque"] = types.opaque
     _G["rawstring"] = types.pointer(int8)
     terra.types = types
 end
@@ -2210,7 +2230,7 @@ function terra.funcdefinition:typecheck()
                 (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N)) and
                not typ:islogicalorvector() and not exp.type:islogicalorvector() then
                 return cast_exp, true
-            elseif typ:ispointer() and exp.type:ispointer() and typ.type == uint8 then --implicit cast from any pointer to &uint8
+            elseif typ:ispointer() and exp.type:ispointer() and typ.type == terra.types.opaque then --implicit cast from any pointer to &opaque
                 return cast_exp, true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return cast_exp, true

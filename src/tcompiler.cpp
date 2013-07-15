@@ -451,6 +451,9 @@ struct CCallingConv {
                 case T_niltype: {
                     t->type = Type::getInt8PtrTy(*C->ctx);
                 } break;
+                case T_opaque: {
+                    t->type = Type::getInt8Ty(*C->ctx);
+                } break;
                 default: {
                     printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
                     terra_reporterror(T,"type not understood or not primitive\n");
