@@ -262,7 +262,10 @@ unsigned ManualInliner::getInlineThreshold(CallSite CS) const {
   bool InlineHint = Callee && !Callee->isDeclaration() &&
     Callee->HASFNATTR(InlineHint);
   if (InlineHint && HintThreshold > thres
-      && !Caller->HASFNATTR(MinSize))
+#if defined LLVM_3_3 || defined LLVM_3_2
+      && !Caller->HASFNATTR(MinSize)
+#endif
+  )
     thres = HintThreshold;
 
   return thres;
