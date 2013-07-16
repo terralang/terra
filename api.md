@@ -326,7 +326,7 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
         return [luaexpr],4
     end 
 
-`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time compilation-time conversion [rules](#converting_between_lua_values_and_terra_values). If the conversion results in a list of Terra values, it is truncated to a single value.
+`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time conversion [rules](#converting_between_lua_values_and_terra_values). If the conversion results in a list of Terra values, it is truncated to a single value.
 
 ---
     terra foo()
