@@ -530,7 +530,7 @@ True if the `type` can be used in expressions `or` and `and` (i.e. integral and 
 
     type:ispointer()
 
-True if `type` is a pointer. `type.N` is the length. `type.type` is the element type.
+True if `type` is a pointer. `type.type` is the type pointed to.
 
 ---
 
