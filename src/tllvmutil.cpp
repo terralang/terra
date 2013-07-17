@@ -92,7 +92,7 @@ void llvmutil_addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * o
 }
 
 void llvmutil_disassemblefunction(void * data, size_t sz) {
-#ifndef __linux__
+#if !defined  __linux__ || defined LLVM_3_3
     InitializeNativeTargetDisassembler();
     printf("assembly for function at address %p\n",data);
     LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
