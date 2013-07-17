@@ -326,7 +326,7 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
         return [luaexpr],4
     end 
 
-`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time compilation-time conversion [rules](#converting_between_lua_values_and_terra_values). If the conversion results in a list of Terra values, it is truncated to a single value.
+`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time conversion [rules](#converting_between_lua_values_and_terra_values). If the conversion results in a list of Terra values, it is truncated to a single value.
 
 ---
     terra foo()
@@ -444,7 +444,7 @@ Construct a new symbol. This symbol will be unique from any other symbol. `typ` 
 Types
 -----
 
-Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [Struct](#struct) can be declared before their members and methods are fully specified.When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
+Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [Struct](#structs) can be declared before their members and methods are fully specified.When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
 
 ---
     
@@ -530,7 +530,7 @@ True if the `type` can be used in expressions `or` and `and` (i.e. integral and 
 
     type:ispointer()
 
-True if `type` is a pointer. `type.N` is the length. `type.type` is the element type.
+True if `type` is a pointer. `type.type` is the type pointed to.
 
 ---
 
