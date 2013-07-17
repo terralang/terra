@@ -544,12 +544,19 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
     if(!ls->in_terra) {
       yindex(ls, &key);
     } else {
-      checksymbol(ls,NULL);
-      if(ls->t.token != '=') {
-        /* oops! this wasn't a recfield, but a listfield with an antiquote 
+      RETURNS_1(expr(ls,&val));
+      if(ls->t.token == '=') {
+        lua_getfield(ls->L,-1, "kind");
+        int kind = lua_tointeger(ls->L, -1);
+        lua_pop(ls->L,1); /* the kind */
+        if(kind != T_luaexpression)
+            luaX_syntaxerror(ls, "unexpected symbol");
+        int sym = new_table_before(ls, T_symbol);
+        add_field(ls, sym, "expression");
+        
+      } else {
+        /* oops! this wasn't a recfield, but a listfield with an antiquote
            this is a somewhat unfortunate corner case of terra's parsing rules: we need to fix the AST now */
-        lua_getfield(ls->L,-1,"expression");
-        lua_remove(ls->L,-2); //remove the T_symbol, now we have { kind = recfield }, luaexpression
         add_field(ls,tbl,"value");
         //replace T_recfield with T_listfield
         push_double(ls,T_listfield);
