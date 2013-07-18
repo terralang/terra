@@ -4,7 +4,16 @@
 
 #include "tllvmutil.h"
 #include "llvm/Target/TargetLibraryInfo.h"
-#include "llvm-c/Disassembler.h"
+
+#include "llvm/MC/MCAsmInfo.h"
+#include "llvm/MC/MCDisassembler.h"
+#include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstPrinter.h"
+#include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/MemoryObject.h"
+
 using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
@@ -91,22 +100,63 @@ void llvmutil_addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * o
     fpm->add(createInstructionCombiningPass());  // Clean up after everything.
 }
 
-void llvmutil_disassemblefunction(void * data, size_t sz) {
-#if !defined  __linux__ || defined LLVM_3_3
+
+struct SimpleMemoryObject : public MemoryObject {
+  uint8_t *Bytes;
+  uint64_t Size;
+  uint64_t getBase() const { return 0; }
+  uint64_t getExtent() const { return Size; }
+  int readByte(uint64_t Addr, uint8_t *Byte) const {
+    *Byte = Bytes[Addr];
+    return 0;
+  }
+};
+
+void llvmutil_disassemblefunction(void * data, size_t numBytes) {
     InitializeNativeTargetDisassembler();
+    std::string Error;
+    std::string TripleName = llvm::sys::getDefaultTargetTriple();
+    const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
+    assert(TheTarget && "Unable to create target!");
+    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(TripleName);
+    assert(MAI && "Unable to create target asm info!");
+    const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
+    assert(MII && "Unable to create target instruction info!");
+    const MCRegisterInfo *MRI = TheTarget->createMCRegInfo(TripleName);
+    assert(MRI && "Unable to create target register info!");
+
+    std::string FeaturesStr;
+    std::string CPU;
+    const MCSubtargetInfo *STI = TheTarget->createMCSubtargetInfo(TripleName, CPU,
+                                                                  FeaturesStr);
+    assert(STI && "Unable to create subtarget info!");
+
+    MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI);
+    assert(DisAsm && "Unable to create disassembler!");
+
+    int AsmPrinterVariant = MAI->getAssemblerDialect();
+    MCInstPrinter *IP = TheTarget->createMCInstPrinter(AsmPrinterVariant,
+                                                     *MAI, *MII, *MRI, *STI);
+    assert(IP && "Unable to create instruction printer!");
+
     printf("assembly for function at address %p\n",data);
-    LLVMDisasmContextRef disasm = LLVMCreateDisasm(llvm::sys::getDefaultTargetTriple().c_str(),NULL,0,NULL,NULL);
-    assert(disasm != NULL);
-    char buf[1024];
-    buf[0] = '\0';
-    int64_t offset = 0;
-    while(offset < sz) {
-        int64_t inc = LLVMDisasmInstruction(disasm, (uint8_t*)data + offset, sz - offset, 0, buf,1024);
-        printf("%d:\t%s\n",(int)offset,buf);
-        offset += inc;
+    SimpleMemoryObject SMO;
+    SMO.Bytes = (uint8_t*)data;
+    SMO.Size = numBytes;
+    uint64_t Size;
+    raw_fd_ostream Out(STDOUT_FILENO, false);
+    for(int i = 0; i < numBytes; i += Size) {
+        MCInst Inst;
+        MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
+        if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
+            break;
+        Out << i << ":\t";
+        IP->printInst(&Inst,Out,"");
+        Out << "\n";
+        SMO.Size -= Size; SMO.Bytes += Size;
     }
-    LLVMDisasmDispose(disasm);
-#endif
+    Out.flush();
+    delete MAI; delete MRI; delete STI; delete MII; delete DisAsm; delete IP;
 }
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
