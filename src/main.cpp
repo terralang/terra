@@ -55,7 +55,10 @@ int main(int argc, char ** argv) {
     if(scriptidx < argc) {
       int narg = getargs(L, argv, scriptidx);  
       lua_setglobal(L, "arg");
-      if(terra_loadfile(L,argv[scriptidx]))
+      const char * filename = argv[scriptidx];
+      if(!strcmp(filename,"-"))
+        filename = NULL;
+      if(terra_loadfile(L,filename))
         doerror(L);
       lua_insert(L, -(narg + 1));
       if(lua_pcall(L, narg, LUA_MULTRET, 0))
@@ -79,7 +82,8 @@ void usage() {
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
-           "    -p <terra path> set the terralib.path search path to <terra path>\n");
+           "    -p <terra path> set the terralib.path search path to <terra path>\n"
+           "    -  Execute stdin instead of script and stop parsing options\n");
 }
 
 void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int * begin_script) {

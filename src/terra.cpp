@@ -184,7 +184,9 @@ int terra_luaload(lua_State * L) {
 }
 
 int terra_lualoadfile(lua_State * L) {
-    const char * file = luaL_checkstring(L,-1);
+    const char * file = NULL;
+    if(lua_gettop(L) > 0)
+        file = luaL_checkstring(L,-1);
     if(terra_loadfile(L,file)) {
         lua_pushnil(L);
         lua_pushvalue(L,-2);
@@ -331,7 +333,7 @@ static const char *reader_string(lua_State *L, void *ud, size_t *size)
 
 int terra_loadfile(lua_State * L, const char * file) {
     FileReaderCtx ctx;
-    ctx.fp = fopen(file,"r");
+    ctx.fp = file ? fopen(file,"r") : stdin;
     if(!ctx.fp) {
        terra_State * T = getterra(L);
        terra_pusherror(T,"failed to open file '%s'",file);
@@ -347,9 +349,10 @@ int terra_loadfile(lua_State * L, const char * file) {
         if(c == '\n')
             ungetc(c,ctx.fp); /* keep line count accurate */
     }
-
-    int r = terra_load(L,reader_file,&ctx,file);
-    fclose(ctx.fp);
+    const char * name = file ? file : "=stdin";
+    int r = terra_load(L,reader_file,&ctx,name);
+    if(file)
+        fclose(ctx.fp);
     return r;
 }
 
