@@ -1,0 +1,60 @@
+---
+layout: post
+title: Terra Demo
+---
+<h1 id='installing_terra'>Demo</h1>
+<div id="codecontent" style="display: none;">-- This top-level code is plain Lua code.
+print("Hello, Lua!")
+
+-- Terra is backwards compatible with C
+-- we'll use C's io library in our example.
+C = terralib.includec("stdio.h")
+
+-- The keyword 'terra' introduces
+-- a new Terra function.
+terra hello(argc : int, argv : &rawstring)
+    -- Here we call a C function from Terra
+    C.printf("Hello, Terra!\n")
+    return 0
+end
+
+-- You can call Terra functions directly from Lua
+hello(0,nil)
+</div>
+<div id="editor">
+
+</div>
+<link rel="stylesheet" href="stylesheets/codemirror.css">
+<script src="javascripts/codemirror.js"></script>
+<script src="javascripts/lua.js"></script>
+<script>
+var codemirror = CodeMirror(document.getElementById("editor"), {
+  value: document.getElementById("codecontent").innerText,
+  lineNumbers: true,
+  lineWrapping: false,
+  smartIndent: false,
+  mode:  "lua"
+});
+function finishresult(data) {
+	var r = document.getElementById("result")
+	var code = document.createElement("code")
+	code.innerText = atob(data)
+	var pre = document.createElement("pre")
+	pre.appendChild(code)
+	r.innerHTML = ""
+	r.appendChild(pre)
+}
+function execute() {
+	var script = document.createElement("script")
+	script.type = "text/javascript"
+	var data = btoa(codemirror.getValue())
+	script.src = "http://candela.stanford.edu:4001/" + data 
+	document.getElementById("result").appendChild(script)
+}
+</script>
+<br>
+<button type="button" style="float:right;" onclick="execute()">Execute</button>
+<br>
+<br>
+<hr>
+<div id="result"></div>
