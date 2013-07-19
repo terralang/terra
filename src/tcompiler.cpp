@@ -563,7 +563,7 @@ struct CCallingConv {
         }
     }
     bool ValidAggregateSize(size_t sz) {
-        return sz <= 16;
+        return sz <= 16 && sz > 0;
     }
 #else
     Type * TypeForClass(size_t size, RegisterClass clz) {
