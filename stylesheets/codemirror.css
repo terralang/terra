@@ -7,6 +7,10 @@ pre, code {
   white-space: pre-wrap;  
 }
 
+.example {
+  display: none;
+}
+
 .CodeMirror {
   /* Set height, width, borders, and global font properties here */
   width: 100%;

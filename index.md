@@ -423,12 +423,13 @@ of the power function (e.g. pow2, or pow3):
     
     --generate a power function for a specific N (e.g. N = 3)
     function makePowN(N)
+        local function emit(a,N)
+            if N == 0 then return 1
+          else return `a*[emit(a,N-1)]
+          end
+        end
         return terra(a : double)
-            var r = 1.0
-            for i = 0, N do
-                r = r * a
-            end
-            return r
+            return [emit(a,N)]
         end
     end
 
@@ -436,13 +437,6 @@ of the power function (e.g. pow2, or pow3):
     local mymath = {}
     for n = 1,10 do
         mymath["pow"..n] = makePowN(n)
-    end
-    print(mymath.pow3(2)) -- 8
-
-    --use it to fill in a table of functions
-    local mymath = {}
-    for n = 1,10 do
-        mymath["pow"..i] = makePowN(n)
     end
     print(mymath.pow3(2)) -- 8
 
