@@ -144,6 +144,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes) {
     SMO.Bytes = (uint8_t*)data;
     SMO.Size = numBytes;
     uint64_t Size;
+    fflush(stdout);
     raw_fd_ostream Out(STDOUT_FILENO, false);
     for(int i = 0; i < numBytes; i += Size) {
         MCInst Inst;
