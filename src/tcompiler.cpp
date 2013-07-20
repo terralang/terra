@@ -609,10 +609,10 @@ struct CCallingConv {
         *usedint += nint;
         
         std::vector<Type*> elements;
-        elements.push_back(TypeForClass(sizes[0], classes[0]));
-        if(sizes[1] > 0) {
-            elements.push_back(TypeForClass(sizes[1],classes[1]));
-        }
+        for(int i = 0; i < 2; i++)
+            if(sizes[i] > 0)
+                elements.push_back(TypeForClass(sizes[i], classes[i]));
+        
         return Argument(C_AGGREGATE_REG,t->type,elements.size(),
                         StructType::get(*C->ctx,elements));
     }
@@ -758,7 +758,7 @@ struct CCallingConv {
         assert(results->size() == info->nreturns);
         ArgumentKind kind = info->returntype.kind;
         
-        if(info->nreturns == 0) {
+        if(info->nreturns == 0 || (C_AGGREGATE_REG == kind && info->returntype.nargs == 0)) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
             assert(results->size() == 1);
@@ -834,7 +834,8 @@ struct CCallingConv {
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
                 if(info.returntype.nargs == 1)
                     casted = B->CreateConstGEP2_32(casted, 0, 0);
-                B->CreateStore(call,casted);
+                if(info.returntype.nargs > 0)
+                    B->CreateStore(call,casted);
             }
             
             if(info.nreturns == 1) {
@@ -863,10 +864,11 @@ struct CCallingConv {
         
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
-            if(info->returntype.nargs == 1)
-                rt = info->returntype.cctype->getElementType(0);
-            else
-                rt = info->returntype.cctype;
+            switch(info->returntype.nargs) {
+                case 0: rt = Type::getVoidTy(*C->ctx); break;
+                case 1: rt = info->returntype.cctype->getElementType(0); break;
+                default: rt = info->returntype.cctype; break;
+            }
         } else if(info->returntype.kind == C_AGGREGATE_MEM) {
             rt = Type::getVoidTy(*C->ctx);
             arguments.push_back(Ptr(info->returntype.type));
