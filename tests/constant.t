@@ -8,7 +8,7 @@ struct A {
 }
 
 local mystr = terralib.new(A,{3,4.5})
-local const = terralib.constant(mystr)
+local const = constant(mystr)
 
 
 terra bar()

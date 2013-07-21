@@ -3487,7 +3487,6 @@ _G["truncate"] = terra.internalmacro(function(diag,tree,nexp,...)
     return terra.newtree(tree, { kind = terra.kinds.truncate, value = exp, size = N })
 end)
 _G["global"] = terra.global
-_G["constant"] = terra.constant
 
 terra.select = terra.internalmacro(function(diag,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
@@ -4088,6 +4087,7 @@ function terra.constant(a0,a1)
         return terra.constant(typ,init)
     end
 end
+_G["constant"] = terra.constant
 
 function terra.typeof(obj)
     if type(obj) ~= "cdata" then
