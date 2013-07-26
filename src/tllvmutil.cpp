@@ -1,6 +1,7 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
 #include <stdio.h>
+#include <unistd.h>
 
 #include "tllvmutil.h"
 #include "llvm/Target/TargetLibraryInfo.h"

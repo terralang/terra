@@ -96,6 +96,10 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
         { NULL,        0,     NULL,            0 }
     };
     int verbose = 0;
+    const char* orig_path;
+    char* new_path;
+    char* dot_t;
+    size_t len;
     /*  Parse commandline options  */
     opterr = 0;
     while ((ch = getopt_long(argc, argv, "+hvip:", longopts, NULL)) != -1) {
@@ -112,6 +116,29 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
                 lua_pushstring(L,optarg);
                 lua_setfield(L,-2,"path");
                 lua_pop(L,1);
+
+                // Also append path to package.path
+                lua_getglobal(L,"package");
+                lua_getfield(L,-1,"path");
+                orig_path = lua_tolstring(L,-1,&len);
+                // +2 for changing .t to .lua, +1 for ;
+                new_path = (char*)malloc(strlen(optarg) + 3 + len);
+                strcpy(new_path, optarg);
+                dot_t = (char*)strstr(new_path, "?.t");
+                if (dot_t != NULL) {
+                  strcpy((char*)dot_t+2, "lua");
+                  if (len) {
+                    dot_t[5] = ';';
+                    memcpy(dot_t + 6, orig_path, len);                    
+                  }
+                  lua_pop(L,1); // pop path, but not package
+                  lua_pushlstring(L, new_path, dot_t - new_path + 6 + len);
+                  lua_setfield(L,-2,"path");
+                  lua_pop(L,1); // pop package
+                } else {
+                  lua_pop(L,2);
+                }                
+                free(new_path);
                 break;
             case ':':
             case 'h':
