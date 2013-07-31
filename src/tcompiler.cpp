@@ -1420,6 +1420,9 @@ if(baseT->isIntegerTy()) { \
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
     }
+    bool isPointerToFunction(Type * t) {
+        return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
+    }
     Value * emitStructSelect(Obj * structType, Value * structPtr, int index) {
 
         assert(structPtr->getType()->isPointerTy());
@@ -1436,8 +1439,12 @@ if(baseT->isIntegerTy()) { \
         int allocindex = entry.number("allocation");
         
         Value * addr = B->CreateConstGEP2_32(structPtr,0,allocindex);
-        
-        if (entry.boolean("inunion")) {
+        //in two cases the type of the value in the struct does not match the expected type returned
+        //1. if it is a union then the llvm struct will have some buffer space to hold the object but
+        //   the space may have a different type
+        //2. if the struct was imported from Clang and the value is a function pointer (Terra internal represents functions with i8* for simplicity)
+        //in both cases we simply bitcast cast the resulting pointer to the expected type
+        if (entry.boolean("inunion") || isPointerToFunction(addr->getType()->getPointerElementType())) {
             Obj entryType;
             entry.obj("type",&entryType);
             Type * resultType = PointerType::getUnqual(getType(&entryType)->type);
