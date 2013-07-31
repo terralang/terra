@@ -145,7 +145,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes) {
     SMO.Size = numBytes;
     uint64_t Size;
     fflush(stdout);
-    raw_fd_ostream Out(STDOUT_FILENO, false);
+    raw_fd_ostream Out(fileno(stdout), false);
     for(int i = 0; i < numBytes; i += Size) {
         MCInst Inst;
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
