@@ -352,71 +352,104 @@ end
 terra.diagnostics = {}
 terra.diagnostics.__index = terra.diagnostics
 
---terra.printlocation
---and terra.opensourcefile are inserted by C wrapper
+function terra.diagnostics:errorlist()
+    return self._errors[#self._errors]
+end
+
 function terra.diagnostics:printsource(anchor)
     if not anchor.offset then 
         return
     end
     local filename = anchor.filename
-    local handle = self.filecache[filename] or terra.opensourcefile(filename)
-    self.filecache[filename] = handle
-    
-    if handle then --if the code did not come from a file then we don't print the carrot, since we cannot (easily) find the text
-        terra.printlocation(handle,anchor.offset)
+    local filetext = self.filecache[filename] 
+    if not filetext then
+        local file = io.open(filename,"r")
+        if file then
+            filetext = file:read("*all")
+            self.filecache[filename] = filetext
+            file:close()
+        end
+    end
+    if filetext then --if the code did not come from a file then we don't print the carrot, since we cannot (easily) find the text
+        local begin,finish = anchor.offset + 1,anchor.offset + 1
+        local TAB,NL = ("\t"):byte(),("\n"):byte()
+        while begin > 1 and filetext:byte(begin) ~= NL do
+            begin = begin - 1
+        end
+        if begin > 1 then
+            begin = begin + 1
+        end
+        while finish < filetext:len() and filetext:byte(finish + 1) ~= NL do
+            finish = finish + 1
+        end
+        local errlist = self:errorlist()
+        local line = filetext:sub(begin,finish) 
+        errlist:insert(line)
+        errlist:insert("\n")
+        for i = begin,anchor.offset do
+            errlist:insert((filetext:byte(i) == TAB and "\t") or " ")
+        end
+        errlist:insert("^\n")
     end
 end
 
 function terra.diagnostics:clearfilecache()
-    for k,v in pairs(self.filecache) do
-        terra.closesourcefile(v)
-    end
     self.filecache = {}
 end
 
 function terra.diagnostics:reporterror(anchor,...)
-    self._haserrors[#self._haserrors] = true
     if not anchor or not anchor.filename or not anchor.linenumber then
         print(debug.traceback())
         print(terralib.tree.printraw(anchor))
         error("nil anchor")
     end
-    io.write(anchor.filename..":"..anchor.linenumber..": ")
+    local errlist = self:errorlist()
+    errlist:insert(anchor.filename..":"..anchor.linenumber..": ")
     for _,v in ipairs({...}) do
-        io.write(tostring(v))
+        errlist:insert(tostring(v))
     end
-    io.write("\n")
+    errlist:insert("\n")
     self:printsource(anchor)
 end
 
 function terra.diagnostics:haserrors()
-    return self._haserrors[#self._haserrors]
+    return #self._errors[#self._errors] > 0
 end
 
 function terra.diagnostics:begin()
-    table.insert(self._haserrors,false)
+    table.insert(self._errors,terra.newlist())
 end
 
 function terra.diagnostics:finish()
-    local haderrors = table.remove(self._haserrors)
-    local top = #self._haserrors
-    assert(top > 0)
-    self._haserrors[top] = self._haserrors[top] or haderrors
+    local olderrors = table.remove(self._errors)
+    local haderrors = #olderrors > 0
+    if haderrors then
+        self._errors[#self._errors]:insert(olderrors)
+    end
     return haderrors
 end
 
 function terra.diagnostics:finishandabortiferrors(msg,depth)
-    local haderrors = table.remove(self._haserrors)
-    if haderrors then
+    local errors = table.remove(self._errors)
+    if #errors > 0 then
+        local flatlist = {msg,"\n"}
+        local function insert(l) 
+            if type(l) == "table" then
+                for i,e in ipairs(l) do
+                    insert(e)
+                end
+            else
+                table.insert(flatlist,l)
+            end
+        end
+        insert(errors)
         self:clearfilecache()
-        error(msg,depth+1)
-    else
-        assert(#self.filecache == 0)
+        error(table.concat(flatlist),depth+1)
     end
 end
 
 function terra.newdiagnostics()
-    return setmetatable({ filecache = {}, _haserrors = { true } },terra.diagnostics)
+    return setmetatable({ filecache = {}, _errors = { terra.newlist() } },terra.diagnostics)
 end
 
 -- END DIAGNOSTICS

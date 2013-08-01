@@ -14,10 +14,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
-#ifndef _WIN32
-#include <sys/mman.h>
-#endif
-
 
 static char * vstringf(const char * fmt, va_list ap) {
     int N = 128;
@@ -57,12 +53,6 @@ void terra_reporterror(terra_State * T, const char * fmt, ...) {
     lua_error(T->L);
 }
 
-struct SourceInfo {
-    FILE * file;
-    size_t len;
-    char * mapped_file;
-};
-
 static terra_State * getterra(lua_State * L) {
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"__terrastate");
@@ -70,83 +60,6 @@ static terra_State * getterra(lua_State * L) {
     assert(T->L == L);
     lua_pop(L,2);
     return T;
-}
-
-static int opensourcefile(lua_State * L) {
-    const char * filename = luaL_checkstring(L,-1);
-    FILE * f = fopen(filename,"r");
-    if(!f) {
-        //this might not be a valid filename, or might no longer exist..
-        //returning 0 here will suppress printing the carrot ^ but other error messages will still print
-        //terra_reporterror(getterra(L),"failed to open file %s\n",filename);
-        return 0;
-    }
-    fseek(f,0, SEEK_END);
-    size_t filesize = ftell(f);
-#ifndef _MSC_VER
-    char * mapped_file = (char*) mmap(0,filesize, PROT_READ, MAP_SHARED, fileno(f), 0);
-    if(mapped_file == MAP_FAILED) {
-        terra_reporterror(getterra(L),"failed to map file %s\n",filename);
-    }
-#else
-    fseek(f,0,SEEK_SET);
-    char *mapped_file = (char*)malloc(filesize);
-	filesize = fread(mapped_file, 1, filesize, f);
-#endif
-    lua_pop(L,1);
-    
-    SourceInfo * si = (SourceInfo*) lua_newuserdata(L,sizeof(SourceInfo));
-    
-    si->file = f;
-    si->mapped_file = mapped_file;
-    si->len = filesize;
-    return 1;
-}
-
-
-
-static int printlocation(lua_State * L) {
-    int token = luaL_checkint(L,-1);
-    SourceInfo * si = (SourceInfo*) lua_touserdata(L,-2);
-    assert(si);
-    
-    
-    int begin = token;
-    while(begin > 0 && si->mapped_file[begin] != '\n')
-        begin--;
-    
-    int end = token;
-    while(end < si->len && si->mapped_file[end] != '\n')
-        end++;
-    
-    if(begin > 0)
-        begin++;
-        
-    fwrite(&si->mapped_file[begin],end - begin,1,stdout);
-    fputc('\n',stdout);
-    while(begin < token) {
-        if(si->mapped_file[begin] == '\t')
-            fputs("        ",stdout);
-        else
-            fputc(' ',stdout);
-        begin++;
-    }
-    fputc('^',stdout);
-    fputc('\n',stdout);
-    
-    return 0;
-}
-static int closesourcefile(lua_State * L) {
-    SourceInfo * si = (SourceInfo*) lua_touserdata(L,-1);
-    assert(si);
-#ifndef _MSC_VER
-    munmap(si->mapped_file,si->len);
-#else
-    free(si->mapped_file);
-    si->mapped_file = nullptr;
-#endif
-    fclose(si->file);
-    return 0;
 }
 
 //implementations of lua functions load, loadfile, loadstring
@@ -243,12 +156,6 @@ int terra_init(lua_State * L) {
     terra_cwrapperinit(T);
     
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    lua_pushcfunction(T->L,opensourcefile);
-    lua_setfield(T->L,-2,"opensourcefile");
-    lua_pushcfunction(T->L,closesourcefile);
-    lua_setfield(T->L,-2,"closesourcefile");
-    lua_pushcfunction(T->L,printlocation);
-    lua_setfield(T->L,-2,"printlocation");
 
     lua_pushcfunction(T->L,terra_luaload);
     lua_setfield(T->L,-2,"load");
