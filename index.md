@@ -5,8 +5,12 @@ title: Terra
 __Terra__ is a new low-level system programming language that is designed to interoperate seamlessly with the __Lua__ programming language:
 
     -- This top-level code is plain Lua code.
-    print("Hello, Lua!")
-    
+    function printhello()
+        -- This is a plain Lua function
+        print("Hello, Lua!")
+    end
+    printhello()
+
     -- Terra is backwards compatible with C
     -- we'll use C's io library in our example.
     C = terralib.includec("stdio.h")
@@ -26,7 +30,7 @@ __Terra__ is a new low-level system programming language that is designed to int
     -- files and link them into existing programs
     terralib.saveobj("helloterra",{ main = hello })
 
-Like C, Terra is a simple, statically-typed, compiled language with manual memory management. But unlike C, it is designed from the beginning to interoperate with Lua. Terra functions are first-class Lua values created using the `terra` keyword. When needed they are JIT-compiled to machine code.
+Like C, Terra is a simple, statically-typed, compiled language with manual memory management. But unlike C, it is designed from the beginning to interoperate with Lua. Terra functions are first-class Lua values created using the `terra` keyword. When needed they are JIT-compiled to machine code. Try the **[online demo](demo.html)**!
 
 You can **use** Terra and Lua as...
 

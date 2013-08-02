@@ -1,11 +1,18 @@
 ---
 layout: post
-title: Terra Demo
+title: Try Terra
 ---
-<h1 id='installing_terra'>Demo</h1>
+<link rel="stylesheet" href="stylesheets/codemirror.css">
+<script src="javascripts/codemirror.js"></script>
+<script src="javascripts/lua.js"></script>
+<h1 id='installing_terra'>Try Terra</h1>
 <div class="example" id="hello.t" >
 -- This top-level code is plain Lua code.
-print("Hello, Lua!")
+function printhello()
+    -- This is a plain Lua function
+    print("Hello, Lua!")
+end
+printhello()
 
 -- Terra is backwards compatible with C
 -- we'll use C's io library in our example.
@@ -22,6 +29,53 @@ end
 -- You can call Terra functions directly from Lua
 hello(0,nil)
 </div>
+
+<div class="example" id="vectors.t">
+
+-- Implements a SIMD-vectorized SAXPY operator
+-- from BLAS
+local V = 4
+-- Create a 4-wide vector type
+local floatV = vector(float,V)
+terra saxpy(x : &float, y : &float, n : uint, a : float)
+	for i = 0,n,V do
+	 -- Load x and y as vectors 
+	 -- (assuming correct alignment and 'n' divisible by 4)
+  	 var xv = @[&floatV](x + i)
+     var yv = @[&floatV](y + i)
+     -- Perform vector arithmetic
+     var r = a*xv + yv
+     -- Store x vector back into memory
+  	 @[&floatV](x + i) = r
+  end
+end
+
+C = terralib.includecstring [[
+    #include "stdio.h"
+    #include "stdlib.h"
+]]
+terra saxpytest()
+  var x = [&float](C.malloc(sizeof(float) * 32))
+  var y = [&float](C.malloc(sizeof(float) * 32))
+  for i = 0,32 do
+  	x[i],y[i] = i,i
+  end
+  saxpy(x,y,32,4)
+  for i = 0,32 do
+     C.printf("x[%d] = %f\n",i,x[i])
+  end
+  C.free(x)
+  C.free(y)
+end
+
+--Verify that the generated code uses SSE instructions
+print("disassembling ...")
+saxpy:disas()
+
+print("testing saxpy...")
+saxpytest()
+</div>
+
 <div class="example" id="pow.t">
 --generate a power function for a specific N (e.g. N = 3)
 function makePowN(N)
@@ -165,9 +219,6 @@ fn()
 </div>
 <div id="editor">
 </div>
-<link rel="stylesheet" href="stylesheets/codemirror.css">
-<script src="javascripts/codemirror.js"></script>
-<script src="javascripts/lua.js"></script>
 <script>
 var codemirror = CodeMirror(document.getElementById("editor"), {
   value: "",
@@ -182,6 +233,8 @@ function updatecontent() {
 	var name = o.options[o.selectedIndex].value
 	var content = document.getElementById(name).innerText
 	codemirror.setValue(content.replace(/^\n/,""))
+	codemirror.setCursor(codemirror.lineCount(),0)
+	codemirror.focus()
 }
 function finishresult(data) {
 	var r = document.getElementById("result")
