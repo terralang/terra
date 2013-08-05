@@ -20,7 +20,7 @@ for i = 1,8 do
 	dat[i-1] = i
 end
 
-if terralib.llvmversion ~= "3.2" then
+if terralib.llvmversion == "3.1" then
 	print("ignoring...")
 else
 	foobar:compile()

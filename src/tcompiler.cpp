@@ -176,11 +176,7 @@ int terra_compilerinit(struct terra_State * T) {
     TERRALIB_FUNCTIONS(REGISTER_FN)
     #undef REGISTER_FN
 
-#ifdef LLVM_3_2
-    lua_pushstring(T->L,"3.2");
-#else
-    lua_pushstring(T->L,"3.1");
-#endif
+    lua_pushstring(T->L,LLVM_VERSION);
 
     lua_setfield(T->L,-2, "llvmversion");
     

@@ -15,3 +15,4 @@
 #define ADDFNATTR(attr) addFnAttr(Attribute :: attr)
 #define ATTRIBUTE Attribute
 #define TARGETDATA(nm) nm##TargetData
+#define LLVM_VERSION "3.1"
