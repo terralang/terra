@@ -4001,13 +4001,14 @@ function terra.saveobj(filename,env,arguments)
     return terra.saveobjimpl(filename,cleanenv,isexe,arguments)
 end
 
+
+package.path = (not os.getenv("LUA_PATH") and package.path .. ";./?.t") or package.path 
 terra.packages = {} --table of packages loaded using terralib.require()
-terra.path = os.getenv("TERRA_PATH") or "?.t"
 function terra.require(name)
     if not terra.packages[name] then
         local fname = name:gsub("%.","/")
         local file = nil
-        for template in terra.path:gmatch("([^;]+);?") do
+        for template in package.path:gmatch("([^;]+);?") do
             local fpath = template:gsub("%?",fname)
             local handle = io.open(fpath,"r")
             if handle then

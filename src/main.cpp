@@ -82,7 +82,7 @@ void usage() {
            "    -v enable verbose debugging output\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
-           "    -p <terra path> set the terralib.path search path to <terra path>\n"
+           "    -p <path> append <path> to package.path before executing code\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
 
@@ -108,8 +108,11 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
                 *interactive = true;
                 break;
             case 'p':
-                lua_getglobal(L,"terra");
+                lua_getglobal(L,"package");
+                lua_getfield(L,-1,"path");
+                lua_pushstring(L,";");
                 lua_pushstring(L,optarg);
+                lua_concat(L,3);
                 lua_setfield(L,-2,"path");
                 lua_pop(L,1);
                 break;
