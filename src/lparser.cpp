@@ -2053,7 +2053,7 @@ static void statement (LexState *ls) {
       
       if(lua_pcall(ls->L, 3, 0, 0)) {
         const char * str = luaL_checkstring(ls->L,-1);
-        luaX_syntaxerror(ls, str);
+        luaX_reporterror(ls, str);
       }
       luaX_next(ls); /* skip string */
       luaX_patchbegin(ls, &begin);
@@ -2294,7 +2294,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   lexstate.L = L;
   lexstate.in_terra = 0;
   lexstate.terracnt = NULL;
-  TString *tname = luaS_new(T, name);
+  TString *tname = (name[0] == '@') ? luaS_new(T, name + 1) : luaS_stringf(T,"[string \"%s\"]",name);
   lexstate.buff = buff;
   lexstate.n_lua_objects = 0;
   lexstate.rethrow = 0;
@@ -2368,7 +2368,8 @@ int luaY_parser (terra_State *T, ZIO *z,
   while(lexstate.output_buffer.data[lexstate.output_buffer.N-1] == '\0' && lexstate.output_buffer.N > 0) {
     lexstate.output_buffer.N--;
   }
-  int err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);  
+  
+  int err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);
   cleanup(&lexstate);
   return err;
 }

@@ -256,11 +256,16 @@ int terra_loadfile(lua_State * L, const char * file) {
         if(c == '\n')
             ungetc(c,ctx.fp); /* keep line count accurate */
     }
-    const char * name = file ? file : "=stdin";
-    int r = terra_load(L,reader_file,&ctx,name);
-    if(file)
+    if(file) {
+        char * name = (char *) malloc(strlen(file) + 2);
+        sprintf(name,"@%s",file);
+        int r = terra_load(L,reader_file,&ctx,name);    
+        free(name);
         fclose(ctx.fp);
-    return r;
+        return r;
+    } else {
+        return terra_load(L,reader_file,&ctx,"@=stdin");
+    }
 }
 
 int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *name) {
