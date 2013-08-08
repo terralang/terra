@@ -1212,8 +1212,9 @@ do --construct type table that holds the singleton value representing each uniqu
                 cstring = nm
             elseif self:isvector() then
                 local value = self.type:cstring()
+                local elemSz = ffi.sizeof(value)
                 local nm = uniquetypename(value,"vec")
-                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N)..")));")
+                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N*elemSz)..")));")
                 cstring = nm 
             elseif self:isfunction() then
                 local rt = (#self.returns == 0 and "void") or self.returnobj:cstring()
