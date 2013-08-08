@@ -426,7 +426,7 @@ Print out a visual representation of the code in this quote. Because quotes are 
 Symbol
 ------
 
-Symbols are abstract representations of Terra identifiers. They can be used in Terra code where an identifier is expected (e.g. a variable use, a variable definition, a field name, a method name, a label). They are similar to the symbols return by LISP's `gensym` function. 
+Symbols are abstract representations of Terra identifiers. They can be used in Terra code where an identifier is expected (e.g. a variable use, a variable definition, a field name, a method name, a label). They are similar to the symbols returned by LISP's `gensym` function. 
 
 ---
 
@@ -584,7 +584,7 @@ True if the `type` is a vector. `type.N` is the length. `type.type` is the eleme
 
     type:(isprimitive|isintegral|isarithmetic|islogical|canbeord)orvector()
 
-True if the type is a primitive type we the requested property, or if it is a vector of a primitive type of the requested property.
+True if the `type` is a primitive type with the requested property, or if it is a vector of a primitive type with the requested property.
 
 ---
 
@@ -998,7 +998,7 @@ A Lua list specifying the keywords that can begin a term in your language. These
 
     keywords
 
-A Lua list specifying any additional keywords used your language. Like entry-points these also must be valid identifiers. A keyword in Lua or Terra is always considered a keyword in your language, so you do not need to list them here. 
+A Lua list specifying any additional keywords used in your language. Like entry-points, these also must be valid identifiers. A keyword in Lua or Terra is always considered a keyword in your language, so you do not need to list them here. 
 
 ---
 
