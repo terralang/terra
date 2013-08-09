@@ -3143,13 +3143,15 @@ function terra.funcdefinition:typecheck()
             elseif e:is "attrload" then
                 local addr = checkexp(e.address)
                 if not addr.type:ispointer() then
-                    diag:reporterror(e,"address must be a pointer but found ",add.type)
+                    diag:reporterror(e,"address must be a pointer but found ",addr.type)
+                    return e:copy { type = terra.types.error }
                 end
                 return e:copy { type = addr.type.type, address = addr }
             elseif e:is "attrstore" then
                 local addr = checkexp(e.operands[1])
                 if not addr.type:ispointer() then
-                    diag:reporterror(e,"address must be a pointer but found ",add.type)
+                    diag:reporterror(e,"address must be a pointer but found ",addr.type)
+                    return e:copy { type = terra.types.error }
                 end
                 local value = insertcast(checkexp(e.operands[2]),addr.type.type)
                 return createtypedtreelist(e,terra.newlist { e:copy { address = addr, value = value } },nil,terra.newlist())
