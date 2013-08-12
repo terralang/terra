@@ -185,6 +185,16 @@ int terra_init(lua_State * L) {
     return 0;   
 }
 
+int terra_free(lua_State * L) {
+    terra_State * T = getterra (L);
+    lua_close (L);
+    terra_cudafree (T);
+    terra_compilerfree (T);
+    free (T);
+
+    return 0;   
+}
+
 struct FileInfo {
     FILE * file;
     char buf[512];
