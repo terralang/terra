@@ -129,27 +129,37 @@ int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size
     return luaL_loadbuffer(L, bytecodes, size, name) 
            || lua_pcall(L,0,LUA_MULTRET,0);
 }
+
+#define abs_index(L, i) \
+  ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
+  
+static void ongc(lua_State * L, int idx, lua_CFunction gcfn) {
+    idx = abs_index(L,idx);
+    lua_newtable(L);
+    lua_pushcfunction(L, gcfn);
+    lua_setfield(L, -2, "__gc");
+    lua_setmetatable(L, idx);
+}
+static int terra_free(lua_State * L);
+
 int terra_init(lua_State * L) {
-    terra_State * T = (terra_State*) malloc(sizeof(terra_State));
+    terra_State * T = (terra_State*) lua_newuserdata(L, sizeof(terra_State));
+    ongc(L, -1, terra_free);
     assert(T);
     memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
     T->L = L;
     assert (T->L);
     lua_newtable(T->L);
-    
-    lua_pushlightuserdata(L, T);
+    lua_insert(L, -2);
     lua_setfield(L, -2, "__terrastate"); //reference to our T object, so that we can load it from the lua state on other API calls
     
     lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
-    
-
 
     int err =    terra_loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
               || terra_loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
               
     if(err) {
-        free(T);
         return err;
     }
     
@@ -172,27 +182,23 @@ int terra_init(lua_State * L) {
     
     err = terra_compilerinit(T);
     if(err) {
-        free(T);
         return err;
     }
 
     err = terra_cudainit(T); /* if cuda is not enabled, this does nothing */
     if(err) {
-        free(T);
         return err;
     }
-
     return 0;   
 }
 
-int terra_free(lua_State * L) {
-    terra_State * T = getterra (L);
-    lua_close (L);
-    terra_cudafree (T);
-    terra_compilerfree (T);
-    free (T);
-
-    return 0;   
+//Called when the lua state object is free'd during lua_close
+static int terra_free(lua_State * L) {
+    terra_State * T = (terra_State *) lua_touserdata(L, -1);
+    assert(T);
+    terra_cudafree(T);
+    terra_compilerfree(T);
+    return 0;
 }
 
 struct FileInfo {
@@ -297,3 +303,12 @@ int terra_setverbose(lua_State * L, int v) {
     lua_pop(L,1);
     return 0;
 }
+
+namespace llvm {
+    void llvm_shutdown();
+}
+
+void terra_llvmshutdown() { 
+    llvm::llvm_shutdown();
+}
+

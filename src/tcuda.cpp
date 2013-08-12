@@ -169,8 +169,9 @@ int terra_cudainit(struct terra_State * T) {
 int terra_cudainit(struct terra_State * T) {
     return 0;
 }
-int terra_cudafree(struct terra_State * T) {
-    return 0;
-}
 #endif
 
+int terra_cudafree(struct terra_State * T) {
+    //TODO: clean up after cuda
+    return 0;
+}

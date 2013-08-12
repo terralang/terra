@@ -182,7 +182,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     lua_pop(T->L,1); //remove terra from stack
     
-    T->C = new terra_CompilerState;
+    T->C = new terra_CompilerState();
     T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
     T->C->m = new Module("terra",*T->C->ctx);
