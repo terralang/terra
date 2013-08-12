@@ -71,6 +71,8 @@ int main(int argc, char ** argv) {
     }
     
     printstats(L);
+    terra_free (L);
+    terra_llvmshutdown ();
 
     return 0;
 }

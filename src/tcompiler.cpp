@@ -182,9 +182,8 @@ int terra_compilerinit(struct terra_State * T) {
     
     lua_pop(T->L,1); //remove terra from stack
     
-    T->C = (terra_CompilerState*) malloc(sizeof(terra_CompilerState));
-    memset(T->C, 0, sizeof(terra_CompilerState));
-    
+    T->C = new terra_CompilerState;
+    T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
     T->C->m = new Module("terra",*T->C->ctx);
     
@@ -223,6 +222,18 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
     
+    return 0;
+}
+
+int terra_compilerfree(struct terra_State * T) {
+    T->C->ee->UnregisterJITEventListener(T->C->jiteventlistener);
+    delete T->C->jiteventlistener;
+    delete T->C->mi;
+    delete T->C->fpm;
+    delete T->C->ee;
+    delete T->C->tm;
+    delete T->C->ctx;
+    delete T->C;
     return 0;
 }
 

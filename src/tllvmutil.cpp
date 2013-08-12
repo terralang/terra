@@ -13,6 +13,7 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/MemoryObject.h"
+#include "llvm/Support/ManagedStatic.h"
 
 using namespace llvm;
 
@@ -241,3 +242,6 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
     
         return M;
 }
+
+extern "C" void terra_llvmshutdown () { llvm_shutdown (); }
+
