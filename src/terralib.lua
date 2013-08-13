@@ -1457,6 +1457,31 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         return self
     end
+    
+    local function defaultgetmethod(self,methodname)
+        local fnlike = self.methods[methodname]
+        if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
+            fnlike = terra.internalmacro(function(ctx,tree,...)
+                return self.metamethods.__methodmissing(ctx,tree,methodname,...)
+            end)
+        end
+        return fnlike
+    end
+
+    function types.type:getmethod(methodname)
+        if not self:isstruct() then return nil, "not a struct" end
+        local gm = (type(self.metamethods.__getmethod) == "function" and self.metamethods.__getmethod) or defaultgetmethod
+        local success,result = pcall(gm,self,methodname)
+        if not success then
+            return nil,"error while looking up method: "..result
+        elseif result == nil then
+            return nil, "no such method "..methodname.." defined for type "..tostring(self)
+        elseif not (terra.isfunction(result) or terra.ismacro(result) or type(result) == "function") then
+            return nil, "method "..methodname.." must be a Terra function, a Lua function or a macro but found "..type(result)
+        else
+            return result
+        end
+    end
         
     function types.istype(t)
         return getmetatable(t) == types.type
@@ -2787,20 +2812,16 @@ function terra.funcdefinition:typecheck()
             return anchor:copy { type = terra.types.error }
         end
 
-        local fnlike
+        local fnlike,errmsg
         if ismeta then
             fnlike = objtyp.metamethods[methodname]
+            errmsg = fnlike == nil and "no such metamethodmethod "..methodname.." defined for type "..tostring(objtyp)
         else
-            fnlike = objtyp.methods[methodname]
-            if not fnlike and terra.ismacro(objtyp.metamethods.__methodmissing) then
-                fnlike = terra.internalmacro(function(ctx,tree,...)
-                    return objtyp.metamethods.__methodmissing(ctx,tree,methodname,...)
-                end)
-            end
+            fnlike,errmsg = objtyp:getmethod(methodname)
         end
 
         if not fnlike then
-            diag:reporterror(anchor,"no such method ",methodname," defined for type ",reciever.type)
+            diag:reporterror(anchor,errmsg)
             return anchor:copy { type = terra.types.error }
         end
 
