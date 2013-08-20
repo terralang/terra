@@ -3555,7 +3555,8 @@ local function createattributetable(q)
         error("attributes must be a table")
     end
     local cleanattr = { nontemporal = attr.nontemporal and true,
-                        alignment = (type(attr.align) == "number" and attr.align) } 
+                        alignment = (type(attr.align) == "number" and attr.align),
+                        isvolatile = attr.isvolatile and true} 
     return cleanattr
 end
 
@@ -3645,7 +3646,7 @@ local function printpretty(toptree,returntypes)
         end
     end
     local function emitAttr(a)
-        emit("{ nontemporal = %s, align = %s }",a.nontemporal or "false",a.align or "native")
+        emit("{ nontemporal = %s, align = %s, isvolatile = %s }",a.nontemporal or "false",a.align or "native",a.isvolatile or "false")
     end
     function emitStmt(s)
         if s:is "block" then
