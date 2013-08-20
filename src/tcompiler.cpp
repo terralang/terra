@@ -1748,6 +1748,10 @@ if(baseT->isIntegerTy()) { \
                     int alignment = attr.number("alignment");
                     l->setAlignment(alignment);
                 }
+                if(attr.hasfield("isvolatile")) {
+                  bool isVolatile = attr.boolean("isvolatile");
+                  l->setVolatile(isVolatile);
+                }
                 return l;
             } break;
             default: {
@@ -2050,6 +2054,10 @@ if(baseT->isIntegerTy()) { \
                 }
                 if(attr.hasfield("nontemporal")) {
                     store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
+                }
+                if(attr.hasfield("isvolatile")) {
+                  bool isVolatile = attr.boolean("isvolatile");
+                  store->setVolatile(isVolatile);
                 }
             } break;
             case T_apply: {
