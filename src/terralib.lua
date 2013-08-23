@@ -1176,91 +1176,6 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
 
-    types.type.cstring = memoize { 
-        name  = "cstring";
-        defaultvalue = "int";
-        erroronrecursion = "cstring called itself?";
-        getvalue = function(self,diag)
-            local function definetype(base,name,value)
-                local nm = uniquetypename(base,name)
-                ffi.cdef("typedef "..value.." "..nm..";")
-                return nm
-            end
-            local cstring
-            --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
-            --this makes it possible to predict the syntax of subsequent typedef operations
-            if self:isintegral() then
-                cstring = tostring(self).."_t"
-            elseif self:isfloat() then
-                cstring = tostring(self)
-            elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
-                cstring = self.type:cstring()
-            elseif self:ispointer() then
-                local value = self.type:cstring()
-                cstring = definetype(value,"ptr",value .. "*")
-            elseif self:islogical() then
-                cstring = "bool"
-            elseif self:isstruct() then
-                local nm = uniquetypename(self.name)
-                ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
-                                                              --when the struct is 
-                cstring = nm 
-            elseif self:isarray() then
-                local value = self.type:cstring()
-                local nm = uniquetypename(value,"arr")
-                ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
-                cstring = nm
-            elseif self:isvector() then
-                local value = self.type:cstring()
-                local elemSz = ffi.sizeof(value)
-                local nm = uniquetypename(value,"vec")
-                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N*elemSz)..")));")
-                cstring = nm 
-            elseif self:isfunction() then
-                local rt = (#self.returns == 0 and "void") or self.returnobj:cstring()
-                local function getcstring(t)
-                    if t == rawstring then
-                        --hack to make it possible to pass strings to terra functions
-                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
-                        --so it should be removed when we have a better solution
-                        return "const char *"
-                    else
-                        return t:cstring()
-                    end
-                end
-                local pa = self.parameters:map(getcstring)
-                pa = pa:mkstring("(",",","")
-                if self.isvararg then
-                    pa = pa .. ",...)"
-                else
-                    pa = pa .. ")"
-                end
-                local ntyp = uniquetypename("function")
-                local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
-                ffi.cdef(cdef)
-                cstring = ntyp
-            elseif self == types.niltype then
-                local nilname = uniquetypename("niltype")
-                ffi.cdef("typedef void * "..nilname..";")
-                cstring = nilname
-            elseif self == types.opaque then
-                cstring = "void"
-            elseif self == types.error then
-                cstring = "int"
-            else
-                error("NYI - cstring")
-            end
-            if not cstring then error("cstring not set? "..tostring(self)) end
-            
-            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
-            local ctype = ffi.typeof(cstring)
-            types.ctypetoterra[tonumber(ctype)] = self
-            local rctype = ffi.typeof(cstring.."&")
-            types.ctypetoterra[tonumber(rctype)] = self
-            return cstring
-        end
-    }
-
     local function definecstruct(nm,layout)
         local str = "struct "..nm.." { "
         local entries = layout.entries
@@ -1287,6 +1202,97 @@ do --construct type table that holds the singleton value representing each uniqu
         str = str .. "};"
         ffi.cdef(str)
     end
+    function types.type:cstring()
+        if not self.cachedcstring then
+            local function definetype(base,name,value)
+                local nm = uniquetypename(base,name)
+                ffi.cdef("typedef "..value.." "..nm..";")
+                return nm
+            end
+            --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
+            --this makes it possible to predict the syntax of subsequent typedef operations
+            if self:isintegral() then
+                self.cachedcstring = tostring(self).."_t"
+            elseif self:isfloat() then
+                self.cachedcstring = tostring(self)
+            elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
+                self.cachedcstring = self.type:cstring()
+            elseif self:ispointer() then
+                local value = self.type:cstring()
+                if not self.cachedcstring then
+                    self.cachedcstring = definetype(value,"ptr",value .. "*")
+                end
+            elseif self:islogical() then
+                self.cachedcstring = "bool"
+            elseif self:isstruct() then
+                local nm = uniquetypename(self.name)
+                ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
+                                                              --when the struct is 
+                self.cachedcstring = nm
+                if self.cachedlayout then
+                    definecstruct(nm,self.cachedlayout)
+                end
+            elseif self:isarray() then
+                local value = self.type:cstring()
+                if not self.cachedcstring then
+                    local nm = uniquetypename(value,"arr")
+                    ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
+                    self.cachedcstring = nm
+                end
+            elseif self:isvector() then
+                local value = self.type:cstring()
+                local elemSz = ffi.sizeof(value)
+                local nm = uniquetypename(value,"vec")
+                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N*elemSz)..")));")
+                self.cachedcstring = nm 
+            elseif self:isfunction() then
+                local rt = (#self.returns == 0 and "void") or self.returnobj:cstring()
+                local function getcstring(t)
+                    if t == rawstring then
+                        --hack to make it possible to pass strings to terra functions
+                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
+                        --so it should be removed when we have a better solution
+                        return "const char *"
+                    else
+                        return t:cstring()
+                    end
+                end
+                local pa = self.parameters:map(getcstring)
+                if not self.cachedcstring then
+                    pa = pa:mkstring("(",",","")
+                    if self.isvararg then
+                        pa = pa .. ",...)"
+                    else
+                        pa = pa .. ")"
+                    end
+                    local ntyp = uniquetypename("function")
+                    local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
+                    ffi.cdef(cdef)
+                    self.cachedcstring = ntyp
+                end
+            elseif self == types.niltype then
+                local nilname = uniquetypename("niltype")
+                ffi.cdef("typedef void * "..nilname..";")
+                self.cachedcstring = nilname
+            elseif self == types.opaque then
+                self.cachedcstring = "void"
+            elseif self == types.error then
+                self.cachedcstring = "int"
+            else
+                error("NYI - cstring")
+            end
+            if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
+            
+            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
+            local ctype = ffi.typeof(self.cachedcstring)
+            types.ctypetoterra[tonumber(ctype)] = self
+            local rctype = ffi.typeof(self.cachedcstring.."&")
+            types.ctypetoterra[tonumber(rctype)] = self
+        end
+        return self.cachedcstring
+    end
+
+    
 
     types.type.getentries = memoize{
         name = "entries";
@@ -1414,8 +1420,8 @@ do --construct type table that holds the singleton value representing each uniqu
             
             dbprint(2,"Resolved Named Struct To:")
             dbprintraw(2,self)
-            if not diag:haserrors() then
-                definecstruct(self:cstring(),layout)
+            if not diag:haserrors() and self.cachedcstring then
+                definecstruct(self.cachedcstring,layout)
             end
             return layout
         end;
