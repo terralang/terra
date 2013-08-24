@@ -3770,8 +3770,9 @@ local function printpretty(toptree,returntypes)
             return 12
         end
     end
-    local function doparens(ref,e)
-        if getprec(ref) > getprec(e) then
+    local function doparens(ref,e,isrhs)
+        local pr, pe = getprec(ref), getprec(e)
+        if pr > pe or (isrhs and pr == pe) then
             emit("(")
             emitExp(e)
             emit(")")
@@ -3785,8 +3786,8 @@ local function printpretty(toptree,returntypes)
             emit(e.name)
         elseif e:is "operator" then
             local op = terra.kinds[e.operator]
-            local function emitOperand(o)
-                doparens(e,o)
+            local function emitOperand(o,isrhs)
+                doparens(e,o,isrhs)
             end
             if #e.operands == 1 then
                 emit(op)
@@ -3794,7 +3795,7 @@ local function printpretty(toptree,returntypes)
             elseif #e.operands == 2 then
                 emitOperand(e.operands[1])
                 emit(" %s ",op)
-                emitOperand(e.operands[2])
+                emitOperand(e.operands[2],true)
             elseif op == "select" then
                 emit("terralib.select")
                 emitList(e.operands,"(",", ",")",emitExp)
