@@ -181,8 +181,8 @@ public:
               InitType("opaque",tt);
                 return true;
             case BuiltinType::Bool:
-                assert(!"bool?");
-                break;
+                InitType("bool",tt);
+                return true;
             case BuiltinType::Char_S:
             case BuiltinType::Char_U:
             case BuiltinType::SChar:
