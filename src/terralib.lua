@@ -2152,16 +2152,25 @@ function terra.funcdefinition:typecheck()
     local function createtypedexpression(exp)
         return terra.newtree(exp, { kind = terra.kinds.typedexpression, expression = exp, key = validkeystack[#validkeystack] })
     end
-    local function createtypedtreelist(anchor, statements, expressions, types, next)
-        local lvalue
-        if #types > 0 then
-            local exp,treelist = expressions[1],next
-            while not exp do
-                exp,treelist = treelist.expressions[1],treelist.next
+    local function treelistiter(tl)
+        local N,cl,ce = #tl.types,tl,1
+        return function()
+            if N == 0 then return nil end
+            while not cl.expressions or not cl.expressions[ce] do
+                cl,ce = cl.next,1
             end
-            lvalue = exp.lvalue
+            local r = cl.expressions[ce]
+            N,ce = N - 1,ce + 1
+            return r 
         end
-        return terra.newtree(anchor,{ kind = terra.kinds.treelist, statements = statements, expressions = expressions, types = types, type = types[1], lvalue = lvalue, next = next})
+    end
+    local function createtypedtreelist(anchor, statements, expressions, types, next)
+        local tl = terra.newtree(anchor,{ kind = terra.kinds.treelist, statements = statements, expressions = expressions, types = types, type = types[1], next = next})
+        for exp in treelistiter(tl) do
+            tl.lvalue = exp.lvalue
+            break
+        end
+        return tl
     end
     local function createextractreturn(fncall, index, t)
         return terra.newtree(fncall,{ kind = terra.kinds.extractreturn, index = index, type = t:complete(fncall), fncall = fncall})
@@ -3385,17 +3394,9 @@ function terra.funcdefinition:typecheck()
         elseif s:is "assignment" then
             local rhs = checkparameterlist(s,s.rhs)
             local lhs = checklet(s,nil,s.lhs)
-            local treelist = lhs
-            local N,i = #lhs.types,1
-            repeat
-                for _,e in ipairs(treelist.expressions) do
-                    if i <= N then
-                        ensurelvalue(e)
-                    end
-                    i = i + 1
-                end
-                treelist = treelist.next
-            until treelist == nil
+            for exp in treelistiter(lhs) do
+                ensurelvalue(exp)
+            end
             rhs = insertcasts(lhs.types,rhs)
             return s:copy { lhs = lhs, rhs = rhs }
         elseif s:is "apply" then
