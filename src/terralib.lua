@@ -782,9 +782,11 @@ function terra.quote:astype()
     end
     return self.tree.expression.value
 end
-
+function terra.quote:istyped()
+	return self.tree:is "typedexpression" and not self.tree.expression:is "luaobject"
+end
 function terra.quote:gettypes()
-    if not self.tree:is "typedexpression" or self.tree.expression:is "luaobject" then
+    if not self:istyped() then
         error("not a typed quote")
     end
     local types = self.tree.expression:is "treelist" and self.tree.types or { self.tree.expression.type }
@@ -797,7 +799,12 @@ function terra.quote:gettype()
     end
     return types[1]
 end
-
+function terra.quote:islvalue()
+	if not self:istyped() then
+		error("not a typed quote")
+	end
+	return self.tree.expression.lvalue
+end
 function terra.quote:asvalue()
     
     local function getvalue(e)
