@@ -3714,8 +3714,8 @@ local function printpretty(toptree,returntypes)
             if s.orelse then
                 begin("else\n")
                 emitStmt(s.orelse)
-                begin("end\n")
             end
+            begin("end\n")
         elseif s:is "repeat" then
             begin("repeat\n")
             enterblock()
