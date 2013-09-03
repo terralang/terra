@@ -396,7 +396,7 @@ end
 function terra.diagnostics:clearfilecache()
     self.filecache = {}
 end
-
+terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
     if not anchor or not anchor.filename or not anchor.linenumber then
         print(debug.traceback())
@@ -405,11 +405,22 @@ function terra.diagnostics:reporterror(anchor,...)
     end
     local errlist = self:errorlist()
     errlist:insert(anchor.filename..":"..anchor.linenumber..": ")
-    for _,v in ipairs({...}) do
-        errlist:insert(tostring(v))
+    local printedsource = false
+    local function printsource()
+        errlist:insert("\n")
+        self:printsource(anchor)
+        printedsource = true
     end
-    errlist:insert("\n")
-    self:printsource(anchor)
+    for _,v in ipairs({...}) do
+        if v == self.source then
+            printsource()
+        else
+            errlist:insert(tostring(v))
+        end
+    end
+    if not printedsource then
+        printsource()
+    end
 end
 
 function terra.diagnostics:haserrors()
@@ -2081,9 +2092,9 @@ function terra.evalluaexpression(diag, env, e)
     local function parseerrormessage(startline, errmsg)
         local line,err = errmsg:match [["$terra$"]:([0-9]+):(.*)]]
         if line and err then
-            return startline + tonumber(line) - 1, "error evaluating lua code: " .. err
+            return startline + tonumber(line) - 1, err
         else
-            return startline, "error evaluating lua code: " .. errmsg
+            return startline, errmsg
         end
     end
     if not terra.istree(e) or not e:is "luaexpression" then
@@ -2097,7 +2108,7 @@ function terra.evalluaexpression(diag, env, e)
     local success,v = pcall(fn)
     if not success then --v contains the error message
         local ln,err = parseerrormessage(e.linenumber,v)
-        diag:reporterror(e:copy( { linenumber = ln }),err)
+        diag:reporterror(e:copy( { linenumber = ln }),"error evaluating lua code: ", diag.source, "lua error was:\n", err)
         return false
     end
     return true,v
