@@ -2104,8 +2104,10 @@ function terra.evalluaexpression(diag, env, e)
     end
     assert(type(e.expression) == "function")
     local fn = e.expression
+    local oldenv = getfenv(fn)
     setfenv(fn,env)
     local success,v = pcall(fn)
+    --setfenv(fn,oldenv) --otherwise, we hold false reference to env
     if not success then --v contains the error message
         local ln,err = parseerrormessage(e.linenumber,v)
         diag:reporterror(e:copy( { linenumber = ln }),"error evaluating lua code: ", diag.source, "lua error was:\n", err)
@@ -4294,8 +4296,11 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
         self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
         local expr = luaexpr()
         return function(env)
+            local oldenv = getfenv(expr)
             setfenv(expr,env)
-            return expr()
+            local results = {expr()}
+            setfenv(expr,oldenv)
+            return unpack(results)
         end
     end
 
