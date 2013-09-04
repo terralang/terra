@@ -2107,7 +2107,7 @@ function terra.evalluaexpression(diag, env, e)
     local oldenv = getfenv(fn)
     setfenv(fn,env)
     local success,v = pcall(fn)
-    --setfenv(fn,oldenv) --otherwise, we hold false reference to env
+    setfenv(fn,oldenv) --otherwise, we hold false reference to env
     if not success then --v contains the error message
         local ln,err = parseerrormessage(e.linenumber,v)
         diag:reporterror(e:copy( { linenumber = ln }),"error evaluating lua code: ", diag.source, "lua error was:\n", err)
