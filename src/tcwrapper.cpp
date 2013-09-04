@@ -607,11 +607,11 @@ int include_c(lua_State * L) {
     }
 
 #ifdef _WIN32
-	args.push_back("-fms-extensions");
-	args.push_back("-fms-compatibility");
+    args.push_back("-fms-extensions");
+    args.push_back("-fms-compatibility");
 #define __stringify(x) #x
 #define __indirect(x) __stringify(x)
-	args.push_back("-fmsc-version=" __indirect(_MSC_VER));
+    args.push_back("-fmsc-version=" __indirect(_MSC_VER));
 #endif
     
     args.push_back("-I");

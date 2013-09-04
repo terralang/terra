@@ -5,15 +5,15 @@
 #include "lj_char.c"
 
 int treadnumber(const char * buf, ReadNumber * result, int allowsuffixes, int allowimag) {
-	TValue o;
-	StrScanFmt fmt;
+    TValue o;
+    StrScanFmt fmt;
     int opt = STRSCAN_OPT_TOINT;
     if(allowsuffixes)
         opt |= STRSCAN_OPT_LL | STRSCAN_OPT_C;
     if(allowimag)
         opt |= STRSCAN_OPT_IMAG;
     
-	fmt = lj_strscan_scan((const uint8_t*)buf, &o, opt);
+    fmt = lj_strscan_scan((const uint8_t*)buf, &o, opt);
     result->flags = 0;
     switch(fmt) {
         case STRSCAN_ERROR:

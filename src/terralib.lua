@@ -794,7 +794,7 @@ function terra.quote:astype()
     return self.tree.expression.value
 end
 function terra.quote:istyped()
-	return self.tree:is "typedexpression" and not self.tree.expression:is "luaobject"
+    return self.tree:is "typedexpression" and not self.tree.expression:is "luaobject"
 end
 function terra.quote:gettypes()
     if not self:istyped() then
@@ -811,10 +811,10 @@ function terra.quote:gettype()
     return types[1]
 end
 function terra.quote:islvalue()
-	if not self:istyped() then
-		error("not a typed quote")
-	end
-	return self.tree.expression.lvalue
+    if not self:istyped() then
+        error("not a typed quote")
+    end
+    return self.tree.expression.lvalue
 end
 function terra.quote:asvalue()
     
@@ -2656,9 +2656,9 @@ function terra.funcdefinition:typecheck()
             end
             return createfunctionliteral(e,definitions[1])
         else
-        	if terra.types.istype(e.value) then
-        		diag:reporterror(e, "expected a terra expression but found terra type ", tostring(e.value), ". If this is a cast, you may have omitted the required parentheses: [T](exp)")
-        	else  
+            if terra.types.istype(e.value) then
+                diag:reporterror(e, "expected a terra expression but found terra type ", tostring(e.value), ". If this is a cast, you may have omitted the required parentheses: [T](exp)")
+            else  
                 diag:reporterror(e, "expected a terra expression but found ",type(e.value))
             end
             return e:copy { type = terra.types.error }
@@ -4218,23 +4218,23 @@ function terra.importlanguage(languages,entrypoints,langstring)
         entrypoints[e] = lang
     end
     if not lang.keywordtable then
-	    lang.keywordtable = {} --keyword => true
-	    for i,k in ipairs(lang.keywords) do
-	        lang.keywordtable[k] = true
-	    end
-	    for i,k in ipairs(lang.entrypoints) do
-	        lang.keywordtable[k] = true
-	    end
-	end
-	table.insert(languages,lang)
+        lang.keywordtable = {} --keyword => true
+        for i,k in ipairs(lang.keywords) do
+            lang.keywordtable[k] = true
+        end
+        for i,k in ipairs(lang.entrypoints) do
+            lang.keywordtable[k] = true
+        end
+    end
+    table.insert(languages,lang)
 end
 function terra.unimportlanguages(languages,N,entrypoints)
     for i = 1,N do
-		local lang = table.remove(languages)
-		for i,e in ipairs(lang.entrypoints) do
-			entrypoints[e] = nil
-		end
-	end
+        local lang = table.remove(languages)
+        for i,e in ipairs(lang.entrypoints) do
+            entrypoints[e] = nil
+        end
+    end
 end
 
 function terra.languageextension.tokentype:__tostring()

@@ -1856,7 +1856,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
                 if(ls->t.token == '(') {
                     body(ls, &b, ismethod, ls->linenumber);
                     int tree = store_value(ls);
-					TDefn tdefn = {ismethod ? 'm' : 'f', idx, tree};
+                    TDefn tdefn = {ismethod ? 'm' : 'f', idx, tree};
                     defs.push_back(tdefn);
                 }
             } break;
@@ -1865,7 +1865,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
                 if(ls->t.token == '{') {
                     structconstructor(ls,T_struct);
                     int tree = store_value(ls);
-					TDefn tdefn = { 's', idx, tree};
+                    TDefn tdefn = { 's', idx, tree};
                     defs.push_back(tdefn);
                 }
             } break;

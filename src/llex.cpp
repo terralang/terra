@@ -340,7 +340,7 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
     if ((ls->current | 0x20) == 'x') xp = 'p';
   }
   while (lislalnum(ls->current) || ls->current == '.' ||
-	 ((ls->current == '-' || ls->current == '+') && (c | 0x20) == xp)) {
+     ((ls->current == '-' || ls->current == '+') && (c | 0x20) == xp)) {
     if(ls->current == '.')
         hasdecpoint = true;
     c = ls->current;

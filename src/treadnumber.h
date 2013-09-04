@@ -14,17 +14,17 @@ extern "C" {
 #endif
 
 typedef enum {
-	F_ISINTEGER = 1,
-	F_ISUNSIGNED = 2,
-	F_IS8BYTES = 4,
+    F_ISINTEGER = 1,
+    F_ISUNSIGNED = 2,
+    F_IS8BYTES = 4,
 } ReadNumberFlags;
 
 typedef struct  {
-	union {
-		uint64_t i;
-		double d;
-	};
-	int flags;
+    union {
+        uint64_t i;
+        double d;
+    };
+    int flags;
 } ReadNumber;
 int treadnumber(const char * buf, ReadNumber * result, int allowsuffixes, int allowimag);
 
