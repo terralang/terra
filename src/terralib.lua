@@ -2656,7 +2656,11 @@ function terra.funcdefinition:typecheck()
             end
             return createfunctionliteral(e,definitions[1])
         else
-            diag:reporterror(e, "expected a terra expression but found ",type(e.value))
+        	if terra.types.istype(e.value) then
+        		diag:reporterror(e, "expected a terra expression but found terra type ", tostring(e.value), ". If this is a cast, you may have omitted the required parentheses: [T](exp)")
+        	else  
+                diag:reporterror(e, "expected a terra expression but found ",type(e.value))
+            end
             return e:copy { type = terra.types.error }
         end
     end
