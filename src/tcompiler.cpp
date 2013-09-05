@@ -71,7 +71,15 @@ struct DisassembleFunctionListener : public JITEventListener {
 
 static double CurrentTimeInSeconds() {
 #ifdef _WIN32
-    return time(NULL);
+    static uint64_t freq = 0;
+    if(freq == 0) {
+        LARGE_INTEGER i;
+        QueryPerformanceFrequency(&i);
+        freq = i.QuadPart;
+    }
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t.QuadPart / (double) freq;
 #else
     struct timeval tv;
     gettimeofday(&tv, NULL);
