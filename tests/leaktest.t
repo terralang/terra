@@ -11,11 +11,17 @@ function make()
 
   return b(12),leak.track(b)
 end
-
+nan = 0/0
 res,t=make()
 assert(res == 13)
 local gcd, path = leak.find(t)
-if not gcd then
+if gcd then
 	print(path)
 	assert(false)
 end
+
+l = leak.track(leak)
+foo = 0/0
+local f,p = leak.find(l)
+assert(f)
+assert(p == "$locals.leak")

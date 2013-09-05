@@ -14,20 +14,21 @@ function leak.find(self)
   self[special] = nil
 
   if not env.target then
-    return true
+    return false
   end
    
   local function traverse(from, to, how, name)
-    if to == env or env.seen[to] then return end
+    local t = type(to)
+    if t == "string" or t == "number" or t == "boolean" or t == "nil" or --ignore types that don't reference anything
+       to == env or --ignore our local working environment 'env'
+       env.seen[to] then --ignore objects we have already added to worklist
+         return
+    end
     env.seen[to] = {from = from, to = to, how = how, name = name}
     table.insert(env.unscanned,to)
   end
 
   --initialize roots
-  traverse(nil,"_G","isname")
-  traverse(nil,_G,"value","_G")
-  traverse(nil,debug.getregistry(),"value","$registry")
-
   for i=2, math.huge do
     local info = debug.getinfo(i, "f") 
     if not info then break end 
@@ -38,6 +39,10 @@ function leak.find(self)
       traverse(nil, v, "local", n)
      end
   end
+
+  traverse(nil,debug.getregistry(),"value","$registry")
+  traverse(nil,"_G","isname")
+  traverse(nil,_G,"value","_G")
 
   local function pathstring(f)
     local node = env.seen[f]
@@ -68,18 +73,28 @@ function leak.find(self)
   while #env.unscanned > 0 do
     local obj = table.remove(env.unscanned)
     if obj == env.target then
-      return false, pathstring(obj)
+      return true, pathstring(obj)
     end
     local t = type(obj)
-    if t == "string" or t == "number" or t == "boolean" then
-      --pass
-    elseif "table" == t then
-      for key, value in pairs(obj) do
-        traverse(obj, key, "key", nil)
-        traverse(obj, value, "value", key)
-      end
+    if "table" == t then
       local mtable = debug.getmetatable(obj)
-      if mtable then traverse(obj, mtable, "ismetatable", nil) end 
+      local weakkeys,weakvalues
+      if mtable then 
+        traverse(obj, mtable, "ismetatable", nil)
+        local m = mtable.__mode
+        if type(m) == "string" then
+          weakkeys = m:find("k")
+          weakvalues = m:find("v")
+        end
+      end
+      for key, value in pairs(obj) do
+        if not weakkeys then
+          traverse(obj, key, "key", nil)
+        end
+        if not weakvalues then
+          traverse(obj, value, "value", key)
+        end
+      end
     elseif "function" == t then
       for i = 1, math.huge do
         local n, v = debug.getupvalue(obj, i)
@@ -98,7 +113,7 @@ function leak.find(self)
       print("warning! ignoring unknown object type: ",t)
     end
   end
-  return false, "error! failed to find the path to object"
+  return true, "error! failed to find the path to object"
 end
 return leak
 
