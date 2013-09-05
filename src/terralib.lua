@@ -585,6 +585,13 @@ function terra.funcdefinition:getpointer()
     return self.ffiwrapper
 end
 
+function terra.funcdefinition:setinlined(v)
+    if self.state ~= "untyped" then
+        error("inlining state can only be changed before typechecking",2)
+    end
+    self.alwaysinline = v
+end
+
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
 end }
