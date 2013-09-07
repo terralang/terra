@@ -22,6 +22,7 @@
 #define isatty(x) _isatty(x)
 #endif
 
+
 static void printstats(lua_State * L) {
 #if 0
   //LINE COVERAGE INFORMATION 
@@ -41,12 +42,36 @@ static void dotty (lua_State *L);
 void parse_args(lua_State * L, int argc, char ** argv, bool * interactive, int * begin_script);
 static int getargs (lua_State *L, char **argv, int n);
 
+
+#ifndef _WIN32
+#include <signal.h>
+static void (*terratraceback)(void);
+void sigsegv(int sig) {
+    terratraceback();  //call terra's pretty traceback
+    signal(sig,SIG_DFL);
+    raise(sig);   //rethrow the signal to the default handler
+}
+void setupsigsegv(lua_State * L) {
+    lua_getglobal(L, "terralib");
+    lua_getfield(L, -1, "traceback");
+    terratraceback = *(void(**)(void))lua_topointer(L, -1);
+    signal(SIGSEGV, sigsegv);
+    signal(SIGILL, sigsegv);
+    lua_pop(L,2);
+}
+#else
+void setupsigsegv(lua_State * L) {}
+#endif
+
 int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
     if(terra_init(L))
         doerror(L);
+    
+    setupsigsegv(L);
+    
     bool interactive = false;
     int scriptidx;
 

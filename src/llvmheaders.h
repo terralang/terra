@@ -26,6 +26,7 @@
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/ExecutionEngine/JITMemoryManager.h"
 
 #include "llvm/Linker.h"
 #include "llvm/PassManager.h"

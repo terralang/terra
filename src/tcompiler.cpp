@@ -10,6 +10,7 @@ extern "C" {
 }
 #include <assert.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -32,6 +33,7 @@ extern "C" {
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
+#include "execinfo.h"
 
 using namespace llvm;
 
@@ -173,13 +175,65 @@ bool HostHasAVX() {
     return (ECX >> 28) & 1;
 }
 
+#ifndef _WIN32
+static bool stacktrace_findsymbol(terra_CompilerState * C, int i, uintptr_t ip) {
+    for(llvm::DenseMap<const llvm::Function *, size_t>::iterator it = C->functionsizes.begin(), end = C->functionsizes.end();
+            it != end; ++it) {
+        const Function * fn = it->first;
+        void * addr = C->ee->getPointerToGlobalIfAvailable(fn);
+        if(addr == NULL)
+            continue;
+        uintptr_t fstart = (uintptr_t) addr;
+        uintptr_t fend = fstart + it->second;
+        if(fstart <= ip && ip < fend) {
+            std::string str = fn->getName();
+            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d\n",i,"terra (JIT)",fstart,str.c_str(),(int)(ip - fstart));
+            return true;
+        }
+    }
+    return false;
+}
+
+static void terra_printstacktrace(void * data) {
+    terra_CompilerState * C = (terra_CompilerState*) data;
+    const int maxN = 128;
+    void * frames[maxN];
+    int N = backtrace(frames, maxN);
+    char ** symbols = backtrace_symbols(frames, N);
+    for(int i = 0; i < N; i++) {
+        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[i]))
+            printf("%s\n",symbols[i]);
+    }
+    free(symbols);
+}
+#endif
+
+typedef void (*VoidFnPtrTy)(void);
+static VoidFnPtrTy createclosure(JITMemoryManager * JMM, void (*code)(void*),void * data) {
+    /* assembly template for: x86-64 ONLY!
+       movabs rdi,data
+       movabs rax,code
+       jmp    rax
+    */
+    char Template[] =
+    {0x48, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x48, 0xb8, 0x00, 0x00, 0x00, 0x00,
+     0x00, 0x00, 0x00, 0x00, 0xff, 0xe0};
+    uint8_t * buf = JMM->allocateSpace(sizeof(Template), 16);
+    memcpy(buf, Template, sizeof(Template));
+    *(void**)(&buf[2]) = data;
+    *(void**)(&buf[12]) = (void*) code;
+    return (VoidFnPtrTy) buf;
+}
+
 int terra_compilerinit(struct terra_State * T) {
     
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
-
+    
+    
     #define REGISTER_FN(name,isclo) RegisterFunction(T,#name,isclo,terra_##name);
     TERRALIB_FUNCTIONS(REGISTER_FN)
     #undef REGISTER_FN
@@ -188,14 +242,24 @@ int terra_compilerinit(struct terra_State * T) {
 
     lua_setfield(T->L,-2, "llvmversion");
     
+    T->C = new terra_CompilerState();
+    JITMemoryManager * JMM = JITMemoryManager::CreateDefaultMemManager();
+    
+#ifndef _WIN32
+    VoidFnPtrTy stacktracefn = createclosure(JMM,terra_printstacktrace, T->C);
+    lua_getfield(T->L, -1, "initstacktracefn");
+    lua_pushlightuserdata(T->L, (void*)stacktracefn);
+    lua_call(T->L, 1, 0);
+#endif
+    
     lua_pop(T->L,1); //remove terra from stack
     
-    T->C = new terra_CompilerState();
     T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
     T->C->m = new Module("terra",*T->C->ctx);
     
     TargetOptions options;
+    options.NoFramePointerElim = true;
     CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
     std::string Triple = llvm::sys::getDefaultTargetTriple();
     std::string err;
@@ -203,8 +267,13 @@ int terra_compilerinit(struct terra_State * T) {
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
     
-    
-    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err).setEngineKind(EngineKind::JIT).setAllocateGVsWithCode(false).create();
+    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err)
+                                     .setEngineKind(EngineKind::JIT)
+                                     .setAllocateGVsWithCode(false)
+                                     .setTargetOptions(options)
+                                     .setOptLevel(CodeGenOpt::Aggressive)
+                                     .setJITMemoryManager(JMM)
+                                     .create();
     if (!T->C->ee) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
@@ -217,12 +286,10 @@ int terra_compilerinit(struct terra_State * T) {
     llvmutil_addoptimizationpasses(T->C->fpm,&info);
     
     
-    
     if(!TheTarget) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
     }
-    
     
     T->C->tm = TM;
     T->C->mi = createManualFunctionInliningPass(T->C->tm);

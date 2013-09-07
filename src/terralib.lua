@@ -4447,6 +4447,10 @@ _G["operator"] = terra.internalmacro(function(diag,anchor,op,...)
     end
     return terralib.newtree(anchor, { kind = terra.kinds.operator, operator = terra.kinds[opv], operands = operands })
 end)
+--called by tcompiler.cpp to convert userdata pointer to stacktrace function to the right type;
+function terra.initstacktracefn(fn)
+    terra.traceback = terra.cast(terra.types.funcpointer({},{}),fn)
+end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 --io.write("done\n")
