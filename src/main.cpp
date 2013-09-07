@@ -45,18 +45,28 @@ static int getargs (lua_State *L, char **argv, int n);
 
 #ifndef _WIN32
 #include <signal.h>
-static void (*terratraceback)(void);
-void sigsegv(int sig) {
-    terratraceback();  //call terra's pretty traceback
+static void (*terratraceback)(void*);
+void sigsegv(int sig, siginfo_t *info, void * uap) {
+    ucontext_t * uc = (ucontext_t*)uap;
+#ifndef __linux__
+    void * addr = (void*) uc->uc_mcontext->__ss.__rip;
+#else
+    void * addr = (void*) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+    terratraceback(addr);  //call terra's pretty traceback
     signal(sig,SIG_DFL);
     raise(sig);   //rethrow the signal to the default handler
 }
 void setupsigsegv(lua_State * L) {
     lua_getglobal(L, "terralib");
     lua_getfield(L, -1, "traceback");
-    terratraceback = *(void(**)(void))lua_topointer(L, -1);
-    signal(SIGSEGV, sigsegv);
-    signal(SIGILL, sigsegv);
+    terratraceback = *(void(**)(void*))lua_topointer(L, -1);
+    struct sigaction sa;
+    sa.sa_flags = SA_RESETHAND | SA_SIGINFO;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_sigaction = sigsegv;
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGILL, &sa, NULL);
     lua_pop(L,2);
 }
 #else

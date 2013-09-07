@@ -176,6 +176,7 @@ bool HostHasAVX() {
 }
 
 #ifndef _WIN32
+#include <signal.h>
 static bool stacktrace_findsymbol(terra_CompilerState * C, int i, uintptr_t ip) {
     for(llvm::DenseMap<const llvm::Function *, size_t>::iterator it = C->functionsizes.begin(), end = C->functionsizes.end();
             it != end; ++it) {
@@ -194,35 +195,41 @@ static bool stacktrace_findsymbol(terra_CompilerState * C, int i, uintptr_t ip) 
     return false;
 }
 
-static void terra_printstacktrace(void * data) {
+static void terra_printstacktrace(void * data,void * addr) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
     int N = backtrace(frames, maxN);
-    char ** symbols = backtrace_symbols(frames, N);
-    for(int i = 0; i < N; i++) {
-        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[i]))
+    int start = 1;
+    if(addr && N > 3) {
+        frames[3] = addr;
+        start = 3;
+    }
+    char ** symbols = backtrace_symbols(frames + start, N - start);
+    for(int i = 0 ; i < N - start; i++) {
+        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[start + i]))
             printf("%s\n",symbols[i]);
     }
     free(symbols);
 }
 #endif
 
-typedef void (*VoidFnPtrTy)(void);
-static VoidFnPtrTy createclosure(JITMemoryManager * JMM, void (*code)(void*),void * data) {
+typedef void (*VoidFnPtrTy)(void*);
+static VoidFnPtrTy createclosure(JITMemoryManager * JMM, void (*code)(void*,void*),void * data) {
     /* assembly template for: x86-64 ONLY!
+       mov    rsi,rdi
        movabs rdi,data
        movabs rax,code
        jmp    rax
     */
     char Template[] =
-    {0x48, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    {0x48, 0x89, 0xFE, 0x48, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x48, 0xb8, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x00, 0x00, 0xff, 0xe0};
     uint8_t * buf = JMM->allocateSpace(sizeof(Template), 16);
     memcpy(buf, Template, sizeof(Template));
-    *(void**)(&buf[2]) = data;
-    *(void**)(&buf[12]) = (void*) code;
+    *(void**)(&buf[5]) = data;
+    *(void**)(&buf[15]) = (void*) code;
     return (VoidFnPtrTy) buf;
 }
 
