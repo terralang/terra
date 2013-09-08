@@ -200,29 +200,41 @@ struct Frame {
     void * addr;
 };
 __attribute__((noinline))
-static int terra_backtrace(void ** frames, int maxN) {
-    Frame * frame = (Frame*) __builtin_frame_address(0);
+static int terra_backtrace(void ** frames, int maxN, void * rip, void * rbp) {
+    if(maxN > 0)
+        frames[0] = rip;
+    Frame * frame = (Frame*) rbp;
     int i;
-    for(i = 0; i < maxN && frame != NULL && frame->addr != NULL; i++) {
+    for(i = 1; i < maxN && frame != NULL && frame->addr != NULL; i++) {
         frames[i] = frame->addr;
         frame = frame->next;
     }
     return i - 1;
 }
 
-static void terra_printstacktrace(void * data,void * addr) {
+static void terra_printstacktrace(void * data,void * uap) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
-    int N = terra_backtrace(frames, maxN);
-    int start = 0;
-    if(addr && N > 3) {
-        frames[3] = addr;
-        start = 3;
+    void * rip;
+    void * rbp;
+    if(uap == NULL) {
+        rip = __builtin_return_address(0);
+        rbp = __builtin_frame_address(1);
+    } else {
+        ucontext_t * uc = (ucontext_t*) uap;
+#ifdef __linux__
+        rip = (void*) uc->uc_mcontext.gregs[REG_RIP];
+        rbp = (void*) uc->uc_mcontext.gregs[REG_RBP];
+#else
+        rip = (void*)uc->uc_mcontext->__ss.__rip;
+        rbp = (void*)uc->uc_mcontext->__ss.__rbp;
+#endif
     }
-    char ** symbols = backtrace_symbols(frames + start, N - start);
-    for(int i = 0 ; i < N - start; i++) {
-        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[start + i]))
+    int N = terra_backtrace(frames, maxN,rip,rbp);
+    char ** symbols = backtrace_symbols(frames, N);
+    for(int i = 0 ; i < N; i++) {
+        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[i]))
             printf("%s\n",symbols[i]);
     }
     free(symbols);

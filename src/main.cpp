@@ -47,13 +47,7 @@ static int getargs (lua_State *L, char **argv, int n);
 #include <signal.h>
 static void (*terratraceback)(void*);
 void sigsegv(int sig, siginfo_t *info, void * uap) {
-    ucontext_t * uc = (ucontext_t*)uap;
-#ifndef __linux__
-    void * addr = (void*) uc->uc_mcontext->__ss.__rip;
-#else
-    void * addr = (void*) uc->uc_mcontext.gregs[REG_RIP];
-#endif
-    terratraceback(addr);  //call terra's pretty traceback
+    terratraceback(uap);  //call terra's pretty traceback
     signal(sig,SIG_DFL);
     raise(sig);   //rethrow the signal to the default handler
 }
