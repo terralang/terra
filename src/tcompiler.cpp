@@ -188,19 +188,34 @@ static bool stacktrace_findsymbol(terra_CompilerState * C, int i, uintptr_t ip) 
         uintptr_t fend = fstart + it->second;
         if(fstart <= ip && ip < fend) {
             std::string str = fn->getName();
-            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d\n",i,"terra (JIT)",fstart,str.c_str(),(int)(ip - fstart));
+            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d\n",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
             return true;
         }
     }
     return false;
 }
 
+struct Frame {
+    Frame * next;
+    void * addr;
+};
+__attribute__((noinline))
+static int terra_backtrace(void ** frames, int maxN) {
+    Frame * frame = (Frame*) __builtin_frame_address(0);
+    int i;
+    for(i = 0; i < maxN && frame != NULL && frame->addr != NULL; i++) {
+        frames[i] = frame->addr;
+        frame = frame->next;
+    }
+    return i - 1;
+}
+
 static void terra_printstacktrace(void * data,void * addr) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
-    int N = backtrace(frames, maxN);
-    int start = 1;
+    int N = terra_backtrace(frames, maxN);
+    int start = 0;
     if(addr && N > 3) {
         frames[3] = addr;
         start = 3;
