@@ -598,20 +598,20 @@ Structs
 Structs are Terra's user-defined Type. Each struct has a list of `entries` which describe the layout of the type in memory, a table of `methods` which can be invoked using the `obj:method(arg)` syntax sugar, and a table of `metamethods` which allow you to define custom behavior for the type (e.g. custom type conversions). 
 
 ---
-	[local] struct mystruct
-	
+    [local] struct mystruct
+    
 _Struct declaration_ If `mystruct` is not already a Terra struct, it creates a new struct and stores it the Lua variable `mystruct`. If `mystruct` is already a struct, then it does not modify it. If the optional `local` keyword is used, then `mystruct` is first defined as a new local Lua variable.  When used without the `local` keyword, `mystruct` can be a table specifier (e.g. `a.b.c`).
 
-	[local] struct mystruct {
-		field0 : type0;
-		...
-		union {
-			fieldUnion0 : type1;
-			fieldUnion1 : type2;
-		}
-		...
-		fieldN : typeN;
-	}
+    [local] struct mystruct {
+        field0 : type0;
+        ...
+        union {
+            fieldUnion0 : type1;
+            fieldUnion1 : type2;
+        }
+        ...
+        fieldN : typeN;
+    }
 
 _Struct definition_. If `mystruct` is not already a Struct, then it creates a new struct with the behavior of struct declarations. It then fills in the `entries` table of the struct with the fields and types specified in the body of the defintion. The `union` block can be used to specify that a group of fields should share the same location in memory. If `mystruct` was previously given a definition, then defining it again will result in an error.
 
@@ -648,8 +648,8 @@ The `metamethods` field can be used to extend the behavior of structs by definit
 * `castedexp = __cast(from,to,exp)` -- a _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works.
 * `__methodmissing(methodname,arg0,...,argN)` -- A terra macro that is called when `methodname` is not found in the method table of the type. It should return a Terra expression to use in place of the method call.
 * custom operators: `__sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,`
-	`__eq, __ne, __and, __or, __not, __xor, __lshift, __rshift,` 
-	`__select, __apply, __get` Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, `__get` for field selection `mystruct.missingfield` for a field that doesn't exist in the struct, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
+    `__eq, __ne, __and, __or, __not, __xor, __lshift, __rshift,` 
+    `__select, __apply, __get` Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, `__get` for field selection `mystruct.missingfield` for a field that doesn't exist in the struct, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
 
 
 C Backwards Compatibility
@@ -671,8 +671,8 @@ Similar to `includecstring` except that C code is loaded from `filename`. This u
 
 ---
 
-	terralib.linklibrary(filename)
-	
+    terralib.linklibrary(filename)
+    
 Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. 
 
 Managing Terra Values from Lua
@@ -737,12 +737,12 @@ Lua equivalent of C API call `terra_loadfile`.
  
 ---
 
-	terralib.require(modulename)
-	
+    terralib.require(modulename)
+    
 Load the terra code `modulename`. `require` first checks if `modulename` has already been loaded by a previous call to `require`, returning the previously loaded results if available. Otherwise it searches `package.path` for the module. `package.path` is a semi-colon separated list of templates, e.g.:
-	
-	"lib/?.t;./?.t"
-	
+    
+    "lib/?.t;./?.t"
+    
 The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `terralib.require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.path` is set to the environment variable `LUA_PATH`. If `LUA_PATH` is not set then `package.path` will contain `./?.t` as a path.
 
 Converting between Lua values and Terra values
@@ -794,6 +794,23 @@ If the `async` argument to a compilation function is not `nil` or `false`, then 
 
 Situations requiring callbacks arise when building class systems that have virtual function tables (vtables). To build a vtable, you need to compile the concrete implementations of the type's methods and then fill in the vtable with these values. However, it is possible that these functions were already being compiled. In this case, we still need to compile these functions and fill-in the vtable, but cannot finish this task inside the type's `__staticinitialize` metamethod.  By calling compile asynchronously and registering a callback that fills in the vtable, we can guarantee that the vtable is filled in before the call to the compiler returns while allowing `__staticinitialize` to return before the vtable is complete. Callbacks are guaranteed to be invoked before returning to user-defined code that invoked the compiler synchronously. So we know that the vtable will be initialized before any of this newly compiled code is run.
 
+Debugging
+---------
+
+Terra provides a few library functions to help debug and performance tune code.
+
+---
+
+    terra terralib.traceback(uctx : &opaque)
+
+A Terra function that can be called from Terra code to print a stack trace. If `uctx` is `nil` then this will print the current stack. `uctx` can also be a pointer to a `ucontext_t` object (see `ucontext.h`) and will print the stack trace for that context.
+By default, the interpreter will print this information when a program segfaults.
+
+---
+    terra.currenttimeinseconds()
+
+A Lua function that returns the current time in seconds since some fixed time in the past. Useful for performancing tuning Terra code.
+
 Embedded Language API
 =====================
 
@@ -806,43 +823,43 @@ A Simple Example
 ----------------
 
 To get started, let's add a simple language extension to Lua that sums up a list of numbers. The syntax will look like `sum 1,2,3 done`, and when run it will sum up the numbers, producing the value `6`. A language extension is defined using a Lua table. Here is the table for our language
-	
-	local sumlanguage = {
-	  name = "sumlanguage"; --name for debugging
-	  -- list of keywords that will start our expressions
-	  entrypoints = {"sum"}; 
-	  keywords = {"done"}; --list of keywords specific to this language
-	   --called by Terra parser to enter this language
-	  expression = function(self,lex)
-	    --implementation here
-	  end;
-	}
+    
+    local sumlanguage = {
+      name = "sumlanguage"; --name for debugging
+      -- list of keywords that will start our expressions
+      entrypoints = {"sum"}; 
+      keywords = {"done"}; --list of keywords specific to this language
+       --called by Terra parser to enter this language
+      expression = function(self,lex)
+        --implementation here
+      end;
+    }
 
 We list `"sum"` in the `entrypoints` list since we want Terra to hand control over to our language when it encounters this token at the beginning of an expression. We also list `"done"` as a keyword since we are using it to end our expression. When the Terra parser sees the `sum` token it will call the `expression` function passing in an interface to the lexer, `lex`. Here is the implementation:
 
-	expression = function(self,lex)
-	  local sum = 0
-	  lex:expect("sum") --first token should be "sum"
-	  if not lex:matches("done") then
-	    repeat
-	      --parse a number, return its value
-	      local v = lex:expect(lex.number).value 
-	      sum = sum + v
-	    --if there is a comma, consume it and continue
-	    until not lex:nextif(",") 
-	  end
+    expression = function(self,lex)
+      local sum = 0
+      lex:expect("sum") --first token should be "sum"
+      if not lex:matches("done") then
+        repeat
+          --parse a number, return its value
+          local v = lex:expect(lex.number).value 
+          sum = sum + v
+        --if there is a comma, consume it and continue
+        until not lex:nextif(",") 
+      end
 
-	  lex:expect("done")
-	  --return a function that is run 
-	  --when this expression would be evaluated by Lua
-	  return function(environment_function)
-	    return sum
-	  end
-	end
+      lex:expect("done")
+      --return a function that is run 
+      --when this expression would be evaluated by Lua
+      return function(environment_function)
+        return sum
+      end
+    end
 
 We use the `lex` object to interact with the tokens. The interface is documented below. Since the statement only allows numeric constants, we can perform the summation during parsing. Finally, we return a _constructor_ function that will be run every time this statement is executed. We can use it in Lua code like so:
 
-	print(sum 1,2,3 done) -- prints 6
+    print(sum 1,2,3 done) -- prints 6
 
 The file `tests/lib/sumlanguage.t` contains the code for this example, and `tests/sumlanguage1.t` has an example of its use.
 
@@ -858,8 +875,8 @@ Since `import` statements are evaluated at _parse_ time, the argument must be a 
 The parser will then call `terralib.require` on the string literal to load the language extension file.
 The file specified should _return_ the Lua table describing your language:
 
-	local sumlanguage = { ... } --fill in your table
-	return sumlanguage
+    local sumlanguage = { ... } --fill in your table
+    return sumlanguage
 
 The imported language will be enabled only in the local scope where the import statement occured:
 
@@ -879,42 +896,42 @@ Interacting with Lua symbols
 ----------------------------
 
 One of the advantages of Terra is that it shares the same lexical scope as Lua, making it easy to parameterize Terra functions. Extension languages can also access Lua's static scope. Let's extend our sum language so that it supports both constant numbers, as well as Lua variables:
-	
-	local a = 4
-	print(sum a,3 done) --prints 7
+    
+    local a = 4
+    print(sum a,3 done) --prints 7
 
 To do this we need to modify the code in our `expression` function:
 
-	expression = function(self,lex)
-	  local sum = 0
-	  local variables = terralib.newlist()
-	  lex:expect("sum")
-	  if not lex:matches("done") then
-	    repeat
-	      if lex:matches(lex.name) then --if it is a variable
-	        local name = lex:next().value
-	        --tell the Terra parser 
-	        --we will access a Lua variable, 'name'
-	        lex:ref(name) 
-	        --add its name to the list of variables
-	        variables:insert(name) 
-	      else
-	        sum = sum + lex:expect(lex.number).value
-	      end
-	    until not lex:nextif(",")
-	  end
-	  lex:expect("done")
-	  return function(environment_function)
-	    --capture the local environment
-	    --a table from variable name => value
-	    local env = environment_function() 
-	    local mysum = sum
-	    for i,v in ipairs(variables) do
-	      mysum = mysum + env[v]
-	    end
-	    return mysum
-	  end
-	end
+    expression = function(self,lex)
+      local sum = 0
+      local variables = terralib.newlist()
+      lex:expect("sum")
+      if not lex:matches("done") then
+        repeat
+          if lex:matches(lex.name) then --if it is a variable
+            local name = lex:next().value
+            --tell the Terra parser 
+            --we will access a Lua variable, 'name'
+            lex:ref(name) 
+            --add its name to the list of variables
+            variables:insert(name) 
+          else
+            sum = sum + lex:expect(lex.number).value
+          end
+        until not lex:nextif(",")
+      end
+      lex:expect("done")
+      return function(environment_function)
+        --capture the local environment
+        --a table from variable name => value
+        local env = environment_function() 
+        local mysum = sum
+        for i,v in ipairs(variables) do
+          mysum = mysum + env[v]
+        end
+        return mysum
+      end
+    end
 
 Now an expression can be a variable name (`lex.name`). Unlike constants, we don't know the value of this variable at parse time, so we cannot calculate the entire sum before execution. Instead, we save the variable name (`variables:insert(name)`) and tell the Terra parser that will need the value of this variable at runtime (`lex:ref(name)`).  In our _constructor_ we now capture the local lexical environment by calling the `environment_function` parameter, and look up the values of our variables in the environment to compute the sum. It is important to call `lex:ref(name)`. If we had not called it, then this environment table will not contain the variables we need.
 
@@ -923,35 +940,35 @@ Recursively Parsing Lua
 
 Sometimes in the middle of your language you may want to call back into the Lua parser to parse an entire Lua expression. For instance, Terra types are Lua expressions:
 
-	var a : int = 3
+    var a : int = 3
 
 In this example, `int` is actually a Lua expression.
 
 The method `lex:luaexpr()` will parse a Lua expression. It returns a Lua function that implements the expression. This functions takes the local lexical environment, and returns the value of the expression in that environment. As an example, let's add a concise way of specifying a single argument Lua function, `def(a) exp`, where `a` is a single argument and `exp` is a Lua expression. This is similar to Pythons `lambda` statement. Here is our language extension:
 
-	{
-	  name = "def";
-	  entrypoints = {"def"};
-	  keywords = {};
-	  expression = function(self,lex)
-	    lex:expect("def")
-	    lex:expect("(")
-	    local formal = lex:expect(lex.name).value
-	    lex:expect(")")
-	    local expfn = lex:luaexpr()
-	    return function(environment_function)
-	      --return our result, a single argument lua function
-	      return function(actual)
-	        local env = environment_function()
-	        --bind the formal argument 
-	        --to the actual one in our environment
-	        env[formal] = actual
-	        --evaluate our expression in the environment
-	        return expfn(env)
-	      end
-	    end
-	  end;
-	}
+    {
+      name = "def";
+      entrypoints = {"def"};
+      keywords = {};
+      expression = function(self,lex)
+        lex:expect("def")
+        lex:expect("(")
+        local formal = lex:expect(lex.name).value
+        lex:expect(")")
+        local expfn = lex:luaexpr()
+        return function(environment_function)
+          --return our result, a single argument lua function
+          return function(actual)
+            local env = environment_function()
+            --bind the formal argument 
+            --to the actual one in our environment
+            env[formal] = actual
+            --evaluate our expression in the environment
+            return expfn(env)
+          end
+        end
+      end;
+    }
 
 The full code for this example can be found in `tests/lib/def.t` and `tests/def1.t`.
 
@@ -960,13 +977,13 @@ Extending Statements
 
 In addition to extending the syntax of expressions, you can also define new syntax for statements and local variable declarations:
 
-	terra foo() end -- a new statement
-	local terra foo() end -- a new local variable declaration
+    terra foo() end -- a new statement
+    local terra foo() end -- a new local variable declaration
 
 This is done by specifying the `statement` and `localstatement` functions in your language table. These function behave the same way as the `expression` function, but they can optionally return a list of names that they define. The file `test/lib/def.t` shows how this would work for the `def` constructor to support statements:
-	
-	def foo(a) luaexpr --defines global variable foo
-	local def bar(a) luaexpr --defins local variable bar
+    
+    def foo(a) luaexpr --defines global variable foo
+    local def bar(a) luaexpr --defins local variable bar
 
 
 Higher-Level Parsing via Pratt Parsers
