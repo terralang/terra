@@ -47,8 +47,8 @@ static int getargs (lua_State *L, char **argv, int n);
 #include <signal.h>
 static void (*terratraceback)(void*);
 void sigsegv(int sig, siginfo_t *info, void * uap) {
+    signal(sig,SIG_DFL); //reset signal to default, just in case traceback itself crashes
     terratraceback(uap);  //call terra's pretty traceback
-    signal(sig,SIG_DFL);
     raise(sig);   //rethrow the signal to the default handler
 }
 void setupsigsegv(lua_State * L) {
