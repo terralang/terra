@@ -20,6 +20,21 @@ In fact, the `terra` executable and REPL are just clients of the C API. The Terr
 Initializes the internal Terra state for the `lua_State` `L`. `L` must be an already initialized `lua_State`.
 
 ---
+    
+    typedef struct { /* default values are 0 */
+        int verbose; /* Sets verbosity of debugging output. 
+                        Valid values are 0 (no debug output) 
+                        to 2 (very verbose). */
+        int debug;   /* Turns on debug information in Terra compiler. 
+                        Enables base pointers and line number
+                        information in stack traces. */
+    } terra_Options;
+    int terra_initwithoptions(lua_State * L, terra_Options * options);
+
+Initializes the internal Terra state for the `lua_State` `L`. `L` must be an already initialized `lua_State`. `terra_Options` holds additional configuration options.
+
+---
+
     int terra_load(lua_State *L,
                    lua_Reader reader,
                    void *data,
@@ -47,12 +62,6 @@ Loads a buffer as a combined Terra-Lua chunk. Terra equivalent of `luaL_loadbuff
     int terra_loadstring(lua_State *L, const char *s);
 
 Loads string `s` as a combined Terra-Lua chunk. Terra equivalent of `luaL_loadstring`.
-
----
-    
-    int terra_setverbose(lua_State * L, int v);
-
-Sets the verbosity for Terra libraries. Valid values are 0 (no debug output) to 2 (very verbose).
 
 ---
 
