@@ -39,7 +39,7 @@ static void doerror(lua_State * L) {
 }
 const char * progname = NULL;
 static void dotty (lua_State *L);
-void parse_args(lua_State * L, int argc, char ** argv, bool * interactive, int * begin_script);
+void parse_args(lua_State * L, int argc, char ** argv, terra_Options * options, bool * interactive, int * begin_script);
 static int getargs (lua_State *L, char **argv, int n);
 
 
@@ -71,15 +71,19 @@ int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
-    if(terra_init(L))
-        doerror(L);
     
-    setupsigsegv(L);
+    terra_Options options;
+    memset(&options, 0, sizeof(terra_Options));
     
     bool interactive = false;
     int scriptidx;
 
-    parse_args(L,argc,argv,&interactive,&scriptidx);
+    parse_args(L,argc,argv,&options,&interactive,&scriptidx);
+    
+    if(terra_initwithoptions(L, &options))
+        doerror(L);
+    
+    setupsigsegv(L);
     
     if(scriptidx < argc) {
       int narg = getargs(L, argv, scriptidx);  
@@ -111,17 +115,19 @@ void usage() {
     print_welcome();
     printf("terra [OPTIONS] [source-file] [arguments-to-source-file]\n"
            "    -v enable verbose debugging output\n"
+           "    -g enable debugging symbols\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
            "    -p <path> append <path> to package.path before executing code\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
 
-void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int * begin_script) {
+void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options, bool * interactive, int * begin_script) {
     int ch;
     static struct option longopts[] = {
         { "help",      0,     NULL,           'h' },
         { "verbose",   0,     NULL,           'v' },
+        { "debugsymbols",   0,     NULL,           'g' },
         { "interactive",     0,     NULL,     'i' },
         { "path",      0,     NULL,           'p' },
         { NULL,        0,     NULL,            0 }
@@ -129,11 +135,10 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
     int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(argc, argv, "+hvip:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvgip:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
-                verbose++;
-                terra_setverbose(L,verbose);
+                options->verbose++;
                 break;
             case 'i':
                 *interactive = true;
@@ -146,6 +151,9 @@ void parse_args(lua_State * L, int  argc, char ** argv, bool * interactive, int 
                 lua_concat(L,3);
                 lua_setfield(L,-2,"path");
                 lua_pop(L,1);
+                break;
+            case 'g':
+                options->debug = 1;
                 break;
             case ':':
             case 'h':

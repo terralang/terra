@@ -4,6 +4,12 @@
 #include "llvmheaders.h"
 #include "tinline.h"
 
+
+struct TerraFunctionInfo {
+    void * addr;
+    size_t size;
+    llvm::JITEvent_EmittedFunctionDetails efd;
+};
 struct terra_CompilerState {
     llvm::Module * m;
     llvm::LLVMContext * ctx;
@@ -13,8 +19,9 @@ struct terra_CompilerState {
     llvm::TargetMachine * tm;
     const llvm :: TARGETDATA() * td;
     llvm::ManualInliner * mi;
-    llvm::DenseMap<const llvm::Function *, size_t> functionsizes;
+    llvm::DenseMap<const llvm::Function *, TerraFunctionInfo> functioninfo;
     size_t next_unused_id; //for creating names for dummy functions
+    void (*printsourceline)(const char *,size_t);
 };
 
 #endif

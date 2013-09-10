@@ -151,7 +151,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes) {
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
             break;
-        Out << i << ":\t";
+        Out << (void*) ((uintptr_t)data + i) << "(+" << i << ")" << ":\t";
         IP->printInst(&Inst,Out,"");
         Out << "\n";
         SMO.Size -= Size; SMO.Bytes += Size;

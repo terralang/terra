@@ -2361,7 +2361,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
-  DEBUG_ONLY(T) {
+  VERBOSE_ONLY(T) {
     printf("********* passing to lua ************\n%s\n*************************************\n",lexstate.output_buffer.data);
   }
   //loadbuffer doesn't like null terminators, so rewind to before them

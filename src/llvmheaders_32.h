@@ -7,6 +7,8 @@
 #include "llvm/CallGraphSCCPass.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/DIBuilder.h"
+#include "llvm/DebugInfo.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"

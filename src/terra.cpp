@@ -143,10 +143,16 @@ static void ongc(lua_State * L, int idx, lua_CFunction gcfn) {
 static int terra_free(lua_State * L);
 
 int terra_init(lua_State * L) {
+    terra_Options options;
+    memset(&options,0, sizeof(terra_Options));
+    return terra_initwithoptions(L, &options);
+}
+int terra_initwithoptions(lua_State * L, terra_Options * options) {
     terra_State * T = (terra_State*) lua_newuserdata(L, sizeof(terra_State));
     ongc(L, -1, terra_free);
     assert(T);
     memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
+    T->options = *options;
     T->L = L;
     assert (T->L);
     lua_newtable(T->L);
@@ -176,7 +182,13 @@ int terra_init(lua_State * L) {
     
     lua_newtable(T->L);
     lua_setfield(T->L,-2,"_trees"); //to hold parser generated trees
-    lua_pop(T->L,1);
+    
+    lua_pushinteger(L, T->options.verbose);
+    lua_setfield(L, -2, "isverbose");
+    lua_pushinteger(L, T->options.debug);
+    lua_setfield(L, -2, "isdebug");
+    
+    lua_pop(T->L,1); //'terra' global
     
     luaX_init(T);
     
@@ -293,15 +305,6 @@ int terra_loadbuffer(lua_State * L, const char *buf, size_t size, const char *na
 
 int terra_loadstring(lua_State *L, const char *s) {
   return terra_loadbuffer(L, s, strlen(s), "<string>");
-}
-int terra_setverbose(lua_State * L, int v) {
-    terra_State * T = getterra(L);
-    T->verbose = v;
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-    lua_pushinteger(L, v);
-    lua_setfield(L, -2, "isverbose");
-    lua_pop(L,1);
-    return 0;
 }
 
 namespace llvm {

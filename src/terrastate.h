@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+#include "terra.h"
 
 struct terra_CompilerState;
 struct terra_CUDAState;
@@ -13,7 +14,7 @@ typedef struct terra_State {
     struct lua_State * L;
     struct terra_CompilerState * C;
     struct terra_CUDAState * cuda;
-    int verbose;
+    terra_Options options;
 //for parser
     int nCcalls;
     char tstring_table; //&tstring_table is used as the key into the lua registry that maps strings in Lua to TString objects for the parser
@@ -29,6 +30,7 @@ void terra_reporterror(terra_State * T, const char * fmt, ...);
 void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
 int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name);
-#define DEBUG_ONLY(T) if((T)->verbose != 0)
+#define VERBOSE_ONLY(T) if((T)->options.verbose != 0)
+#define DEBUG_ONLY(T) if((T)->options.debug != 0)
 
 #endif

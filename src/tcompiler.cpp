@@ -33,7 +33,6 @@ extern "C" {
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
-#include "execinfo.h"
 
 using namespace llvm;
 
@@ -66,8 +65,13 @@ struct DisassembleFunctionListener : public JITEventListener {
     terra_State * T;
     DisassembleFunctionListener(terra_State * T_)
     : T(T_) {}
-    virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails &) {
-        T->C->functionsizes[&f] = sz;
+    virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails & EFD) {
+        TerraFunctionInfo & fi = T->C->functioninfo[&f];
+        fi.addr = data;
+        fi.size = sz;
+        DEBUG_ONLY(T) {
+            fi.efd = EFD;
+        }
     }
 };
 
@@ -176,19 +180,36 @@ bool HostHasAVX() {
 }
 
 #ifndef _WIN32
-#include <signal.h>
-static bool stacktrace_findsymbol(terra_CompilerState * C, int i, uintptr_t ip) {
-    for(llvm::DenseMap<const llvm::Function *, size_t>::iterator it = C->functionsizes.begin(), end = C->functionsizes.end();
+#include <execinfo.h>
+
+static bool pointIsBeforeInstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
+    return point < inst || (!isNextInst && point == inst);
+}
+static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
+    const std::vector<JITEvent_EmittedFunctionDetails::LineStart> & LineStarts = fi->efd.LineStarts;
+    int i;
+    for(i = 0; i + 1 < LineStarts.size() && pointIsBeforeInstruction(LineStarts[i + 1].Address, ip, isNextInstr); i++) {
+        //printf("\nscanning for %p, %s:%d %p\n",(void*)ip,DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename().data(),(int)LineStarts[i].Loc.getLine(),(void*)LineStarts[i].Address);
+    }
+    if(i < LineStarts.size()) {
+        *lineno = LineStarts[i].Loc.getLine();
+        *file = DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename();
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static bool stacktrace_findsymbol(terra_CompilerState * C, uintptr_t ip, const Function ** rfn, const TerraFunctionInfo ** rfi) {
+    for(llvm::DenseMap<const llvm::Function *, TerraFunctionInfo>::iterator it = C->functioninfo.begin(), end = C->functioninfo.end();
             it != end; ++it) {
         const Function * fn = it->first;
-        void * addr = C->ee->getPointerToGlobalIfAvailable(fn);
-        if(addr == NULL)
-            continue;
-        uintptr_t fstart = (uintptr_t) addr;
-        uintptr_t fend = fstart + it->second;
+        const TerraFunctionInfo & fi = it->second;
+        uintptr_t fstart = (uintptr_t) fi.addr;
+        uintptr_t fend = fstart + fi.size;
         if(fstart <= ip && ip < fend) {
-            std::string str = fn->getName();
-            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d\n",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
+            *rfn = fn;
+            *rfi = &fi;
             return true;
         }
     }
@@ -210,6 +231,25 @@ static int terra_backtrace(void ** frames, int maxN, void * rip, void * rbp) {
         frame = frame->next;
     }
     return i - 1;
+}
+
+static void stacktrace_printsourceline(const char * filename, size_t lineno) {
+    FILE * file = fopen(filename,"r");
+    if(!file)
+        return;
+    int c = fgetc(file);
+    for(int i = 1; i < lineno && c != EOF;) {
+        if(c == '\n')
+            i++;
+        c = fgetc(file);
+    }
+    printf("    ");
+    while(c != EOF && c != '\n') {
+        fputc(c,stdout);
+        c = fgetc(file);
+    }
+    fputc('\n',stdout);
+    fclose(file);
 }
 
 static void terra_printstacktrace(void * data,void * uap) {
@@ -234,8 +274,25 @@ static void terra_printstacktrace(void * data,void * uap) {
     int N = terra_backtrace(frames, maxN,rip,rbp);
     char ** symbols = backtrace_symbols(frames, N);
     for(int i = 0 ; i < N; i++) {
-        if(!stacktrace_findsymbol(C, i, (uintptr_t) frames[i]))
+        const Function * fn;
+        const TerraFunctionInfo * fi;
+        uintptr_t ip = (uintptr_t) frames[i];
+        if(stacktrace_findsymbol(C,ip,&fn,&fi)) {
+            std::string str = fn->getName();
+            uintptr_t fstart = (uintptr_t) fi->addr;
+            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d ",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
+            StringRef filename;
+            size_t lineno;
+            bool isNextInst = i > 0 || uap == NULL; //unless this is the first entry in suspended context then the address is really a pointer to the _next_ instruction
+            if(stacktrace_findline(C, fi, ip,isNextInst, &filename, &lineno)) {
+                printf("(%s:%d)\n",filename.data(),(int)lineno);
+                stacktrace_printsourceline(filename.data(), lineno);
+            } else {
+                printf("\n");
+            }
+        } else {
             printf("%s\n",symbols[i]);
+        }
     }
     free(symbols);
 }
@@ -293,7 +350,9 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->m = new Module("terra",*T->C->ctx);
     
     TargetOptions options;
-    options.NoFramePointerElim = true;
+    DEBUG_ONLY(T) {
+        options.NoFramePointerElim = true;
+    }
     CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
     std::string Triple = llvm::sys::getDefaultTargetTriple();
     std::string err;
@@ -464,7 +523,7 @@ struct CCallingConv {
             }
         }
         st->setBody(entry_types);
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             printf("Struct Layout Is:\n");
             st->dump();
             printf("\nEnd Layout\n");
@@ -1114,6 +1173,7 @@ struct TerraCompiler {
     terra_State * T;
     terra_CompilerState * C;
     IRBuilder<> * B;
+    DIBuilder * DB;
     Obj funcobj;
     Function * func;
     TType * func_type;
@@ -1172,13 +1232,14 @@ struct TerraCompiler {
         L = T->L;
         C = T->C;
         B = new IRBuilder<>(*C->ctx);
+        initDebug();
+        
         CC.init(T, C, B);
         
         lua_pushvalue(T->L,-2); //the original argument
         funcobj.initFromStack(T->L, ref_table);
         
         getOrCreateFunction(&funcobj,&func,&func_type);
-        
         BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
         
         B->SetInsertPoint(entry);
@@ -1187,6 +1248,7 @@ struct TerraCompiler {
         Obj parameters;
         
         funcobj.obj("typedtree",&typedtree);
+        setDebugPoint(&typedtree);
         typedtree.obj("parameters",&parameters);
         
         Obj ftype;
@@ -1209,7 +1271,7 @@ struct TerraCompiler {
         //if there was a Return, then this block is dead and will be cleaned up
         emitReturnUndef();
         
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             func->dump();
         }
         verifyFunction(*func);
@@ -1218,6 +1280,7 @@ struct TerraCompiler {
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
         delete B;
+        endDebug();
     }
     
     Value * emitAddressOf(Obj * exp) {
@@ -1602,6 +1665,7 @@ if(baseT->isIntegerTy()) { \
     */
     
     Value * emitExpRaw(Obj * exp) {
+        setDebugPoint(exp);
         switch(exp->kind("kind")) {
             case T_var:  {
                 return variableFromDefinition(exp);
@@ -1910,6 +1974,21 @@ if(baseT->isIntegerTy()) { \
         
     }
     
+    void initDebug() {
+        DEBUG_ONLY(T) {
+            DB = new DIBuilder(*C->m);
+        }
+    }
+    void endDebug() {
+        DEBUG_ONLY(T) {
+            delete DB;
+        }
+    }
+    void setDebugPoint(Obj * obj) {
+        DEBUG_ONLY(T) {
+            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, DB->createFile(obj->string("filename"), ".")));
+        }
+    }
     void setInsertBlock(BasicBlock * bb) {
         B->SetInsertPoint(bb);
     }
@@ -2011,6 +2090,7 @@ if(baseT->isIntegerTy()) { \
     }
     
     void emitStmt(Obj * stmt) {
+        setDebugPoint(stmt);
         T_Kind kind = stmt->kind("kind");
         switch(kind) {
             case T_block: {
@@ -2236,7 +2316,7 @@ static int terra_optimize(lua_State * L) {
         jitobj.obj("flags",&flags);
         std::vector<Function *> scc;
         int N = funclist.size();
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             printf("optimizing scc containing: ");
         }
         for(int i = 0; i < N; i++) {
@@ -2245,12 +2325,12 @@ static int terra_optimize(lua_State * L) {
             Function * func = (Function*) funcobj.ud("llvm_function");
             assert(func);
             scc.push_back(func);
-            DEBUG_ONLY(T) {
+            VERBOSE_ONLY(T) {
                 std::string s = func->getName();
                 printf("%s ",s.c_str());
             }
         }
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             printf("\n");
         }
         
@@ -2262,7 +2342,7 @@ static int terra_optimize(lua_State * L) {
             Function * func = (Function*) funcobj.ud("llvm_function");
             assert(func);
             
-            DEBUG_ONLY(T) {
+            VERBOSE_ONLY(T) {
                 std::string s = func->getName();
                 printf("optimizing %s\n",s.c_str());
             }
@@ -2270,7 +2350,7 @@ static int terra_optimize(lua_State * L) {
             T->C->fpm->run(*func);
             RecordTime(&funcobj,"opt",begin);
             
-            DEBUG_ONLY(T) {
+            VERBOSE_ONLY(T) {
                 func->dump();
             }
         }
@@ -2340,17 +2420,17 @@ static int terra_deletefunction(lua_State * L) {
     assert(fp);
     Function * func = (Function*) *fp;
     assert(func);
-    DEBUG_ONLY(T) {
+    VERBOSE_ONLY(T) {
         printf("deleting function: %s\n",func->getName().str().c_str());
     }
     if(T->C->ee->getPointerToGlobalIfAvailable(func)) {
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             printf("... and deleting generated code\n");
         }
         T->C->ee->freeMachineCodeForFunction(func); 
     }
     func->eraseFromParent();
-    DEBUG_ONLY(T) {
+    VERBOSE_ONLY(T) {
         printf("... finish delete.\n");
     }
     *fp = NULL;
@@ -2359,14 +2439,12 @@ static int terra_deletefunction(lua_State * L) {
 static int terra_disassemble(lua_State * L) {
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
-    lua_getfield(L, -1, "fptr");
-    void * data = lua_touserdata(L, -1);
-    lua_getfield(L,-2,"llvm_function");
+    lua_getfield(L,-1,"llvm_function");
     Function * fn = (Function*) lua_touserdata(L, -1);
     assert(fn);
     fn->dump();
-    size_t sz = T->C->functionsizes[fn];
-    llvmutil_disassemblefunction(data, sz);
+    TerraFunctionInfo & fi = T->C->functioninfo[fn];
+    llvmutil_disassemblefunction(fi.addr, fi.size);
     return 0;
 }
 
@@ -2427,7 +2505,7 @@ static int terra_saveobjimpl(lua_State * L) {
         
         Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
         
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             printf("extraced module is:\n");
             M->dump();
         }

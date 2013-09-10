@@ -562,7 +562,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     
     if(mod) {
         std::string err;
-        DEBUG_ONLY(T) {
+        VERBOSE_ONLY(T) {
             mod->dump();
         }
         
