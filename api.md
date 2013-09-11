@@ -682,7 +682,11 @@ Similar to `includecstring` except that C code is loaded from `filename`. This u
 
     terralib.linklibrary(filename)
     
-Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. 
+Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. `filename` can also be an LLVM bitcode file with extension `.bc` generated with `clang` or `clang++`:
+    
+    clang++ -O3 -emit-llvm -c mycode.cpp -o mybitcode.bc
+
+In this case, the code is loaded as bitcode rather than machine code. This allows for more aggressive optimization (such as inlining the function calls) but will take longer to initialize in Terra since it must be compiled to machine code.
 
 Managing Terra Values from Lua
 ------------------------------
