@@ -4195,7 +4195,7 @@ function terra.typeof(obj)
 end
 
 function terra.linklibrary(filename)
-    terra.linklibraryimpl(filename)
+    terra.linklibraryimpl(filename,filename:match(".bc$"))
 end
 
 terra.languageextension = {

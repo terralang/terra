@@ -401,6 +401,8 @@ int terra_compilerfree(struct terra_State * T) {
     delete T->C->ee;
     delete T->C->tm;
     delete T->C->ctx;
+    if(T->C->cwrapperpm)
+        delete T->C->cwrapperpm;
     delete T->C;
     return 0;
 }
@@ -2586,15 +2588,30 @@ static int terra_isintegral(lua_State * L) {
 }
 
 static int terra_linklibraryimpl(lua_State * L) {
+    std::string Err;
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
-    const char * filename = luaL_checkstring(L, -1);
-    
-    std::string Err;
-    if(sys::DynamicLibrary::LoadLibraryPermanently(filename,&Err)) {
-        terra_reporterror(T, "llvm: %s\n", Err.c_str());
+    const char * filename = luaL_checkstring(L, -2);
+    bool isbitcode = lua_toboolean(L,-1);
+    if(isbitcode) {
+        OwningPtr<MemoryBuffer> mb;
+        error_code ec = MemoryBuffer::getFile(filename,mb);
+        if(ec)
+            terra_reporterror(T, "llvm: %s\n", ec.message().c_str());
+        Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
+        m->setTargetTriple(T->C->m->getTargetTriple());
+        if(!m)
+            terra_reporterror(T, "llvm: %s\n", Err.c_str());
+        bool failed = llvmutil_linkmodule(T->C->m, m, T->C->tm, NULL, &Err);
+        delete m;
+        if(failed)
+            terra_reporterror(T, "llvm: %s\n", Err.c_str());
+    } else {
+        std::string Err;
+        if(sys::DynamicLibrary::LoadLibraryPermanently(filename,&Err)) {
+            terra_reporterror(T, "llvm: %s\n", Err.c_str());
+        }
     }
-    
     return 0;
 }
 

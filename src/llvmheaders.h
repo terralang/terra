@@ -43,6 +43,8 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/Support/DynamicLibrary.h"
+#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Support/system_error.h"
 
 #if LLVM_3_1
 #include "llvmheaders_31.h"
@@ -52,6 +54,7 @@
 #include "llvmheaders_33.h"
 #else
 #error "unsupported LLVM version"
+#include "llvmheaders_33.h" //for OSX code completion
 #endif
 
 #endif

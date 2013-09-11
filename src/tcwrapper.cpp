@@ -18,6 +18,7 @@ extern "C" {
 #include <iostream>
 
 #include "llvmheaders.h"
+#include "tllvmutil.h"
 #include "clang/AST/Attr.h"
 #include "tcompilerstate.h"
 #include "clangpaths.h"
@@ -565,25 +566,12 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
         VERBOSE_ONLY(T) {
             mod->dump();
         }
-        
-        //cleanup after clang.
-        //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
-        //the linker will then delete it because it is not used.
-        //switching it to WeakODR means that the linker will keep it even if it is not used
-        for(llvm::Module::iterator it = mod->begin(), end = mod->end();
-            it != end;
-            ++it) {
-            llvm::Function * fn = it;
-            if(fn->hasAvailableExternallyLinkage()) {
-                fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
-            }
-        }
-        
-        if(llvm::Linker::LinkModules(T->C->m, mod, 0, &err)) {
+        if(llvmutil_linkmodule(T->C->m, mod, T->C->tm,&T->C->cwrapperpm, &err)) {
+            delete codegen;
             terra_reporterror(T,"llvm: %s\n",err.c_str());
         }
-        
     } else {
+        delete codegen;
         terra_reporterror(T,"compilation of included c code failed\n");
     }
     

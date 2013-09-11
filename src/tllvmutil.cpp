@@ -28,7 +28,7 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
 }
 
 
-void llvmutil_addoptimizationpasses(FunctionPassManager * fpm, const OptInfo * oi) {
+void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     //These passes are passes from PassManagerBuilder adapted to work a function at at time
     //inlining is handled as a preprocessing step before this gets called
     
@@ -220,7 +220,7 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         MPM->add(createInternalizePass(names));
         MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
                                          //this will remove dead functions
-        
+    
         //clean up the name list
         for(size_t i = 0; i < names.size(); i++) {
             free((char*)names[i]);
@@ -240,5 +240,33 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         MPM = NULL;
     
         return M;
+}
+
+bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassManager ** optManager, std::string * errmsg) {
+    //cleanup after clang.
+    //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
+    //the linker will then delete it because it is not used.
+    //switching it to WeakODR means that the linker will keep it even if it is not used
+    for(llvm::Module::iterator it = src->begin(), end = src->end();
+        it != end;
+        ++it) {
+        llvm::Function * fn = it;
+        if(fn->hasAvailableExternallyLinkage()) {
+            fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+        }
+    }
+    
+    if(optManager) {
+        if(!*optManager) {
+            *optManager = new PassManager();
+            llvmutil_addtargetspecificpasses(*optManager, TM);
+            (*optManager)->add(createFunctionInliningPass());
+            OptInfo oi;
+            llvmutil_addoptimizationpasses(*optManager, &oi);
+        }
+        (*optManager)->run(*src);
+    }
+    
+    return llvm::Linker::LinkModules(dst, src, 0, errmsg);
 }
 
