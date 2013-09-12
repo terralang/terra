@@ -26,7 +26,7 @@ typedef struct  {
     };
     int flags;
 } ReadNumber;
-int treadnumber(const char * buf, ReadNumber * result, int allowsuffixes, int allowimag);
+int treadnumber(const char * buf, ReadNumber * result, int cstylesuffixes);
 
 #ifdef __cplusplus
 } /* extern "C" */

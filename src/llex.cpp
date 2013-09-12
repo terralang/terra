@@ -358,7 +358,7 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
   }
   
   ReadNumber num;
-  if(treadnumber(ls->buff->buffer, &num, !issinglefloat, !ls->in_terra))
+  if(treadnumber(ls->buff->buffer, &num, ls->in_terra && !issinglefloat))
     lexerror(ls, "malformed number", TK_NUMBER);
   
   /* Terra handles 2 things differently from LuaJIT:

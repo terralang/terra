@@ -1153,7 +1153,48 @@ do --construct type table that holds the singleton value representing each uniqu
         return r
     end
     
-
+    --pretty print of layout of type
+    function types.type:printpretty()
+        local seen = {}
+        local function print(self,d)
+            local function indent(l)
+                io.write("\n")
+                for i = 1,d+1+(l or 0) do 
+                    io.write("  ")
+                end
+            end
+            io.write(tostring(self))
+            if seen[self] then return end
+            seen[self] = true
+            if self:isstruct() then
+                io.write(":")
+                local layout = self:getlayout()
+                for i,e in ipairs(layout.entries) do
+                    indent()
+                    io.write(e.key..": ")
+                    print(e.type,d+1)
+                end
+            elseif self:isarray() or self:ispointer() then
+                io.write(" ->")
+                indent()
+                print(self.type,d+1)
+            elseif self:isfunction() then
+                io.write(":")
+                local function printlist(n,l)
+                    indent()
+                    io.write(n..":")
+                    for i,t in ipairs(l) do
+                        indent(1)
+                        print(t,d+2)
+                    end
+                end
+                printlist("parameters",self.parameters)
+                printlist("returns",self.returns)
+            end
+        end
+        print(self,0)
+        io.write("\n")
+    end
     local function memoize(data)
         local name = data.name
         local defaultvalue = data.defaultvalue

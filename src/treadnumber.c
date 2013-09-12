@@ -4,13 +4,13 @@
 #include "lj_strscan.c"
 #include "lj_char.c"
 
-int treadnumber(const char * buf, ReadNumber * result, int allowsuffixes, int allowimag) {
+int treadnumber(const char * buf, ReadNumber * result, int cstylesuffixes) {
     TValue o;
     StrScanFmt fmt;
-    int opt = STRSCAN_OPT_TOINT;
-    if(allowsuffixes)
-        opt |= STRSCAN_OPT_LL | STRSCAN_OPT_C;
-    if(allowimag)
+    int opt = STRSCAN_OPT_TOINT | STRSCAN_OPT_LL;
+    if(cstylesuffixes)
+        opt |= STRSCAN_OPT_C;
+    else
         opt |= STRSCAN_OPT_IMAG;
     
     fmt = lj_strscan_scan((const uint8_t*)buf, &o, opt);
