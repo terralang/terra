@@ -11,7 +11,6 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 #include <inttypes.h>
-#include <ucontext.h>
 
 #ifdef _WIN32
 #include <io.h>
@@ -182,6 +181,8 @@ bool HostHasAVX() {
 
 #ifndef _WIN32
 #include <execinfo.h>
+#define _XOPEN_SOURCE
+#include <ucontext.h>
 
 static bool pointIsBeforeInstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
     return point < inst || (!isNextInst && point == inst);
