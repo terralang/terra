@@ -11,6 +11,7 @@ extern "C" {
 #include <assert.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <ucontext.h>
 
 #ifdef _WIN32
 #include <io.h>
