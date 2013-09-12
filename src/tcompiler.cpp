@@ -226,10 +226,16 @@ static int terra_backtrace(void ** frames, int maxN, void * rip, void * rbp) {
         frames[0] = rip;
     Frame * frame = (Frame*) rbp;
     int i;
-    for(i = 1; i < maxN && frame != NULL && frame->addr != NULL; i++) {
+    int fds[2];
+    pipe(fds);
+    //successful write to a pipe checks that we can read
+    //Frame's memory. Otherwise we might segfault if rbp holds junk.
+    for(i = 1; i < maxN && frame != NULL && write(fds[1],frame,sizeof(Frame)) != -1 && frame->addr != NULL; i++) {
         frames[i] = frame->addr;
         frame = frame->next;
     }
+    close(fds[0]);
+    close(fds[1]);
     return i - 1;
 }
 
