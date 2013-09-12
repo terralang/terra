@@ -181,7 +181,9 @@ bool HostHasAVX() {
 
 #ifndef _WIN32
 #include <execinfo.h>
+#ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE
+#endif
 #include <ucontext.h>
 
 static bool pointIsBeforeInstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {

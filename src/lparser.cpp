@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #define lparser_c
 #define LUA_CORE
@@ -1035,7 +1036,7 @@ static void simpleexp (LexState *ls, expdesc *v) {
         char buf[128];
         sprintf(buf,"%sint%s",sign,sz);
         push_literal(ls,buf);
-        sprintf(buf,"%lld",ls->t.seminfo.i);
+        sprintf(buf,"%"PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
         add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
