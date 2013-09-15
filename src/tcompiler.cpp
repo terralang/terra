@@ -1217,8 +1217,12 @@ struct TerraCompiler {
             
             fn = CC.CreateFunction(&ftype, name);
             
-            if(funcobj->boolean("alwaysinline")) {
-                fn->ADDFNATTR(AlwaysInline);
+            if(funcobj->hasfield("alwaysinline")) {
+                if(funcobj->boolean("alwaysinline")) {
+                    fn->ADDFNATTR(AlwaysInline);
+                } else {
+                    fn->ADDFNATTR(NoInline);
+                }
             }
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
