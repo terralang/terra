@@ -66,7 +66,8 @@ struct DisassembleFunctionListener : public JITEventListener {
     DisassembleFunctionListener(terra_State * T_)
     : T(T_) {}
     virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails & EFD) {
-        TerraFunctionInfo & fi = T->C->functioninfo[&f];
+        TerraFunctionInfo & fi = T->C->functioninfo[data];
+        fi.fn = &f;
         fi.addr = data;
         fi.size = sz;
         DEBUG_ONLY(T) {
@@ -205,14 +206,13 @@ static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo
 }
 
 static bool stacktrace_findsymbol(terra_CompilerState * C, uintptr_t ip, const Function ** rfn, const TerraFunctionInfo ** rfi) {
-    for(llvm::DenseMap<const llvm::Function *, TerraFunctionInfo>::iterator it = C->functioninfo.begin(), end = C->functioninfo.end();
+    for(llvm::DenseMap<const void *, TerraFunctionInfo>::iterator it = C->functioninfo.begin(), end = C->functioninfo.end();
             it != end; ++it) {
-        const Function * fn = it->first;
         const TerraFunctionInfo & fi = it->second;
         uintptr_t fstart = (uintptr_t) fi.addr;
         uintptr_t fend = fstart + fi.size;
         if(fstart <= ip && ip < fend) {
-            *rfn = fn;
+            *rfn = fi.fn;
             *rfi = &fi;
             return true;
         }
@@ -262,7 +262,7 @@ static void stacktrace_printsourceline(const char * filename, size_t lineno) {
     fclose(file);
 }
 
-static void terra_printstacktrace(void * data,void * uap) {
+static void terra_printstacktrace(void * uap, void * data) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
@@ -308,23 +308,27 @@ static void terra_printstacktrace(void * data,void * uap) {
 }
 #endif
 
-typedef void (*VoidFnPtrTy)(void*);
-static VoidFnPtrTy createclosure(JITMemoryManager * JMM, void (*code)(void*,void*),void * data) {
-    /* assembly template for: x86-64 ONLY!
-       mov    rsi,rdi
-       movabs rdi,data
-       movabs rax,code
-       jmp    rax
-    */
-    char Template[] =
-    {0x48, 0x89, 0xFE, 0x48, 0xbf, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x48, 0xb8, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0xff, 0xe0};
-    uint8_t * buf = JMM->allocateSpace(sizeof(Template), 16);
-    memcpy(buf, Template, sizeof(Template));
-    *(void**)(&buf[5]) = data;
-    *(void**)(&buf[15]) = (void*) code;
-    return (VoidFnPtrTy) buf;
+static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void ** env, int nenv) {
+    assert(nargs <= 6);
+    assert(*env);
+    size_t fnsize = 2 + 10*(nenv + 1);
+    uint8_t * buf = JMM->allocateSpace(fnsize, 16);
+    uint8_t * code = buf;
+#define ENCODE_MOV(reg,imm) do {  \
+    *code++ = 0x48 | ((reg) >> 3);\
+    *code++ = 0xb8 | ((reg) & 7); \
+    void * data = (imm);          \
+    memcpy(code,&data, 8);        \
+    code += 8;                    \
+} while(0);
+    const uint8_t regnums[] = {7,6,2,1,8,9};
+    ENCODE_MOV(0,fn); /* mov rax, fn */
+    for(int i = nargs - nenv; i < nargs; i++)
+        ENCODE_MOV(regnums[i],*env++);
+    *code++ = 0xff; /* jmp rax */
+    *code++ = 0xe0;
+    return (void*) buf;
+#undef ENCODE_MOV
 }
 
 int terra_compilerinit(struct terra_State * T) {
@@ -347,7 +351,7 @@ int terra_compilerinit(struct terra_State * T) {
     JITMemoryManager * JMM = JITMemoryManager::CreateDefaultMemManager();
     
 #ifndef _WIN32
-    VoidFnPtrTy stacktracefn = createclosure(JMM,terra_printstacktrace, T->C);
+    void* stacktracefn = createclosure(JMM,(void*)terra_printstacktrace,2,(void**)&T->C,1);
     lua_getfield(T->L, -1, "initstacktracefn");
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
     lua_call(T->L, 1, 0);
@@ -2455,11 +2459,10 @@ static int terra_deletefunction(lua_State * L) {
 static int terra_disassemble(lua_State * L) {
     terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
     assert(T->L == L);
-    lua_getfield(L,-1,"llvm_function");
-    Function * fn = (Function*) lua_touserdata(L, -1);
-    assert(fn);
-    fn->dump();
-    TerraFunctionInfo & fi = T->C->functioninfo[fn];
+    lua_getfield(L,-1,"fptr");
+    void * addr = lua_touserdata(L, -1);
+    TerraFunctionInfo & fi = T->C->functioninfo[addr];
+    fi.fn->dump();
     llvmutil_disassemblefunction(fi.addr, fi.size);
     return 0;
 }

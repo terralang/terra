@@ -6,6 +6,7 @@
 
 
 struct TerraFunctionInfo {
+    const llvm::Function * fn;
     void * addr;
     size_t size;
     llvm::JITEvent_EmittedFunctionDetails efd;
@@ -20,7 +21,7 @@ struct terra_CompilerState {
     llvm::TargetMachine * tm;
     const llvm :: TARGETDATA() * td;
     llvm::ManualInliner * mi;
-    llvm::DenseMap<const llvm::Function *, TerraFunctionInfo> functioninfo;
+    llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
     size_t next_unused_id; //for creating names for dummy functions
 };
 
