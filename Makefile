@@ -193,7 +193,7 @@ FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
 SO_FLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
 endif
 
-LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o
+LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o
 LIBLUA = terralib.lua strict.lua cudalib.lua
 
 EXEOBJS = main.o linenoise.o
