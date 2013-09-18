@@ -2582,7 +2582,9 @@ function terra.funcdefinition:typecheck()
     local function checkcomparision(e,operands)
         local t,l,r = typematch(e,operands[1],operands[2])
         local rt = bool
-        if t:isvector() then
+        if t:isaggregate() then
+            diag:reporterror(e,"cannot compare aggregate type ",t)
+        elseif t:isvector() then
             rt = terra.types.vector(bool,t.N)
         end
         return e:copy { type = rt, operands = terra.newlist {l,r} }
