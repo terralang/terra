@@ -112,7 +112,7 @@ struct SimpleMemoryObject : public MemoryObject {
   }
 };
 
-void llvmutil_disassemblefunction(void * data, size_t numBytes) {
+void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
     std::string Error;
     std::string TripleName = llvm::sys::getDefaultTargetTriple();
@@ -139,19 +139,18 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes) {
                                                      *MAI, *MII, *MRI, *STI);
     assert(IP && "Unable to create instruction printer!");
 
-    printf("assembly for function at address %p\n",data);
     SimpleMemoryObject SMO;
     SMO.Bytes = (uint8_t*)data;
     SMO.Size = numBytes;
     uint64_t Size;
     fflush(stdout);
     raw_fd_ostream Out(fileno(stdout), false);
-    for(int i = 0; i < numBytes; i += Size) {
+    for(int i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
             break;
-        Out << (void*) ((uintptr_t)data + i) << "(+" << i << ")" << ":\t";
+        Out << (void*) ((uintptr_t)data + b) << "(+" << b << ")" << ":\t";
         IP->printInst(&Inst,Out,"");
         Out << "\n";
         SMO.Size -= Size; SMO.Bytes += Size;

@@ -16,7 +16,6 @@ unsigned long long CurrentTimeInUSeconds() {
     gettimeofday(&tv, NULL);
     return tv.tv_sec * 1000000+ tv.tv_usec;
 }
-void llvmutil_disassemblefunction(void * data, size_t sz);
 ]]
 
 local ffi = require("ffi")
@@ -58,6 +57,7 @@ terra printinfo(ip : &opaque, count : int, lines  : &int, fname : rawstring)
   
   if terralib.lookupsymbol(ip,&addr,&sz,nm,128) then 
     C.printf("%p + %d: %s %d\n",addr, [&uint8](ip) - [&uint8](addr), nm,count)
+    terralib.disas(ip,0,1)
     if terralib.lookupline(addr,ip,fname,128,&sz) then
         lines[sz] = lines[sz] + count
     end

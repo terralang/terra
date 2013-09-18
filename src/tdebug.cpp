@@ -189,7 +189,8 @@ void terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
     lua_pushlightuserdata(T->L, (void*)terra_backtrace);
     lua_pushlightuserdata(T->L, (void*)lookupsymbol);
     lua_pushlightuserdata(T->L, (void*)lookupline);
-    lua_call(T->L, 4, 0);
+    lua_pushlightuserdata(T->L, (void*)llvmutil_disassemblefunction);
+    lua_call(T->L, 5, 0);
     lua_pop(T->L,1); /* terra table */
 }
 

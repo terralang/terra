@@ -2306,7 +2306,8 @@ static int terra_disassemble(lua_State * L) {
     void * addr = lua_touserdata(L, -1);
     TerraFunctionInfo & fi = T->C->functioninfo[addr];
     fi.fn->dump();
-    llvmutil_disassemblefunction(fi.addr, fi.size);
+    printf("assembly for function at address %p\n",fi.addr);
+    llvmutil_disassemblefunction(fi.addr, fi.size,0);
     return 0;
 }
 
