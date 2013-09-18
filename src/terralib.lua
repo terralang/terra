@@ -4489,8 +4489,16 @@ _G["operator"] = terra.internalmacro(function(diag,anchor,op,...)
     return terralib.newtree(anchor, { kind = terra.kinds.operator, operator = terra.kinds[opv], operands = operands })
 end)
 --called by tcompiler.cpp to convert userdata pointer to stacktrace function to the right type;
-function terra.initstacktracefn(fn)
-    terra.traceback = terra.cast(terra.types.funcpointer({terra.types.pointer(opaque)},{}),fn)
+function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline)
+    local P,FP = terra.types.pointer, terra.types.funcpointer
+    local po = P(opaque)
+    local ppo = P(po)
+    local p64 = P(uint64)
+    
+    terra.traceback = terra.cast(FP({po},{}),traceback)
+    terra.backtrace = terra.cast(FP({ppo,int,po,po},{int}),backtrace)
+    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,rawstring,uint64},{bool}),lookupsymbol)
+    terra.lookupline   = terra.cast(FP({po,po,rawstring,uint64,p64},{bool}),lookupline)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
