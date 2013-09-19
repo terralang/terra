@@ -810,7 +810,14 @@ Situations requiring callbacks arise when building class systems that have virtu
 Debugging
 ---------
 
-Terra provides a few library functions to help debug and performance tune code.
+Terra provides a few library functions to help debug and performance tune code. Except for `currenttimeinseconds`,
+these debugging facilities are only available on OSX and Linux.
+
+---
+
+    terralib.currenttimeinseconds()
+
+A Lua function that returns the current time in seconds since some fixed time in the past. Useful for performancing tuning Terra code.
 
 ---
 
@@ -820,9 +827,34 @@ A Terra function that can be called from Terra code to print a stack trace. If `
 By default, the interpreter will print this information when a program segfaults.
 
 ---
-    terra.currenttimeinseconds()
 
-A Lua function that returns the current time in seconds since some fixed time in the past. Useful for performancing tuning Terra code.
+    terra terralib.backtrace(addresses : &&opaque, naddr : uint64, ip : &opaque, frameaddress : &opaque)
+
+A low-level interface used to get the return addresses from a machine stack. `addresses` must be a pointer to a buffer that can hold at least `naddr` pointers.
+`ip` should be the address of the current instruction and will be the first entry in `addresses`, while `frameaddress` should be the value of the base pointer.
+`addresses` will be filled with the return addresses on the stack. Requires debugging mode to be enabled (`-g`) for it to work correctly.
+
+---
+
+    terra terralib.disas(addr : &opaque, nbytes : uint64, ninst : uint64)
+
+A low-level interface to the disassembler. Print the disassembly of instructions starting at `addr`. Will print `nbytes` of instructions or `ninst` instructions, whichever causes more instructions to be printed.
+
+---
+
+    terra terralib.lookupsymbol(ip : &opaque, addr : &&opaque, size : &uint64, name : rawstring, namemax : uint64) : bool
+
+Attempts to look up information about a Terra function given a pointer  `ip` to any instruction in the function. Returns `true` if successful,
+filling in `addr` with the start of the function and `size` with the size of the function in bytes. Fills up to `namemax` characters of the function's name into `name`.
+
+---
+
+    terra terralib.lookupline(fnaddr : &opaque, ip : &opaque, filename : rawstring, namemax : uint64, line : &uint64) : bool
+
+Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it. 
+Returns `true` if successful, filling in `line` with line on which the instruction occured and `filename` with up to `namemax` characters of the filename.
+Fills up to `namemax` characters of the function's name into `name`.
+
 
 Embedded Language API
 =====================
