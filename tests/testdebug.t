@@ -16,11 +16,11 @@ local ptr = terralib.cast(rawstring,foo:getdefinitions()[1]:getpointer())
 terra findptr(a : &opaque)
   var addr : &opaque
   var sz : uint64
-  var nm : int8[128]
-  terralib.lookupsymbol(a,&addr,&sz,nm,128)
-  C.printf("p = %p, addr = %p, sz = %d, nm = %s\n",a,addr,[int](sz), nm)
-  terralib.lookupline(addr,a, nm, 128, &sz)
-  C.printf("line = %s:%d\n",nm,[int](sz))
+  var nm : rawstring, nmL : uint64
+  terralib.lookupsymbol(a,&addr,&sz,&nm,&nmL)
+  C.printf("p = %p, addr = %p, sz = %d, nm = %.*s\n",a,addr,[int](sz), nmL,nm)
+  terralib.lookupline(addr,a, &nm, &nmL, &sz)
+  C.printf("line = %.*s:%d\n",nmL,nm,[int](sz))
   return sz 
 end
 --foo:disas()
@@ -33,9 +33,10 @@ terra testbt()
   var N = terralib.backtrace(frames,128,ra(0),fa(1))
   for i = 0,N do
     C.printf("%p\n",frames[i])
-    var nm : int8[128]
-    if terralib.lookupsymbol(frames[i],nil,nil,nm,128) then
-      C.printf("%s\n", nm)
+    var nm : rawstring
+    var nmL : uint64 
+    if terralib.lookupsymbol(frames[i],nil,nil,&nm,&nmL) then
+      C.printf("%.*s\n", nmL, nm)
     end
   end
 end

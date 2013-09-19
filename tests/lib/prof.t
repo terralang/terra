@@ -50,19 +50,23 @@ terra helperthread(data : &opaque) : &opaque
 end 
 
 local starttime
-terra printinfo(ip : &opaque, count : int, lines  : &int, fname : rawstring)
+terra getinfo(ip : &opaque, cb : {rawstring,uint64,rawstring,uint64,uint64} -> {})
   var addr : &opaque
   var sz : uint64
-  var nm : int8[128]
-  
-  if terralib.lookupsymbol(ip,&addr,&sz,nm,128) then 
-    C.printf("%p + %d: %s %d\n",addr, [&uint8](ip) - [&uint8](addr), nm,count)
-    terralib.disas(ip,0,1)
-    if terralib.lookupline(addr,ip,fname,128,&sz) then
-        lines[sz] = lines[sz] + count
+  var nm : rawstring, nmL : uint64
+  var fname : rawstring, fnameL : uint64
+  if terralib.lookupsymbol(ip,&addr,&sz,&nm,&nmL) then
+    var offset = [&uint8](ip) - [&uint8](addr)
+    C.printf("%p + %d: %.*s",addr, offset, nmL, nm)
+    if terralib.lookupline(addr,ip,&fname,&fnameL,&sz) then
+        cb(nm,nmL,fname,fnameL,sz)
+        C.printf(" (%.*s:%d)",fnameL,fname,int(sz))
     end
+    C.printf("\n")
+    terralib.disas(ip,0,1)
+
   else
-    C.printf("%p %d\n",addr,count)
+    C.printf("%p\n",addr)
   end
 end 
 local pthread
@@ -116,21 +120,32 @@ local function finish()
         local c = counts[k] or 0
         counts[k] = c + 1
     end
-    local lines = terralib.new(int[1024])
-    local fname = terralib.new(int8[128])
-    local file
+    local typ = &&opaque
+    
+    local data = {}
+    local c
+    local function cb(fn,fnL,fl,flL,ln)
+        local file = ffi.string(fl,flL)
+        ln = tonumber(ln)
+        local df = data[file] or {}
+        data[file] = df
+        df[ln] = (df[ln] or 0) + c
+    end
     local typ = &&opaque
     for k,v in pairs(counts) do
+        c = v
         local addr = terralib.cast(typ,k)[0]
-        printinfo(addr,v,lines,fname)
-        file = file or ffi.string(fname)
+        getinfo(addr,cb)
     end
-    local i = 1
-    for l in io.open(file):lines() do
-        print(lines[i],l)
-        i = i + 1
+    for file,lines in pairs(data) do
+        local i = 1
+        local f = io.open(file)
+        for l in f:lines() do
+            print(lines[i] or 0,l)
+            i = i + 1
+        end
+        f:close()
     end
-    
     C.signal(C.SigProf(),C.SigDfl())
 end
 

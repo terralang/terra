@@ -8,6 +8,9 @@
 #include "tllvmutil.h"
 #include "terrastate.h"
 #include "tcompilerstate.h"
+#ifdef __linux__
+#include <unistd.h>
+#endif
 
 using namespace llvm;
 
@@ -131,7 +134,7 @@ static void printstacktrace(void * uap, void * data) {
     free(symbols);
 }
 
-static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, char * namebuf, size_t N, terra_CompilerState * C) {
+static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, const char ** name, size_t * N, terra_CompilerState * C) {
     const Function * fn;
     const TerraFunctionInfo * fi;
     if(!stacktrace_findsymbol(C, (uintptr_t)ip, &fi))
@@ -141,17 +144,24 @@ static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, char 
         *fnaddr = fi->addr;
     if(fnsize)
         *fnsize = fi->size;
-    strlcpy(namebuf, fi->fn->getName().str().c_str(), N);
+    StringRef sr = fi->fn->getName();
+    if(name)
+        *name = sr.data();
+    if(N)
+        *N = sr.size();
     return true;
 }
-static bool terra_lookupline(void * fnaddr, void * ip, char * fnamebuf, size_t N, size_t * linenum, terra_CompilerState * C) {
+static bool terra_lookupline(void * fnaddr, void * ip, const char ** fname, size_t * N, size_t * linenum, terra_CompilerState * C) {
     if(C->functioninfo.count(fnaddr) == 0)
         return false;
     const TerraFunctionInfo & fi = C->functioninfo[fnaddr];
     StringRef sr;
     if(!stacktrace_findline(C, &fi, (uintptr_t)ip, false, &sr, linenum))
         return false;
-    strlcpy(fnamebuf, sr.str().c_str(), N);
+    if(fname)
+        *fname = sr.data();
+    if(N)
+        *N = sr.size();
     return true;
 }
 

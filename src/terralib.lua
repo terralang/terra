@@ -4496,11 +4496,11 @@ function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
     local po = P(opaque)
     local ppo = P(po)
     local p64 = P(uint64)
-    
+    local ps = P(rawstring) 
     terra.traceback = terra.cast(FP({po},{}),traceback)
     terra.backtrace = terra.cast(FP({ppo,int,po,po},{int}),backtrace)
-    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,rawstring,uint64},{bool}),lookupsymbol)
-    terra.lookupline   = terra.cast(FP({po,po,rawstring,uint64,p64},{bool}),lookupline)
+    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,ps,p64},{bool}),lookupsymbol)
+    terra.lookupline   = terra.cast(FP({po,po,ps,p64,p64},{bool}),lookupline)
     terra.disas = terra.cast(FP({po,uint64,uint64},{}),disas)
 end
 

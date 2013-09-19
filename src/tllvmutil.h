@@ -15,7 +15,7 @@ struct OptInfo {
         OptLevel = 3;
         SizeLevel = 0;
         DisableSimplifyLibCalls = false;
-        DisableUnrollLoops = true;
+        DisableUnrollLoops = false;
         UseGVNAfterVectorization = false;
         Vectorize = false;
     }
