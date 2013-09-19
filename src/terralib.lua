@@ -826,7 +826,6 @@ function terra.quote:islvalue()
     return self.tree.expression.lvalue
 end
 function terra.quote:asvalue()
-    
     local function getvalue(e)
         if e:is "literal" then
             if type(e.value) == "userdata" then
@@ -839,19 +838,18 @@ function terra.quote:asvalue()
         elseif e:is "constructor" then
             local t = {}
             for i,r in ipairs(e.records) do
-                t[r.key] = getvalue(e.expressions.expressions[i])
+                local v,e = getvalue(e.expressions.expressions[i]) 
+                if e then return nil,e end
+                t[r.key] = v
             end
             return t
         elseif e:is "typedexpression" then
             return getvalue(e.expression)
         else
-             error("the rest of :asvalue() needs to be implemented...")
+            return nil, "not a constant value (note: :asvalue() isn't implement for all constants yet)"
         end
     end
-    
-    local v = getvalue(self.tree)
-    
-    return v
+    return getvalue(self.tree)
 end
 function terra.newquote(tree)
     return setmetatable({ tree = tree }, terra.quote)
