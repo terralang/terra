@@ -5,7 +5,7 @@ end
 
 
 assert(1 == foo())
-assert(foo.fastcall == foo:getdefinitions()[1].ffiwrapper)
+assert(rawget(foo,"fastcall") == foo:getdefinitions()[1].ffiwrapper)
 assert(1 == foo())
 
 
@@ -15,11 +15,11 @@ end
 
 local a,b = foo2()
 assert(a == 1 and b == 2)
-assert(foo2.fastcall == foo2:getdefinitions()[1])
+assert(rawget(foo2,"fastcall") == foo2:getdefinitions()[1])
 local a,b = foo2()
 assert(a == 1 and b == 2)
 
 terra foo(a : int)
 end
 
-assert(foo.fastcall == nil)
+assert(rawget(foo,"fastcall") == nil)

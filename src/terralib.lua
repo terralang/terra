@@ -592,6 +592,19 @@ function terra.funcdefinition:setinlined(v)
     self.alwaysinline = v
 end
 
+function terra.funcdefinition:disas()
+    self:compile()
+    print("definition ", self.type)
+    terra.disassemble(self)
+end
+function terra.funcdefinition:printstats()
+    self:compile()
+    print("definition ", self.type)
+    for k,v in pairs(self.stats) do
+        print("",k,v)
+    end
+end
+
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
 end }
@@ -608,21 +621,28 @@ end
 -- may have different definitions
 
 terra.func = {} --metatable for all function types
-terra.func.__index = terra.func
-
-function terra.func:compile(cont)
-    for i,v in ipairs(self.definitions) do
-        v:compile(cont)
-    end
-end
-function terra.func:emitllvm(cont)
-    for i,v in ipairs(self.definitions) do
-        v:emitllvm(cont)
+terra.func.__index = function(self,idx)
+    local r = terra.func[idx]
+    if r then return r end
+    return function(self,...)
+        local ND = #self.definitions
+        if ND == 1 then --faster path, avoid creating a table of arguments
+            local dfn = self.definitions[1]
+            return dfn[idx](dfn,...)
+        elseif ND == 0 then
+            error("attempting to call "..idx.." on undefined function",2)
+        end
+        local results
+        for i,dfn in ipairs(self.definitions) do
+            local r = { dfn[idx](dfn,...) }
+            results = results or r
+        end
+        return unpack(results)
     end
 end
 
 function terra.func:__call(...)
-    if self.fastcall then
+    if rawget(self,"fastcall") then
         return self.fastcall(...)
     end
     if #self.definitions == 1 then --generate fast path for the non-overloaded case
@@ -658,24 +678,6 @@ end
 
 function terra.func:getdefinitions()
     return self.definitions
-end
-
-function terra.func:printstats()
-    self:compile()
-    for i,v in ipairs(self.definitions) do
-        print("definition ", v.type)
-        for k,v in pairs(v.stats) do
-            print("",k,v)
-        end
-    end
-end
-
-function terra.func:disas()
-    self:compile()
-    for i,v in ipairs(self.definitions) do
-        print("definition ", v.type)
-        terra.disassemble(v)
-    end
 end
 
 function terra.isfunction(obj)
