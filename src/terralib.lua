@@ -845,6 +845,9 @@ function terra.quote:asvalue()
             return t
         elseif e:is "typedexpression" then
             return getvalue(e.expression)
+        elseif e:is "operator" and e.operator == terra.kinds["-"] and #e.operands == 1 then
+            local v,er = getvalue(e.operands[1])
+            return type(v) == "number" and -v, er
         else
             return nil, "not a constant value (note: :asvalue() isn't implement for all constants yet)"
         end
