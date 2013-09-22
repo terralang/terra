@@ -57,18 +57,19 @@ static int terra_backtrace(void ** frames, int maxN, void * rip, void * rbp) {
     if(maxN > 0)
         frames[0] = rip;
     Frame * frame = (Frame*) rbp;
+    if(!frame) return 1;
     int i;
     int fds[2];
     pipe(fds);
     //successful write to a pipe checks that we can read
     //Frame's memory. Otherwise we might segfault if rbp holds junk.
-    for(i = 1; i < maxN && frame != NULL && write(fds[1],frame,sizeof(Frame)) != -1 && frame->addr != NULL; i++) {
+    for(i = 1; i < maxN && write(fds[1],frame,sizeof(Frame)) != -1 && frame->addr && frame->next; i++) {
         frames[i] = frame->addr;
         frame = frame->next;
     }
     close(fds[0]);
     close(fds[1]);
-    return i - 1;
+    return i;
 }
 
 static void stacktrace_printsourceline(const char * filename, size_t lineno) {
@@ -111,6 +112,7 @@ static void printstacktrace(void * uap, void * data) {
     }
     int N = terra_backtrace(frames, maxN,rip,rbp);
     char ** symbols = backtrace_symbols(frames, N);
+    
     for(int i = 0 ; i < N; i++) {
         const TerraFunctionInfo * fi;
         uintptr_t ip = (uintptr_t) frames[i];

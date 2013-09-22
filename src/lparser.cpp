@@ -1054,7 +1054,8 @@ static void simpleexp (LexState *ls, expdesc *v) {
       break;
     }
     case TK_NIL: {
-      push_boolean(ls,false);
+      if(ls->in_terra)
+        lua_pushnil(ls->L);
       push_literal(ls,"niltype");
       break;
     }
