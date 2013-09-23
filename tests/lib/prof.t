@@ -7,6 +7,7 @@ local C,S = terralib.includecstring [[
 	#include <stdlib.h>
 	#define _XOPEN_SOURCE
 	#include <ucontext.h>
+    #include <execinfo.h>
 	int SigProf() { return SIGPROF; }
 	int SigInfo() { return SA_SIGINFO; }
 	int ITimerProf() { return ITIMER_PROF; }
@@ -50,23 +51,27 @@ terra helperthread(data : &opaque) : &opaque
 end 
 
 local starttime
-terra getinfo(ip : &opaque, cb : {rawstring,uint64,rawstring,uint64,uint64} -> {})
+terra getinfo(ipstr : rawstring, cb : {rawstring,uint64,rawstring,uint64,uint64} -> {}, count: int)
+  var ip = @[&&opaque](ipstr)
   var addr : &opaque
   var sz : uint64
   var nm : rawstring, nmL : uint64
   var fname : rawstring, fnameL : uint64
   if terralib.lookupsymbol(ip,&addr,&sz,&nm,&nmL) then
     var offset = [&uint8](ip) - [&uint8](addr)
-    C.printf("%p + %d: %.*s",addr, offset, nmL, nm)
+    C.printf("%p + %d: (%d) %.*s",addr, offset, count, nmL, nm)
     if terralib.lookupline(addr,ip,&fname,&fnameL,&sz) then
         cb(nm,nmL,fname,fnameL,sz)
         C.printf(" (%.*s:%d)",fnameL,fname,int(sz))
     end
     C.printf("\n")
-    terralib.disas(ip,0,1)
+    --terralib.disas(ip,0,1)
 
   else
-    C.printf("%p\n",addr)
+    var iparr = array(ip)
+    var btstuff = C.backtrace_symbols(iparr, 1)
+    C.printf("%p: (%d)    %s\n",ip,count, @btstuff)
+    C.free(btstuff)
   end
 end 
 local pthread
@@ -121,6 +126,13 @@ local function finish()
         counts[k] = c + 1
     end
     local typ = &&opaque
+
+    -- Sort the info by sample count
+    local sortedcounts = {}
+    for k,v in pairs(counts) do
+        table.insert(sortedcounts, {key = k, count = v})
+    end
+    table.sort(sortedcounts, function(a, b) return a.count > b.count end)
     
     local data = {}
     local c
@@ -132,10 +144,9 @@ local function finish()
         df[ln] = (df[ln] or 0) + c
     end
     local typ = &&opaque
-    for k,v in pairs(counts) do
-        c = v
-        local addr = terralib.cast(typ,k)[0]
-        getinfo(addr,cb)
+    for _,kv in ipairs(sortedcounts) do
+        c = kv.count
+        getinfo(kv.key, cb, c)
     end
     for file,lines in pairs(data) do
         local i = 1
