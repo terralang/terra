@@ -580,7 +580,7 @@ end
 function terra.funcdefinition:getpointer()
     self:compile()
     if not self.ffiwrapper then
-        self.ffiwrapper = ffi.cast(self.type:cstring(),self.fptr)
+        self.ffiwrapper = ffi.cast(terra.types.pointer(self.type):cstring(),self.fptr)
     end
     return self.ffiwrapper
 end
@@ -1353,10 +1353,12 @@ do --construct type table that holds the singleton value representing each uniqu
             if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
             
             --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
-            local ctype = ffi.typeof(self.cachedcstring)
-            types.ctypetoterra[tonumber(ctype)] = self
-            local rctype = ffi.typeof(self.cachedcstring.."&")
-            types.ctypetoterra[tonumber(rctype)] = self
+            if not self:isfunction() then
+                local ctype = ffi.typeof(self.cachedcstring)
+                types.ctypetoterra[tonumber(ctype)] = self
+                local rctype = ffi.typeof(self.cachedcstring.."&")
+                types.ctypetoterra[tonumber(rctype)] = self
+            end
         end
         return self.cachedcstring
     end
