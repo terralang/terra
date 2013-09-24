@@ -3893,7 +3893,7 @@ local function printpretty(toptree,returntypes)
             elseif type(e.value) == "string" then
                 emit("%q",e.value)
             else
-                emit("%s",e.value)
+                emit("%s",tostring(e.value))
             end
         elseif e:is "luafunction" then
             emit("<lua %s>",tostring(e.callback))
