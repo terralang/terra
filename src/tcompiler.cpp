@@ -436,7 +436,7 @@ struct CCallingConv {
         return st;
     }
     Type * FunctionPointerType() {
-        return Ptr(Type::getInt8PtrTy(*C->ctx));
+        return Type::getInt8PtrTy(*C->ctx);
     }
     TType * GetTypeIncomplete(Obj * typ) {
         TType * t = NULL;

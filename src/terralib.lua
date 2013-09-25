@@ -528,7 +528,7 @@ function terra.funcdefinition:initializecfunction(anchor)
     assert(self.state == "uninitializedc")
     terra.registercfunction(self)
     --make sure all types for function are registered
-    self.type:complete(anchor)
+    self.type:completefunction(anchor)
     self.state = "compiled"
 end
 
@@ -1285,7 +1285,33 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self:isfloat() then
                 self.cachedcstring = tostring(self)
             elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
-                self.cachedcstring = self.type:cstring()
+                local ftype = self.type
+                local rt = (#ftype.returns == 0 and "void") or ftype.returnobj:cstring()
+                local function getcstring(t)
+                    if t == rawstring then
+                        --hack to make it possible to pass strings to terra functions
+                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
+                        --so it should be removed when we have a better solution
+                        return "const char *"
+                    else
+                        return t:cstring()
+                    end
+                end
+                local pa = ftype.parameters:map(getcstring)
+                if not self.cachedcstring then
+                    pa = pa:mkstring("(",",","")
+                    if ftype.isvararg then
+                        pa = pa .. ",...)"
+                    else
+                        pa = pa .. ")"
+                    end
+                    local ntyp = uniquetypename("function")
+                    local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
+                    ffi.cdef(cdef)
+                    self.cachedcstring = ntyp
+                end
+            elseif self:isfunction() then
+                error("asking for the cstring for a function?",2)
             elseif self:ispointer() then
                 local value = self.type:cstring()
                 if not self.cachedcstring then
@@ -1315,30 +1341,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N*elemSz)..")));")
                 self.cachedcstring = nm 
             elseif self:isfunction() then
-                local rt = (#self.returns == 0 and "void") or self.returnobj:cstring()
-                local function getcstring(t)
-                    if t == rawstring then
-                        --hack to make it possible to pass strings to terra functions
-                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
-                        --so it should be removed when we have a better solution
-                        return "const char *"
-                    else
-                        return t:cstring()
-                    end
-                end
-                local pa = self.parameters:map(getcstring)
-                if not self.cachedcstring then
-                    pa = pa:mkstring("(",",","")
-                    if self.isvararg then
-                        pa = pa .. ",...)"
-                    else
-                        pa = pa .. ")"
-                    end
-                    local ntyp = uniquetypename("function")
-                    local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
-                    ffi.cdef(cdef)
-                    self.cachedcstring = ntyp
-                end
+                
             elseif self == types.niltype then
                 local nilname = uniquetypename("niltype")
                 ffi.cdef("typedef void * "..nilname..";")
@@ -1352,13 +1355,11 @@ do --construct type table that holds the singleton value representing each uniqu
             end
             if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
             
-            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
-            if not self:isfunction() then
-                local ctype = ffi.typeof(self.cachedcstring)
-                types.ctypetoterra[tonumber(ctype)] = self
-                local rctype = ffi.typeof(self.cachedcstring.."&")
-                types.ctypetoterra[tonumber(rctype)] = self
-            end
+            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)            
+            local ctype = ffi.typeof(self.cachedcstring)
+            types.ctypetoterra[tonumber(ctype)] = self
+            local rctype = ffi.typeof(self.cachedcstring.."&")
+            types.ctypetoterra[tonumber(rctype)] = self
         end
         return self.cachedcstring
     end
@@ -1497,24 +1498,19 @@ do --construct type table that holds the singleton value representing each uniqu
             return layout
         end;
     }
+    function types.type:completefunction(anchor)
+        assert(self:isfunction())
+        for i,p in ipairs(self.parameters) do p:complete(anchor) end
+        for i,r in ipairs(self.returns) do r:complete(anchor) end
+        if self.returnobj then self.returnobj:complete(anchor) end
+        return self
+    end
     function types.type:complete(anchor) 
         if self.incomplete then
             if self:isarray() then
                 self.type:complete(anchor)
                 self.incomplete = self.type.incomplete
-            elseif self:isfunction() then
-                local incomplete = nil
-                for i,p in ipairs(self.parameters) do
-                    incomplete = incomplete or p:complete(anchor).incomplete
-                end
-                for i,r in ipairs(self.returns) do
-                    incomplete = incomplete or r:complete(anchor).incomplete
-                end
-                if self.returnobj then
-                    incomplete = incomplete or self.returnobj:complete(anchor).incomplete
-                end
-                self.incomplete = incomplete
-            elseif self == types.opaque then
+            elseif self == types.opaque or self:isfunction() then
                 reportopaque(anchor)
             else
                 assert(self:isstruct())
@@ -2263,9 +2259,6 @@ function terra.funcdefinition:typecheck()
         if not e.type:ispointer() then
             diag:reporterror(e,"argument of dereference is not a pointer type but ",e.type)
             ret.type = terra.types.error 
-        elseif e.type.type:isfunction() then
-            --function pointer dereference does nothing, return the input
-            return e
         else
             ret.type = e.type.type:complete(e)
         end
@@ -2990,7 +2983,7 @@ function terra.funcdefinition:typecheck()
         end
 
         local function createcall(callee, paramlist)
-            callee.type.type:complete(anchor)
+            callee.type.type:completefunction(anchor)
             local returntypes = callee.type.type.returns
             local fncall = terra.newtree(anchor, { kind = terra.kinds.apply, arguments = paramlist, value = callee, returntypes = returntypes, paramtypes = paramlist.types })
             local expressions = terra.newlist()
@@ -3531,7 +3524,7 @@ function terra.funcdefinition:typecheck()
             end 
         end
     end
-    local fntype = terra.types.functype(parameter_types,return_types):complete(ftree)
+    local fntype = terra.types.functype(parameter_types,return_types):completefunction(ftree)
 
     --now cast each return expression to the expected return type
     for _,stmt in ipairs(return_stmts) do
