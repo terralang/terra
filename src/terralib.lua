@@ -1812,8 +1812,8 @@ function terra.createterraexpression(diag,anchor,v)
         elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
             return createsingle(terra.constant(v))
         elseif terra.isconstant(v) then
-            if type(v.object) == "string" then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
-                return terra.newtree(anchor, { kind = terra.kinds.literal, value = v.object, type = rawstring })
+            if v.stringvalue then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
+                return terra.newtree(anchor, { kind = terra.kinds.literal, value = v.stringvalue, type = rawstring })
             else 
                 return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:isaggregate()})
             end
@@ -4198,7 +4198,7 @@ function terra.constant(a0,a1)
         local c = setmetatable({ type = a0, object = a1 },terra.constantobj)
         --special handling for string literals
         if type(c.object) == "string" and c.type == rawstring then
-            return c
+            c.stringvalue = c.object --save string type for special handling in compiler
         end
 
         --if the  object is not already cdata, we need to convert it
