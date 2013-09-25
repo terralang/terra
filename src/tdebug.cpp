@@ -91,6 +91,25 @@ static void stacktrace_printsourceline(const char * filename, size_t lineno) {
     fclose(file);
 }
 
+static bool printfunctioninfo(terra_CompilerState * C, uintptr_t ip, bool isNextInst, int i) {
+    const TerraFunctionInfo * fi;
+    if(stacktrace_findsymbol(C,ip,&fi)) {
+        std::string str = fi->fn->getName();
+        uintptr_t fstart = (uintptr_t) fi->addr;
+        printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d ",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
+        StringRef filename;
+        size_t lineno;
+         if(stacktrace_findline(C, fi, ip,isNextInst, &filename, &lineno)) {
+            printf("(%s:%d)\n",filename.data(),(int)lineno);
+            stacktrace_printsourceline(filename.data(), lineno);
+        } else {
+            printf("\n");
+        }
+        return true;
+    }
+    return false;
+}
+
 static void printstacktrace(void * uap, void * data) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
@@ -114,22 +133,9 @@ static void printstacktrace(void * uap, void * data) {
     char ** symbols = backtrace_symbols(frames, N);
     
     for(int i = 0 ; i < N; i++) {
-        const TerraFunctionInfo * fi;
+        bool isNextInst = i > 0 || uap == NULL; //unless this is the first entry in suspended context then the address is really a pointer to the _next_ instruction
         uintptr_t ip = (uintptr_t) frames[i];
-        if(stacktrace_findsymbol(C,ip,&fi)) {
-            std::string str = fi->fn->getName();
-            uintptr_t fstart = (uintptr_t) fi->addr;
-            printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d ",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
-            StringRef filename;
-            size_t lineno;
-            bool isNextInst = i > 0 || uap == NULL; //unless this is the first entry in suspended context then the address is really a pointer to the _next_ instruction
-            if(stacktrace_findline(C, fi, ip,isNextInst, &filename, &lineno)) {
-                printf("(%s:%d)\n",filename.data(),(int)lineno);
-                stacktrace_printsourceline(filename.data(), lineno);
-            } else {
-                printf("\n");
-            }
-        } else {
+        if(!printfunctioninfo(C, ip, isNextInst,i)) {
             printf("%s\n",symbols[i]);
         }
     }
