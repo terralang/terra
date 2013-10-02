@@ -148,6 +148,9 @@ public:
                         entries.push();
                         allentries.addentry();
                     }
+                    tt->pushfield("complete");
+                    tt->push();
+                    lua_call(L,1,0);
                 }
             }
             

@@ -1548,7 +1548,7 @@ do --construct type table that holds the singleton value representing each uniqu
         if not success then
             return nil,"error while looking up method: "..result
         elseif result == nil then
-            return nil, "no such method "..methodname.." defined for type "..tostring(self)
+            return nil, "no such method "..tostring(methodname).." defined for type "..tostring(self)
         elseif not (terra.isfunction(result) or terra.ismacro(result) or type(result) == "function") then
             return nil, "method "..methodname.." must be a Terra function, a Lua function or a macro but found "..type(result)
         else
