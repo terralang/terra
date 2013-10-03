@@ -1168,7 +1168,10 @@ struct TerraCompiler {
                 return a; /* no-op, a is a pointer and lvalue is true for this expression */
                 break;
             case T_not:
-                return B->CreateNot(a);
+                if(t->islogical)
+                    return B->CreateZExt(B->CreateICmpEQ(a, ConstantInt::get(t->type,0)), t->type);
+                else
+                    return B->CreateNot(a);
                 break;
             case T_sub:
                 if(baseT->isIntegerTy()) {
@@ -1613,7 +1616,7 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("type", &type);
                 TType * t = getType(&type);
                 if(t->islogical) {
-                   bool b = exp->boolean("value"); 
+                   bool b = exp->boolean("value");
                    return ConstantInt::get(t->type,b);
                 } else if(t->type->isIntegerTy()) {
                     uint64_t integer = exp->integer("value");
