@@ -1360,6 +1360,20 @@ do --construct type table that holds the singleton value representing each uniqu
             types.ctypetoterra[tonumber(ctype)] = self
             local rctype = ffi.typeof(self.cachedcstring.."&")
             types.ctypetoterra[tonumber(rctype)] = self
+            
+            if self:isstruct() then
+                local function index(obj,idx)
+                    local method = self:getmethod(idx)
+                    if terra.isfunction(method) or type(method) == "function" then
+                        return method
+                    end
+                    if terra.ismacro(method) then
+                        error("calling a terra macro directly from Lua is not supported",2)
+                    end
+                    return nil
+                end
+                ffi.metatype(ctype, { __index = index })
+            end
         end
         return self.cachedcstring
     end
