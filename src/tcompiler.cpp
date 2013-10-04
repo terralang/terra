@@ -34,6 +34,7 @@ extern "C" {
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
+#include "llvm/Support/CFG.h"
 
 using namespace llvm;
 
@@ -305,14 +306,16 @@ struct CCallingConv {
     struct Argument {
         ArgumentKind kind;
         int nargs; //number of arguments this value will produce in parameter list
+        int isi1; //primitive needs to be cast to i1 (such as a boolean)
         Type * type; //orignal type for the object
         StructType * cctype; //if type == C_AGGREGATE_REG, this struct that holds a list of the values that goes into the registers
         Argument() {}
-        Argument(ArgumentKind kind, Type * type, int nargs = 1, StructType * cctype = NULL) {
+        Argument(ArgumentKind kind, Type * type, int nargs = 1, StructType * cctype = NULL, int isi1 = 0) {
             this->kind = kind;
             this->type = type;
             this->nargs = nargs;
             this->cctype = cctype;
+            this->isi1 = isi1;
         }
     };
     
@@ -618,7 +621,7 @@ struct CCallingConv {
                 ++*usedfloat;
             else
                 ++*usedint;
-            return Argument(C_PRIMITIVE,t->type);
+            return Argument(C_PRIMITIVE,t->type,1,NULL,t->islogical && !t->type->isVectorTy());
         }
         
         int sz = C->td->getTypeAllocSize(t->type);
@@ -717,9 +720,23 @@ struct CCallingConv {
             r->addAttribute(idx,Attribute::ByVal);
         #endif
     }
+    template<typename FnOrCall>
+    void addZeroExtAttr(FnOrCall * r, int idx) {
+        #ifdef LLVM_3_2
+            AttrBuilder builder;
+            builder.addAttribute(Attributes::ZExt);
+            r->addAttribute(idx,Attributes::get(*C->ctx,builder));
+        #elif LLVM_3_1
+            r->addAttribute(idx,Attributes(Attribute::ZExt));
+        #else
+            r->addAttribute(idx,Attribute::ZExt);
+        #endif
+    }
     
     template<typename FnOrCall>
     void AttributeFnOrCall(FnOrCall * r, Classification * info) {
+        if(info->returntype.isi1)
+            addZeroExtAttr(r, 0);
         int argidx = 1;
         if(info->returntype.kind == C_AGGREGATE_MEM) {
             addSRetAttr(r, argidx);
@@ -732,6 +749,8 @@ struct CCallingConv {
                 addByValAttr(r, argidx);
                 #endif
             }
+            if(v->isi1)
+                addZeroExtAttr(r, argidx);
             argidx += v->nargs;
         }
     }
@@ -759,10 +778,13 @@ struct CCallingConv {
             Argument * p = &info->paramtypes[i];
             Value * v = (*variables)[i];
             switch(p->kind) {
-                case C_PRIMITIVE:
-                    B->CreateStore(ai,v);
+                case C_PRIMITIVE: {
+                    Value * a = ai;
+                    if(p->isi1)
+                        a = B->CreateZExt(a,p->type);
+                    B->CreateStore(a,v);
                     ++ai;
-                    break;
+                } break;
                 case C_AGGREGATE_MEM:
                     //TODO: check that LLVM optimizes this copy away
                     B->CreateStore(B->CreateLoad(ai),v);
@@ -796,7 +818,10 @@ struct CCallingConv {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
             assert(results->size() == 1);
-            B->CreateRet((*results)[0]);
+            Value * r = (*results)[0];
+            if(info->returntype.isi1)
+                r = B->CreateTrunc(r, Type::getInt1Ty(*C->ctx));
+            B->CreateRet(r);
         } else if(C_AGGREGATE_MEM == kind) {
             FillAggregate(function->arg_begin(),results);
             B->CreateRetVoid();
@@ -826,6 +851,8 @@ struct CCallingConv {
             Value * actual = (*actuals)[i];
             switch(a->kind) {
                 case C_PRIMITIVE:
+                    if(a->isi1)
+                        actual = B->CreateTrunc(actual, Type::getInt1Ty(*C->ctx));
                     arguments.push_back(actual);
                     break;
                 case C_AGGREGATE_MEM: {
@@ -858,6 +885,8 @@ struct CCallingConv {
         if(info.nreturns == 0) {
             return call;
         } else if(C_PRIMITIVE == info.returntype.kind) {
+            if(info.returntype.isi1)
+                return B->CreateZExt(call,info.returntype.type);
             return call;
         } else {
             Value * aggregate;
@@ -906,15 +935,19 @@ struct CCallingConv {
         } else if(info->returntype.kind == C_AGGREGATE_MEM) {
             rt = Type::getVoidTy(*C->ctx);
             arguments.push_back(Ptr(info->returntype.type));
+        } else if(info->returntype.isi1) {
+            rt = Type::getInt1Ty(*C->ctx);
         }
         
         for(size_t i = 0; i < info->paramtypes.size(); i++) {
-            Type * t;
             Argument * a = &info->paramtypes[i];
             switch(a->kind) {
-                case C_PRIMITIVE:
-                    arguments.push_back(a->type);
-                    break;
+                case C_PRIMITIVE: {
+                    Type * t = a->type;
+                    if(a->isi1)
+                        t = Type::getInt1Ty(*C->ctx);
+                    arguments.push_back(t);
+                } break;
                 case C_AGGREGATE_MEM:
                     arguments.push_back(Ptr(a->type));
                     break;
@@ -1221,7 +1254,32 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
 #undef RETURN_OP
 #undef RETURN_SOP
     }
-    
+    void emitBranchOnExpr(Obj * expr, BasicBlock * trueblock, BasicBlock * falseblock) {
+        //try to optimize the branching by looking into lazy logical expressions and simplifying them
+        T_Kind kind = expr->kind("kind");
+        if(T_operator == kind) {
+            T_Kind op = expr->kind("operator");
+            Obj operands;
+            expr->obj("operands",&operands);
+            Obj lhs; Obj rhs;
+            operands.objAt(0,&lhs);
+            operands.objAt(1,&rhs);
+            if(T_not == op) {
+                emitBranchOnExpr(&lhs, falseblock, trueblock);
+                return;
+            }
+            if(T_and == op || T_or == op) {
+                bool isand = T_and == op;
+                BasicBlock * condblock = createAndInsertBB((isand) ? "and.lhs.true" : "or.lhs.false");
+                emitBranchOnExpr(&lhs, (isand) ? condblock : trueblock, (isand) ? falseblock : condblock);
+                setInsertBlock(condblock);
+                emitBranchOnExpr(&rhs, trueblock, falseblock);
+                return;
+            }
+        }
+        //if no optimizations applied just emit the naive branch
+        B->CreateCondBr(emitCond(expr), trueblock, falseblock);
+    }
     Value * emitLazyLogical(TType * t, Obj * ao, Obj * bo, bool isAnd) {
         /*
         AND (isAnd == true)
@@ -1241,25 +1299,29 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
             result = <b>;
         }
         */
-        Value * a = emitExp(ao);
-        Value * acond = emitCond(a);
         
         BasicBlock * startB = B->GetInsertBlock();
-        BasicBlock * stmtB = createAndInsertBB("logicalcont");
-        BasicBlock * mergeB = createAndInsertBB("merge");
+        BasicBlock * stmtB = createAndInsertBB((isAnd) ? "and.rhs" : "or.rhs");
+        BasicBlock * mergeB = createBB((isAnd) ? "and.end" : "or.end");
         
-        B->CreateCondBr(acond, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
+        emitBranchOnExpr(ao, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
+        
+        Type * int1 = Type::getInt1Ty(*C->ctx);
+        setInsertBlock(mergeB);
+        PHINode * result = B->CreatePHI(int1, 2);
+        Value * literal = ConstantInt::get(int1, !isAnd);
+        for(pred_iterator it = pred_begin(mergeB), end = pred_end(mergeB);
+            it != end; ++it)
+            result->addIncoming(literal,*it);
         
         setInsertBlock(stmtB);
-        Value * b = emitExp(bo);
+        Value * b = emitCond(bo);
         stmtB = B->GetInsertBlock();
         B->CreateBr(mergeB);
-        
+        insertBB(mergeB);
         setInsertBlock(mergeB);
-        PHINode * result = B->CreatePHI(t->type, 2);
-        result->addIncoming(a, startB);
         result->addIncoming(b, stmtB);
-        return result;
+        return B->CreateZExt(result, t->type);
     }
     Value * emitIndex(TType * ftype, int tobits, Value * number) {
         TType ttype;
@@ -1829,10 +1891,9 @@ if(baseT->isIntegerTy()) { \
         Obj cond,body;
         ifbranch->obj("condition", &cond);
         ifbranch->obj("body",&body);
-        Value * v = emitCond(&cond);
         BasicBlock * thenBB = createAndInsertBB("then");
         BasicBlock * continueif = createBB("else");
-        B->CreateCondBr(v, thenBB, continueif);
+        emitBranchOnExpr(&cond, thenBB, continueif);
         
         setInsertBlock(thenBB);
         
@@ -2012,14 +2073,13 @@ if(baseT->isIntegerTy()) { \
                 
                 setInsertBlock(condBB);
                 
-                Value * v = emitCond(&cond);
                 BasicBlock * loopBody = createAndInsertBB("whilebody");
     
                 BasicBlock * merge = createBB("merge");
                 
                 setBreaktable(stmt,merge);
                 
-                B->CreateCondBr(v, loopBody, merge);
+                emitBranchOnExpr(&cond, loopBody, merge);
                 
                 setInsertBlock(loopBody);
                 
@@ -2060,8 +2120,7 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
                 emitStmt(&body);
-                Value * c = emitCond(&cond);
-                B->CreateCondBr(c, merge, loopBody);
+                emitBranchOnExpr(&cond, merge, loopBody);
                 insertBB(merge);
                 setInsertBlock(merge);
                 

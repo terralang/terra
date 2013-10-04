@@ -29,11 +29,16 @@ struct Obj {
         pop();
         return i;
     }
-    void objAt(int i, Obj * r) {
+    bool objAt(int i, Obj * r) {
         push();
         lua_rawgeti(L,-1,i+1); //stick to 0-based indexing in C code...
+        if(lua_isnil(L,-1)) {
+            pop(2);
+            return false;
+        }
         r->initFromStack(L,ref_table);
         pop();
+        return true;
     }
     double number(const char * field) {
         push();
