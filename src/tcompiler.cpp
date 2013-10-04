@@ -1241,22 +1241,25 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
             result = <b>;
         }
         */
-        Value * result = CC.CreateAlloca(t->type);
         Value * a = emitExp(ao);
         Value * acond = emitCond(a);
+        
+        BasicBlock * startB = B->GetInsertBlock();
         BasicBlock * stmtB = createAndInsertBB("logicalcont");
-        BasicBlock * emptyB = createAndInsertBB("logicalnop");
         BasicBlock * mergeB = createAndInsertBB("merge");
-        B->CreateCondBr(acond, (isAnd) ? stmtB : emptyB, (isAnd) ? emptyB : stmtB);
+        
+        B->CreateCondBr(acond, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
+        
         setInsertBlock(stmtB);
         Value * b = emitExp(bo);
-        B->CreateStore(b, result);
+        stmtB = B->GetInsertBlock();
         B->CreateBr(mergeB);
-        setInsertBlock(emptyB);
-        B->CreateStore(a, result);
-        B->CreateBr(mergeB);
+        
         setInsertBlock(mergeB);
-        return B->CreateLoad(result, "logicalop");
+        PHINode * result = B->CreatePHI(t->type, 2);
+        result->addIncoming(a, startB);
+        result->addIncoming(b, stmtB);
+        return result;
     }
     Value * emitIndex(TType * ftype, int tobits, Value * number) {
         TType ttype;
