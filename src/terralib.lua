@@ -1563,8 +1563,6 @@ do --construct type table that holds the singleton value representing each uniqu
             return nil,"error while looking up method: "..result
         elseif result == nil then
             return nil, "no such method "..tostring(methodname).." defined for type "..tostring(self)
-        elseif not (terra.isfunction(result) or terra.ismacro(result) or type(result) == "function") then
-            return nil, "method "..methodname.." must be a Terra function, a Lua function or a macro but found "..type(result)
         else
             return result
         end
@@ -1873,10 +1871,9 @@ function terra.specialize(origtree, luaenv, depth)
                 diag:reporterror(e,"expected a table but found ", type(value))
                 return ee
             end
-            
 
-            if terra.types.istype(value) and value:isstruct() then --class method resolve to method table
-                value = value.methods
+            if terra.types.istype(value) and value:isstruct() then --class method lookup, this is handled when typechecking
+                return ee
             end
 
             local success,selected = terra.invokeuserfunction(e,false,function() return value[field] end)
@@ -3168,8 +3165,20 @@ function terra.funcdefinition:typecheck()
 
                 return e:copy { type = definition.type, definition = definition }
             elseif e:is "select" then
-                local v = checkexp(e.value)
+                local v = checkexp(e.value,nil,true)
                 local field = checksymbol(e.field)
+                --check for and handle Type.staticmethod
+                if v:is "luaobject" and terra.types.istype(v.value) and v.value:isstruct() then
+                    local fnlike, errmsg = v.value:getmethod(field)
+                    if not fnlike then
+                        diag:reporterror(e,errmsg)
+                        return e:copy { type = terra.types.error }
+                    end
+                    return terra.createterraexpression(diag,e,fnlike)
+                end
+                
+                v = removeluaobject(v)
+                
                 if v.type:ispointertostruct() then --allow 1 implicit dereference
                     v = insertdereference(v)
                 end
