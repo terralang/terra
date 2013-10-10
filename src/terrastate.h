@@ -30,6 +30,7 @@ void terra_reporterror(terra_State * T, const char * fmt, ...);
 void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
 int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name);
+terra_State * terra_getstate(lua_State * L, int closureindex);
 #define VERBOSE_ONLY(T) if((T)->options.verbose != 0)
 #define DEBUG_ONLY(T) if((T)->options.debug != 0)
 

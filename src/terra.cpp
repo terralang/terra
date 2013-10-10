@@ -53,11 +53,18 @@ void terra_reporterror(terra_State * T, const char * fmt, ...) {
     lua_error(T->L);
 }
 
+terra_State * terra_getstate(lua_State * L, int upvalue) {
+    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(upvalue));
+    assert(T);
+    T->L = L;
+    return T;
+}
+
 static terra_State * getterra(lua_State * L) {
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"__terrastate");
     terra_State * T = (terra_State *) lua_touserdata(L, -1);
-    assert(T->L == L);
+    T->L = L;
     lua_pop(L,2);
     return T;
 }

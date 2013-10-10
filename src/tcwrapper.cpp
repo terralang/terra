@@ -585,8 +585,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
 }
 
 int include_c(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     const char * code = luaL_checkstring(L, -2);
     int N = lua_objlen(L, -1);
     std::vector<const char *> args;
@@ -629,8 +628,7 @@ int include_c(lua_State * L) {
 }
 
 int register_c_function(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     
     int ref_table = lobj_newreftable(L);
     {

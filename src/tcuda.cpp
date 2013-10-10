@@ -85,8 +85,7 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
 }
 
 int terra_cudacompile(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     initializeCUDAState(T);
 
     int tbl = lua_gettop(L);

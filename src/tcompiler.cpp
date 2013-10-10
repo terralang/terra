@@ -2190,8 +2190,7 @@ if(baseT->isIntegerTy()) { \
 };
 
 static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     
     //create lua table to hold object references anchored on stack
     int ref_table = lobj_newreftable(T->L);
@@ -2208,8 +2207,7 @@ static int terra_codegen(lua_State * L) { //entry point into compiler from lua c
 
 
 static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     
     //create lua table to hold object references anchored on stack
     int ref_table = lobj_newreftable(T->L);
@@ -2229,8 +2227,7 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
 }
 
 static int terra_optimize(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     
     int ref_table = lobj_newreftable(T->L);
     
@@ -2290,8 +2287,7 @@ static int terra_optimize(lua_State * L) {
 }
 
 static int terra_jit(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     
     int ref_table = lobj_newreftable(T->L);
     
@@ -2342,8 +2338,8 @@ static int terra_jit(lua_State * L) {
 }
 
 static int terra_deletefunction(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
+    
     Function ** fp = (Function**) lua_touserdata(L,-1);
     assert(fp);
     Function * func = (Function*) *fp;
@@ -2365,8 +2361,8 @@ static int terra_deletefunction(lua_State * L) {
     return 0;
 }
 static int terra_disassemble(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
+    
     lua_getfield(L,-1,"fptr");
     void * addr = lua_touserdata(L, -1);
     TerraFunctionInfo & fi = T->C->functioninfo[addr];
@@ -2400,8 +2396,8 @@ static int terra_saveobjimpl(lua_State * L) {
     const char * filename = luaL_checkstring(L, -4);
     int tbl = lua_gettop(L) - 2;
     bool isexe = luaL_checkint(L, -2);
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
+    
     int ref_table = lobj_newreftable(T->L);
     
     char tmpnamebuf[256];
@@ -2515,8 +2511,8 @@ static int terra_isintegral(lua_State * L) {
 
 static int terra_linklibraryimpl(lua_State * L) {
     std::string Err;
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
+    
     const char * filename = luaL_checkstring(L, -2);
     bool isbitcode = lua_toboolean(L,-1);
     if(isbitcode) {
@@ -2542,8 +2538,7 @@ static int terra_linklibraryimpl(lua_State * L) {
 }
 
 static int terra_dumpmodule(lua_State * L) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(1));
-    assert(T->L == L);
+    terra_State * T = terra_getstate(L, 1);
     T->C->m->dump();
     return 0;
 }
