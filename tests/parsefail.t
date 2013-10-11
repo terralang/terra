@@ -28,7 +28,7 @@ end
 terra foo2()
 	var [getsym()] = 3
 	var a = { [getsym()] = 4, [getsym()] }
-	return a.[getsym()] + a._0
+	return a.[getsym()] + a._1
 end
 
 assert(7 == foo2())

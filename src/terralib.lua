@@ -1442,7 +1442,6 @@ do --construct type table that holds the singleton value representing each uniqu
             local tree = self.anchor
             local entries = self:getentries(anchor)
             local nextallocation = 0
-            local nextunnamed = 0
             local uniondepth = 0
             local unionsize = 0
             
@@ -1465,8 +1464,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
                 if not k then
                     entry.hasname = false
-                    entry.key = "_"..tostring(nextunnamed)
-                    nextunnamed = nextunnamed + 1
+                    entry.key = "_"..tostring(#layout.entries)
                 end
                 
                 if layout.keytoindex[entry.key] ~= nil then
@@ -1475,7 +1473,6 @@ do --construct type table that holds the singleton value representing each uniqu
 
                 layout.keytoindex[entry.key] = #layout.entries
                 layout.entries:insert(entry)
-                
                 if uniondepth > 0 then
                     unionsize = unionsize + 1
                 else
@@ -2331,40 +2328,24 @@ function terra.funcdefinition:typecheck()
         cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = exp.type:complete(exp) })
         local var_ref = insertvar(exp,exp.type,cast.structvariable.name,cast.structvariable)
         
-        local indextoinit = {}
+        local initialized = {}
+        cast.entries = terra.newlist()
+        if #from.entries > #to.entries then
+            err("structural cast invalid, source has ",#from.entries," fields but target has only ",#to.entries)
+            return cast, valid
+        end
         for i,entry in ipairs(from.entries) do
             local selected = insertselect(var_ref,entry.key)
-            if entry.hasname then
-                local offset = to.keytoindex[entry.key]
-                if not offset then
-                    err("structural cast invalid, result structure has no key ", entry.key)
-                else
-                    if indextoinit[offset] then
-                        err("structural cast invalid, ",entry.key," initialized more than once")
-                    end
-                    indextoinit[offset] = insertcast(selected,to.entries[offset+1].type)
-                end
-            else
-                local offset = 0
-                
-                --find the first non initialized entry
-                while offset < #to.entries and indextoinit[offset] do
-                    offset = offset + 1
-                end
-                local totyp = to.entries[offset+1] and to.entries[offset+1].type
-                local maxsz = #to.entries
-                
-                if offset == maxsz then
-                    err("structural cast invalid, too many unnamed fields")
-                else
-                    indextoinit[offset] = insertcast(selected,totyp)
-                end
+            local offset = entry.hasname and to.keytoindex[entry.key] or i - 1
+            if not offset then
+                err("structural cast invalid, result structure has no key ", entry.key)
             end
-        end
-        
-        cast.entries = terra.newlist()
-        for i,v in pairs(indextoinit) do
-            cast.entries:insert( { index = i, value = v } )
+            if initialized[offset] then
+                err("structural cast invalid, ",tostring(to.entries[offset+1].key)," initialized more than once")
+            end
+            local v = insertcast(selected,to.entries[offset+1].type)
+            cast.entries:insert { index = offset, value = v }
+            initialized[offset] = true
         end
         
         return cast, valid
