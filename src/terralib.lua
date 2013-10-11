@@ -1400,22 +1400,27 @@ do --construct type table that holds the singleton value representing each uniqu
                 diag:reporterror(self.anchor,"computed entries are not a table")
                 return
             end
-            local function checkentries(entries)
+            local function checkentries(entries,results)
                 for i,e in ipairs(entries) do
-                    if type(e) == "table" and terra.types.istype(e.type) then
-                        local f = e.field
-                        if f and not (type(f) == "string" or terra.issymbol(f)) then
+                    if terra.types.istype(e) then
+                        results:insert { type = e }
+                    elseif type(e) == "table" and terra.types.istype(e.type) then
+                        if e.field and not (type(e.field) == "string" or terra.issymbol(e.field)) then
                             diag:reporterror(self.anchor,"entry field must be a string or symbol")
                         end
+                        results:insert { type = e.type, field = e.field }
                     elseif terra.israwlist(e) then
-                        checkentries(e)
-                    elseif not terra.types.istype(e) then
+                        local union = terralib.newlist()
+                        checkentries(e,union)
+                        results:insert(union)
+                    else
                         diag:reporterror(self.anchor,"expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
                     end
                 end
             end
-            checkentries(entries)
-            return entries
+            local checkedentries = terralib.newlist()
+            checkentries(entries,checkedentries)
+            return checkedentries
         end
     }
     local function reportopaque(anchor)
@@ -1489,16 +1494,12 @@ do --construct type table that holds the singleton value representing each uniqu
             end
             local function addentrylist(entries)
                 for i,e in ipairs(entries) do
-                    if terra.types.istype(e) then
-                        addentry(nil,e)
-                    elseif type(e) == "table" and terra.types.istype(e.type) then
-                        addentry(e.field,e.type)
-                    elseif terra.israwlist(e) then
+                    if terra.islist(e) then
                         beginunion()
                         addentrylist(e)
                         endunion()
                     else
-                        error("internal - invalid entries list?")
+                        addentry(e.field,e.type)
                     end
                 end
             end
