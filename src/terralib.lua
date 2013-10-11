@@ -140,7 +140,7 @@ end
 
 function terra.newanchor(depth)
     local info = debug.getinfo(1 + depth,"Sl")
-    local body = { linenumber = info.currentline, filename = info.short_src }
+    local body = { linenumber = info and info.currentline or 0, filename = info and info.short_src or "unknown" }
     return setmetatable(body,terra.tree)
 end
 
