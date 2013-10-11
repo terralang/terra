@@ -636,7 +636,7 @@ Constructs and returns a new struct. `displayname` is an option name that will b
 
 The `entries` field is a [List](#list) of field entries. Each field entry is one of:
 * A table `{ field = stringorsymbol, type = terratype }`, specifying a named field.
-* Type `terratype`, specifying an anonymous field that will be given a name (e.g. `_0`, `_1`, ...) automatically.
+* Type `terratype`, specifying an anonymous field that will be given a name based on its position in the struct (e.g. `_0` for the first field, `_2` for the third ...).
 * A [List](#list) of field entries that will be allocated together in a union.
 
 ---

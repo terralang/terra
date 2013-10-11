@@ -595,7 +595,7 @@ They may also contain unnamed members:
 
     var a : struct { float, float }
     
-Unnamed members will be given the names `_0`, `_1`, ... `_N`:
+Unnamed members will be given the names based on their position in the struct (e.g, `_0` for the first field, `_1` for the second, etc.):
 
     a._0 + a._1
 
