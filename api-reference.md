@@ -421,7 +421,7 @@ Print out a visual representation of the code in this quote. Because quotes are 
 Symbol
 ------
 
-Symbols are abstract representations of Terra identifiers. They can be used in Terra code where an identifier is expected (e.g. a variable use, a variable definition, a field name, a method name, a label). They are similar to the symbols returned by LISP's `gensym` function. 
+Symbols are abstract representations of Terra identifiers. They can be used in Terra code where an identifier is expected, e.g. a variable use, a variable definition, a function argument, a field name, a method name, a label (see also [Escapes](#escapes)). They are similar to the symbols returned by LISP's `gensym` function.
 
 ---
 
