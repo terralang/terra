@@ -3035,7 +3035,7 @@ function terra.funcdefinition:typecheck()
                 end
                 local function addtreelist(tl,N)
                     if not tl then return end
-                    if tl.statements or N == 0 then
+                    if tl.statements then
                         addquote(truncateexpression(tl,N))
                     else
                         local NE = tl.expressions and #tl.expressions or 0
