@@ -12,7 +12,7 @@ local OCR = terralib.includec("objc/runtime.h")
 
 terra main()
 	var nsobject = OC.NSObject
-	OCR.objc_allocateClassPair([&OCR.objc_class](nsobject),nil,0)
+	OCR.objc_allocateClassPair([&OCR.objc_class](nsobject.data),nil,0)
 end
 
 main:compile()

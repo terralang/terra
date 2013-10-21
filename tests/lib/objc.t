@@ -14,10 +14,13 @@ local mangleSelector
 --replace methods such as:   myobj:methodcall(arg0,arg1)
 --with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
 
-C.objc_object.metamethods.__methodmissing = macro(function(sel,obj,...)
+local struct Wrapper {
+    data : &C.objc_object
+}
+Wrapper.metamethods.__methodmissing = macro(function(sel,obj,...)
 	local arguments = {...}
 	sel = mangleSelector(sel,#arguments)
-	return `C.objc_msgSend(&obj,C.sel_registerName(sel),arguments)
+	return `Wrapper { C.objc_msgSend(obj.data,C.sel_registerName(sel),arguments) }
 end)
 
 function mangleSelector(sel,nargs)
@@ -31,9 +34,9 @@ end
 local OC = {}
 setmetatable(OC, {
 	 __index = function(self,idx)
-	 	return `C.id(C.objc_getClass(idx))
+	 	return `Wrapper { C.id(C.objc_getClass(idx)) }
 	end
 })
-OC.ID = &C.objc_object
+OC.ID = Wrapper
 
 return OC

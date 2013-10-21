@@ -33,7 +33,7 @@ function Array(T)
         local args = terralib.newlist {...}
         local params = args:map(function(a) return symbol(a:gettype()) end)
         local terra elemfn(a : &T, [params])
-            return (@a):[methodname](params)
+            return a:[methodname](params)
         end
         local RT = elemfn:gettype().returns[1]
         return quote
