@@ -1118,6 +1118,7 @@ struct TerraCompiler {
             }
             lua_setmetatable(L,-2);
             funcobj->setfield("llvm_gchandle");
+            T->numlivefunctions++;
         }
         *rfn = fn;
     }
@@ -2358,6 +2359,7 @@ static int terra_deletefunction(lua_State * L) {
         printf("... finish delete.\n");
     }
     *fp = NULL;
+    terra_decrementlivefunctions(T);
     return 0;
 }
 static int terra_disassemble(lua_State * L) {

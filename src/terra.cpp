@@ -160,6 +160,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     assert(T);
     memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
     T->options = *options;
+    T->numlivefunctions = 1;
     T->L = L;
     assert (T->L);
     lua_newtable(T->L);
@@ -215,9 +216,31 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
 static int terra_free(lua_State * L) {
     terra_State * T = (terra_State *) lua_touserdata(L, -1);
     assert(T);
-    terra_cudafree(T);
-    terra_compilerfree(T);
+    terra_decrementlivefunctions(T);
     return 0;
+}
+
+//determines when to free terra_State
+//it is safe to free terra_State when both:
+//1. all live functions in the system have been deleted
+//2. terra_free has been called
+// due to the way lua calls finalizers, terra_free can be called
+// before the destructors for live functions. numlivefunctions
+// keeps an accurate count of the live functions + 1 if terra free
+// has not been called. when this count reaches 0 both conditions
+// 1 and 2 are met, so we can delete the state.
+// terra_decrementlivefunctions will be called by both terra_free
+// and terra_deletefunction to check for this condition
+void terra_decrementlivefunctions(terra_State * T) {
+    assert(T->numlivefunctions > 0);
+    T->numlivefunctions--;
+    if(T->numlivefunctions == 0) {
+        VERBOSE_ONLY(T) {
+            printf("freeing terra_State\n");
+        }
+        terra_cudafree(T);
+        terra_compilerfree(T);
+    }
 }
 
 struct FileInfo {

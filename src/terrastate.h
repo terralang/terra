@@ -18,6 +18,8 @@ typedef struct terra_State {
 //for parser
     int nCcalls;
     char tstring_table; //&tstring_table is used as the key into the lua registry that maps strings in Lua to TString objects for the parser
+    size_t numlivefunctions; //number of terra functions that are live in the system, + 1 if terra_free has not been called
+                            //used to track when it is safe to delete the terra_State object.
 } terra_State;
 
 //call this whenevern terra code is running within a lua call.
@@ -31,6 +33,7 @@ void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
 int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name);
 terra_State * terra_getstate(lua_State * L, int closureindex);
+void terra_decrementlivefunctions(terra_State * T);
 #define VERBOSE_ONLY(T) if((T)->options.verbose != 0)
 #define DEBUG_ONLY(T) if((T)->options.debug != 0)
 
