@@ -1338,7 +1338,9 @@ do --construct type table that holds the singleton value representing each uniqu
                 local value = self.type:cstring()
                 local elemSz = ffi.sizeof(value)
                 local nm = uniquetypename(value,"vec")
-                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(self.N*elemSz)..")));")
+                local pow2 = 1 --round N to next power of 2
+                while pow2 < self.N do pow2 = 2*pow2 end
+                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
                 self.cachedcstring = nm 
             elseif self:isfunction() then
                 
