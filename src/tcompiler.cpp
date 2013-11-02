@@ -45,6 +45,7 @@ using namespace llvm;
                     all callee's of these functions that are not in this scc have already been optimized*/\
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
     _(createglobal,1) \
+    _(llvmsizeof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
     _(gcdebug,0) \
@@ -2225,6 +2226,23 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
     lobj_removereftable(T->L,ref_table);
     
     return 0;
+}
+
+static int terra_llvmsizeof(lua_State * L) {
+    terra_State * T = terra_getstate(L, 1);
+    int ref_table = lobj_newreftable(L);
+    TType * llvmtyp;
+    {
+        CCallingConv CC;
+        CC.init(T,T->C,NULL);
+        lua_pushvalue(T->L,-2); //original argument
+        Obj typ;
+        typ.initFromStack(L, ref_table);
+        llvmtyp = CC.GetType(&typ);
+    }
+    lobj_removereftable(T->L, ref_table);
+    lua_pushnumber(T->L,T->C->td->getTypeAllocSize(llvmtyp->type));
+    return 1;
 }
 
 static int terra_optimize(lua_State * L) {

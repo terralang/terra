@@ -4155,8 +4155,7 @@ function terra.new(terratype,...)
 end
 function terra.sizeof(terratype,...)
     terratype:complete()
-    local typ = terratype:cstring()
-    return ffi.sizeof(typ,...)
+    return terra.llvmsizeof(terratype)
 end
 function terra.offsetof(terratype,field)
     terratype:complete()
