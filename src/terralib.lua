@@ -4115,9 +4115,8 @@ end
 
 
 package.path = (not os.getenv("LUA_PATH") and package.path .. ";./?.t") or package.path 
-terra.packages = {} --table of packages loaded using terralib.require()
 function terra.require(name)
-    if not terra.packages[name] then
+    if package.loaded[name] == nil then
         local fname = name:gsub("%.","/")
         local file = nil
         for template in package.path:gmatch("([^;]+);?") do
@@ -4136,9 +4135,12 @@ function terra.require(name)
         if not fn then
             error(err,0)
         end
-        terra.packages[name] = { results = {fn()} }    
+        local result = fn()
+        if package.loaded[name] == nil then
+            package.loaded[name] = result ~= nil and result or true
+        end
     end
-    return unpack(terra.packages[name].results)
+    return package.loaded[name]
 end
 function terra.makeenvunstrict(env)
     if getmetatable(env) == Strict then
