@@ -213,5 +213,20 @@ void terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
 }
 
 #else /* it is WIN32 */
-void terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {}
+
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE
+#endif
+#include "llvmheaders.h"
+#include "tllvmutil.h"
+#include "terrastate.h"
+#include "tcompilerstate.h"
+
+using namespace llvm;
+
+int terra_debuginit(struct terra_State * T, JITMemoryManager * JMM)
+{
+    return 0;
+}
+
 #endif
