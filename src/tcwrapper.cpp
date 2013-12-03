@@ -346,7 +346,7 @@ public:
         }
         return true;
     }
-    bool VisitRecordDecl(RecordDecl * rd) {
+    bool TraverseRecordDecl(RecordDecl * rd) {
         if(rd->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
             Obj type;
             std::string name;
@@ -415,7 +415,7 @@ public:
         }
         return false;
     }
-    bool VisitFunctionDecl(FunctionDecl *f) {
+    bool TraverseFunctionDecl(FunctionDecl *f) {
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
