@@ -1338,8 +1338,6 @@ do --construct type table that holds the singleton value representing each uniqu
                 while pow2 < self.N do pow2 = 2*pow2 end
                 ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
                 self.cachedcstring = nm 
-            elseif self:isfunction() then
-                
             elseif self == types.niltype then
                 local nilname = uniquetypename("niltype")
                 ffi.cdef("typedef void * "..nilname..";")
