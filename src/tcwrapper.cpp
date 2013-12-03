@@ -33,10 +33,8 @@ using namespace clang;
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Rewriter &R, std::stringstream & o, Obj * res)
-        : TheRewriter(R),
-          output(o),
-          resulttable(res),
+    IncludeCVisitor(Obj * res)
+        : resulttable(res),
           L(res->getState()),
           ref_table(res->getRefTable()) {
         
@@ -310,9 +308,28 @@ public:
         lua_pushstring(L,error_message.c_str());
         error_table.setfield(field);
     }
-    void KeepTypeLive(llvm::StringRef name) {
-         //make sure it stays live through llvm translation
-        output << "(void)(" << name.str() << "*) (void*) 0;\n";
+    CStyleCastExpr* CreateCast(QualType Ty, CastKind Kind, Expr *E) {
+      TypeSourceInfo *TInfo = Context->getTrivialTypeSourceInfo(Ty, SourceLocation());
+      return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0, TInfo,
+                                    SourceLocation(), SourceLocation());
+    }
+    IntegerLiteral * LiteralZero() {
+        unsigned IntSize = static_cast<unsigned>(Context->getTypeSize(Context->IntTy));
+        return IntegerLiteral::Create(*Context, llvm::APInt(IntSize, 0), Context->IntTy, SourceLocation());
+    }
+    void KeepTypeLive(QualType T, llvm::StringRef name) {
+        Expr * castexp = CreateCast(Context->VoidTy, clang::CK_ToVoid, CreateCast(Context->getPointerType(T), clang::CK_NullToPointer, LiteralZero()));
+        outputstmts.push_back(castexp);
+    }
+    DeclRefExpr * GetFunctionReference(FunctionDecl * df) {
+        DeclRefExpr *DR = DeclRefExpr::Create(*Context, NestedNameSpecifierLoc(),SourceLocation(),df, false, SourceLocation(),
+                          df->getType(),
+                          VK_RValue);
+        return DR;
+    }
+    void KeepFunctionLive(FunctionDecl * df) {
+        Expr * castexp = CreateCast(Context->VoidTy, clang::CK_ToVoid, GetFunctionReference(df));
+        outputstmts.push_back(castexp);
     }
     bool VisitTypedefDecl(TypedefDecl * TD) {
         if(TD == TD->getCanonicalDecl() && TD->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
@@ -322,7 +339,7 @@ public:
             if(GetType(QT,&typ)) {
                 typ.push();
                 general.setfield(name.str().c_str());
-               KeepTypeLive(name);
+               KeepTypeLive(QT,name);
             } else {
                 SetErrorReport(name.str().c_str());
             }
@@ -334,7 +351,7 @@ public:
             Obj type;
             std::string name;
             if(GetRecordTypeFromDecl(rd, &type,&name)) {
-                KeepTypeLive(name);
+                KeepTypeLive(Context->getRecordType(rd),name);
             }
         }
         return true;
@@ -385,10 +402,25 @@ public:
         
         return valid;
     }
+    bool HandleLiveness(FunctionDecl * f, const std::string & FuncName) {
+        std::string prefix = "__makeeverythinginclanglive_";
+        if(FuncName.substr(0,prefix.size()) == prefix) {
+            #if defined(LLVM_3_3)
+            CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
+            #elif defined(LLVM_3_2) || defined(LLVM_3_1)
+            CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
+            #endif
+            f->setBody(stmts);
+            return true;
+        }
+        return false;
+    }
     bool VisitFunctionDecl(FunctionDecl *f) {
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
+        if(HandleLiveness(f,FuncName))
+            return true;
         const FunctionType * fntyp = f->getType()->getAs<FunctionType>();
         
         if(!fntyp)
@@ -416,8 +448,7 @@ public:
         }
         CreateFunction(FuncName,InternalName,&typ);
         
-        //make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
-        output << "    (void)" << FuncName << ";\n";         
+        KeepFunctionLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
         
         return true;
     }
@@ -434,8 +465,7 @@ public:
         Context = ctx;
     }
   private:
-    std::stringstream & output;
-    Rewriter &TheRewriter;
+    std::vector<Stmt*> outputstmts;
     Obj * resulttable; //holds table returned to lua includes "functions", "types", and "errors"
     lua_State * L;
     int ref_table;
@@ -447,27 +477,44 @@ public:
     std::string error_message;
 };
 
-class IncludeCConsumer : public ASTConsumer
-{
+class CodeGenProxy : public ASTConsumer {
 public:
-    IncludeCConsumer(Rewriter &R,std::stringstream & o, Obj * result)
-        : Visitor(R,o,result)
-    {}
-
-    virtual void Initialize(ASTContext &Context) {
-        Visitor.SetContext(&Context);
-    }
-
-    virtual bool HandleTopLevelDecl(DeclGroupRef DR) {
-        for (DeclGroupRef::iterator b = DR.begin(), e = DR.end();
-             b != e; ++b)
-            // Traverse the declaration using our AST visitor.
+  CodeGenProxy(CodeGenerator * CG_, Obj * result)
+  : CG(CG_), Visitor(result) {}
+  CodeGenerator * CG;
+  IncludeCVisitor Visitor;
+  virtual ~CodeGenProxy() {}
+  virtual void Initialize(ASTContext &Context) {
+    Visitor.SetContext(&Context);
+    CG->Initialize(Context);
+  }
+  virtual bool HandleTopLevelDecl(DeclGroupRef D) {
+    for (DeclGroupRef::iterator b = D.begin(), e = D.end();
+         b != e; ++b)
             Visitor.TraverseDecl(*b);
-        return true;
-    }
+    return CG->HandleTopLevelDecl(D);
+  }
+  virtual void HandleInterestingDecl(DeclGroupRef D) { CG->HandleInterestingDecl(D); }
+  virtual void HandleTranslationUnit(ASTContext &Ctx) { CG->HandleTranslationUnit(Ctx); }
+  virtual void HandleTagDeclDefinition(TagDecl *D) { CG->HandleTagDeclDefinition(D); }
+  virtual void HandleCXXImplicitFunctionInstantiation(FunctionDecl *D) { CG->HandleCXXImplicitFunctionInstantiation(D); }
+  virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) { CG->HandleTopLevelDeclInObjCContainer(D); }
+  virtual void CompleteTentativeDefinition(VarDecl *D) { CG->CompleteTentativeDefinition(D); }
+  virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *D) { CG->HandleCXXStaticMemberVarInstantiation(D); }
+  virtual void HandleVTable(CXXRecordDecl *RD, bool DefinitionRequired) { CG->HandleVTable(RD, DefinitionRequired); }
+  virtual ASTMutationListener *GetASTMutationListener() { return CG->GetASTMutationListener(); }
+  virtual ASTDeserializationListener *GetASTDeserializationListener() { return CG->GetASTDeserializationListener(); }
+  virtual void PrintStats() { CG->PrintStats(); }
 
-private:
-    IncludeCVisitor Visitor;
+#if LLVM_3_1
+#elif LLVM_3_2
+  virtual void HandleImplicitImportDecl(ImportDecl *D) { CG->HandleImplicitImportDecl(D); }
+  virtual PPMutationListener *GetPPMutationListener() { return CG->GetPPMutationListener(); }
+#elif LLVM_3_3
+  virtual void HandleImplicitImportDecl(ImportDecl *D) { CG->HandleImplicitImportDecl(D); }
+  virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
+#endif
+
 };
 
 static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, const char ** argbegin, const char ** argend, CompilerInstance * TheCompInst) {
@@ -509,47 +556,17 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     
 }
 
-static void dorewrite(terra_State * T, const char * code, const char ** argbegin, const char ** argend, std::string * output, Obj * result) {
-    
-    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(code, "<buffer>");
-    CompilerInstance TheCompInst;
-    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
-    
-    // Create an AST consumer instance which is going to get called by
-    // ParseAST.
-    // A Rewriter helps us manage the code rewriting task.
-    SourceManager & SourceMgr = TheCompInst.getSourceManager();
-    Rewriter TheRewriter;
-    TheRewriter.setSourceMgr(SourceMgr, TheCompInst.getLangOpts());
-    
-    std::stringstream dummy;
-    IncludeCConsumer TheConsumer(TheRewriter,dummy,result);
-
-    // Parse the file to AST, registering our consumer as the AST consumer.
-    ParseAST(TheCompInst.getPreprocessor(), &TheConsumer,
-             TheCompInst.getASTContext());
-
-    // At this point the rewriter's buffer should be full with the rewritten
-    // file contents.
-    const RewriteBuffer *RewriteBuf =
-        TheRewriter.getRewriteBufferFor(SourceMgr.getMainFileID());
-    
-    std::ostringstream out;
-    out << std::string(membuffer->getBufferStart(),membuffer->getBufferEnd()) << "\n" 
-    << "void __makeeverythinginclanglive_" << T->C->next_unused_id++ << "() {\n"
-    << dummy.str() << "\n}\n";
-    *output = out.str();
-    //printf("output is %s\n",(*output).c_str());
-}
-
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
-    std::string buffer;
-    dorewrite(T,code,argbegin,argend,&buffer,result);
     
+    std::string buffer;
+    
+    llvm::raw_string_ostream StringStream(buffer);
+    StringStream << code << "\nvoid __makeeverythinginclanglive_" << T->C->next_unused_id++ << "(void) {}\n";
+    StringStream.flush();
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
-    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBufferCopy(buffer, "<buffer>");
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(buffer, "<buffer>");
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
     
     #if defined LLVM_3_1 || defined LLVM_3_2
@@ -558,8 +575,9 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
     #endif
     
+    CodeGenProxy proxy(codegen,result);
     ParseAST(TheCompInst.getPreprocessor(),
-            codegen,
+            &proxy,
             TheCompInst.getASTContext());
 
     llvm::Module * mod = codegen->ReleaseModule();
@@ -579,7 +597,6 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     }
     
     delete codegen;
-    //delete membuffer;
     
     return 0;
 }
