@@ -428,6 +428,9 @@ struct CCallingConv {
             } break;
         }
     }
+    bool beginsWith(const std::string & s, const std::string & prefix) {
+        return s.substr(0,prefix.size()) == prefix;
+    }
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
         StructType * st;
@@ -435,7 +438,10 @@ struct CCallingConv {
             const char * llvmname = typ->string("llvm_name");
             st = C->m->getTypeByName(llvmname);
         } else {
-            st = StructType::create(*C->ctx,typ->asstring("displayname"));
+            std::string name = typ->asstring("displayname");
+            bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
+            name = (isreserved) ? std::string("$") + name : name;
+            st = StructType::create(*C->ctx, name);
         }
         return st;
     }
