@@ -1919,7 +1919,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
     for(size_t i = 0; i < defs.size(); i++) {
         Name * name = &names[defs[i].nameidx];
         OutputBuffer_putc(&ls->output_buffer, ',');
-        print_value_and_name(ls, name);
+        Name_print(name,ls);
         OutputBuffer_printf(&ls->output_buffer, ", _G.terra._trees[%d] ", defs[i].treeid);
         if(defs[i].kind == 'm') {
             OutputBuffer_putc(&ls->output_buffer, ',');

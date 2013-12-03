@@ -672,6 +672,8 @@ function terra.func:__call(...)
 end
 
 function terra.func:adddefinition(v)
+    v.name = self.name --propagate function name to definition 
+                       --this will be used as the name for llvm debugging, etc.
     self.fastcall = nil
     self.definitions:insert(v)
 end
@@ -914,15 +916,8 @@ end
 -- CONSTRUCTORS
 do  --constructor functions for terra functions and variables
     local name_count = 0
-    local function manglename(nm)
-        local fixed = nm:gsub("[^A-Za-z0-9]","_") .. name_count --todo if a user writes terra foo, pass in the string "foo"
-        name_count = name_count + 1
-        return fixed
-    end
-    local function newfunctiondefinition(newtree,name,env,reciever)
-        local rawname = (name or newtree.filename.."_"..newtree.linenumber.."_")
-        local fname = manglename(rawname)
-        local obj = { untypedtree = newtree, filename = newtree.filename, name = fname, state = "untyped", stats = {} }
+    local function newfunctiondefinition(newtree,env,reciever)
+        local obj = { untypedtree = newtree, filename = newtree.filename, state = "untyped", stats = {} }
         local fn = setmetatable(obj,terra.funcdefinition)
         
         --handle desugaring of methods defintions by adding an implicit self argument
@@ -947,6 +942,7 @@ do  --constructor functions for terra functions and variables
     end
     
     local function mkfunction(name)
+        assert(name and type(name) == "string")
         return setmetatable({definitions = terra.newlist(), name = name},terra.func)
     end
     
@@ -1019,8 +1015,8 @@ do  --constructor functions for terra functions and variables
         local results = {}
         for i = 1, #fmt do
             local c = fmt:sub(i,i)
-            local obj, name, tree = args[idx], args[idx+1], args[idx+2]
-            idx = idx + 3
+            local obj, tree = args[idx], args[idx+1]
+            idx = idx + 2
             if "s" == c then
                 layoutstruct(obj,tree,envfn())
             elseif "f" == c or "m" == c then
@@ -1029,7 +1025,7 @@ do  --constructor functions for terra functions and variables
                     reciever = args[idx]
                     idx = idx + 1
                 end
-                obj:adddefinition(newfunctiondefinition(tree,name,envfn(),reciever))
+                obj:adddefinition(newfunctiondefinition(tree,envfn(),reciever))
             else
                 error("unknown object format: "..c)
             end
@@ -1044,13 +1040,13 @@ do  --constructor functions for terra functions and variables
     end
 
     function terra.anonfunction(tree,envfn)
-        local fn = mkfunction(nil)
-        fn:adddefinition(newfunctiondefinition(tree,nil,envfn(),nil))
+        local fn = mkfunction("anon ("..tree.filename..":"..tree.linenumber..")")
+        fn:adddefinition(newfunctiondefinition(tree,envfn(),nil))
         return fn
     end
 
     function terra.newcfunction(name,typ)
-        local obj = { name = name, type = typ, state = "uninitializedc" }
+        local obj = { type = typ, state = "uninitializedc" }
         setmetatable(obj,terra.funcdefinition)
         
         local fn = mkfunction(name)

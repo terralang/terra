@@ -219,12 +219,6 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         MPM->add(createInternalizePass(names));
         MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
                                          //this will remove dead functions
-    
-        //clean up the name list
-        for(size_t i = 0; i < names.size(); i++) {
-            free((char*)names[i]);
-            names[i] = NULL;
-        }
         
         PassManagerBuilder PMB;
         PMB.OptLevel = 3;
@@ -237,6 +231,23 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         
         delete MPM;
         MPM = NULL;
+    
+        //clean up the name list
+        //if other symbols already had names the same as symbolnames, we need to rename those symbols
+        //here so that the names refer to the requested symbols in the modules
+        for(size_t i = 0; i < names.size(); i++) {
+            if (symbolnames != NULL && names[i] != (*symbolnames)[i]) {
+                GlobalValue * gv = M->getNamedValue((*symbolnames)[i]);
+                if(gv) { /* it might have been deleted during internalization */
+                    gv->setName(Twine((*symbolnames)[i],"_renamed"));
+                }
+                gv = M->getNamedValue(names[i]);
+                assert(gv);
+                gv->setName((*symbolnames)[i]);
+            }
+            free((char*)names[i]);
+            names[i] = NULL;
+        }
     
         return M;
 }

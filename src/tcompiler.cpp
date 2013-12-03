@@ -760,7 +760,6 @@ struct CCallingConv {
         TType * llvmtyp = GetType(ftype);
         Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,name, C->m);
         Classification * info = ClassifyFunction(ftype);
-        
         AttributeFnOrCall(fn,info);
         return fn;
     }
