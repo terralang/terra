@@ -405,7 +405,7 @@ public:
     bool HandleLiveness(FunctionDecl * f, const std::string & FuncName) {
         std::string prefix = "__makeeverythinginclanglive_";
         if(FuncName.substr(0,prefix.size()) == prefix) {
-            #if defined(LLVM_3_3)
+            #if defined(LLVM_3_3) || defined(LLVM_3_3_1)
             CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
             #elif defined(LLVM_3_2) || defined(LLVM_3_1)
             CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
