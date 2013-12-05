@@ -1675,7 +1675,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     local definedstructs = {}
     local function getuniquestructname(displayname)
-        local name = displayname
+        local name = displayname    
         if definedstructs[displayname] then 
             name = name .. "$"..tostring(definedstructs[displayname])
             definedstructs[displayname] = definedstructs[displayname] + 1
@@ -3672,6 +3672,7 @@ function terra.func:__tostring()
 end
 
 local function printpretty(toptree,returntypes)
+    local env = terra.newenvironment({})
     local indent = 0
     local function enterblock()
         indent = indent + 1
@@ -3701,9 +3702,20 @@ local function printpretty(toptree,returntypes)
     local function emitType(t)
         emit(t)
     end
-
+    local function emitIdent(name,sym)
+        local lenv = env:localenv()
+        local assignedname = lenv[sym]
+        --if we haven't seen this symbol in this scope yet, assign a name for this symbol, favoring the non-mangled name
+        if not assignedname then
+            if lenv[name] then
+                name = name.."$"..sym.id
+            end
+            lenv[name],lenv[sym],assignedname = true,name,name
+        end
+        emit("%s",assignedname)
+    end
     local function emitParam(p)
-        emit("%s",p.name)
+        emitIdent(p.name,p.symbol)
         if p.type then 
             emit(" : %s",p.type)
         end
@@ -3726,7 +3738,9 @@ local function printpretty(toptree,returntypes)
     function emitStmt(s)
         if s:is "block" then
             enterblock()
+            env:enterblock()
             emitStmt(s.body)
+            env:leaveblock()
             leaveblock()
         elseif s:is "treelist" then
             if s.statements then
@@ -3852,7 +3866,7 @@ local function printpretty(toptree,returntypes)
 
     function emitExp(e)
         if e:is "var" then
-            emit(e.name)
+            emitIdent(e.name,e.value)
         elseif e:is "operator" then
             local op = terra.kinds[e.operator]
             local function emitOperand(o,isrhs)
