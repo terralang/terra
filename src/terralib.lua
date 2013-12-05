@@ -1082,7 +1082,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     
     function types.type:__tostring()
-        return self.displayname or self.name
+        return self.name
     end
     types.type.printraw = terra.tree.printraw
     function types.type:isprimitive()
@@ -1677,20 +1677,16 @@ do --construct type table that holds the singleton value representing each uniqu
     local function getuniquestructname(displayname)
         local name = displayname
         if definedstructs[displayname] then 
-            name = name .. tostring(definedstructs[displayname])
-        else
-            definedstructs[displayname] = 0
+            name = name .. "$"..tostring(definedstructs[displayname])
+            definedstructs[displayname] = definedstructs[displayname] + 1
+            return getuniquestructname(name) --the string Name$Num might itself be a type name already
         end
-        definedstructs[displayname] = definedstructs[displayname] + 1
+        definedstructs[displayname] = 1
         return name
     end
     function types.newstruct(displayname,depth)
-        if not displayname then
-            displayname = "anon"
-        end
-        if not depth then
-            depth = 1
-        end
+        displayname = displayname or "anon"
+        depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
     local llvmnametostruct = {} --map from llvm_name -> terra type used to make c structs unique per llvm_name
@@ -1711,7 +1707,6 @@ do --construct type table that holds the singleton value representing each uniqu
                 
         local tbl = mkincomplete { kind = terra.kinds["struct"],
                             name = name, 
-                            displayname = displayname, 
                             entries = terra.newlist(),
                             methods = {},
                             metamethods = {},
