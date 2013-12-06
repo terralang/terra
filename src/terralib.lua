@@ -1064,6 +1064,26 @@ end
 
 -- TYPE
 
+--returns a function string -> string that makes names unique by appending numbers
+local function uniquenameset(sep)
+    local cache = {}
+    local function get(name)
+        local count = cache[name]
+        if not count then
+            cache[name] = 1
+            return name
+        end
+        local rename = name .. sep .. tostring(count)
+        cache[name] = count + 1
+        return get(rename) -- the string name<sep><count> might itself be a type name already
+    end
+    return get
+end
+--sanitize a string, making it a valid lua/C identifier
+local function tovalididentifier(name)
+    return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1") --sanitize input to be valid identifier
+end
+
 do --construct type table that holds the singleton value representing each unique type
    --eventually this will be linked to the LLVM object representing the type
    --and any information about the operators defined on the type
@@ -1139,18 +1159,7 @@ do --construct type table that holds the singleton value representing each uniqu
             return self[n](self) or (self:isvector() and self.type[n](self.type))  
         end
     end
-    
-    local next_type_id = 0 --used to generate uniq type names
-    local function uniquetypename(base,name) --used to generate unique typedefs for C
-        base = base:gsub("[^_%w]","_")
-        local r = base.."_"
-        if name then
-            r = r..name.."_"
-        end
-        r = r..next_type_id
-        next_type_id = next_type_id + 1
-        return r
-    end
+    local makevalid
     
     --pretty print of layout of type
     function types.type:printpretty()
@@ -1267,13 +1276,12 @@ do --construct type table that holds the singleton value representing each uniqu
         str = str .. "};"
         ffi.cdef(str)
     end
+    local uniquetypenameset = uniquenameset("_")
+    local function uniquecname(name) --used to generate unique typedefs for C
+        return uniquetypenameset(tovalididentifier(name))
+    end
     function types.type:cstring()
         if not self.cachedcstring then
-            local function definetype(base,name,value)
-                local nm = uniquetypename(base,name)
-                ffi.cdef("typedef "..value.." "..nm..";")
-                return nm
-            end
             --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
             --this makes it possible to predict the syntax of subsequent typedef operations
             if self:isintegral() then
@@ -1301,7 +1309,7 @@ do --construct type table that holds the singleton value representing each uniqu
                     else
                         pa = pa .. ")"
                     end
-                    local ntyp = uniquetypename("function")
+                    local ntyp = uniquecname("function")
                     local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
                     ffi.cdef(cdef)
                     self.cachedcstring = ntyp
@@ -1311,12 +1319,14 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self:ispointer() then
                 local value = self.type:cstring()
                 if not self.cachedcstring then
-                    self.cachedcstring = definetype(value,"ptr",value .. "*")
+                    local nm = uniquecname("ptr_"..value)
+                    ffi.cdef("typedef "..value.."* "..nm..";")
+                    self.cachedcstring = nm
                 end
             elseif self:islogical() then
                 self.cachedcstring = "bool"
             elseif self:isstruct() then
-                local nm = uniquetypename(self.name)
+                local nm = uniquecname(self.name)
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
                                                               --when the struct is 
                 self.cachedcstring = nm
@@ -1326,20 +1336,20 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self:isarray() then
                 local value = self.type:cstring()
                 if not self.cachedcstring then
-                    local nm = uniquetypename(value,"arr")
+                    local nm = uniquecname(value.."_arr")
                     ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
                     self.cachedcstring = nm
                 end
             elseif self:isvector() then
                 local value = self.type:cstring()
                 local elemSz = ffi.sizeof(value)
-                local nm = uniquetypename(value,"vec")
+                local nm = uniquecname(value.."_vec")
                 local pow2 = 1 --round N to next power of 2
                 while pow2 < self.N do pow2 = 2*pow2 end
                 ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
                 self.cachedcstring = nm 
             elseif self == types.niltype then
-                local nilname = uniquetypename("niltype")
+                local nilname = uniquecname("niltype")
                 ffi.cdef("typedef void * "..nilname..";")
                 self.cachedcstring = nilname
             elseif self == types.opaque then
@@ -1674,16 +1684,7 @@ do --construct type table that holds the singleton value representing each uniqu
     
     
     local definedstructs = {}
-    local function getuniquestructname(displayname)
-        local name = displayname    
-        if definedstructs[displayname] then 
-            name = name .. "$"..tostring(definedstructs[displayname])
-            definedstructs[displayname] = definedstructs[displayname] + 1
-            return getuniquestructname(name) --the string Name$Num might itself be a type name already
-        end
-        definedstructs[displayname] = 1
-        return name
-    end
+    local getuniquestructname = uniquenameset("$")
     function types.newstruct(displayname,depth)
         displayname = displayname or "anon"
         depth = depth or 1
