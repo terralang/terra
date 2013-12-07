@@ -1084,7 +1084,7 @@ do
     end
     --sanitize a string, making it a valid lua/C identifier
     local function tovalididentifier(name)
-        return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1") --sanitize input to be valid identifier
+        return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1"):gsub("^$","_") --sanitize input to be valid identifier
     end
     
     local function memoizefunction(fn)
