@@ -649,7 +649,7 @@ The `methods` field is a table mapping strings or [symbols](#symbol) to function
 
     mystruct.metamethods
 
-The `metamethods` field can be used to extend the behavior of structs by definition the following fields:
+The `metamethods` field can be used to extend the behavior of structs by defining the following fields:
 
 * `entries = __getentries(self)` -- a _Lua_ function that overrides the default behavior that determines the fields in a struct. By default, `__getentries` just returns the `self.entries` table. It can be overridden to determine the fields in the struct computationally. The `__getentries` function will be called by the compiler once when it first requires the list of entries in the struct. Since the type is not yet complete during this call, doing anything in this method that requires the type to be complete will result in an error.
 * `method = __getmethod(self,methodname)` -- a _Lua_ function that overrides the default behavior that looks up a method for a struct statically. By default, `__getmethod(self,methodname)` will return `self.methods[methodname]`. If the resulting value is `nil` then it will call `__methodmissing` as described below. By defining `__getmethod`, you can change the behavior of method lookup. This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls. 
@@ -659,7 +659,7 @@ The `metamethods` field can be used to extend the behavior of structs by definit
 * custom operators: `__sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,`
     `__eq, __ne, __and, __or, __not, __xor, __lshift, __rshift,` 
     `__select, __apply, __get` Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, `__get` for field selection `mystruct.missingfield` for a field that doesn't exist in the struct, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
-
+* `__typename(self)` -- a _Lua_ function that generates a string that names the type. This name will be used in error messages and `tostring`.
 
 C Backwards Compatibility
 -------------------------
