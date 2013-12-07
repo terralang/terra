@@ -169,6 +169,11 @@ function terra.list:map(fn)
     end 
     return l
 end
+function terra.list:insertall(elems)
+    for i,e in ipairs(elems) do
+        self:insert(e)
+    end
+end
 
 function terra.list:printraw()
     for i,v in ipairs(self) do
@@ -183,13 +188,7 @@ function terra.list:mkstring(begin,sep,finish)
     if sep == nil then
         begin,sep,finish = "",begin,""
     end
-    local len = #self
-    if len == 0 then return begin..finish end
-    local str = begin .. tostring(self[1])
-    for i = 2,len do
-        str = str .. sep .. tostring(self[i])
-    end
-    return str..finish
+    return begin..table.concat(self:map(tostring),sep)..finish
 end
 
 function terra.islist(exp)
@@ -1064,31 +1063,56 @@ end
 
 -- TYPE
 
---returns a function string -> string that makes names unique by appending numbers
-local function uniquenameset(sep)
-    local cache = {}
-    local function get(name)
-        local count = cache[name]
-        if not count then
-            cache[name] = 1
-            return name
-        end
-        local rename = name .. sep .. tostring(count)
-        cache[name] = count + 1
-        return get(rename) -- the string name<sep><count> might itself be a type name already
-    end
-    return get
-end
---sanitize a string, making it a valid lua/C identifier
-local function tovalididentifier(name)
-    return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1") --sanitize input to be valid identifier
-end
+do 
 
-do --construct type table that holds the singleton value representing each unique type
-   --eventually this will be linked to the LLVM object representing the type
-   --and any information about the operators defined on the type
-    local types = {}
+    --some utility functions used to generate unique types and names
     
+    --returns a function string -> string that makes names unique by appending numbers
+    local function uniquenameset(sep)
+        local cache = {}
+        local function get(name)
+            local count = cache[name]
+            if not count then
+                cache[name] = 1
+                return name
+            end
+            local rename = name .. sep .. tostring(count)
+            cache[name] = count + 1
+            return get(rename) -- the string name<sep><count> might itself be a type name already
+        end
+        return get
+    end
+    --sanitize a string, making it a valid lua/C identifier
+    local function tovalididentifier(name)
+        return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1") --sanitize input to be valid identifier
+    end
+    
+    local function memoizefunction(fn)
+        local info = debug.getinfo(fn,'u')
+        local nparams = not info.isvararg and info.nparams
+        local cachekey = {}
+        local values = {}
+        local nilkey = {} --key to use in place of nil when a nil value is seen
+        return function(...)
+            local key = cachekey
+            for i = 1,nparams or select('#',...) do
+                local e = select(i,...)
+                if e == nil then e = nilkey end
+                local n = key[e]
+                if not n then
+                    n = {}; key[e] = n
+                end
+                key = n
+            end
+            local v = values[key]
+            if not v then
+                v = fn(...); values[key] = v
+            end
+            return v
+        end
+    end
+    
+    local types = {}
     
     types.type = {} --all types have this as their metatable
     types.type.__index = function(self,key)
@@ -1101,9 +1125,21 @@ do --construct type table that holds the singleton value representing each uniqu
     end
     
     
-    function types.type:__tostring()
+    types.type.__tostring = memoizefunction(function(self)
+        if self:isstruct() then return self.name
+        elseif self:ispointer() then return "&"..tostring(self.type)
+        elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
+        elseif self:isfunction() then return self.parameters:mkstring("{",",","}").." -> "..self.returns:mkstring("{",",","}")
+        elseif self:isarray() then
+            local t = tostring(self.type)
+            if self.type:ispointer() then
+                t = "("..t..")"
+            end
+            return t.."["..tostring(self.N).."]"
+        end
+        if not self.name then error("unknown type?") end
         return self.name
-    end
+    end)
     types.type.printraw = terra.tree.printraw
     function types.type:isprimitive()
         return self.kind == terra.kinds.primitive
@@ -1203,7 +1239,7 @@ do --construct type table that holds the singleton value representing each uniqu
         print(self,0)
         io.write("\n")
     end
-    local function memoize(data)
+    local function memoizeproperty(data)
         local name = data.name
         local defaultvalue = data.defaultvalue
         local erroronrecursion = data.erroronrecursion
@@ -1292,7 +1328,7 @@ do --construct type table that holds the singleton value representing each uniqu
                 local ftype = self.type
                 local rt = (#ftype.returns == 0 and "void") or ftype.returnobj:cstring()
                 local function getcstring(t)
-                    if t == rawstring then
+                    if t == types.rawstring then
                         --hack to make it possible to pass strings to terra functions
                         --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
                         --so it should be removed when we have a better solution
@@ -1326,7 +1362,7 @@ do --construct type table that holds the singleton value representing each uniqu
             elseif self:islogical() then
                 self.cachedcstring = "bool"
             elseif self:isstruct() then
-                local nm = uniquecname(self.name)
+                local nm = uniquecname(tostring(self))
                 ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
                                                               --when the struct is 
                 self.cachedcstring = nm
@@ -1386,7 +1422,7 @@ do --construct type table that holds the singleton value representing each uniqu
 
     
 
-    types.type.getentries = memoize{
+    types.type.getentries = memoizeproperty{
         name = "entries";
         defaultvalue = terra.newlist();
         erroronrecursion = "recursively calling getentries on type";
@@ -1440,7 +1476,7 @@ do --construct type table that holds the singleton value representing each uniqu
             error(msg,4)
         end
     end
-    types.type.getlayout = memoize {
+    types.type.getlayout = memoizeproperty {
         name = "layout"; 
         defaultvalue = { entries = terra.newlist(), keytoindex = {}, invalid = true };
         erroronrecursion = "type recursively contains itself";
@@ -1576,9 +1612,6 @@ do --construct type table that holds the singleton value representing each uniqu
         return getmetatable(t) == types.type
     end
     
-    --map from unique type identifier string to the metadata for the type
-    types.table = {}
-    
     --map from luajit ffi ctype objects to corresponding terra type
     types.ctypetoterra = {}
     
@@ -1590,20 +1623,10 @@ do --construct type table that holds the singleton value representing each uniqu
         return setmetatable(v,types.type)
     end
     
-    local function registertype(name, constructor)
-        local typ = types.table[name]
-        if typ == nil then
-            if types.istype(constructor) then
-                typ = constructor
-            elseif type(constructor) == "function" then
-                typ = constructor()
-            else
-                error("expected function or type")
-            end
-            typ.name = name
-            types.table[name] = typ
-        end
-        return typ
+    local function globaltype(name, typ)
+        typ.name = typ.name or name
+        rawset(_G,name,typ)
+        types[name] = typ
     end
     
     --initialize integral types
@@ -1615,18 +1638,18 @@ do --construct type table that holds the singleton value representing each uniqu
                 name = "u"..name
             end
             local typ = mktyp { kind = terra.kinds.primitive, bytes = size, type = terra.kinds.integer, signed = s}
-            registertype(name,typ)
+            globaltype(name,typ)
             typ:cstring() -- force registration of integral types so calls like terralib.typeof(1LL) work
         end
     end  
     
-    registertype("float", mktyp { kind = terra.kinds.primitive, bytes = 4, type = terra.kinds.float })
-    registertype("double",mktyp { kind = terra.kinds.primitive, bytes = 8, type = terra.kinds.float })
-    registertype("bool",  mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical})
+    globaltype("float", mktyp { kind = terra.kinds.primitive, bytes = 4, type = terra.kinds.float })
+    globaltype("double",mktyp { kind = terra.kinds.primitive, bytes = 8, type = terra.kinds.float })
+    globaltype("bool",  mktyp { kind = terra.kinds.primitive, bytes = 1, type = terra.kinds.logical})
     
-    types.error   = registertype("error",  mktyp { kind = terra.kinds.error })
-    types.niltype = registertype("niltype",mktyp { kind = terra.kinds.niltype}) -- the type of the singleton nil (implicitly convertable to any pointer type)
-    types.opaque = registertype("opaque", mkincomplete { kind = terra.kinds.opaque }) -- an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type
+    types.error = mktyp { kind = terra.kinds.error }
+    globaltype("niltype",mktyp { kind = terra.kinds.niltype}) -- the type of the singleton nil (implicitly convertable to any pointer type)
+    globaltype("opaque", mkincomplete { kind = terra.kinds.opaque }) -- an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type
                                                                                -- equivalent to "void *"
 
     local function checkistype(typ)
@@ -1635,15 +1658,11 @@ do --construct type table that holds the singleton value representing each uniqu
         end
     end
     
-    function types.pointer(typ)
+    types.pointer = memoizefunction(function(typ)
         checkistype(typ)
         if typ == types.error then return types.error end
-        
-        return registertype("&"..typ.name, function()
-            return mktyp { kind = terra.kinds.pointer, type = typ }
-        end)
-    end
-    
+        return mktyp { kind = terra.kinds.pointer, type = typ }
+    end)
     local function checkarraylike(typ, N_)
         local N = tonumber(N_)
         checkistype(typ)
@@ -1653,37 +1672,21 @@ do --construct type table that holds the singleton value representing each uniqu
         return N
     end
     
-    function types.array(typ, N_)
+    types.array = memoizefunction(function(typ, N_)
         local N = checkarraylike(typ,N_)
         if typ == types.error then return types.error end
-        
-        local tname = (typ:ispointer() and "("..typ.name..")") or typ.name
-        local name = tname .. "[" .. N .. "]"
-        return registertype(name,function()
-            return mkincomplete { kind = terra.kinds.array, type = typ, N = N }
-        end)
-    end
+        return mkincomplete { kind = terra.kinds.array, type = typ, N = N }
+    end)
     
-    function types.vector(typ,N_)
+    types.vector = memoizefunction(function(typ,N_)
         local N = checkarraylike(typ,N_)
         if typ == types.error then return types.error end
-        
-        
         if not typ:isprimitive() then
             error("vectors must be composed of primitive types (for now...) but found type "..tostring(typ))
         end
-        local name = "vector("..typ.name..","..N..")"
-        return registertype(name,function()
-            return mktyp { kind = terra.kinds.vector, type = typ, N = N }
-        end)
-    end
+        return mktyp { kind = terra.kinds.vector, type = typ, N = N }
+    end)
     
-    function types.primitive(name)
-        return types.table[name] or types.error
-    end
-    
-    
-    local definedstructs = {}
     local getuniquestructname = uniquenameset("$")
     function types.newstruct(displayname,depth)
         displayname = displayname or "anon"
@@ -1730,60 +1733,35 @@ do --construct type table that holds the singleton value representing each uniqu
         end
         return types.pointer(types.functype(parameters,returns,isvararg))
     end
-    
+    local functypeimpl = memoizefunction(function(N,isvararg,...)
+        local parameters,returns = terralib.newlist(),terralib.newlist()
+        for i = 1,select("#",...) do
+            local t = select(i,...)
+            checkistype(t);
+            (i <= N and parameters or returns):insert(t)
+        end
+        local returnobj = nil
+        if #returns == 1 then
+            returnobj = returns[1]
+        elseif #returns > 1 then
+            returnobj = types.newstruct()
+            returnobj.entries = returns
+        end
+        return mkincomplete { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
+    end)
     function types.functype(parameters,returns,isvararg)
-        
-        if not terra.islist(parameters) then
-            parameters = terra.newlist(parameters)
-        end
-        if not terra.islist(returns) then
-            returns = terra.newlist(returns)
-        end
-        
-        local function checkalltypes(l)
-            for i,v in ipairs(l) do
-                checkistype(v)
-            end
-        end
-        checkalltypes(parameters)
-        checkalltypes(returns)
-        
-        local function getname(t) return t.name end
-        local a = terra.list.map(parameters,getname):mkstring("{",",","")
-        if isvararg then
-            a = a .. ",...}"
-        else
-            a = a .. "}"
-        end
-        local r = terra.list.map(returns,getname):mkstring("{",",","}")
-        local name = a.."->"..r
-        return registertype(name,function()
-            local returnobj = nil
-            if #returns == 1 then
-                returnobj = returns[1]
-            elseif #returns > 1 then
-                returnobj = types.newstruct()
-                returnobj.entries = returns
-            end
-            return mkincomplete { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
-        end)
+        local N = #parameters
+        local args = terralib.newlist()
+        args:insertall(parameters)
+        args:insertall(returns)
+        return functypeimpl(N,not not isvararg,unpack(args))
     end
-    
-    for name,typ in pairs(types.table) do
-        --introduce primitive types into global namespace
-        -- outside of the typechecker and internal terra modules
-        if typ:isprimitive() then
-            _G[name] = typ
-        end 
-    end
-    _G["int"] = int32
-    _G["uint"] = uint32
-    _G["long"] = int64
-    _G["intptr"] = uint64
-    _G["ptrdiff"] = int64
-    _G["niltype"] = types.niltype
-    _G["opaque"] = types.opaque
-    _G["rawstring"] = types.pointer(int8)
+    globaltype("int",types.int32)
+    globaltype("uint",types.uint32)
+    globaltype("long",types.int64)
+    globaltype("intptr",types.uint64)
+    globaltype("ptrdiff",types.int64)
+    globaltype("rawstring",types.pointer(types.int8))
     terra.types = types
 end
 
@@ -1815,7 +1793,7 @@ function terra.createterraexpression(diag,anchor,v)
             return createsingle(terra.constant(v))
         elseif terra.isconstant(v) then
             if v.stringvalue then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
-                return terra.newtree(anchor, { kind = terra.kinds.literal, value = v.stringvalue, type = rawstring })
+                return terra.newtree(anchor, { kind = terra.kinds.literal, value = v.stringvalue, type = terra.types.rawstring })
             else 
                 return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:isaggregate()})
             end
@@ -2416,7 +2394,7 @@ function terra.funcdefinition:typecheck()
         elseif typ:ispointer() and exp.type:isintegral() then --int to pointer
             return createcast(exp,typ)
         elseif typ:isintegral() and exp.type:ispointer() then
-            if typ.bytes < intptr.bytes then
+            if typ.bytes < terra.types.intptr.bytes then
                 diag:reporterror(exp,"pointer to ",typ," conversion loses precision")
             end
             return createcast(exp,typ)
@@ -2473,7 +2451,7 @@ function terra.funcdefinition:typecheck()
             elseif a:isfloat() and b:isintegral() then
                 return a
             elseif a:isfloat() and b:isfloat() then
-                return double
+                return terra.types.double
             else
                 err()
                 return terra.types.error
@@ -2548,7 +2526,7 @@ function terra.funcdefinition:typecheck()
         end
         -- subtracting 2 pointers
         if  pointerlike(l.type) and pointerlike(r.type) and l.type.type == r.type.type and e.operator == terra.kinds["-"] then
-            return e:copy { type = ptrdiff, operands = terra.newlist {ascompletepointer(l),ascompletepointer(r)} }
+            return e:copy { type = terra.types.ptrdiff, operands = terra.newlist {ascompletepointer(l),ascompletepointer(r)} }
         elseif pointerlike(l.type) and r.type:isintegral() then -- adding or subtracting a int to a pointer
             return e:copy { type = terra.types.pointer(l.type.type), operands = terra.newlist {ascompletepointer(l),r} }
         elseif l.type:isintegral() and pointerlike(r.type) then
@@ -2564,11 +2542,11 @@ function terra.funcdefinition:typecheck()
     
     local function checkcomparision(e,operands)
         local t,l,r = typematch(e,operands[1],operands[2])
-        local rt = bool
+        local rt = terra.types.bool
         if t:isaggregate() then
             diag:reporterror(e,"cannot compare aggregate type ",t)
         elseif t:isvector() then
-            rt = terra.types.vector(bool,t.N)
+            rt = terra.types.vector(terra.types.bool,t.N)
         end
         return e:copy { type = rt, operands = terra.newlist {l,r} }
     end
@@ -2606,11 +2584,11 @@ function terra.funcdefinition:typecheck()
         local cond = operands[1]
         local t,l,r = typematch(ee,operands[2],operands[3])
         if cond.type ~= terra.types.error and t ~= terra.types.error then
-            if cond.type:isvector() and cond.type.type == bool then
+            if cond.type:isvector() and cond.type.type == terra.types.bool then
                 if not t:isvector() or t.N ~= cond.type.N then
                     diag:reporterror(ee,"conditional in select is not the same shape as ",cond.type)
                 end
-            elseif cond.type ~= bool then
+            elseif cond.type ~= terra.types.bool then
                 print(ee)
                 diag:reporterror(ee,"expected a boolean or vector of booleans but found ",cond.type)   
             end
@@ -2744,8 +2722,8 @@ function terra.funcdefinition:typecheck()
     end
 
     local function insertvarargpromotions(param)
-        if param.type == float then
-            return insertcast(param,double)
+        if param.type == terra.types.float then
+            return insertcast(param,terra.types.double)
         elseif param.type:isarray() then
             --varargs are only possible as an interface to C (or Lua) where arrays are not value types
             --this can cause problems (e.g. calling printf) when Terra passes the value
@@ -3207,7 +3185,7 @@ function terra.funcdefinition:typecheck()
                 return insertexplicitcast(checkexp(e.value),e.totype)
             elseif e:is "sizeof" then
                 e.oftype:complete(e)
-                return e:copy { type = uint64 }
+                return e:copy { type = terra.types.uint64 }
             elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
                 local entries = checkparameterlist(e,e.expressions)
                 local N = #entries.types
@@ -3338,7 +3316,7 @@ function terra.funcdefinition:typecheck()
         return e
     end
     local function checkcondbranch(s)
-        local e = checkexptyp(s.condition,bool)
+        local e = checkexptyp(s.condition,terra.types.bool)
         local b = checkstmt(s.body)
         return s:copy {condition = e, body = b}
     end
@@ -3432,7 +3410,7 @@ function terra.funcdefinition:typecheck()
         elseif s:is "repeat" then
             local breaktable = enterloop()
             local new_body = checkstmt(s.body)
-            local e = checkexptyp(s.condition,bool)
+            local e = checkexptyp(s.condition,terra.types.bool)
             leaveloop()
             return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
@@ -4209,7 +4187,7 @@ function terra.constant(a0,a1)
     if terra.types.istype(a0) then
         local c = setmetatable({ type = a0, object = a1 },terra.constantobj)
         --special handling for string literals
-        if type(c.object) == "string" and c.type == rawstring then
+        if type(c.object) == "string" and c.type == terra.types.rawstring then
             c.stringvalue = c.object --save string type for special handling in compiler
         end
 
@@ -4227,11 +4205,11 @@ function terra.constant(a0,a1)
         if type(init) == "cdata" then
             typ = terra.typeof(init)
         elseif type(init) == "number" then
-            typ = (terralib.isintegral(init) and int) or double
+            typ = (terralib.isintegral(init) and terra.types.int) or terra.types.double
         elseif type(init) == "boolean" then
-            typ = bool
+            typ = terra.types.bool
         elseif type(init) == "string" then
-            typ = rawstring
+            typ = terra.types.rawstring
         else
             error("constant constructor requires explicit type for objects of type "..type(init))
         end
@@ -4503,15 +4481,15 @@ end)
 --called by tcompiler.cpp to convert userdata pointer to stacktrace function to the right type;
 function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
     local P,FP = terra.types.pointer, terra.types.funcpointer
-    local po = P(opaque)
+    local po = P(terra.types.opaque)
     local ppo = P(po)
-    local p64 = P(uint64)
-    local ps = P(rawstring) 
+    local p64 = P(terra.types.uint64)
+    local ps = P(terra.types.rawstring) 
     terra.traceback = terra.cast(FP({po},{}),traceback)
-    terra.backtrace = terra.cast(FP({ppo,int,po,po},{int}),backtrace)
-    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,ps,p64},{bool}),lookupsymbol)
-    terra.lookupline   = terra.cast(FP({po,po,ps,p64,p64},{bool}),lookupline)
-    terra.disas = terra.cast(FP({po,uint64,uint64},{}),disas)
+    terra.backtrace = terra.cast(FP({ppo,terra.types.int,po,po},{terra.types.int}),backtrace)
+    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,ps,p64},{terra.types.bool}),lookupsymbol)
+    terra.lookupline   = terra.cast(FP({po,po,ps,p64,p64},{terra.types.bool}),lookupline)
+    terra.disas = terra.cast(FP({po,terra.types.uint64,terra.types.uint64},{}),disas)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
