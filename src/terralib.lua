@@ -1126,7 +1126,14 @@ do
     
     
     types.type.__tostring = memoizefunction(function(self)
-        if self:isstruct() then return self.name
+        if self:isstruct() then 
+            if self.metamethods.__typename then
+                local status,r = pcall(function() 
+                    return tostring(self.metamethods.__typename(self))
+                end)
+                if status then return r end
+            end
+            return self.name
         elseif self:ispointer() then return "&"..tostring(self.type)
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
         elseif self:isfunction() then return self.parameters:mkstring("{",",","}").." -> "..self.returns:mkstring("{",",","}")

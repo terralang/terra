@@ -8,6 +8,9 @@ function Array(T)
 		data : &T;
 		N : int;
 	}
+	function ArrayImpl.metamethods.__typename(self)
+	    return "Array("..tostring(T)..")"
+	end
 	arraytypes[ArrayImpl] = true
 	terra ArrayImpl:init(N : int)
 		self.data = [&T](C.malloc(N*sizeof(T)))
@@ -69,3 +72,4 @@ for i = 0,N-1 do
 	assert(r.data[i].real == 2*i)
 	assert(r.data[i].imag == 2*(i+1))
 end
+assert(tostring(Array(int)) == "Array(int32)")
