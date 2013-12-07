@@ -1136,7 +1136,7 @@ do
             return self.name
         elseif self:ispointer() then return "&"..tostring(self.type)
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
-        elseif self:isfunction() then return self.parameters:mkstring("{",",","}").." -> "..self.returns:mkstring("{",",","}")
+        elseif self:isfunction() then return self.parameters:mkstring("{",",","}").." -> "..self.returns:mkstring("{",",",self.isvararg and " ...}" or "}")
         elseif self:isarray() then
             local t = tostring(self.type)
             if self.type:ispointer() then
