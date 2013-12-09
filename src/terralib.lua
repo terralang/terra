@@ -1421,7 +1421,7 @@ do
                     end
                     return nil
                 end
-                ffi.metatype(ctype, { __index = index })
+                ffi.metatype(ctype, self.metamethods.__luametatable or { __index = index })
             end
         end
         return self.cachedcstring
