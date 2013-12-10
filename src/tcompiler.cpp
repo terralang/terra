@@ -200,6 +200,7 @@ int terra_compilerinit(struct terra_State * T) {
     lua_pop(T->L,1); //remove terra from stack
     
     T->C = new terra_CompilerState();
+    memset(T->C, 0, sizeof(terra_CompilerState));
     JITMemoryManager * JMM = JITMemoryManager::CreateDefaultMemManager();
     
     terra_debuginit(T,JMM);
