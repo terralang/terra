@@ -765,7 +765,8 @@ struct CCallingConv {
     
     Function * CreateFunction(Obj * ftype, const char * name) {
         TType * llvmtyp = GetType(ftype);
-        Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,name, C->m);
+        //function name is $+name so that it can't conflict with any symbols imported from the C namespace
+        Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,Twine(StringRef("$"),name), C->m);
         Classification * info = ClassifyFunction(ftype);
         AttributeFnOrCall(fn,info);
         return fn;
@@ -1742,7 +1743,7 @@ if(baseT->isIntegerTy()) { \
                 
                 FunctionType * fntyp = cast<FunctionType>(getType(&objType)->type);
                 assert(fntyp);
-                Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"", C->m);
+                Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"$", C->m);
                 void * ptr = exp->ud("fptr");
                 C->ee->addGlobalMapping(fn, ptr); //if we deserialize this function it will be necessary to relink this to the lua runtime
                 return fn;
