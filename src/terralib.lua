@@ -1702,6 +1702,12 @@ do
     end
     local llvmnametostruct = {} --map from llvm_name -> terra type used to make c structs unique per llvm_name
     function types.getorcreatecstruct(displayname,llvm_name)
+        if displayname == "" then --anonymous c struct
+            local typ = types.newstruct("anon")
+            typ.llvm_name = ""
+            typ.undefined = true
+            return typ
+        end
         local typ = llvmnametostruct[llvm_name]
         if not typ then
             typ = types.newstruct(displayname)

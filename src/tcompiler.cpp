@@ -434,17 +434,15 @@ struct CCallingConv {
     }
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
-        StructType * st;
         if(typ->hasfield("llvm_name")) {
             const char * llvmname = typ->string("llvm_name");
-            st = C->m->getTypeByName(llvmname);
-        } else {
-            std::string name = typ->asstring("displayname");
-            bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
-            name = (isreserved) ? std::string("$") + name : name;
-            st = StructType::create(*C->ctx, name);
+            if(*llvmname != '\0')
+                return C->m->getTypeByName(llvmname);
         }
-        return st;
+        std::string name = typ->asstring("displayname");
+        bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
+        name = (isreserved) ? std::string("$") + name : name;
+        return StructType::create(*C->ctx, name);
     }
     Type * FunctionPointerType() {
         return Type::getInt8PtrTy(*C->ctx);
@@ -1542,6 +1540,11 @@ if(baseT->isIntegerTy()) { \
     bool isPointerToFunction(Type * t) {
         return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
     }
+    bool isAnonymousStruct(Obj * typ) {
+        if(!typ->hasfield("llvm_name"))
+            return false;
+        return *typ->asstring("llvm_name") == '\0';
+    }
     Value * emitStructSelect(Obj * structType, Value * structPtr, int index) {
 
         assert(structPtr->getType()->isPointerTy());
@@ -1558,14 +1561,15 @@ if(baseT->isIntegerTy()) { \
         int allocindex = entry.number("allocation");
         
         Value * addr = B->CreateConstGEP2_32(structPtr,0,allocindex);
-        //in two cases the type of the value in the struct does not match the expected type returned
+        //in three cases the type of the value in the struct does not match the expected type returned
         //1. if it is a union then the llvm struct will have some buffer space to hold the object but
         //   the space may have a different type
         //2. if the struct was imported from Clang and the value is a function pointer (Terra internal represents functions with i8* for simplicity)
-        //in both cases we simply bitcast cast the resulting pointer to the expected type
-        if (entry.boolean("inunion") || isPointerToFunction(addr->getType()->getPointerElementType())) {
-            Obj entryType;
-            entry.obj("type",&entryType);
+        //3. if the field was an anonymous C struct, so we don't know its name
+        //in all cases we simply bitcast cast the resulting pointer to the expected type
+        Obj entryType;
+        entry.obj("type",&entryType);
+        if (entry.boolean("inunion") || isPointerToFunction(addr->getType()->getPointerElementType()) || isAnonymousStruct(&entryType)) {
             Type * resultType = PointerType::getUnqual(getType(&entryType)->type);
             addr = B->CreateBitCast(addr, resultType);
         }

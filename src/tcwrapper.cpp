@@ -108,13 +108,9 @@ public:
                 if(decl) {
                     thenamespace = &general;
                     name = decl->getName();
-                } else {
-                    name = "anon";
                 }
             }
-
-            assert(name != "");
-
+            //if name == "" then we have an anonymous struct
             if(!thenamespace->obj(name.c_str(),tt)) {
                 //create new blank struct, fill in with members
                 std::stringstream ss;
@@ -124,8 +120,10 @@ public:
                 lua_pushstring(L,ss.str().c_str());
                 lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
-                tt->push();
-                thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                if(name != "") { //do not remember a name for an anonymous struct
+                    tt->push();
+                    thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                }
             }
             
             if(tt->boolean("undefined") && rd->getDefinition() != NULL) {
