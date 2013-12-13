@@ -62,7 +62,6 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     LLVMInitializeNVPTXTarget();
     LLVMInitializeNVPTXAsmPrinter();
     
-    llvm::TargetRegistry::printRegisteredTargetsForVersion();
     std::string err;
     const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
     
@@ -112,7 +111,6 @@ int terra_cudacompile(lua_State * L) {
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
     delete M;
-    printf("what: %s\n",ptx.c_str());
     CUmodule cudaM;
     CUDA_DO(cuModuleLoadDataEx(&cudaM, ptx.c_str(), 0, 0, 0));
 

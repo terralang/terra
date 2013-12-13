@@ -26,7 +26,7 @@ local R = terralib.cudacompile({ foo = foo, bar = foo })
 
 terra doit(N : int)
 	var data : &float
-	C.cudaMalloc([&&uint8](&data),sizeof(float)*N)
+	C.cudaMalloc([&&opaque](&data),sizeof(float)*N)
 	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }
 	R.bar(&launch,data)
 	var results : &float = [&float](C.malloc(sizeof(float)*N))

@@ -56,7 +56,7 @@ function terralib.cudamakekernelwrapper(fn,funcdata)
     return terra(params : &terralib.CUDAParams, [arguments])
         
         var func : &C.CUfunction = [&C.CUfunction](funcdata)
-        var paramlist = arrayof([&uint8],[paramctor])
+        var paramlist = arrayof([&opaque],[paramctor])
         return C.cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
                                      params.blockDimX,params.blockDimY,params.blockDimZ,
                                      params.sharedMemBytes, params.hStream,paramlist,nil)
