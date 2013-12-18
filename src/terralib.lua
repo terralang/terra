@@ -1700,20 +1700,17 @@ do
         depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
-    local llvmnametostruct = {} --map from llvm_name -> terra type used to make c structs unique per llvm_name
-    function types.getorcreatecstruct(displayname,llvm_name)
-        if displayname == "" then --anonymous c struct
-            local typ = types.newstruct("anon")
-            typ.llvm_name = ""
-            typ.undefined = true
-            return typ
+    local cnametostruct = { general = {}, tagged = {}} --map from llvm_name -> terra type used to make c structs unique per llvm_name
+    function types.getorcreatecstruct(displayname,tagged)
+        local namespace
+        if displayname ~= "" then
+            namespace = tagged and cnametostruct.tagged or cnametostruct.general
         end
-        local typ = llvmnametostruct[llvm_name]
+        local typ = namespace and namespace[displayname]
         if not typ then
-            typ = types.newstruct(displayname)
-            typ.llvm_name = llvm_name
+            typ = types.newstruct(displayname == "" and "anon" or displayname)
             typ.undefined = true
-            llvmnametostruct[llvm_name] = typ
+            if namespace then namespace[displayname] = typ end
         end
         return typ
     end

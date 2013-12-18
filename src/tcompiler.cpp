@@ -434,10 +434,12 @@ struct CCallingConv {
     }
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
-        if(typ->hasfield("llvm_name")) {
-            const char * llvmname = typ->string("llvm_name");
-            if(*llvmname != '\0')
-                return C->m->getTypeByName(llvmname);
+        if(typ->hasfield("llvm_definingfunction")) {
+            Function * df = C->m->getFunction(typ->string("llvm_definingfunction"));
+            int argpos = typ->number("llvm_argumentposition");
+            StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
+            assert(st);
+            return st;
         }
         std::string name = typ->asstring("displayname");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");

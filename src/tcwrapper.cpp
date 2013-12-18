@@ -33,7 +33,7 @@ using namespace clang;
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Obj * res)
+    IncludeCVisitor(Obj * res, size_t id)
         : resulttable(res),
           L(res->getState()),
           ref_table(res->getRefTable()) {
@@ -42,6 +42,10 @@ public:
         InitTable(&error_table,"errors");
         InitTable(&general,"general");
         InitTable(&tagged,"tagged");
+        std::stringstream ss;
+        ss << "__makeeverythinginclanglive_";
+        ss << id;
+        livenessfunction = ss.str();
     }
     void InitTable(Obj * tbl, const char * name) {
         lua_newtable(L);
@@ -97,11 +101,15 @@ public:
         return !opaque;
 
     }
-    
-    bool GetRecordTypeFromDecl(RecordDecl * rd, Obj * tt, std::string * fullname) {
+    void RegisterRecordType(QualType T, std::string * definingfunction, size_t * argpos) {
+        *definingfunction = livenessfunction;
+        *argpos = outputtypes.size();
+        outputtypes.push_back(Context->getPointerType(T));
+        assert(outputtypes.size() < 65536 && "fixme: clang limits number of arguments to 65536");
+    }
+    bool GetRecordTypeFromDecl(RecordDecl * rd, Obj * tt) {
         if(rd->isStruct() || rd->isUnion()) {
             std::string name = rd->getName();
-            //TODO: why do some types not have names?
             Obj * thenamespace = &tagged;
             if(name == "") {
                 TypedefNameDecl * decl = rd->getTypedefNameForAnonDecl();
@@ -112,17 +120,23 @@ public:
             }
             //if name == "" then we have an anonymous struct
             if(!thenamespace->obj(name.c_str(),tt)) {
-                //create new blank struct, fill in with members
-                std::stringstream ss;
-                ss << (rd->isStruct() ? "struct." : "union.") << name;
                 PushTypeFunction("getorcreatecstruct");
                 lua_pushstring(L, name.c_str());
-                lua_pushstring(L,ss.str().c_str());
+                lua_pushboolean(L, thenamespace == &tagged);
                 lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
+                if(!tt->hasfield("llvm_definingfunction")) {
+                    std::string definingfunction;
+                    size_t argpos;
+                    RegisterRecordType(Context->getRecordType(rd), &definingfunction, &argpos);
+                    lua_pushstring(L,definingfunction.c_str());
+                    tt->setfield("llvm_definingfunction");
+                    lua_pushinteger(L,argpos);
+                    tt->setfield("llvm_argumentposition");
+                }
                 if(name != "") { //do not remember a name for an anonymous struct
                     tt->push();
-                    thenamespace->setfield(name.c_str()); //register the type (this prevents an infinite loop for recursive types)
+                    thenamespace->setfield(name.c_str()); //register the type
                 }
             }
             
@@ -150,14 +164,6 @@ public:
                 }
             }
             
-            if(fullname) {
-                std::stringstream ss;
-                if(thenamespace == &tagged)
-                    ss << (rd->isStruct() ? "struct " : "union ");
-                ss << name;
-                *fullname = ss.str();
-            }
-            
             return true;
         } else {
             return ImportError("non-struct record types are not supported");
@@ -173,7 +179,7 @@ public:
           case Type::Record: {
             const RecordType *RT = dyn_cast<RecordType>(Ty);
             RecordDecl * rd = RT->getDecl();
-            return GetRecordTypeFromDecl(rd, tt,NULL);
+            return GetRecordTypeFromDecl(rd, tt);
           }  break; //TODO
           case Type::Builtin:
             switch (cast<BuiltinType>(Ty)->getKind()) {
@@ -315,10 +321,6 @@ public:
         unsigned IntSize = static_cast<unsigned>(Context->getTypeSize(Context->IntTy));
         return IntegerLiteral::Create(*Context, llvm::APInt(IntSize, 0), Context->IntTy, SourceLocation());
     }
-    void KeepTypeLive(QualType T, llvm::StringRef name) {
-        Expr * castexp = CreateCast(Context->VoidTy, clang::CK_ToVoid, CreateCast(Context->getPointerType(T), clang::CK_NullToPointer, LiteralZero()));
-        outputstmts.push_back(castexp);
-    }
     DeclRefExpr * GetFunctionReference(FunctionDecl * df) {
         DeclRefExpr *DR = DeclRefExpr::Create(*Context, NestedNameSpecifierLoc(),SourceLocation(),df, false, SourceLocation(),
                           df->getType(),
@@ -337,7 +339,6 @@ public:
             if(GetType(QT,&typ)) {
                 typ.push();
                 general.setfield(name.str().c_str());
-               KeepTypeLive(QT,name);
             } else {
                 SetErrorReport(name.str().c_str());
             }
@@ -347,10 +348,7 @@ public:
     bool TraverseRecordDecl(RecordDecl * rd) {
         if(rd->getDeclContext()->getDeclKind() == Decl::TranslationUnit) {
             Obj type;
-            std::string name;
-            if(GetRecordTypeFromDecl(rd, &type,&name)) {
-                KeepTypeLive(Context->getRecordType(rd),name);
-            }
+            GetRecordTypeFromDecl(rd, &type);
         }
         return true;
     }
@@ -400,25 +398,10 @@ public:
         
         return valid;
     }
-    bool HandleLiveness(FunctionDecl * f, const std::string & FuncName) {
-        std::string prefix = "__makeeverythinginclanglive_";
-        if(FuncName.substr(0,prefix.size()) == prefix) {
-            #if defined(LLVM_3_3)
-            CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
-            #elif defined(LLVM_3_2) || defined(LLVM_3_1)
-            CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
-            #endif
-            f->setBody(stmts);
-            return true;
-        }
-        return false;
-    }
     bool TraverseFunctionDecl(FunctionDecl *f) {
          // Function name
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
-        if(HandleLiveness(f,FuncName))
-            return true;
         const FunctionType * fntyp = f->getType()->getAs<FunctionType>();
         
         if(!fntyp)
@@ -462,8 +445,36 @@ public:
     void SetContext(ASTContext * ctx) {
         Context = ctx;
     }
+    FunctionDecl * GetLivenessFunction() {
+        IdentifierInfo & II = Context->Idents.get(livenessfunction);
+        DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
+        #if defined(LLVM_3_3)
+        QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
+        #elif defined(LLVM_3_2) || defined(LLVM_3_1)
+        QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],outputtypes.size(), FunctionProtoType::ExtProtoInfo());
+        #endif
+        FunctionDecl * F = FunctionDecl::Create(*Context, Context->getTranslationUnitDecl(), SourceLocation(), SourceLocation(), N,T, 0, SC_Extern);
+        
+        std::vector<ParmVarDecl *> params;
+        for(size_t i = 0; i < outputtypes.size(); i++) {
+            params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(), SourceLocation(), 0, outputtypes[i], /*TInfo=*/0, SC_None,
+            #if defined(LLVM_3_2) || defined(LLVM_3_1)
+            SC_None,
+            #endif
+            0));
+        }
+        F->setParams(params);
+        #if defined(LLVM_3_3)
+        CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
+        #elif defined(LLVM_3_2) || defined(LLVM_3_1)
+        CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
+        #endif
+        F->setBody(stmts);
+        return F;
+    }
   private:
     std::vector<Stmt*> outputstmts;
+    std::vector<QualType> outputtypes;
     Obj * resulttable; //holds table returned to lua includes "functions", "types", and "errors"
     lua_State * L;
     int ref_table;
@@ -471,14 +482,14 @@ public:
     Obj error_table; //name -> related error message
     Obj general; //name -> function or type in the general namespace
     Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
-    
     std::string error_message;
+    std::string livenessfunction;
 };
 
 class CodeGenProxy : public ASTConsumer {
 public:
-  CodeGenProxy(CodeGenerator * CG_, Obj * result)
-  : CG(CG_), Visitor(result) {}
+  CodeGenProxy(CodeGenerator * CG_, Obj * result, size_t importid)
+  : CG(CG_), Visitor(result,importid) {}
   CodeGenerator * CG;
   IncludeCVisitor Visitor;
   virtual ~CodeGenProxy() {}
@@ -493,7 +504,12 @@ public:
     return CG->HandleTopLevelDecl(D);
   }
   virtual void HandleInterestingDecl(DeclGroupRef D) { CG->HandleInterestingDecl(D); }
-  virtual void HandleTranslationUnit(ASTContext &Ctx) { CG->HandleTranslationUnit(Ctx); }
+  virtual void HandleTranslationUnit(ASTContext &Ctx) {
+    Decl * Decl = Visitor.GetLivenessFunction();
+    DeclGroupRef R = DeclGroupRef::Create(Ctx, &Decl, 1);
+    CG->HandleTopLevelDecl(R);
+    CG->HandleTranslationUnit(Ctx);
+  }
   virtual void HandleTagDeclDefinition(TagDecl *D) { CG->HandleTagDeclDefinition(D); }
   virtual void HandleCXXImplicitFunctionInstantiation(FunctionDecl *D) { CG->HandleCXXImplicitFunctionInstantiation(D); }
   virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) { CG->HandleTopLevelDeclInObjCContainer(D); }
@@ -555,16 +571,10 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
 }
 
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
-    
-    std::string buffer;
-    
-    llvm::raw_string_ostream StringStream(buffer);
-    StringStream << code << "\nvoid __makeeverythinginclanglive_" << T->C->next_unused_id++ << "(void) {}\n";
-    StringStream.flush();
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
-    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(buffer, "<buffer>");
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
     
     #if defined LLVM_3_1 || defined LLVM_3_2
@@ -573,7 +583,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
     #endif
     
-    CodeGenProxy proxy(codegen,result);
+    CodeGenProxy proxy(codegen,result,T->C->next_unused_id++);
     ParseAST(TheCompInst.getPreprocessor(),
             &proxy,
             TheCompInst.getASTContext());
