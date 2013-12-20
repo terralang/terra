@@ -3263,7 +3263,6 @@ function terra.funcdefinition:typecheck()
                 symbolenv:leaveblock()
                 return result
            elseif e:is "constructor" then
-                local typ = terra.types.newstructwithanchor("anon",e)
                 local paramlist = terra.newlist{}
                 local named = 0
                 for i,f in ipairs(e.records) do
@@ -3274,17 +3273,21 @@ function terra.funcdefinition:typecheck()
                     named = named + (f.key and 1 or 0)
                     paramlist:insert(value)
                 end
-                if named ~= 0 and named ~= #e.records then
+                local entries = checkparameterlist(e,paramlist)
+                local typ = terra.types.error
+                if named == 0 then
+                    typ = terra.types.tuple(unpack(entries.types))
+                elseif named == #e.records then
+                    typ = terra.types.newstructwithanchor("anon",e)
+                    typ:setconvertible("named")
+                    for i,e in ipairs(e.records) do
+                        if entries.types[i] then
+                            typ.entries:insert({field = e.key, type = entries.types[i]})
+                        end
+                    end
+                else
                     diag:reporterror(e, "some entries in constructor are named while others are not")
                 end
-                typ:setconvertible(named == 0 and "tuple" or "named")
-                local entries = checkparameterlist(e,paramlist)
-                for i,t in ipairs(entries.types) do
-                    local k = e.records[i] and e.records[i].key
-                    k = k and checksymbol(k)
-                    typ.entries:insert({field = k or "_"..(i-1), type = t})
-                end
-
                 return e:copy { expressions = entries, type = typ:complete(e) }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e,true)
