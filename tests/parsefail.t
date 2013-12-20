@@ -27,7 +27,7 @@ local function getsym()
 end
 terra foo2()
 	var [getsym()] = 3
-	var a = { [getsym()] = 4, [getsym()] }
+	var a = { [getsym()] = 4, _1 = [getsym()] }
 	return a.[getsym()] + a._1
 end
 

@@ -1,8 +1,8 @@
 struct A { a : int }
 struct B {a : int, b : A}
 
-local C = struct { int }
-local D = struct { double, C }
+local C = tuple(int)
+local D = tuple(double, C)
 
 terra anon()
     var b : B
@@ -20,7 +20,7 @@ end
 
 terra anon2()
     var b : B = { b = { 2.0 }, a = 4 }
-    var b2 : B = { a = 4, { 2.0 } }
+    var b2 : B = { a = 4, b = { 2.0 } }
     var b3 : B = { 4, {2.0} }
     return b.a + b.b.a + b2.a + b2.b.a + b3.a + b3.b.a
 end

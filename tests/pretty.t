@@ -43,7 +43,7 @@ terra foo()
 	var e : int = a
 	var g = terralib.select(true,0,1)
 	var ee = sizeof(int)
-	var more = { a = 5, c = 4, 3}
+	var more = { a = 5, c = 4, _2 = 3}
 	baz()
 	var bb = takebar(bar(1))
 	return 3,4,ee,bar(1)

@@ -1,7 +1,7 @@
 
 struct A { a : int, union { c : int8[6], b : int }, d : float, union { e : int, f : float }, g : int }
 struct B { union { b : int , c : int8[6] }, a : int }
-local C = struct {  union { union { b : int}  , c : int8[6] }, int }
+local C = struct {  union { union { b : int}  , c : int8[6] }, w : int }
 terra foo()
 	var a : A
 	var b : B

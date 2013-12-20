@@ -1,6 +1,5 @@
-struct A { int }
 terra foo()
-    var a : A
+    var a : tuple(int)
     return a._1
 end
 foo()

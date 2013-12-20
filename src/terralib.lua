@@ -1034,7 +1034,6 @@ do  --constructor functions for terra functions and variables
     function terra.anonstruct(tree,envfn)
         local st = terra.types.newstruct("anon",2)
         layoutstruct(st,tree,envfn())
-        st:setconvertible(true)
         return st
     end
 
@@ -1449,26 +1448,25 @@ do
                 diag:reporterror(self.anchor,"computed entries are not a table")
                 return
             end
-            local function checkentries(entries,results)
-                for i,e in ipairs(entries) do
-                    if terra.types.istype(e) then
-                        results:insert { type = e }
-                    elseif type(e) == "table" and terra.types.istype(e.type) then
-                        if e.field and not (type(e.field) == "string" or terra.issymbol(e.field)) then
-                            diag:reporterror(self.anchor,"entry field must be a string or symbol")
-                        end
-                        results:insert { type = e.type, field = e.field }
+            local function checkentry(e,results)
+                if type(e) == "table" then
+                    local f = e.field or e[1] 
+                    local t = e.type or e[2]
+                    if terra.types.istype(t) and (type(f) == "string" or terra.issymbol(f)) then
+                        results:insert { type = t, field = f}
+                        return
                     elseif terra.israwlist(e) then
                         local union = terralib.newlist()
-                        checkentries(e,union)
+                        for i,se in ipairs(e) do checkentry(se,union) end
                         results:insert(union)
-                    else
-                        diag:reporterror(self.anchor,"expected a valid entry (either a type, a field-type pair (e.g. { field = <key>, type = <type> }), or a list of valid entries representing a union")
+                        return
                     end
                 end
+                terralib.tree.printraw(e)
+                diag:reporterror(self.anchor,"expected either a field type pair (e.g. { field = <string>, type = <type> } or {<string>,<type>} ), or a list of valid entries representing a union")
             end
             local checkedentries = terralib.newlist()
-            checkentries(entries,checkedentries)
+            for i,e in ipairs(entries) do checkentry(e,checkedentries) end
             return checkedentries
         end
     }
@@ -1510,11 +1508,7 @@ do
                     end
                 end
                 ensurelayout(t)
-                local entry = { type = t, key = k, hasname = true, allocation = nextallocation, inunion = uniondepth > 0 }
-                if not k then
-                    entry.hasname = false
-                    entry.key = "_"..tostring(#layout.entries)
-                end
+                local entry = { type = t, key = k, allocation = nextallocation, inunion = uniondepth > 0 }
                 
                 if layout.keytoindex[entry.key] ~= nil then
                     diag:reporterror(tree,"duplicate field ",tostring(entry.key))
@@ -1693,7 +1687,19 @@ do
         end
         return mktyp { kind = terra.kinds.vector, type = typ, N = N }
     end)
-    
+    types.tuple = memoizefunction(function(...)
+        local args = terralib.newlist {...}
+        local t = types.newstruct()
+        for i,e in ipairs(args) do
+            checkistype(e)
+            t.entries:insert {"_"..(i-1),e}
+        end
+        t.metamethods.__typename = function(self)
+            return args:mkstring("{",",","}")
+        end
+        t:setconvertible("tuple")
+        return t
+    end)
     local getuniquestructname = uniquenameset("$")
     function types.newstruct(displayname,depth)
         displayname = displayname or "anon"
@@ -1728,7 +1734,7 @@ do
                           }
         function tbl:setconvertible(b)
             assert(self.incomplete)
-            self.isconvertible = b
+            self.convertible = b
         end
         
         return tbl
@@ -1754,8 +1760,7 @@ do
         if #returns == 1 then
             returnobj = returns[1]
         elseif #returns > 1 then
-            returnobj = types.newstruct()
-            returnobj.entries = returns
+            returnobj = types.tuple(unpack(returns))
         end
         return mkincomplete { kind = terra.kinds.functype, parameters = parameters, returns = returns, isvararg = isvararg, returnobj = returnobj }
     end)
@@ -2316,16 +2321,13 @@ function terra.funcdefinition:typecheck()
         end
         for i,entry in ipairs(from.entries) do
             local selected = insertselect(var_ref,entry.key)
-            local offset = entry.hasname and to.keytoindex[entry.key] or i - 1
+            local offset = exp.type.convertible == "tuple" and i - 1 or to.keytoindex[entry.key]
             if not offset then
                 err("structural cast invalid, result structure has no key ", entry.key)
+            else
+                local v = insertcast(selected,to.entries[offset+1].type)
+                cast.entries:insert { index = offset, value = v }
             end
-            if initialized[offset] then
-                err("structural cast invalid, ",tostring(to.entries[offset+1].key)," initialized more than once")
-            end
-            local v = insertcast(selected,to.entries[offset+1].type)
-            cast.entries:insert { index = offset, value = v }
-            initialized[offset] = true
         end
         
         return cast, valid
@@ -2347,7 +2349,7 @@ function terra.funcdefinition:typecheck()
                 return cast_exp, true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return cast_exp, true
-            elseif typ:isstruct() and exp.type:isstruct() and exp.type.isconvertible then 
+            elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then 
                 return structcast(cast_exp,exp,typ,speculative)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 return cast_exp, true
@@ -3262,24 +3264,25 @@ function terra.funcdefinition:typecheck()
                 return result
            elseif e:is "constructor" then
                 local typ = terra.types.newstructwithanchor("anon",e)
-                typ:setconvertible(true)
-                
                 local paramlist = terra.newlist{}
-                
+                local named = 0
                 for i,f in ipairs(e.records) do
                     local value = f.value
                     if i == #e.records and f.key then
                         value = terra.newtree(value, { kind = terra.kinds.truncate, value = value })
                     end
+                    named = named + (f.key and 1 or 0)
                     paramlist:insert(value)
                 end
-
+                if named ~= 0 and named ~= #e.records then
+                    diag:reporterror(e, "some entries in constructor are named while others are not")
+                end
+                typ:setconvertible(named == 0 and "tuple" or "named")
                 local entries = checkparameterlist(e,paramlist)
-                
                 for i,t in ipairs(entries.types) do
                     local k = e.records[i] and e.records[i].key
                     k = k and checksymbol(k)
-                    typ.entries:insert({field = k, type = t})
+                    typ.entries:insert({field = k or "_"..(i-1), type = t})
                 end
 
                 return e:copy { expressions = entries, type = typ:complete(e) }
@@ -3599,6 +3602,7 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
+_G["tuple"] = terra.types.tuple
 _G["truncate"] = terra.internalmacro(function(diag,tree,nexp,...)
     local N = nexp:asvalue()
     if type(N) ~= "number" then

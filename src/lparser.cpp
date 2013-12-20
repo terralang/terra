@@ -625,46 +625,13 @@ static void constructor (LexState *ls, expdesc *t) {
   add_field(ls,tbl,"records");
 }
 
-
-static void structconstructor(LexState * ls, T_Kind kind);
-
-
-static void recstruct (LexState *ls) {
+static void structfield (LexState *ls) {
   int tbl = new_table(ls,T_structentry);
   push_string(ls,str_checkname(ls));
   add_field(ls,tbl,"key");
   checknext(ls, ':');
   RETURNS_1(terratype(ls));
   add_field(ls,tbl,"type");
-}
-
-static void liststruct (LexState *ls) {
-  /* listfield -> exp */
-  
-  if(testnext(ls,TK_UNION)) {
-    RETURNS_1(structconstructor(ls,T_union));
-  } else {
-    int tbl = new_table(ls,T_structentry);
-    RETURNS_1(terratype(ls));
-    add_field(ls,tbl,"type");
-  }
-}
-
-static void structfield (LexState *ls) {
-  /* field -> listfield | recfield */
-  switch(ls->t.token) {
-    case TK_NAME: {  /* may be 'listfield' or 'recfield' */
-      if (luaX_lookahead(ls) != ':')  /* expression? */
-        liststruct(ls);
-      else
-        recstruct(ls);
-      break;
-    }
-    default: {
-      liststruct(ls);
-      break;
-    }
-  }
 }
 
 static void structconstructor(LexState * ls, T_Kind kind) {
@@ -676,7 +643,10 @@ static void structconstructor(LexState * ls, T_Kind kind) {
     checknext(ls,'{');
     do {
        if (ls->t.token == '}') break;
-       RETURNS_1(structfield(ls));
+       if(testnext(ls, TK_UNION))
+         RETURNS_1(structconstructor(ls,T_union));
+       else
+         RETURNS_1(structfield(ls));
        add_entry(ls,records);
     } while(testnext(ls, ',') || testnext(ls, ';'));
     check_match(ls,'}','{',line);

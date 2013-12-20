@@ -34,9 +34,9 @@ test.eq(foo(),12)
 test.eq(foo2(),4)
 
 
-local C = struct { int, int }
+local C = tuple(int, int)
 
-local D = struct { int, int }
+local D = tuple(int, int)
 
 terra anon()
     var c : C
