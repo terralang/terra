@@ -1,34 +1,36 @@
 -- See Copyright Notice in ../LICENSE.txt
 
-
---io.write("loading terra lib...")
-
-
--- LINE COVERAGE INFORMATION, CLEANUP OR REMOVE
---[[
-local converageloader = loadfile("coverageinfo.lua")
-local linetable = converageloader and converageloader() or {}
-function terra.dumplineinfo()
-    local F = io.open("coverageinfo.lua","w")
-    F:write("return {\n")
-    for k,v in pairs(linetable) do
-        F:write("["..k.."] = "..v..";\n")
-    end
-    F:write("}\n")
-    F:close()
-end
-
-local function debughook(event)
-    local info = debug.getinfo(2,"Sl")
-    if info.short_src == "src/terralib.lua" then
-        linetable[info.currentline] = linetable[info.currentline] or 0
-        linetable[info.currentline] = linetable[info.currentline] + 1
-    end
-end
-debug.sethook(debughook,"l")
-]]
-
 local ffi = require("ffi")
+
+-- LINE COVERAGE INFORMATION
+if false then
+    local converageloader = loadfile("coverageinfo.lua")
+    local linetable = converageloader and converageloader() or {}
+    local function dumplineinfo()
+        local F = io.open("coverageinfo.lua","w")
+        F:write("return {\n")
+        for k,v in pairs(linetable) do
+            F:write("["..k.."] = "..v..";\n")
+        end
+        F:write("}\n")
+        F:close()
+    end
+    local function debughook(event)
+        local info = debug.getinfo(2,"Sl")
+        if info.short_src == "src/terralib.lua" then
+            linetable[info.currentline] = linetable[info.currentline] or 0
+            linetable[info.currentline] = linetable[info.currentline] + 1
+        end
+    end
+    debug.sethook(debughook,"l")
+    -- make a fake ffi object that causes dumplineinfo to be called when
+    -- the lua state is removed
+    ffi.cdef [[
+        typedef struct {} __linecoverage;
+    ]]
+    ffi.metatype("__linecoverage", { __gc = dumplineinfo } )
+    _G[{}] = ffi.new("__linecoverage")
+end
 
 terra.isverbose = 0 --set by C api
 
