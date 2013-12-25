@@ -1,5 +1,5 @@
 
 terra foo() : {}
-	return (foo())
+	return (foo()),4
 end
 foo()

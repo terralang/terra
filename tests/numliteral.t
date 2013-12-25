@@ -9,6 +9,6 @@ local exp = { "int32", "double", "float", "int64", "uint64" }
 local test = require("test")
 thetest:compile()
 local typ = thetest.definitions[1]:gettype()
-for i,e in ipairs(typ.returns) do
-	test.eq(tostring(e),exp[i]) 
+for i,e in ipairs(typ.returntype:getentries()) do
+	test.eq(tostring(e.type),exp[i]) 
 end

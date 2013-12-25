@@ -16,7 +16,7 @@ end
 
 
 local test = require("test")
-local z,a,b,c = foo()
+local z,z2,z3,a,b,c = foo()
 test.eq(z,1)
 test.eq(a,1)
 test.eq(b,2)

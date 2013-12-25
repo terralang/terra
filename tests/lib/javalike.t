@@ -67,7 +67,7 @@ local function getentries(self)
 		local _,typ = impl:peektype()
 		local symbols = typ.parameters:map(symbol)
 		local obj = symbols[1]
-		local terra wrapper([symbols]) : typ.returns
+		local terra wrapper([symbols]) : typ.returntype
 			return obj.[vtablesym].[methodname]([symbols])
 		end
 		self.methods[methodname] = wrapper
@@ -192,10 +192,10 @@ function Class.interface(ifacetable)
 		for i,t in ipairs(methodtype.type.parameters) do 
 			params:insert(t)
 		end
-		local fullmethodtype =  params -> methodtype.type.returns
+		local fullmethodtype =  params -> methodtype.type.returntype
 		md.vtable.entries:insert { field = methodname, type = &uint8 }
 		local args = methodtype.type.parameters:map(symbol)
-		iface.methods[methodname] = terra(obj : &iface,[args]) : methodtype.type.returns
+		iface.methods[methodname] = terra(obj : &iface,[args]) : methodtype.type.returntype
 			var method = fullmethodtype(obj.[vtablesym].[methodname])
 			var origobj = [&uint8](int64(obj) - obj.[vtablesym].__offset)
 			return method(origobj,[args])

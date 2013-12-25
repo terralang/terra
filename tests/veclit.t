@@ -11,8 +11,9 @@ end
 terra what()
 	return 3,4.5
 end
+expwhat = macro(function(a) return {`a._0, `a._1} end)
 terra foo3()
-	var a = vector(1,2.5,what())
+	var a = vector(1,2.5,expwhat(what()))
 	return a[3]
 end
 

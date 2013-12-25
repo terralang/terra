@@ -28,7 +28,7 @@ end
 local function createstub(methodname,typ)
 	local symbols = typ.parameters:map(symbol)
 	local obj = symbols[1]
-	local terra wrapper([symbols]) : typ.returns
+	local terra wrapper([symbols]) : typ.returntype
 		return obj.__vtable.[methodname]([symbols])
 	end
 	return wrapper

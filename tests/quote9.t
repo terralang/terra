@@ -6,7 +6,7 @@ local c = terralib.includec("stdio.h")
 a.c = {`1,`2,`3}
 
 a.b = quote
-    return a.c,(a.c)
+    return a.c._0,(a.c)._0
 end
 
 

@@ -31,7 +31,7 @@ function Interface.create(methods)
 	for k,v in pairs(methods) do
 		print(k," = ",v)
 		assert(v:ispointer() and v.type:isfunction())
-		local params,rets = terralib.newlist{&uint8}, v.type.returns
+		local params,rets = terralib.newlist{&uint8}, v.type.returntype
 		local syms = terralib.newlist()
 		for i,p in ipairs(v.type.parameters) do
 			params:insert(p)

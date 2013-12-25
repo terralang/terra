@@ -11,8 +11,10 @@ end
 terra what()
 	return 3,4.5
 end
+local expand = macro(function(a) return {`a._0,`a._1} end)
 terra foo3()
-	var a = array(1,2.5,what())
+	var w = what()
+	var a = array(1,2.5,expand(w))
 	return a[3]
 end
 terra foo4()

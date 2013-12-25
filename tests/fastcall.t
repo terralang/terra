@@ -12,7 +12,6 @@ assert(1 == foo())
 terra foo2()
 	return 1,2
 end
-
 local a,b = foo2()
 assert(a == 1 and b == 2)
 assert(rawget(foo2,"fastcall") == foo2:getdefinitions()[1])

@@ -762,7 +762,7 @@ static void body (LexState *ls, expdesc *e, int ismethod, int line) {
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
     RETURNS_1(terratype(ls));
-    add_field(ls,tbl,"return_types");
+    add_field(ls,tbl,"returntype");
   }
   RETURNS_1(block(ls));
   add_field(ls,tbl,"body");
@@ -843,12 +843,6 @@ static void prefixexp (LexState *ls, expdesc *v) {
       luaX_next(ls);
       RETURNS_1(expr(ls, v));
       check_match(ls, ')', '(', line);
-      if(ls->in_terra) {
-        //if an call was parenthesized, mark it truncated
-        //so that it only returns one argument
-        int tbl = new_table_before(ls, T_truncate);
-        add_field(ls, tbl, "value");
-      }
       //luaK_dischargevars(ls->fs, v);
       return;
     }
@@ -976,8 +970,10 @@ static void doquote(LexState * ls, bool isexp) {
         if(testnext(ls, TK_IN)) {
             expdesc v;
             RETURNS_1(explist(ls, &v));
-            add_field(ls, let, "expressions");
+        } else {
+            new_list(ls);
         }
+         add_field(ls, let, "expressions");
         check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
     }

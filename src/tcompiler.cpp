@@ -322,8 +322,7 @@ struct CCallingConv {
     };
     
     struct Classification {
-        int nreturns; //number of return values
-        Argument returntype; //classification of return type (if nreturns > 1) this will always be an C_AGGREGATE_* each member holding 1 return value
+        Argument returntype;
         std::vector<Argument> paramtypes;
     };
     
@@ -441,7 +440,7 @@ struct CCallingConv {
             assert(st);
             return st;
         }
-        std::string name = typ->asstring("displayname");
+        std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
         return StructType::create(*C->ctx, name);
@@ -663,18 +662,10 @@ struct CCallingConv {
     }
     
     void Classify(Obj * ftype, Obj * params, Classification * info) {
-        Obj returns;
-        ftype->obj("returns",&returns);
-        info->nreturns = returns.size();
-        
-        if (info->nreturns == 0) {
-            info->returntype = Argument(C_PRIMITIVE,Type::getVoidTy(*C->ctx));
-        } else {
-            Obj returnobj;
-            ftype->obj("returnobj",&returnobj);
-            int zero = 0;
-            info->returntype = ClassifyArgument(&returnobj, &zero, &zero);
-        }
+        Obj returntype;
+        ftype->obj("returntype",&returntype);
+        int zero = 0;
+        info->returntype = ClassifyArgument(&returntype, &zero, &zero);
         
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM ? 1 : 0; /*sret consumes RDI for the return value pointer so it counts towards the used integer registers*/
@@ -808,34 +799,22 @@ struct CCallingConv {
             }
         }
     }
-    void FillAggregate(Value * dest, std::vector<Value *> * results) {
-        if(results->size() == 1) {
-            B->CreateStore((*results)[0],dest);
-        } else {
-            for(size_t i = 0; i < results->size(); i++) {
-                B->CreateStore((*results)[i],B->CreateConstGEP2_32(dest,0,i));
-            }
-        }
-    }
-    void EmitReturn(Obj * ftype, Function * function, std::vector<Value*> * results) {
+    void EmitReturn(Obj * ftype, Function * function, Value * result) {
         Classification * info = ClassifyFunction(ftype);
-        assert(results->size() == info->nreturns);
         ArgumentKind kind = info->returntype.kind;
         
-        if(info->nreturns == 0 || (C_AGGREGATE_REG == kind && info->returntype.nargs == 0)) {
+        if(C_AGGREGATE_REG == kind && info->returntype.nargs == 0) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
-            assert(results->size() == 1);
-            Value * r = (*results)[0];
             if(info->returntype.isi1)
-                r = B->CreateTrunc(r, Type::getInt1Ty(*C->ctx));
-            B->CreateRet(r);
+                result = B->CreateTrunc(result, Type::getInt1Ty(*C->ctx));
+            B->CreateRet(result);
         } else if(C_AGGREGATE_MEM == kind) {
-            FillAggregate(function->arg_begin(),results);
+            B->CreateStore(result,function->arg_begin());
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
             Value * dest = CreateAlloca(info->returntype.type);
-            FillAggregate(dest,results);
+            B->CreateStore(result,dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.nargs == 1)
                 result = B->CreateConstGEP2_32(result, 0, 0);
@@ -844,6 +823,7 @@ struct CCallingConv {
             assert(!"unhandled return value");
         }
     }
+    
     Value * EmitCall(Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals) {
         Classification info;
         Classify(ftype,paramtypes,&info);
@@ -890,9 +870,7 @@ struct CCallingConv {
         AttributeFnOrCall(call,&info);
         
         //unstage results
-        if(info.nreturns == 0) {
-            return call;
-        } else if(C_PRIMITIVE == info.returntype.kind) {
+        if(C_PRIMITIVE == info.returntype.kind) {
             if(info.returntype.isi1)
                 return B->CreateZExt(call,info.returntype.type);
             return call;
@@ -908,22 +886,7 @@ struct CCallingConv {
                 if(info.returntype.nargs > 0)
                     B->CreateStore(call,casted);
             }
-            
-            if(info.nreturns == 1) {
-                return B->CreateLoad(aggregate);
-            } else {
-                //multireturn
-                return aggregate;
-            }
-        }
-        
-    }
-    Value * EmitExtractReturn(Value * aggregate, int nreturns, int idx) {
-        assert(nreturns != 0);
-        if(nreturns > 1) {
-            return B->CreateLoad(B->CreateConstGEP2_32(aggregate, 0, idx));
-        } else {
-            return aggregate;
+            return B->CreateLoad(aggregate);
         }
     }
     Type * CreateFunctionType(Obj * typ) {
@@ -1542,11 +1505,6 @@ if(baseT->isIntegerTy()) { \
     bool isPointerToFunction(Type * t) {
         return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
     }
-    bool isAnonymousStruct(Obj * typ) {
-        if(!typ->hasfield("llvm_name"))
-            return false;
-        return *typ->asstring("llvm_name") == '\0';
-    }
     Value * emitStructSelect(Obj * structType, Value * structPtr, int index) {
 
         assert(structPtr->getType()->isPointerTy());
@@ -1571,7 +1529,7 @@ if(baseT->isIntegerTy()) { \
         //in all cases we simply bitcast cast the resulting pointer to the expected type
         Obj entryType;
         entry.obj("type",&entryType);
-        if (entry.boolean("inunion") || isPointerToFunction(addr->getType()->getPointerElementType()) || isAnonymousStruct(&entryType)) {
+        if (entry.boolean("inunion") || isPointerToFunction(addr->getType()->getPointerElementType())) {
             Type * resultType = PointerType::getUnqual(getType(&entryType)->type);
             addr = B->CreateBitCast(addr, resultType);
         }
@@ -1615,6 +1573,9 @@ if(baseT->isIntegerTy()) { \
         switch(exp->kind("kind")) {
             case T_var:  {
                 return variableFromDefinition(exp);
+            } break;
+            case T_treelist: {
+                return emitTreeList(exp);
             } break;
             case T_operator: {
                 
@@ -1754,6 +1715,9 @@ if(baseT->isIntegerTy()) { \
                 C->ee->addGlobalMapping(fn, ptr); //if we deserialize this function it will be necessary to relink this to the lua runtime
                 return fn;
             } break;
+            case T_apply: {
+                return emitCall(exp);
+            } break;
             case T_cast: {
                 Obj a;
                 Obj to,from;
@@ -1793,14 +1757,6 @@ if(baseT->isIntegerTy()) { \
                 TType * tt = getType(&typ);
                 return ConstantInt::get(Type::getInt64Ty(*C->ctx),C->td->getTypeAllocSize(tt->type));
             } break;   
-            case T_extractreturn: {
-                return emitExtractReturn(exp);
-            } break;
-            case T_treelist: {
-                std::vector<Value*> values;
-                emitTreeList(exp, false, &values);
-                return (values.size() == 0) ? NULL : values[0];
-            } break;
             case T_select: {
                 Obj obj,typ;
                 exp->obj("value",&obj);
@@ -1818,21 +1774,13 @@ if(baseT->isIntegerTy()) { \
             case T_constructor: case T_arrayconstructor: {
                 Obj expressions;
                 exp->obj("expressions",&expressions);
-                
-                Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
-                std::vector<Value *> values;
-                emitTreeList(&expressions,true,&values);
-                for(size_t i = 0; i < values.size(); i++) {
-                    Value * addr = B->CreateConstGEP2_32(result,0,i);
-                    B->CreateStore(values[i],addr);
-                }
-                return B->CreateLoad(result);
+                return emitConstructor(exp,&expressions);
             } break;
             case T_vectorconstructor: {
                 Obj expressions;
                 exp->obj("expressions",&expressions);
                 std::vector<Value *> values;
-                emitTreeList(&expressions,true,&values);
+                emitExpressionList(&expressions,true,&values);
                 TType * vecType = typeOfValue(exp);
                 Value * vec = UndefValue::get(vecType->type);
                 Type * intType = Type::getInt32Ty(*C->ctx);
@@ -1845,7 +1793,7 @@ if(baseT->isIntegerTy()) { \
                 Obj arguments;
                 exp->obj("arguments",&arguments);
                 std::vector<Value *> values;
-                emitTreeList(&arguments,true,&values);
+                emitExpressionList(&arguments,true,&values);
                 Obj itypeObjPtr;
                 exp->obj("intrinsictype",&itypeObjPtr);
                 Obj itypeObj;
@@ -1872,6 +1820,27 @@ if(baseT->isIntegerTy()) { \
                   l->setVolatile(isVolatile);
                 }
                 return l;
+            } break;
+            case T_attrstore: {
+                Obj addr,attr,value;
+                exp->obj("address",&addr);
+                exp->obj("attributes",&attr);
+                exp->obj("value",&value);
+                Value * addrexp = emitExp(&addr);
+                Value * valueexp = emitExp(&value);
+                StoreInst * store = B->CreateStore(valueexp,addrexp);
+                if(attr.hasfield("alignment")) {
+                    int alignment = attr.number("alignment");
+                    store->setAlignment(alignment);
+                }
+                if(attr.hasfield("nontemporal")) {
+                    store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
+                }
+                if(attr.hasfield("isvolatile")) {
+                  bool isVolatile = attr.boolean("isvolatile");
+                  store->setVolatile(isVolatile);
+                }
+                return B->CreateLoad(CC.CreateAlloca(typeOfValue(exp)->type));
             } break;
             default: {
                 exp->dump();
@@ -1971,7 +1940,7 @@ if(baseT->isIntegerTy()) { \
         fnptrtyp.obj("type",&fntyp);
         
         std::vector<Value*> actuals;
-        emitTreeList(&paramlist,true,&actuals);
+        emitExpressionList(&paramlist,true,&actuals);
         
         return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
     }
@@ -1984,50 +1953,43 @@ if(baseT->isIntegerTy()) { \
             B->CreateRet(UndefValue::get(rt));
         }
     }
-    void emitTreeList(Obj * treelist, bool loadlvalue, std::vector<Value*> * results) {
-        Obj types;
-        treelist->obj("types",&types);
-        int N = types.size();
-        Obj next;
-        treelist->push();
-        treelist->fromStack(&next);
-        do {
-            Obj stmts;
-            if(next.obj("statements",&stmts)) {
-                int NS = stmts.size();
-                for(int i = 0; i < NS; i++) {
-                    Obj s;
-                    stmts.objAt(i,&s);
-                    emitStmt(&s);
-                }
-            }
-            Obj exprs;
-            if(next.obj("expressions",&exprs)) {
-                int NE = exprs.size();
-                for(int i = 0; i < NE; i++) {
-                    Obj e;
-                    exprs.objAt(i,&e);
-                    Value * r = emitExp(&e,loadlvalue);
-                    if(results && results->size() < N)
-                        results->push_back(r);
-                }
-            }
-        } while(next.obj("next", &next));
+    void emitExpressionList(Obj * exps, bool loadlvalue, std::vector<Value*> * results) {
+        int N = exps->size();
+        for(int i = 0; i < N; i++) {
+            Obj exp;
+            exps->objAt(i, &exp);
+            results->push_back(emitExp(&exp,loadlvalue));
+        }
     }
-    
-    Value * emitExtractReturn(Obj * exp) {
-        int idx = exp->number("index");
-        Obj fncall;
-        Obj rtypes;
-        exp->obj("fncall", &fncall);
-        fncall.obj("returntypes",&rtypes);
-        //TODO: this is a bug, it is possible the user did something really wrong
-        //cause an extract return to escape the scope of the value, which will make this repeat the
-        //function call.
-        //we need to check this earlier in the pipeline
-        Value * fnresult = (Value*) fncall.ud("returnvalue");
-        assert(fnresult);
-        return CC.EmitExtractReturn(fnresult,rtypes.size(),idx);
+    Value * emitConstructor(Obj * exp, Obj * expressions) {
+        Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
+        std::vector<Value *> values;
+        emitExpressionList(expressions,true,&values);
+        for(size_t i = 0; i < values.size(); i++) {
+            Value * addr = B->CreateConstGEP2_32(result,0,i);
+            B->CreateStore(values[i],addr);
+        }
+        return B->CreateLoad(result);
+    }
+    Value * emitTreeList(Obj * treelist) {
+        Obj stmts;
+        if(treelist->obj("statements",&stmts)) {
+            int NS = stmts.size();
+            for(int i = 0; i < NS; i++) {
+                Obj s;
+                stmts.objAt(i,&s);
+                emitStmt(&s);
+            }
+        }
+        Obj exps;
+        if(!treelist->obj("expressions",&exps))
+            return NULL;
+        if (exps.size() == 1) {
+            Obj exp;
+            exps.objAt(0,&exp);
+            return emitExp(&exp,false);
+        }
+        return emitConstructor(treelist, &exps);
     }
     void startDeadCode() {
         BasicBlock * bb = createAndInsertBB("dead");
@@ -2043,18 +2005,13 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("body",&treelist);
                 emitStmt(&treelist);
             } break;
-            case T_treelist: {
-                emitTreeList(stmt, false, NULL);
-            } break;
             case T_return: {
-                Obj exps;
-                stmt->obj("expressions",&exps);
-                
-                std::vector<Value *> results;
-                emitTreeList(&exps, true, &results);
+                Obj exp;
+                stmt->obj("expression",&exp);
+                Value * result = emitExp(&exp);;
                 Obj ftype;
                 funcobj.obj("type",&ftype);
-                CC.EmitReturn(&ftype,func,&results);
+                CC.EmitReturn(&ftype,func,result);
                 startDeadCode();
             } break;
             case T_label: {
@@ -2146,7 +2103,7 @@ if(baseT->isIntegerTy()) { \
                 Obj inits;
                 bool has_inits = stmt->obj("initializers",&inits);
                 if(has_inits)
-                    emitTreeList(&inits, true, &rhs);
+                    emitExpressionList(&inits, true, &rhs);
                 
                 Obj vars;
                 stmt->obj("variables",&vars);
@@ -2163,39 +2120,14 @@ if(baseT->isIntegerTy()) { \
                 std::vector<Value *> rhsexps;
                 Obj rhss;
                 stmt->obj("rhs",&rhss);
-                emitTreeList(&rhss,true,&rhsexps);
+                emitExpressionList(&rhss,true,&rhsexps);
                 std::vector<Value *> lhsexps;
                 Obj lhss;
                 stmt->obj("lhs",&lhss);
-                emitTreeList(&lhss,false,&lhsexps);
+                emitExpressionList(&lhss,false,&lhsexps);
                 int N = lhsexps.size();
                 for(int i = 0; i < N; i++)
                     B->CreateStore(rhsexps[i],lhsexps[i]);
-            } break;
-            case T_attrstore: {
-                Obj addr,attr,value;
-                stmt->obj("address",&addr);
-                stmt->obj("attributes",&attr);
-                stmt->obj("value",&value);
-                Value * addrexp = emitExp(&addr);
-                Value * valueexp = emitExp(&value);
-                StoreInst * store = B->CreateStore(valueexp,addrexp);
-                if(attr.hasfield("alignment")) {
-                    int alignment = attr.number("alignment");
-                    store->setAlignment(alignment);
-                }
-                if(attr.hasfield("nontemporal")) {
-                    store->setMetadata("nontemporal", MDNode::get(*C->ctx, ConstantInt::get(Type::getInt32Ty(*C->ctx), 1)));
-                }
-                if(attr.hasfield("isvolatile")) {
-                  bool isVolatile = attr.boolean("isvolatile");
-                  store->setVolatile(isVolatile);
-                }
-            } break;
-            case T_apply: {
-                Value * fnresult = emitCall(stmt);
-                lua_pushlightuserdata(L, fnresult);
-                stmt->setfield("returnvalue");
             } break;
             default: {
                 emitExp(stmt,false);

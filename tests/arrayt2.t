@@ -35,7 +35,7 @@ function Array(T)
         local terra elemfn(a : &T, [params])
             return a:[methodname](params)
         end
-        local RT = elemfn:gettype().returns[1]
+        local RT = elemfn:gettype().returntype
         return quote
             var self = selfexp
             var r : Array(RT)

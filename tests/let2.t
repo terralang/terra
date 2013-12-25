@@ -41,9 +41,7 @@ local emptyexp = quote
 	a = a + 1
 end
 
-local emptystmts = quote
-in 4,3
-end
+local emptystmts = {4,3}
 
 local both = quote
 in 4,[quote a = a + 1 in 3 end]
@@ -52,14 +50,17 @@ end
 terra bar(a : int,  b : int)
 	return a + b
 end
+terra bar2(a : int,  b : int, c : {})
+	return a + b
+end
 terra f4()
-	return bar(emptystmts) + bar(1,2,emptyexp) + a
+	return bar(emptystmts) + bar2(1,2,emptyexp) + a
 end
 
 assert(f4() == 12)
 
 terra f5()
-	return bar(both,truncate(1,both)) + a
+	return bar(both._0,both._0) + a
 end
 
 assert(f5() == 12)

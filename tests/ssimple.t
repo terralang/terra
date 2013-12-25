@@ -58,7 +58,7 @@ assert(foo4() == 3)
 assert(foo5() == 5)
 assert(foo6() == 7.5)
 test.meq({3,4,5,7.5,4,5},foo7())
-test.meq({4,4},foo8())
+test.meq({4,5,4},foo8())
 
 local a = { b = {c = 4}}
 terra foo9()

@@ -354,20 +354,17 @@ public:
     }
     
     bool GetFuncType(const FunctionType * f, Obj * typ) {
-        Obj returns,parameters;
-        resulttable->newlist(&returns);
+        Obj returntype,parameters;
         resulttable->newlist(&parameters);
         
         bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
         QualType RT = f->getResultType();
-        if(!RT->isVoidType()) {
-            Obj rt;
-            if(!GetType(RT,&rt)) {
+        if(RT->isVoidType()) {
+            PushTypeFunction("unit");
+            returntype.initFromStack(L, ref_table);
+        } else {
+            if(!GetType(RT,&returntype))
                 valid = false;
-            } else {
-                rt.push();
-                returns.addentry();
-            }
         }
        
         
@@ -390,7 +387,7 @@ public:
         if(valid) {
             PushTypeFunction("functype");
             parameters.push();
-            returns.push();
+            returntype.push();
             lua_pushboolean(L, proto ? proto->isVariadic() : false);
             lua_call(L, 3, 1);
             typ->initFromStack(L,ref_table);

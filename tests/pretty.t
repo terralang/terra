@@ -45,7 +45,8 @@ terra foo()
 	var ee = sizeof(int)
 	var more = { a = 5, c = 4, _2 = 3}
 	baz()
-	var bb = takebar(bar(1))
+	var bbb = bar(1)
+	var bb = takebar(bbb._0,bbb._1)
 	return 3,4,ee,bar(1)
 end
 

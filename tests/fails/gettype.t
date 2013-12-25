@@ -12,7 +12,7 @@ end
 makestuff = macro(makestuff)
 
 terra useit()
-	return makestuff(true).a,makestuff(3.0).a,makestuff([quote end]).a
+	return makestuff(true).a,makestuff(3.0).a,makestuff(makestuff).a
 end
 
 local a,b = useit()

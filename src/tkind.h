@@ -58,7 +58,6 @@ _(float,"float") \
 _(integer,"integer") \
 _(logical,"logical") \
 _(cast,"cast") \
-_(extractreturn,"extractreturn") \
 _(globalvar, "globalvar") \
 _(struct, "struct") \
 _(structentry, "structentry") \
@@ -88,7 +87,6 @@ _(numbertoken, "<number>") \
 _(stringtoken, "<string>") \
 _(eostoken, "<eof>") \
 _(constant,"constant") \
-_(truncate, "truncate") \
 _(attrload,"attrload") \
 _(attrstore,"attrstore") \
 _(opaque, "opaque")
