@@ -441,7 +441,7 @@ struct CCallingConv {
             assert(st);
             return st;
         }
-        std::string name = typ->asstring("displayname");
+        std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
         return StructType::create(*C->ctx, name);
