@@ -2274,7 +2274,7 @@ function terra.funcdefinition:typecheck()
             end
         end
         
-        cast.structvariable = terra.newtree(exp, { kind = terra.kinds.entry, name = "<structcast>", type = exp.type:complete(exp) })
+        cast.structvariable = terra.newtree(exp, { kind = terra.kinds.allocvar, name = "<structcast>", type = exp.type:complete(exp) })
         local var_ref = insertvar(exp,exp.type,cast.structvariable.name,cast.structvariable)
         
         local initialized = {}
@@ -3205,8 +3205,7 @@ function terra.funcdefinition:typecheck()
                 p.type:complete(p)
             end
         end
-        --copy the entries since we mutate them and this list could appear multiple times in the tree
-        return params:map(function(x) return x:copy{}  end) 
+        return params:map(function(p) return terra.newtree(p, {kind = terra.kinds.allocvar, name = p.name, symbol = p.symbol, type = p.type, lvalue = true})  end)
     end
 
 
@@ -3290,9 +3289,7 @@ function terra.funcdefinition:typecheck()
             return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
             local res
-            
             local lhs = checkformalparameterlist(s.variables)
-
             if s.initializers then
                 local params = checkexpressions(s.initializers)
                 local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
@@ -3302,10 +3299,9 @@ function terra.funcdefinition:typecheck()
                 for i,v in ipairs(lhs) do
                     v.type = params[i] and params[i].type or terra.types.error
                 end
-                
-                res = s:copy { variables = lhs, initializers = params }
+                res = terra.newtree(s,{kind = terra.kinds.assignment, lhs = lhs, rhs = params })
             else
-                res = s:copy { variables = lhs }
+                res = terra.newtree(s, {kind = terra.kinds.treelist, statements = lhs})
             end     
             --add the variables to current environment
             for i,v in ipairs(lhs) do
@@ -3709,6 +3705,9 @@ local function printpretty(toptree,returntype)
     function emitExp(e)
         if e:is "var" then
             emitIdent(e.name,e.value)
+        elseif e:is "allocvar" then
+            emit("var ")
+            emitParam(e)
         elseif e:is "operator" then
             local op = terra.kinds[e.operator]
             local function emitOperand(o,isrhs)

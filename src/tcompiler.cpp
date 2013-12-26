@@ -1122,14 +1122,8 @@ struct TerraCompiler {
         Obj ftype;
         funcobj.obj("type",&ftype);
         
-        int N = parameters.size();
         std::vector<Value *> parametervars;
-        for(size_t i = 0; i < N; i++) {
-            Obj p;
-            parameters.objAt(i,&p);
-            parametervars.push_back(allocVar(&p));
-        }
-        
+        emitExpressionList(&parameters, false, &parametervars);
         CC.EmitEntry(&ftype, func, &parametervars);
          
         Obj body;
@@ -1573,6 +1567,9 @@ if(baseT->isIntegerTy()) { \
         switch(exp->kind("kind")) {
             case T_var:  {
                 return variableFromDefinition(exp);
+            } break;
+            case T_allocvar: {
+                return allocVar(exp);
             } break;
             case T_treelist: {
                 return emitTreeList(exp);
@@ -2096,25 +2093,6 @@ if(baseT->isIntegerTy()) { \
                 insertBB(merge);
                 setInsertBlock(merge);
                 
-            } break;
-            case T_defvar: {
-                std::vector<Value *> rhs;
-                
-                Obj inits;
-                bool has_inits = stmt->obj("initializers",&inits);
-                if(has_inits)
-                    emitExpressionList(&inits, true, &rhs);
-                
-                Obj vars;
-                stmt->obj("variables",&vars);
-                int N = vars.size();
-                for(int i = 0; i < N; i++) {
-                    Obj v;
-                    vars.objAt(i,&v);
-                    Value * addr = allocVar(&v);
-                    if(has_inits)
-                        B->CreateStore(rhs[i],addr);
-                }
             } break;
             case T_assignment: {
                 std::vector<Value *> rhsexps;

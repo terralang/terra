@@ -89,7 +89,8 @@ _(eostoken, "<eof>") \
 _(constant,"constant") \
 _(attrload,"attrload") \
 _(attrstore,"attrstore") \
-_(opaque, "opaque")
+_(opaque, "opaque") \
+_(allocvar, "allocvar") 
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
