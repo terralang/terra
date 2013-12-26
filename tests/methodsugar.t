@@ -7,7 +7,7 @@ terra M.B:foo(a : int)
 end
 
 terra bar()
-    var b : M.B = { 1,2 }
+    var b = M.B { 1,2 }
     return b:foo(3)
 end
 

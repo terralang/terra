@@ -1,12 +1,12 @@
 struct A { a : int, b : double }
 
 terra returnstruct()
-    var a : A = { 1, 2.5}
+    var a = A { 1, 2.5}
     return a
 end
 terra returnstruct2()
-    var a : A = { 1, 2.5}
-    var b : A = { 2, 3.5}
+    var a = A { 1, 2.5}
+    var b = A { 2, 3.5}
     return a,b
 end
 
@@ -26,7 +26,7 @@ terra returnaos()
 end
 struct B { a : int[4] }
 terra returnsoa()
-    var a : B = { array(1,2,3,4) }
+    var a  = B { array(1,2,3,4) }
     return a
 end
 

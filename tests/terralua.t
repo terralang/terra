@@ -16,7 +16,7 @@ function takesastruct(a)
 end
 struct A { a : int , b : double }
 terra passastruct()
-	var a : A = {1,3.4}
+	var a = A {1,3.4}
 	--takesastruct(a) luajit doesn't like having structs passed to its callbacks by value?
 	var b = a.a
 	takesastruct(&a)

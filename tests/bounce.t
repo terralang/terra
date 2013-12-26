@@ -15,7 +15,7 @@ terra terrafn(a : &Count)
 end
 
 terra begin()
-	var c : Count = {0}
+	var c = Count {0}
 	return terrafn(&c)
 end
 

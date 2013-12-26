@@ -83,11 +83,11 @@ end
 NBODIES = 5
 
 terra main(argc : int, argv : &&int8)
-    var bodies = arrayof(planet,
-      {                               -- sun */
+    var bodies = array(
+      planet {                               -- sun */
         0, 0, 0, 0, 0, 0, solar_mass
       },
-      {                               -- jupiter */
+      planet {                               -- jupiter */
         4.84143144246472090e+00,
         -1.16032004402742839e+00,
         -1.03622044471123109e-01,
@@ -96,7 +96,7 @@ terra main(argc : int, argv : &&int8)
         -6.90460016972063023e-05 * days_per_year,
         9.54791938424326609e-04 * solar_mass
       },
-      {                               -- saturn */
+      planet {                               -- saturn */
         8.34336671824457987e+00,
         4.12479856412430479e+00,
         -4.03523417114321381e-01,
@@ -105,7 +105,7 @@ terra main(argc : int, argv : &&int8)
         2.30417297573763929e-05 * days_per_year,
         2.85885980666130812e-04 * solar_mass
       },
-      {                               -- uranus */
+      planet {                               -- uranus */
         1.28943695621391310e+01,
         -1.51111514016986312e+01,
         -2.23307578892655734e-01,
@@ -114,7 +114,7 @@ terra main(argc : int, argv : &&int8)
         -2.96589568540237556e-05 * days_per_year,
         4.36624404335156298e-05 * solar_mass
       },
-      {                               -- neptune */
+      planet {                               -- neptune */
         1.53796971148509165e+01,
         -2.59193146099879641e+01,
         1.79258772950371181e-01,

@@ -3,8 +3,8 @@ struct A { b : B } and
 struct B {a : int, b : int}
 
 
-terra foo() : B
-	var b = {1,2}
+terra foo()
+	var b = B {1,2}
 	return b
 end
 

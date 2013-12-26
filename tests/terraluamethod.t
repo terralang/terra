@@ -5,7 +5,7 @@ A.methods.up = function(self,b)
 end
 
 terra foo()
-	var a : A = { 1 }
+	var a = A { 1 }
 	a:up()
 	var b = &a
 	b:up(4)

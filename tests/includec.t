@@ -21,7 +21,7 @@ end
 
 terra bar4()
 	var opaquething : c.MyStruct2
-	var my : c.MyStruct  = { 3, 4}
+	var my = c.MyStruct { 3, 4}
 	return my.a + my.b
 end
 

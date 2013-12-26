@@ -1,12 +1,9 @@
 
-struct A { a : int }
-struct B { a : int, b : int}
-
-terra foo(a : A)
+terra foo(a : {int} )
 	return 1
 end
 
-terra foo(a : B)
+terra foo(a : {int,int} )
 	return 2
 end
 

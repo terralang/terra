@@ -14,7 +14,7 @@ and terra B:foo()
 	return self.a
 end 
 and terra foo()
-	var b : B, a : A = {4}, {5}
+	var b , a  = B{4}, A{5}
 	return 1 + b:foo()
 end
 and local terra mydecl

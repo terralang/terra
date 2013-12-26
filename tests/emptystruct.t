@@ -1,22 +1,22 @@
-terra f(x : struct {})
+terra f(x :  {})
 	return x
 end
 
 print(f({}))
 
-terra f2(x : struct {})
+terra f2(x :  {})
 	return x,x
 end
 
 print(f2({}))
 
-terra f3(x : struct{}, a : int)
+terra f3(x : {}, a : int)
 	return a + 1
 end
 
 assert(f3({},3) == 4)
 
-terra f4(x : struct {})
+terra f4(x :  {})
 	return x,4
 end
 

@@ -12,7 +12,7 @@ terra A:foo(a : double, b : uint8)
 end
 
 terra useit()
-	var a : A = { 3 }
+	var a = A { 3 }
 	var pa = &a
 	return a:foo(1,1) + a:foo(1.1,1) + pa:foo(1,1) + pa:foo(1.1,1)
 end

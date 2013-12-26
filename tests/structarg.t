@@ -1,12 +1,8 @@
---struct A { a : int, b : int}
-
-terra A(a : struct { a : int, b : int})
-	return a.a
-end
-
 terra foobar()
-	var a = A { 3, 4}
-	return a
+    var a = { a=3,b=4}
+    var b = {a=5,b=6.0}
+    b = a
+	return a.a
 end
 
 local test = require("test")

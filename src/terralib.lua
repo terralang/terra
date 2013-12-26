@@ -2261,7 +2261,8 @@ function terra.funcdefinition:typecheck()
     --if speculative is true, then errors will not be reported (caller must check)
     --this is used to see if an overloaded function can apply to the argument list
 
-    function structcast(cast,exp,typ, speculative) 
+    function structcast(explicit,exp,typ, speculative)
+        local cast = createcast(exp,typ)
         local from = exp.type:getlayout(exp)
         local to = typ:getlayout(exp)
 
@@ -2278,7 +2279,7 @@ function terra.funcdefinition:typecheck()
         
         local initialized = {}
         cast.entries = terra.newlist()
-        if #from.entries > #to.entries then
+        if #from.entries > #to.entries or (not explicit and #from.entries ~= #to.entries) then
             err("structural cast invalid, source has ",#from.entries," fields but target has only ",#to.entries)
             return cast, valid
         end
@@ -2303,19 +2304,18 @@ function terra.funcdefinition:typecheck()
         if typ == exp.type or typ == terra.types.error or exp.type == terra.types.error then
             return exp, true
         else
-            local cast_exp = createcast(exp,typ)
             if ((typ:isprimitive() and exp.type:isprimitive()) or
                 (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N)) and
                not typ:islogicalorvector() and not exp.type:islogicalorvector() then
-                return cast_exp, true
+                return createcast(exp,typ), true
             elseif typ:ispointer() and exp.type:ispointer() and typ.type == terra.types.opaque then --implicit cast from any pointer to &opaque
-                return cast_exp, true
+                return createcast(exp,typ), true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
-                return cast_exp, true
-            elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then 
-                return structcast(cast_exp,exp,typ,speculative)
+                return createcast(exp,typ), true
+            elseif typ:isstruct() and typ.convertible and exp.type:isstruct() and exp.type.convertible then 
+                return structcast(false,exp,typ,speculative)
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
-                return cast_exp, true
+                return createcast(exp,typ), true
             elseif typ:isvector() and exp.type:isprimitive() then
                 local primitivecast, valid = insertcast(exp,typ.type,speculative)
                 local broadcast = createcast(primitivecast,typ)
@@ -2358,7 +2358,7 @@ function terra.funcdefinition:typecheck()
                     diag:reporterror(exp,"user-defined cast failed: ",e)
                 end
             end
-            return cast_exp, false
+            return createcast(exp,typ), false
         end
     end
     function insertexplicitcast(exp,typ) --all implicit casts are allowed plus some additional casts like from int to pointer, pointer to int, and int to int
@@ -2376,6 +2376,8 @@ function terra.funcdefinition:typecheck()
         elseif (typ:isprimitive() and exp.type:isprimitive())
             or (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N) then --explicit conversions from logicals to other primitives are allowed
             return createcast(exp,typ)
+        elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then 
+            return structcast(true,exp,typ)
         else
             return insertcast(exp,typ) --otherwise, allow any implicit casts
         end
