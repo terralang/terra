@@ -6,9 +6,10 @@ end
 struct A {c : int, a : int, b : double }
 
 terra bar()
-	var a : A = {1,foo()}
-	var b : A = {1,2,(foo())}
-	var c : A = {c = 1,a = 2,b = foo()}
+    var r = foo()
+	var a  = A {1,unpackstruct(r)}
+	var b  = A {1,2,(foo())._0}
+	var c  = A {c = 1,a = 2,b = foo()._0}
 	return a.c + a.a + a.b + b.c + c.c
 end
 

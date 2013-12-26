@@ -26,7 +26,9 @@ in
 end
 
 terra bindit()
-	var a,b,c,d,e,f,g = torturechain
+	var a,b,c,r1 = torturechain
+	var d,e,r2 = r1
+	var f,g = r2
 	return a + b + c + d + e + f + g
 end
 
@@ -48,25 +50,18 @@ end
 
 
 terra callit()
-	return foo(0,torturechain)
+    var a,b,c,r1 = torturechain
+	var d,e,r2 = r1
+	var f,g = r2
+	return foo(0,a,b,c,d,e,f,g)
 end
 
 terra callol()
-	return overloadit(truncate(6,torturechain))
+	var a,b,c,r1 = torturechain
+	var d,e,r2 = r1
+	var f,g = r2
+	return overloadit(a,b,c,e,f,g)
 end
 
 assert(callit() == sum)
 assert(callol() == 1)
-
-terra uselvalue()
-	(torturechain) = 5
-	return 1
-end
-
-terra usemultiplelvalues()
-	truncate(4,torturechain) = 1,2,3,4
-	return 1
-end
-
-assert(uselvalue() == 1)
-assert(usemultiplelvalues() == 1)

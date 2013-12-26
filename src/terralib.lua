@@ -2260,7 +2260,14 @@ function terra.funcdefinition:typecheck()
     -- all implicit casts (struct,reciever,generic) take a speculative argument
     --if speculative is true, then errors will not be reported (caller must check)
     --this is used to see if an overloaded function can apply to the argument list
-
+    
+    --create a new variable allocation and a var node that refers to it, used to create temporary variables
+    local function allocvar(anchor,typ,name)
+        local av = terra.newtree(anchor, { kind = terra.kinds.allocvar, name = name , type = typ:complete(anchor), lvalue = true })
+        local v = insertvar(anchor,typ,name,av)
+        return av,v
+    end
+    
     function structcast(explicit,exp,typ, speculative)
         local cast = createcast(exp,typ)
         local from = exp.type:getlayout(exp)
@@ -2273,9 +2280,8 @@ function terra.funcdefinition:typecheck()
                 diag:reporterror(exp,...)
             end
         end
-        
-        cast.structvariable = terra.newtree(exp, { kind = terra.kinds.allocvar, name = "<structcast>", type = exp.type:complete(exp) })
-        local var_ref = insertvar(exp,exp.type,cast.structvariable.name,cast.structvariable)
+        local var_ref
+        cast.structvariable,var_ref = allocvar(exp,exp.type,"<structcast>")
         
         local initialized = {}
         cast.entries = terra.newlist()
@@ -3139,7 +3145,7 @@ function terra.funcdefinition:typecheck()
                     local value = checkexp(f.value)
                     named = named + (f.key and 1 or 0)
                     if not f.key and value:is "treelist" and not value.statements then
-                        paramlist:insertall(value.trees)
+                        paramlist:insertall(value.expressions)
                     else
                         paramlist:insert(value)
                     end
@@ -3225,8 +3231,35 @@ function terra.funcdefinition:typecheck()
         loopstmts:remove()
     end
     
+    local function createassignment(anchor,lhs,rhs)
+        for i,exp in ipairs(lhs) do ensurelvalue(exp) end
+        if #lhs > #rhs and #rhs > 0 then
+            local last = rhs[#rhs]
+            if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
+                --struct pattern match
+                local av,v = allocvar(anchor,last.type,"<structpattern>")
+                local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
+                for i,l in ipairs(lhs) do
+                    if i < #rhs then
+                        newlhs:insert(l)
+                    else
+                        lhsp:insert(l)
+                        rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
+                    end
+                end
+                newlhs[#rhs] = av
+                local a1,a2 = createassignment(anchor,newlhs,rhs), createassignment(anchor,lhsp,rhsp)
+                return terra.newtree(anchor, {kind = terra.kinds.treelist, statements = terra.newlist { a1,a2 }})
+            end
+        end
+        local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
+        rhs = insertcasts(anchor,vtypes,rhs)
+        for i,v in ipairs(lhs) do
+            v.type = rhs[i] and rhs[i].type or terra.types.error
+        end
+        return terra.newtree(anchor,{kind = terra.kinds.assignment, lhs = lhs, rhs = rhs })
+    end
     -- checking of statements
-
     function checkstmt(s)
         if s:is "block" then
             symbolenv:enterblock()
@@ -3288,21 +3321,9 @@ function terra.funcdefinition:typecheck()
             leaveloop()
             return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
-            local res
             local lhs = checkformalparameterlist(s.variables)
-            if s.initializers then
-                local params = checkexpressions(s.initializers)
-                local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
-                
-                params = insertcasts(s,vtypes,params)
-                
-                for i,v in ipairs(lhs) do
-                    v.type = params[i] and params[i].type or terra.types.error
-                end
-                res = terra.newtree(s,{kind = terra.kinds.assignment, lhs = lhs, rhs = params })
-            else
-                res = terra.newtree(s, {kind = terra.kinds.treelist, statements = lhs})
-            end     
+            local res = s.initializers and createassignment(s,lhs,checkexpressions(s.initializers)) 
+                        or terra.newtree(s, {kind = terra.kinds.treelist, statements = lhs})
             --add the variables to current environment
             for i,v in ipairs(lhs) do
                 assert(terra.issymbol(v.symbol))
@@ -3312,11 +3333,7 @@ function terra.funcdefinition:typecheck()
         elseif s:is "assignment" then
             local rhs = checkexpressions(s.rhs)
             local lhs = checkexpressions(s.lhs)
-            for i,exp in ipairs(lhs) do
-                ensurelvalue(exp)
-            end
-            rhs = insertcasts(s,lhs:map("type"),rhs)
-            return s:copy { lhs = lhs, rhs = rhs }
+            return createassignment(s,lhs,rhs)
         elseif s:is "apply" then
             return checkapply(s,true)
         elseif s:is "method" then
@@ -3453,6 +3470,18 @@ end)
 _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
+end)
+_G["unpackstruct"] = terra.internalmacro(function(diag,tree,obj)
+    local typ = obj:gettype()
+    if not obj or not typ:isstruct() or typ.convertible ~= "tuple" then
+        return obj
+    end
+    if not obj:islvalue() then diag:reporterror("expected an lvalue") end
+    local result = terralib.newlist()
+    for i,e in ipairs(typ:getentries()) do 
+        result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = "_"..tostring(i-1), value = obj.tree }))
+    end
+    return result
 end)
 _G["tuple"] = terra.types.tuple
 _G["global"] = terra.global

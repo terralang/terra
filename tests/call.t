@@ -18,25 +18,27 @@ terra two(a : int, b : int) : int
     return a + b
 end
 terra baz3() : int
-    return two(baz2(1,2))
+    var a,b = baz2(1,2)
+    return two(a,b)
 end
 terra baz4() : int
-    return two(5,(baz2(1,2)))
+    return two(5,(baz2(1,2))._0)
 end
 
 terra baz5()
-    return 1,2,baz2(0,0)
+    var a,b = baz2(0,0)
+    return 1,2,a,b
 end
 
 terra baz6()
     var a,b,c,d = baz5()
-    var e = (baz5())
+    var e = (baz5()._0)
     return a + b + c + d + e
 end
 
 terra baz7(a : int)
     if a < 3 then
-        return 1,(baz5())
+        return 1,(baz5())._0
     else
         return 100,2
     end

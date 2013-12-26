@@ -292,20 +292,19 @@ failit(function()
 	callnotdefined()
 end)
 
-failit(function()
+
 	local terra norets()
 	end
 	local terra callnotdefined()
 		return (norets())
 	end
 	callnotdefined()
-end)
 
 local terra returns2() return 1,2 end
 
 terra foo29(a : int)
 	if a > 1 then
-		return (returns2())
+		return (returns2()._0)
 	else
 		return 5
 	end
@@ -338,7 +337,8 @@ end
 
 
 local terra foo36()
-	return definedtwice(returns2())
+    var r = returns2()
+	return definedtwice(unpackstruct(r))
 end
 assert(3 == foo36())
 
@@ -454,8 +454,8 @@ end
 foo38()
 local twice = macro(function(exp,call)
 	return quote
-		exp = exp + 1 + call
-		exp = exp + 1 + call
+		exp = exp + 1 + call._0
+		exp = exp + 1 + call._0
 	end
 end)
 terra foo39()

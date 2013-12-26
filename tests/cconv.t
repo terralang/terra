@@ -23,7 +23,8 @@ terra f3()
 end
 
 terra c3()
-	return f3() + 1, f3()
+    var r = f3()
+	return f3()._0 + 1,unpackstruct(r) 
 end
 
 terra f4() : {float,float}
@@ -31,7 +32,8 @@ terra f4() : {float,float}
 end
 
 terra c4()
-	return f4() + 1, f4() 
+    var r = f4()
+	return f4()._0 + 1, unpackstruct(r) 
 end
 
 
@@ -40,7 +42,8 @@ terra f5(a : int) : {uint8,uint8,uint8,uint8}
 end
 
 terra c5()
-	return f5(8) + 1, f5(8)
+    var r = f5(8)
+	return f5(8)._0 + 1, unpackstruct(r)
 end
 
 terra f6() : {double, double, int}
@@ -48,7 +51,8 @@ terra f6() : {double, double, int}
 end
 
 terra c6()
-	return f6() + 1, f6()
+    var r = f6()
+	return f6()._0 + 1, unpackstruct(r)
 end
 test.meq({4.25, 3.25,4.25,3},c6())
 
@@ -57,7 +61,8 @@ terra f7(a : int) : {double, double, int}
 end
 
 terra c7()
-	return f7(4) + 1, f7(4)
+    var r = f7(4)
+	return f7(4)._0 + 1, unpackstruct(r)
 end
 test.meq({4.25,3.25,4.25,4},c7())
 
@@ -66,7 +71,8 @@ terra f8() : {double, double}
 end
 
 terra c8()
-	return f8() + 1, f8()
+    var r= f8()
+	return f8()._0 + 1, unpackstruct(r)
 end
 
 test.meq({4.25,3.25,4.25},c8())
@@ -82,7 +88,8 @@ end
 
 terra c9()
 	var a = S1 { 4, 5}
-	return f9(a) + 1, f9(a)
+	var r = f9(a)
+	return f9(a)._0 + 1, unpackstruct(r)
 end
 test.meq({6,5,7},c9())
 
@@ -98,7 +105,8 @@ end
 
 terra c10()
 	var s2 = S2 { 4,5,6 }
-	return f10(s2) + 1, f10(s2)
+	var r = f10(s2)
+	return f10(s2)._0 + 1, unpackstruct(r) 
 end
 
 test.meq({5,4,5,6},c10())
@@ -136,7 +144,8 @@ end
 
 terra c12a()
 	var a = S3 { vector(2.25f, 3.25f), 4 }
-	return f12a(a) + 1, f12a(a)
+	var r = f12a(a)
+	return f12a(a)._0 + 1, unpackstruct(r)
 end
 test.meq({6.5,5.5,4},c12a())
 
@@ -146,7 +155,8 @@ end
 
 terra c12b()
 	var a = S4 { 4, vector(2.25f, 3.25f) }
-	return f12b(a) + 1, f12b(a)
+	var r = f12b(a)
+	return f12b(a)._0 + 1, unpackstruct(r)
 end
 test.meq({6.5,5.5,4},c12b())
 
@@ -191,7 +201,8 @@ end
 
 terra c14()
 	var a = S6 { 4,2,3}
-	return f14(a) + 1, f14(a)
+	var r = f14(a)
+	return f14(a)._0 + 1, unpackstruct(r)
 end
 test.meq({5,4,2,3},c14())
 
@@ -201,7 +212,8 @@ end
 
 terra c15()
 	var a = S7 {1, S7a { 2,3 }, 4}
-	return f15(a) + 1, f15(a)
+	var r = f15(a)
+	return f15(a)._0 + 1, unpackstruct(r)
 end
 
 test.meq({2,1,2,3,4}, c15())
@@ -216,7 +228,8 @@ end
 
 terra c16()
 	var a = S8 { arrayof(uint8, 1,2,3,4,5,6,7) }
-	return f16(a) + 1, f16(a)
+	var r = f16(a)
+	return f16(a)._0 + 1, unpackstruct(r)
 end
 
 test.meq({2,1,7},c16())
@@ -231,7 +244,8 @@ end
 
 terra c17()
 	var a = S9 { arrayof(uint8, 1,2,3,4,5,6,7,8,9) }
-	return f17(a) + 1, f17(a)
+	var r = f17(a)
+	return f17(a)._0 + 1, unpackstruct(r)
 end
 
 
@@ -249,7 +263,8 @@ terra f18a(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a5 : int, a : S10)
 end
 
 terra c18a()
-	return f18a(1,2,3,4,5,6,{7,8}) + 1, f18a(1,2,3,4,5,6,{7,8})
+    var r = f18a(1,2,3,4,5,6,S10{7,8})
+	return f18a(1,2,3,4,5,6,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8},c18a())
@@ -260,7 +275,8 @@ terra f18b(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a : S10)
 end
 
 terra c18b()
-	return f18b(1,2,3,4,5,{7,8}) + 1, f18b(1,2,3,4,5,{7,8})
+    var r = f18b(1,2,3,4,5,S10{7,8})
+	return f18b(1,2,3,4,5,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8},c18b())
@@ -269,7 +285,8 @@ terra f18c(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a : S10)
 	return a.a, a.b, a0, a1, a2
 end
 terra c18c()
-	return f18c(1,2,3,4,5,{7,8}) + 1, f18c(1,2,3,4,5,{7,8})
+    var r = f18c(1,2,3,4,5,S10 {7,8})
+	return f18c(1,2,3,4,5,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8,1,2,3},c18c())
@@ -283,7 +300,8 @@ terra f18d(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a5 : int, a : S11)
 	return a.a, a.b
 end
 terra c18d()
-	return f18d(1,2,3,4,5,6,{7,8}) + 1, f18d(1,2,3,4,5,6,{7,8})
+    var r = f18d(1,2,3,4,5,6,S11{7,8})
+	return f18d(1,2,3,4,5,6,S11{7,8})._0 + 1, unpackstruct(r)
 end
 test.meq({8,7,8},c18d())
 
@@ -293,7 +311,8 @@ terra f18e(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a : S11)
 end
 
 terra c18e()
-	return f18e(1,2,3,4,5,{7,8}) + 1, f18e(1,2,3,4,5,{7,8})
+    var r = f18e(1,2,3,4,5,S11{7,8})
+	return f18e(1,2,3,4,5,S11{7,8})._0 + 1, unpackstruct(r) 
 end
 
 test.meq({8,7,8},c18e())
@@ -303,7 +322,8 @@ terra f18f(a0 : int, a1 : int, a2 : int, a3 : int, a4: int, a : S11)
 end
 
 terra c18f()
-	return f18f(1,2,3,4,5,{7,8}) + 1, f18f(1,2,3,4,5,{7,8})
+    var r = f18f(1,2,3,4,5,S11{7,8})
+	return f18f(1,2,3,4,5,S11{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8,1,2,3},c18f())
@@ -314,7 +334,8 @@ terra f18g(a0 : float, a1 : float, a2 : float, a3 : float, a4: float, a5 : float
 end
 
 terra c18g()
-	return f18g(1,2,3,4,5,6,9,10,{7,8}) + 1, f18g(1,2,3,4,5,6,9,10,{7,8})
+    var r = f18g(1,2,3,4,5,6,9,10,S10{7,8})
+	return f18g(1,2,3,4,5,6,9,10,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8},c18g())
@@ -324,7 +345,8 @@ terra f18h(a0 : float, a1 : float, a2 : float, a3 : float, a4: float, a5 : float
 end
 
 terra c18h()
-	return f18h(1,2,3,4,5,6,9,{7,8}) + 1, f18h(1,2,3,4,5,6,9,{7,8})
+    var r = f18h(1,2,3,4,5,6,9,S10{7,8})
+	return f18h(1,2,3,4,5,6,9,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8},c18h())
@@ -334,7 +356,8 @@ terra f18i(a0 : float, a1 : float, a2 : float, a3 : float, a4: float, a5 : float
 end
 
 terra c18i()
-	return f18i(1,2,3,4,5,6,9,{7,8}) + 1, f18i(1,2,3,4,5,6,9,{7,8})
+    var r = f18i(1,2,3,4,5,6,9,S10{7,8})
+	return f18i(1,2,3,4,5,6,9,S10{7,8})._0 + 1, unpackstruct(r)
 end
 
 test.meq({8,7,8,1,2,3},c18i())
@@ -349,7 +372,8 @@ terra f19(a : S12)
 end
 terra c19()
 	var a = S12 { 3,5 }
-	return f19(a) + 1, f19(a)
+	var r = f19(a)
+	return f19(a)._0 + 1, unpackstruct(r)
 end
 test.meq({4,3,5},c19())
 
@@ -359,7 +383,8 @@ terra f20(a : S10, b : int)
 	return a.a,a.b,b
 end
 terra c20()
-	return f20({1,2},3) + 1, f20({1,2},3)
+    var r = f20(S10{1,2},3)
+	return f20(S10{1,2},3)._0 + 1, unpackstruct(r)
 end
 test.meq({2,1,2,3},c20())
 
