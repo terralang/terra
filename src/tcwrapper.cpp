@@ -55,11 +55,11 @@ public:
     }
     
     void InitType(const char * name, Obj * tt) {
-        lua_getfield(L, LUA_GLOBALSINDEX, name);
+        PushTypeField(name);
         tt->initFromStack(L,ref_table);
     }
     
-    void PushTypeFunction(const char * name) {
+    void PushTypeField(const char * name) {
         lua_getfield(L, LUA_GLOBALSINDEX, "terra");
         lua_getfield(L, -1, "types");
         lua_getfield(L, -1, name);
@@ -120,7 +120,7 @@ public:
             }
             //if name == "" then we have an anonymous struct
             if(!thenamespace->obj(name.c_str(),tt)) {
-                PushTypeFunction("getorcreatecstruct");
+                PushTypeField("getorcreatecstruct");
                 lua_pushstring(L, name.c_str());
                 lua_pushboolean(L, thenamespace == &tagged);
                 lua_call(L,2,1);
@@ -239,7 +239,7 @@ public:
             if(!GetType(ETy,&t2)) {
                 return false;
             }
-            PushTypeFunction("pointer");
+            PushTypeField("pointer");
             t2.push();
             lua_call(L,1,1);
             tt->initFromStack(L, ref_table);
@@ -254,7 +254,7 @@ public:
             const ConstantArrayType *ATy = cast<ConstantArrayType>(Ty);
             int sz = ATy->getSize().getZExtValue();
             if(GetType(ATy->getElementType(),&at)) {
-                PushTypeFunction("array");
+                PushTypeField("array");
                 at.push();
                 lua_pushinteger(L, sz);
                 lua_call(L,2,1);
@@ -271,7 +271,7 @@ public:
                 Obj at;
                 if(GetType(VT->getElementType(),&at)) {
                     int n = VT->getNumElements();
-                    PushTypeFunction("vector");
+                    PushTypeField("vector");
                     at.push();
                     lua_pushinteger(L,n);
                     lua_call(L,2,1);
@@ -360,7 +360,7 @@ public:
         bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
         QualType RT = f->getResultType();
         if(RT->isVoidType()) {
-            PushTypeFunction("unit");
+            PushTypeField("unit");
             returntype.initFromStack(L, ref_table);
         } else {
             if(!GetType(RT,&returntype))
@@ -385,7 +385,7 @@ public:
         }
         
         if(valid) {
-            PushTypeFunction("functype");
+            PushTypeField("functype");
             parameters.push();
             returntype.push();
             lua_pushboolean(L, proto ? proto->isVariadic() : false);
