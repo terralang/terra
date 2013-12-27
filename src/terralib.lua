@@ -1935,9 +1935,8 @@ function terra.specialize(origtree, luaenv, depth)
     function createformalparameterlist(paramlist, requiretypes)
         local result = terra.newlist()
         for i,p in ipairs(paramlist) do
-            if i ~= #paramlist or p.type or p.name.name then
+            if p.type or p.name.name then
                 --treat the entry as a _single_ parameter if any are true:
-                --if it is not the last entry in the list
                 --it has an explicit type
                 --it is a string (and hence cannot be multiple items) then
             
