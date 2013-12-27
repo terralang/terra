@@ -849,7 +849,7 @@ function terra.quote:asvalue()
             for i,r in ipairs(e.records) do
                 local v,e = getvalue(e.expressions[i]) 
                 if e then return nil,e end
-                t[r.key] = v
+                t[r.key or i] = v
             end
             return t
         elseif e:is "typedexpression" then
@@ -3451,7 +3451,7 @@ _G["vector"] = terra.internalmacro(function(diag,tree,...)
     if not tree then
         error("nil second argument in vector constructor")
     end
-    if terra.types.istype(diag) then --vector used as a type constructor vector(int,3)
+    if not terra.istree(tree) then --vector used as a type constructor vector(int,3)
         return terra.types.vector(diag,tree)
     end
     --otherwise this is a macro that constructs a vector literal
@@ -3680,14 +3680,6 @@ local function printpretty(toptree,returntype)
             emit(" = ")
             emitParamList(s.rhs)
             emit("\n")
-        elseif s:is "attrstore" then
-            begin("attrstore(")
-            emitExp(s.address)
-            emit(", ")
-            emitExp(s.value)
-            emit(", ")
-            emitAttr(s.attributes)
-            emit(")\n")
         else
             begin("")
             emitExp(s)
@@ -3817,7 +3809,7 @@ local function printpretty(toptree,returntype)
             if e.type:isprimitive() then
                 emit(tonumber(e.value.object))
             else
-                emit("<constant:",e.type,">")
+                emit("<constant:"..tostring(e.type)..">")
             end
         elseif e:is "treelist" then
             emitTreeList(e)
@@ -3827,6 +3819,14 @@ local function printpretty(toptree,returntype)
             emit(", ")
             emitAttr(e.attributes)
             emit(")")
+        elseif e:is "attrstore" then
+            begin("attrstore(")
+            emitExp(e.address)
+            emit(", ")
+            emitExp(e.value)
+            emit(", ")
+            emitAttr(e.attributes)
+            emit(")\n")
         elseif e:is "intrinsic" then
             emit("intrinsic<%s>(",e.name)
             emitParamList(e.arguments)
@@ -3869,12 +3869,6 @@ local function printpretty(toptree,returntype)
         local exps = pl.expressions or pl.trees
         if exps then
             emitList(exps,"",", ","",emitExp)
-        end
-        if pl.next then
-            if exps and #exps > 0 then
-                emit(", ")
-            end
-            emitParamList(pl.next)
         end
         if pl.statements then
             leaveblock()

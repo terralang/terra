@@ -11,6 +11,8 @@ end
 function whatwhat()
 end
 struct A { data : int }
+terra A:moo() end
+Aptr = terralib.new(A)
 terra foo()
 	var aa : A
 
@@ -21,6 +23,9 @@ terra foo()
 	::what::
 	goto what
 	while 4 < 3 do
+	    break
+	    terralib.attrload(&aa,{})
+	    var d = terralib.attrstore(&aa,aa,{})
 		return 3,4,4,bar(aa.data)
 	end
 	var a = 0.0
@@ -47,6 +52,9 @@ terra foo()
 	baz()
 	var bbb = bar(1)
 	var bb = takebar(bbb._0,bbb._1)
+	var vv = vector(3,4)
+	var vvv = Aptr
+	var vvvv = Aptr:moo()
 	return 3,4,ee,bar(1)
 end
 
