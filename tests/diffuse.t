@@ -233,5 +233,5 @@ doit(1)
 diffuse:disas()
 doit(1)
 
-local al,loads = getloads()
+local al,loads = terralib.unpackstruct(getloads())
 print(al/loads)

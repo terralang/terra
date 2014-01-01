@@ -16,11 +16,9 @@ end
 terra f2()
 	a
 end
-
-assert(1 == f0())
-local f10,f11 = f1()
-assert(f10 == 1)
-assert(f11 == 2)
+local test = require("test")
+test.meq({1,2},f0())
+test.meq({1,2},f1())
 
 local c = symbol()
 local b = 

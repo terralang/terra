@@ -10,7 +10,4 @@ terra foo()
 end
 
 local test = require("test")
-a,b,c = foo()
-test.eq(a,3)
-test.eq(b,2)
-test.eq(c,3)
+test.meq({3,2,3},foo())

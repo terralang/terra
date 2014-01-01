@@ -15,6 +15,4 @@ test.eq( foo( {a = 1,b = 2.3} ), 3.3 )
 test.eq( foo( {1,2.3} ), 3.3 )
 test.eq( foo( {b = 1, a = 2.3} ),3 )
 
-local o,t = foo2( { a = 1, b = 2.3} )
-test.eq(o,3.3)
-test.eq(t,1)
+test.meq({3.3,1},foo2( { a = 1, b = 2.3} ))

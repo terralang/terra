@@ -27,9 +27,4 @@ terra bar()
     return v0,v1,v2,v3,v4
 end
 test = require("test")
-local results = {bar()}
-local expected = {0,1,0,1,0}
-
-for i,r in ipairs(results) do
-    test.eq(r,expected[i])
-end
+test.meq({0,1,0,1,0},bar())

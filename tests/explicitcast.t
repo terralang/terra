@@ -8,7 +8,4 @@ terra foo()
     return @d,fi,what
 end
 local test = require("test")
-local a,b,c = foo()
-test.eq(a,256+3)
-test.eq(b,1)
-test.eq(c,3)
+test.meq({256+3,1,3},foo())

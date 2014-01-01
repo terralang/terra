@@ -9,8 +9,4 @@ terra doit()
     return exps
 end
 local test = require("test")
-local a,b,c,d = doit()
-test.eq(a,2)
-test.eq(b,3)
-test.eq(c,4)
-test.eq(d,5)
+test.meq({2,3,4,5},doit())

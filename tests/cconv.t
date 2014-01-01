@@ -400,7 +400,7 @@ end
 terra c22()
 	return f22().a, f22()
 end
-local s22_0, s22_1 = c22()
+local s22_0, s22_1 = terralib.unpackstruct(c22())
 test.eq(s22_0,3)
 test.eq(s22_1.a,3)
 test.eq(s22_1.b,4)
@@ -412,7 +412,7 @@ end
 terra c23()
 	return f23().a, f23()
 end
-local s23_0, s23_1 = c23()
+local s23_0, s23_1 = terralib.unpackstruct(c23())
 test.eq(s23_0,1)
 test.eq(s23_1.a,1)
 test.eq(s23_1.b,2)
@@ -424,7 +424,7 @@ end
 terra c24()
 	return f24().a, f24()
 end
-local s24_0, s24_1 = c24()
+local s24_0, s24_1 = terralib.unpackstruct(c24())
 test.eq(s24_0,1)
 test.eq(s24_1.a,1)
 test.eq(s24_1.b,2)

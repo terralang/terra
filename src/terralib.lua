@@ -574,24 +574,9 @@ function terra.funcdefinition:emitllvm(cont)
     end
 end
 
-function terra.funcdefinition:iscalleddirectly()
-    local ret = self.type.returntype
-    return ret.convertible ~= "tuple" or ret == terra.types.unit
-end
 function terra.funcdefinition:__call(...)
     local ffiwrapper = self:getpointer()
-    if self:iscalleddirectly() then --fast path
-        return ffiwrapper(...)
-    else
-        --multireturn
-        local NR = #self.type.returntype.entries
-        local rs = ffiwrapper(...)
-        local rl = {}
-        for i = 0,NR-1 do
-            table.insert(rl,rs["_"..i])
-        end
-        return unpack(rl)
-    end
+    return ffiwrapper(...)
 end
 function terra.funcdefinition:getpointer()
     self:compile()
@@ -664,11 +649,7 @@ function terra.func:__call(...)
     if #self.definitions == 1 then --generate fast path for the non-overloaded case
         local defn = self.definitions[1]
         local ptr = defn:getpointer() --forces compilation
-        if defn:iscalleddirectly() then
-            self.fastcall = ptr
-        else
-            self.fastcall = defn
-        end
+        self.fastcall = ptr
         return self.fastcall(...)
     end
     
@@ -845,11 +826,12 @@ function terra.quote:asvalue()
         elseif e:is "constant" then
             return tonumber(e.value.object) or e.value.object
         elseif e:is "constructor" then
-            local t = {}
-            for i,r in ipairs(e.records) do
+            local t,typ = {},e.type
+            for i,r in ipairs(typ:getentries()) do
                 local v,e = getvalue(e.expressions[i]) 
                 if e then return nil,e end
-                t[r.key or i] = v
+                local key = typ.convertible == "tuple" and i or r.field
+                t[key] = v
             end
             return t
         elseif e:is "typedexpression" then
@@ -898,6 +880,7 @@ end
 function terra.symbol:__tostring()
     return "$"..(self.displayname or tostring(self.id))
 end
+function terra.symbol:tocname() return "__symbol"..tostring(self.id) end
 
 _G["symbol"] = terra.newsymbol 
 
@@ -1306,10 +1289,7 @@ do
                 str = str .. " union { "
             end
             
-            local keystr = v.key
-            if terra.issymbol(keystr) then
-                keystr = "__symbol"..tostring(keystr.id)
-            end
+            local keystr = terra.issymbol(v.key) and v.key:tocname() or v.key
             str = str..v.type:cstring().." "..keystr.."; "
             
             if v.inunion and nextalloc ~= v.allocation then
@@ -3478,10 +3458,24 @@ _G["unpackstruct"] = terra.internalmacro(function(diag,tree,obj)
     if not obj:islvalue() then diag:reporterror("expected an lvalue") end
     local result = terralib.newlist()
     for i,e in ipairs(typ:getentries()) do 
-        result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = "_"..tostring(i-1), value = obj.tree }))
+        if e.field then
+            result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = e.field, value = obj.tree }))
+        end
     end
     return result
 end)
+function terra.unpackstruct(cdata)
+    local t = terra.typeof(cdata)
+    if not t or not t:isstruct() then error("expected a struct value",2) end
+    local results = terralib.newlist()
+    for i,e in ipairs(t:getentries()) do
+        if e.field then
+            local nm = terra.issymbol(e.field) and e.field:tocname() or e.field
+            results:insert(cdata[nm])
+        end
+    end
+    return unpack(results)
+end
 _G["tuple"] = terra.types.tuple
 _G["global"] = terra.global
 

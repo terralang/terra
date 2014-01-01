@@ -9,7 +9,7 @@ terra f2(x : {})
 	return x,x
 end
 
-print(f2({}))
+print(f2({})._0)
 
 terra f3(x : {}, a : int)
 	return a + 1
@@ -21,8 +21,8 @@ terra f4(x : {})
 	return x,4
 end
 
-a,b = f4({})
-assert(b == 4)
+a = f4({})
+assert(a._1 == 4)
 
 terra f5()
 	return f({})

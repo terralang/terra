@@ -10,6 +10,6 @@ terra bar()
 	c = c + 10
 	return [quote var a = 3 in [quote var b = 4 in a + b + c + d end] end]
 end
-local a,b = foo()
-assert(a == 1 and b == 2)
+local test = require("test")
+test.meq({1,2},foo())
 assert(25 == bar())

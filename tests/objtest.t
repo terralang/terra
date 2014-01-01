@@ -42,9 +42,4 @@ terra bar()
 end
 
 test = require("test")
-local results = {bar()}
-local expected = {0,1,1,2,2,3,2,0,1,1,2,2,3,2}
-
-for i,r in ipairs(results) do
-    test.eq(r,expected[i])
-end
+test.meq({0,1,1,2,2,3,2,0,1,1,2,2,3,2},bar())

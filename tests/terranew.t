@@ -12,7 +12,7 @@ end
 
 local test = require("test")
 
-local a,b = foo(A)
+local a,b = terralib.unpackstruct(foo(A))
 
 test.eq(a,10)
 test.eq(terralib.typeof(A),int[4])

@@ -10,8 +10,8 @@ function test.neq(a,b)
 		error(tostring(a) .. " == "  .. tostring(b),2)
 	end
 end
-function test.meq(a,...)
-	local lst = {...}
+function test.meq(a,b)
+	local lst = {terralib.unpackstruct(b)}
 	if #lst ~= #a then
 		error("size mismatch",2)
 	end

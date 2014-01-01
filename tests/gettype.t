@@ -14,7 +14,5 @@ makestuff = macro(makestuff)
 terra useit()
 	return makestuff(true).a,makestuff(3.0).a
 end
-
-local a,b = useit()
-assert(a == true)
-assert(b == 3)
+local test = require("test")
+test.meq({true,3},useit())

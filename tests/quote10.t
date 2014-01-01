@@ -9,7 +9,5 @@ terra bar()
 	return q
 end
 
-a,b = bar()
 local test = require("test")
-test.eq(a,1)
-test.eq(b,2)
+test.meq({1,2},bar())

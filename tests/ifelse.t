@@ -14,8 +14,4 @@ local test = require("test")
 test.eq(foo(1),1)
 test.eq(foo(-1),-1)
 
-a,b,c = foo2(1)
-
-test.eq(a,1)
-test.eq(b,5)
-test.eq(c,6)
+test.meq({1,5,6},foo2(1))

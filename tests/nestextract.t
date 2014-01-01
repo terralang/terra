@@ -36,9 +36,5 @@ end
 
 
 doit:printpretty()
-
-local a,b = doit()
-
-print(a,b)
-assert(1 == a)
-assert(2 == b)
+local test = require("test")
+test.meq({1,2},doit())

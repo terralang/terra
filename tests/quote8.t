@@ -16,8 +16,4 @@ end
 
 
 local test = require("test")
-local z,z2,z3,a,b,c = foo()
-test.eq(z,1)
-test.eq(a,1)
-test.eq(b,2)
-test.eq(c,3)
+test.meq({1,2,3,1,2,3},foo())

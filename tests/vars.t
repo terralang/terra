@@ -20,8 +20,4 @@ end
 local test = require("test")
 
 bar()
-i,j,k = foo()
-
-test.eq(i,4)
-test.eq(j,5)
-test.eq(k,6)
+test.meq({4,5,6},foo())

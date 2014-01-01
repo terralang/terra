@@ -12,7 +12,6 @@ terra doit()
     iamclean(a)
 end
 
-local a,b = doit()
+local a = doit()
 local test = require("test")
-test.eq(a,3)
-test.eq(b,4)
+test.meq({3,4}, a)
