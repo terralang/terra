@@ -747,23 +747,28 @@ end
 
 terra.macro = {}
 terra.macro.__index = terra.macro
-terra.macro.__call = function(self,ctx,tree,...)
+terra.macro.__call = function(self,...)
+    if not self.fromlua then
+        error("macros must be called from inside terra code",2)
+    end
+    return self.fromlua(...)
+end
+function terra.macro:run(ctx,tree,...)
     if self._internal then
-        return self.fn(ctx,tree,...)
+        return self.fromterra(ctx,tree,...)
     else
-        return self.fn(...)
+        return self.fromterra(...)
     end
 end
-
 function terra.ismacro(t)
     return getmetatable(t) == terra.macro
 end
 
-function terra.createmacro(fn)
-    return setmetatable({fn = fn}, terra.macro)
+function terra.createmacro(fromterra,fromlua)
+    return setmetatable({fromterra = fromterra,fromlua = fromlua}, terra.macro)
 end
-function terra.internalmacro(fn) 
-    local m = terra.createmacro(fn)
+function terra.internalmacro(...) 
+    local m = terra.createmacro(...)
     m._internal = true
     return m
 end
@@ -1571,7 +1576,7 @@ do
         local fnlike = self.methods[methodname]
         if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
             fnlike = terra.internalmacro(function(ctx,tree,...)
-                return self.metamethods.__methodmissing(ctx,tree,methodname,...)
+                return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
             end)
         end
         return fnlike
@@ -2281,7 +2286,7 @@ function terra.funcdefinition:typecheck()
         
         return cast, valid
     end
-
+    
     function insertcast(exp,typ,speculative) --if speculative is true, then an error will not be reported and the caller should check the second return value to see if the cast was valid
         if typ == nil or not terra.types.istype(typ) or not exp.type then
             print(debug.traceback())
@@ -2916,7 +2921,7 @@ function terra.funcdefinition:typecheck()
                 local quotes = arguments:map(function(a)
                     return terra.newquote(createtypedexpression(a))
                 end)
-                local success, result = terra.invokeuserfunction(anchor, false, fnlike, diag, anchor, unpack(quotes))
+                local success, result = terra.invokeuserfunction(anchor, false, fnlike.run, fnlike, diag, anchor, unpack(quotes))
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
                     result = isstatement and checkstmt(newexp) or checkexp(newexp,true)
@@ -3420,24 +3425,29 @@ end
 
 
 -- GLOBAL MACROS
-_G["sizeof"] = terra.internalmacro(function(diag,tree,typ)
+terra.sizeof = terra.internalmacro(
+function(diag,tree,typ)
     return terra.newtree(tree,{ kind = terra.kinds.sizeof, oftype = typ:astype()})
-end)
-_G["vector"] = terra.internalmacro(function(diag,tree,...)
+end,
+function (terratype,...)
+    terratype:complete()
+    return terra.llvmsizeof(terratype)
+end
+)
+_G["sizeof"] = terra.sizeof
+_G["vector"] = terra.internalmacro(
+function(diag,tree,...)
     if not diag then
         error("nil first argument in vector constructor")
     end
     if not tree then
         error("nil second argument in vector constructor")
     end
-    if not terra.istree(tree) then --vector used as a type constructor vector(int,3)
-        return terra.types.vector(diag,tree)
-    end
-    --otherwise this is a macro that constructs a vector literal
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, expressions = exps })
-    
-end)
+end,
+terra.types.vector
+)
 _G["vectorof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree,{ kind = terra.kinds.vectorconstructor, oftype = typ:astype(), expressions = exps })
@@ -3450,7 +3460,7 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
-_G["unpackstruct"] = terra.internalmacro(function(diag,tree,obj)
+terra.unpackstruct = terra.internalmacro(function(diag,tree,obj)
     local typ = obj:gettype()
     if not obj or not typ:isstruct() or typ.convertible ~= "tuple" then
         return obj
@@ -3463,8 +3473,8 @@ _G["unpackstruct"] = terra.internalmacro(function(diag,tree,obj)
         end
     end
     return result
-end)
-function terra.unpackstruct(cdata)
+end,
+function(cdata)
     local t = terra.typeof(cdata)
     if not t or not t:isstruct() then error("expected a struct value",2) end
     local results = terralib.newlist()
@@ -3475,7 +3485,8 @@ function terra.unpackstruct(cdata)
         end
     end
     return unpack(results)
-end
+end)
+_G["unpackstruct"] = terra.unpackstruct
 _G["tuple"] = terra.types.tuple
 _G["global"] = terra.global
 
@@ -3979,10 +3990,6 @@ function terra.new(terratype,...)
     terratype:complete()
     local typ = terratype:cstring()
     return ffi.new(typ,...)
-end
-function terra.sizeof(terratype,...)
-    terratype:complete()
-    return terra.llvmsizeof(terratype)
 end
 function terra.offsetof(terratype,field)
     terratype:complete()
