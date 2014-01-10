@@ -122,7 +122,7 @@ static void AddLLVMOptions(int N,...) {
     cl::ParseCommandLineOptions(N+1, &ops[0]);
 }
 
-//useful for debugging GC problems. You can attach it to 
+//useful for debugging GC problems. You can attach it to
 static int terra_gcdebug(lua_State * L) {
     Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function*));
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
@@ -158,7 +158,7 @@ bool OneTimeInit(struct terra_State * T) {
         InitializeNativeTarget();
         InitializeNativeTargetAsmPrinter();
         InitializeNativeTargetAsmParser();
-    } else { 
+    } else {
         if(!llvm_is_multithreaded()) {
             if(!llvm_start_multithreaded()) {
                 terra_pusherror(T,"llvm failed to start multi-threading\n");
@@ -186,29 +186,29 @@ bool HostHasAVX() {
 int terra_compilerinit(struct terra_State * T) {
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
-    
-    
+
+
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    
+
     #define REGISTER_FN(name,isclo) RegisterFunction(T,#name,isclo,terra_##name);
     TERRALIB_FUNCTIONS(REGISTER_FN)
     #undef REGISTER_FN
 
     lua_pushstring(T->L,LLVM_VERSION);
     lua_setfield(T->L,-2, "llvmversion");
-    
+
     lua_pop(T->L,1); //remove terra from stack
-    
+
     T->C = new terra_CompilerState();
     memset(T->C, 0, sizeof(terra_CompilerState));
     JITMemoryManager * JMM = JITMemoryManager::CreateDefaultMemManager();
-    
+
     terra_debuginit(T,JMM);
-    
+
     T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
     T->C->m = new Module("terra",*T->C->ctx);
-    
+
     TargetOptions options;
     DEBUG_ONLY(T) {
         options.NoFramePointerElim = true;
@@ -219,7 +219,7 @@ int terra_compilerinit(struct terra_State * T) {
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
-    
+
     T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err)
                                      .setEngineKind(EngineKind::JIT)
                                      .setAllocateGVsWithCode(false)
@@ -231,25 +231,25 @@ int terra_compilerinit(struct terra_State * T) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
     }
-    
+
     T->C->fpm = new FunctionPassManager(T->C->m);
 
     llvmutil_addtargetspecificpasses(T->C->fpm, TM);
     OptInfo info; //TODO: make configurable from terra
     llvmutil_addoptimizationpasses(T->C->fpm,&info);
-    
-    
+
+
     if(!TheTarget) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
     }
-    
+
     T->C->tm = TM;
     T->C->mi = createManualFunctionInliningPass(T->C->tm);
     T->C->mi->doInitialization();
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
-    
+
     return 0;
 }
 
@@ -291,20 +291,20 @@ struct CCallingConv {
     lua_State * L;
     terra_CompilerState * C;
     IRBuilder<> * B;
-    
+
     enum RegisterClass {
         C_INTEGER,
         C_NO_CLASS,
         C_SSE,
         C_MEMORY
     };
-    
+
     enum ArgumentKind {
         C_PRIMITIVE, //passed without modifcation (i.e. any non-aggregate type)
         C_AGGREGATE_REG, //aggregate passed through registers
         C_AGGREGATE_MEM, //aggregate passed through memory
     };
-    
+
     struct Argument {
         ArgumentKind kind;
         int nargs; //number of arguments this value will produce in parameter list
@@ -320,37 +320,37 @@ struct CCallingConv {
             this->isi1 = isi1;
         }
     };
-    
+
     struct Classification {
         int nreturns; //number of return values
         Argument returntype; //classification of return type (if nreturns > 1) this will always be an C_AGGREGATE_* each member holding 1 return value
         std::vector<Argument> paramtypes;
     };
-    
+
     void init(terra_State * T, terra_CompilerState * C, IRBuilder<> * B) {
         this->T = T;
         this->L = T->L;
         this->C = C;
         this->B = B;
     }
-    
+
     void LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
         GetStructEntries(typ,&layout);
         int N = layout.size();
         std::vector<Type *> entry_types;
-        
+
         unsigned unionAlign = 0; //minimum union alignment
         Type * unionType = NULL; //type with the largest alignment constraint
         size_t unionAlignSz = 0; //size of type with largest alignment contraint
         size_t unionSz   = 0;    //allocation size of the largest member
-                                 
+
         for(int i = 0; i < N; i++) {
             Obj v;
             layout.objAt(i, &v);
             Obj vt;
             v.obj("type",&vt);
-            
+
             Type * fieldtype = GetType(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
@@ -363,7 +363,7 @@ struct CCallingConv {
                 size_t allocSize = C->td->getTypeAllocSize(fieldtype);
                 if(allocSize > unionSz)
                     unionSz = allocSize;
-                
+
                 //check if this is the last member of the union, and if it is, add it to our struct
                 Obj nextObj;
                 if(i + 1 < N)
@@ -508,7 +508,7 @@ struct CCallingConv {
         assert(t && t->type);
         return t;
     }
-    
+
     TType * GetType(Obj * typ) {
         TType * t = GetTypeIncomplete(typ);
         if(t->incomplete) {
@@ -529,7 +529,7 @@ struct CCallingConv {
         t->incomplete = false;
         return t;
     }
-    
+
     RegisterClass Meet(RegisterClass a, RegisterClass b) {
         switch(a) {
             case C_INTEGER:
@@ -554,7 +554,7 @@ struct CCallingConv {
                 return C_MEMORY;
         }
     }
-    
+
     void MergeValue(RegisterClass * classes, size_t offset, Obj * type) {
         Type * t = GetType(type)->type;
         int entry = offset / 8;
@@ -613,17 +613,17 @@ struct CCallingConv {
 #else
     Type * TypeForClass(size_t size, RegisterClass clz) {
         assert(size <= 8);
-        return Type::getIntNTy(*C->ctx, size * 8); 
+        return Type::getIntNTy(*C->ctx, size * 8);
     }
     bool ValidAggregateSize(size_t sz) {
         bool isPow2 = sz && !(sz & (sz - 1));
         return sz <= 8 && isPow2;
     }
 #endif
-    
+
     Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
         TType * t = GetType(type);
-        
+
         if(!t->type->isAggregateType()) {
             if(t->type->isFloatingPointTy() || t->type->isVectorTy())
                 ++*usedfloat;
@@ -631,14 +631,14 @@ struct CCallingConv {
                 ++*usedint;
             return Argument(C_PRIMITIVE,t->type,1,NULL,t->islogical && !t->type->isVectorTy());
         }
-        
+
         int sz = C->td->getTypeAllocSize(t->type);
         if(!ValidAggregateSize(sz)) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
-        
+
         RegisterClass classes[] = {C_NO_CLASS, C_NO_CLASS};
-        
+
         int sizes[] = { std::min(sz,8), std::max(0,sz - 8) };
         MergeValue(classes, 0, type);
         if(classes[0] == C_MEMORY || classes[1] == C_MEMORY) {
@@ -649,24 +649,24 @@ struct CCallingConv {
         if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
             return Argument(C_AGGREGATE_MEM,t->type);
         }
-        
+
         *usedfloat += nfloat;
         *usedint += nint;
-        
+
         std::vector<Type*> elements;
         for(int i = 0; i < 2; i++)
             if(sizes[i] > 0)
                 elements.push_back(TypeForClass(sizes[i], classes[i]));
-        
+
         return Argument(C_AGGREGATE_REG,t->type,elements.size(),
                         StructType::get(*C->ctx,elements));
     }
-    
+
     void Classify(Obj * ftype, Obj * params, Classification * info) {
         Obj returns;
         ftype->obj("returns",&returns);
         info->nreturns = returns.size();
-        
+
         if (info->nreturns == 0) {
             info->returntype = Argument(C_PRIMITIVE,Type::getVoidTy(*C->ctx));
         } else {
@@ -675,7 +675,7 @@ struct CCallingConv {
             int zero = 0;
             info->returntype = ClassifyArgument(&returnobj, &zero, &zero);
         }
-        
+
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM ? 1 : 0; /*sret consumes RDI for the return value pointer so it counts towards the used integer registers*/
         int N = params->size();
@@ -685,13 +685,13 @@ struct CCallingConv {
             info->paramtypes.push_back(ClassifyArgument(&elem,&nfloat,&nint));
         }
     }
-    
+
     Classification * ClassifyFunction(Obj * fntyp) {
         Classification * info  = (Classification*) fntyp->ud("llvm_ccinfo");
         if(!info) {
             info = new Classification();
             lua_pushlightuserdata(L,info);
-            
+
             Obj params;
             fntyp->obj("parameters",&params);
             Classify(fntyp, &params, info);
@@ -701,7 +701,7 @@ struct CCallingConv {
         }
         return info;
     }
-    
+
     template<typename FnOrCall>
     void addSRetAttr(FnOrCall * r, int idx) {
         #ifdef LLVM_3_2
@@ -740,7 +740,7 @@ struct CCallingConv {
             r->addAttribute(idx,Attribute::ZExt);
         #endif
     }
-    
+
     template<typename FnOrCall>
     void AttributeFnOrCall(FnOrCall * r, Classification * info) {
         if(info->returntype.isi1)
@@ -762,7 +762,7 @@ struct CCallingConv {
             argidx += v->nargs;
         }
     }
-    
+
     Function * CreateFunction(Obj * ftype, const char * name) {
         TType * llvmtyp = GetType(ftype);
         //function name is $+name so that it can't conflict with any symbols imported from the C namespace
@@ -771,11 +771,11 @@ struct CCallingConv {
         AttributeFnOrCall(fn,info);
         return fn;
     }
-    
+
     PointerType * Ptr(Type * t) {
         return PointerType::getUnqual(t);
     }
-    
+
     void EmitEntry(Obj * ftype, Function * func, std::vector<Value *> * variables) {
         Classification * info = ClassifyFunction(ftype);
         assert(info->paramtypes.size() == variables->size());
@@ -821,7 +821,7 @@ struct CCallingConv {
         Classification * info = ClassifyFunction(ftype);
         assert(results->size() == info->nreturns);
         ArgumentKind kind = info->returntype.kind;
-        
+
         if(info->nreturns == 0 || (C_AGGREGATE_REG == kind && info->returntype.nargs == 0)) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
@@ -847,13 +847,13 @@ struct CCallingConv {
     Value * EmitCall(Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals) {
         Classification info;
         Classify(ftype,paramtypes,&info);
-        
+
         std::vector<Value*> arguments;
-        
+
         if(C_AGGREGATE_MEM == info.returntype.kind) {
             arguments.push_back(CreateAlloca(info.returntype.type));
         }
-        
+
         for(size_t i = 0; i < info.paramtypes.size(); i++) {
             Argument * a = &info.paramtypes[i];
             Value * actual = (*actuals)[i];
@@ -877,9 +877,9 @@ struct CCallingConv {
                     }
                 } break;
             }
-            
+
         }
-        
+
         //emit call
         //function pointers are stored as &int8 to avoid calling convension issues
         //cast it back to the real pointer type right before calling it
@@ -888,7 +888,7 @@ struct CCallingConv {
         CallInst * call = B->CreateCall(callee, arguments);
         //annotate call with byval and sret
         AttributeFnOrCall(call,&info);
-        
+
         //unstage results
         if(info.nreturns == 0) {
             return call;
@@ -908,7 +908,7 @@ struct CCallingConv {
                 if(info.returntype.nargs > 0)
                     B->CreateStore(call,casted);
             }
-            
+
             if(info.nreturns == 1) {
                 return B->CreateLoad(aggregate);
             } else {
@@ -916,7 +916,7 @@ struct CCallingConv {
                 return aggregate;
             }
         }
-        
+
     }
     Value * EmitExtractReturn(Value * aggregate, int nreturns, int idx) {
         assert(nreturns != 0);
@@ -930,9 +930,9 @@ struct CCallingConv {
 
         std::vector<Type*> arguments;
         bool isvararg = typ->boolean("isvararg");
-        
+
         Classification * info = ClassifyFunction(typ);
-        
+
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
             switch(info->returntype.nargs) {
@@ -946,7 +946,7 @@ struct CCallingConv {
         } else if(info->returntype.isi1) {
             rt = Type::getInt1Ty(*C->ctx);
         }
-        
+
         for(size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument * a = &info->paramtypes[i];
             switch(a->kind) {
@@ -966,14 +966,14 @@ struct CCallingConv {
                 } break;
             }
         }
-        
+
         return FunctionType::get(rt,arguments,isvararg);
     }
-    
+
     void EnsureTypeIsComplete(Obj * typ) {
         GetType(typ);
     }
-    
+
     AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = 0, const Twine &Name = "") {
         BasicBlock * entry = &B->GetInsertBlock()->getParent()->getEntryBlock();
         IRBuilder<> TmpB(entry,
@@ -1044,7 +1044,7 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
         Obj t;
         global->obj("type",&t);
         Type * typ = CC->GetType(&t)->type;
-        
+
         Constant * llvmconstant = UndefValue::get(typ);
         Obj constant;
         if(global->obj("initializer",&constant)) {
@@ -1078,7 +1078,7 @@ struct TerraCompiler {
     Function * func;
     TType * func_type;
     CCallingConv CC;
-    
+
     TType * getType(Obj * v) {
         return CC.GetType(v);
     }
@@ -1087,14 +1087,14 @@ struct TerraCompiler {
         v->obj("type",&t);
         return getType(&t);
     }
-    
+
     AllocaInst * allocVar(Obj * v) {
         AllocaInst * a = CC.CreateAlloca(typeOfValue(v)->type,0,v->asstring("name"));
         lua_pushlightuserdata(L,a);
         v->setfield("value");
         return a;
     }
-    
+
     void getOrCreateFunction(Obj * funcobj, Function ** rfn, TType ** rtyp) {
         Function * fn = (Function *) funcobj->ud("llvm_function");
         Obj ftype;
@@ -1102,9 +1102,9 @@ struct TerraCompiler {
         *rtyp = getType(&ftype);
         if(!fn) {
             const char * name = funcobj->string("name");
-            
+
             fn = CC.CreateFunction(&ftype, name);
-            
+
             if(funcobj->hasfield("alwaysinline")) {
                 if(funcobj->boolean("alwaysinline")) {
                     fn->ADDFNATTR(AlwaysInline);
@@ -1115,7 +1115,7 @@ struct TerraCompiler {
             lua_pushlightuserdata(L,fn);
             funcobj->setfield("llvm_function");
 
-            //attach a userdata object to the function that will call terra_deletefunction 
+            //attach a userdata object to the function that will call terra_deletefunction
             //when the function variant is GC'd in lua
             Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
             *gchandle = fn;
@@ -1130,7 +1130,7 @@ struct TerraCompiler {
         }
         *rfn = fn;
     }
-    
+
     void run(terra_State * _T, int ref_table) {
         double begin = CurrentTimeInSeconds();
         T = _T;
@@ -1138,27 +1138,27 @@ struct TerraCompiler {
         C = T->C;
         B = new IRBuilder<>(*C->ctx);
         initDebug();
-        
+
         CC.init(T, C, B);
-        
+
         lua_pushvalue(T->L,-2); //the original argument
         funcobj.initFromStack(T->L, ref_table);
-        
+
         getOrCreateFunction(&funcobj,&func,&func_type);
         BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
-        
+
         B->SetInsertPoint(entry);
-        
+
         Obj typedtree;
         Obj parameters;
-        
+
         funcobj.obj("typedtree",&typedtree);
         setDebugPoint(&typedtree);
         typedtree.obj("parameters",&parameters);
-        
+
         Obj ftype;
         funcobj.obj("type",&ftype);
-        
+
         int N = parameters.size();
         std::vector<Value *> parametervars;
         for(size_t i = 0; i < N; i++) {
@@ -1166,28 +1166,28 @@ struct TerraCompiler {
             parameters.objAt(i,&p);
             parametervars.push_back(allocVar(&p));
         }
-        
+
         CC.EmitEntry(&ftype, func, &parametervars);
-         
+
         Obj body;
         typedtree.obj("body",&body);
         emitStmt(&body);
         //if there no terminating return statment, we need to insert one
         //if there was a Return, then this block is dead and will be cleaned up
         emitReturnUndef();
-        
+
         VERBOSE_ONLY(T) {
             func->dump();
         }
         verifyFunction(*func);
-        
+
         RecordTime(&funcobj, "llvmgen", begin);
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
         delete B;
         endDebug();
     }
-    
+
     Value * emitAddressOf(Obj * exp) {
         Value * v = emitExp(exp,false);
         if(exp->boolean("lvalue"))
@@ -1196,12 +1196,12 @@ struct TerraCompiler {
         B->CreateStore(v,addr);
         return addr;
     }
-    
+
     Value * emitUnary(Obj * exp, Obj * ao) {
         T_Kind kind = exp->kind("operator");
         if (T_addressof == kind)
             return emitAddressOf(ao);
-        
+
         TType * t = typeOfValue(exp);
         Type * baseT = getPrimitiveType(t);
         Value * a = emitExp(ao);
@@ -1247,7 +1247,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
 } else { \
     return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
 }
-        
+
         switch(exp->kind("operator")) {
             case T_ne: RETURN_OP(NE) break;
             case T_eq: RETURN_OP(EQ) break;
@@ -1255,7 +1255,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
             case T_gt: RETURN_SOP(GT) break;
             case T_ge: RETURN_SOP(GE) break;
             case T_le: RETURN_SOP(LE) break;
-            default: 
+            default:
                 assert(!"unknown op");
                 return NULL;
                 break;
@@ -1308,13 +1308,13 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
             result = <b>;
         }
         */
-        
+
         BasicBlock * startB = B->GetInsertBlock();
         BasicBlock * stmtB = createAndInsertBB((isAnd) ? "and.rhs" : "or.rhs");
         BasicBlock * mergeB = createBB((isAnd) ? "and.end" : "or.end");
-        
+
         emitBranchOnExpr(ao, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
-        
+
         Type * int1 = Type::getInt1Ty(*C->ctx);
         setInsertBlock(mergeB);
         PHINode * result = B->CreatePHI(int1, 2);
@@ -1322,7 +1322,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         for(pred_iterator it = pred_begin(mergeB), end = pred_end(mergeB);
             it != end; ++it)
             result->addIncoming(literal,*it);
-        
+
         setInsertBlock(stmtB);
         Value * b = emitCond(bo);
         stmtB = B->GetInsertBlock();
@@ -1375,7 +1375,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
                     break;
             }
         }
-        
+
         //ok, we have eager operators, lets evalute the arguments then emit
         Value * a = emitExp(ao);
         Value * b = emitExp(bo);
@@ -1385,7 +1385,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         TType * at = getType(&aot);
         TType * bt = typeOfValue(bo);
         //CC.EnsureTypeIsComplete(at) (not needed because typeOfValue(ao) ensure the type is complete)
-        
+
         //check for pointer arithmetic first pointer arithmetic first
         if(at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
             EnsurePointsToCompleteType(&aot);
@@ -1396,9 +1396,9 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
                 return emitPointerArith(kind, a, bt, b);
             }
         }
-        
+
         Type * baseT = getPrimitiveType(t);
-        
+
 #define RETURN_OP(op) \
 if(baseT->isIntegerTy()) { \
     return B->Create##op(a,b); \
@@ -1450,17 +1450,17 @@ if(baseT->isIntegerTy()) { \
         exp->obj("structvariable", &structvariable);
         Value * sv = allocVar(&structvariable);
         B->CreateStore(input,sv);
-        
+
         //allocate temporary to hold output variable
         //type must be complete before we try to allocate space for it
         //this is enforced by the callers
         assert(!to->incomplete);
         Value * output = CC.CreateAlloca(to->type);
-        
+
         Obj entries;
         exp->obj("entries",&entries);
         int N = entries.size();
-        
+
         for(int i = 0; i < N; i++) {
             Obj entry;
             entries.objAt(i,&entry);
@@ -1484,13 +1484,13 @@ if(baseT->isIntegerTy()) { \
             return t->type;
     }
     Value * emitPrimitiveCast(TType * from, TType * to, Value * exp) {
-        
+
         Type * fBase = getPrimitiveType(from);
         Type * tBase = getPrimitiveType(to);
-        
+
         int fsize = fBase->getPrimitiveSizeInBits();
         int tsize = tBase->getPrimitiveSizeInBits();
-         
+
         if(fBase->isIntegerTy()) {
             if(tBase->isIntegerTy()) {
                 if(fsize > tsize) {
@@ -1529,7 +1529,7 @@ if(baseT->isIntegerTy()) { \
     nyi:
         assert(!"NYI - casts");
         return NULL;
-        
+
     }
     Value * emitBroadcast(TType * fromT, TType * toT, Value * v) {
         Value * result = UndefValue::get(toT->type);
@@ -1553,15 +1553,15 @@ if(baseT->isIntegerTy()) { \
         PointerType * objTy = cast<PointerType>(structPtr->getType());
         assert(objTy->getElementType()->isStructTy());
         CC.EnsureTypeIsComplete(structType);
-        
+
         Obj layout;
         GetStructEntries(structType,&layout);
-        
+
         Obj entry;
         layout.objAt(index,&entry);
-        
+
         int allocindex = entry.number("allocation");
-        
+
         Value * addr = B->CreateConstGEP2_32(structPtr,0,allocindex);
         //in three cases the type of the value in the struct does not match the expected type returned
         //1. if it is a union then the llvm struct will have some buffer space to hold the object but
@@ -1575,7 +1575,7 @@ if(baseT->isIntegerTy()) { \
             Type * resultType = PointerType::getUnqual(getType(&entryType)->type);
             addr = B->CreateBitCast(addr, resultType);
         }
-        
+
         return addr;
     }
     Value * emitIfElse(Obj * cond, Obj * a, Obj * b) {
@@ -1609,7 +1609,7 @@ if(baseT->isIntegerTy()) { \
     /* alignment for load
 
     */
-    
+
     Value * emitExpRaw(Obj * exp) {
         setDebugPoint(exp);
         switch(exp->kind("kind")) {
@@ -1617,7 +1617,7 @@ if(baseT->isIntegerTy()) { \
                 return variableFromDefinition(exp);
             } break;
             case T_operator: {
-                
+
                 Obj exps;
                 exp->obj("operands",&exps);
                 int N = exps.size();
@@ -1647,7 +1647,7 @@ if(baseT->isIntegerTy()) { \
                     case T_add: {
                         TType * t = typeOfValue(exp);
                         Obj exps;
-                        
+
                         if(t->type->isFPOrFPVectorTy()) {
                             Obj a,b;
                             exps.objAt(0,&a);
@@ -1661,20 +1661,20 @@ if(baseT->isIntegerTy()) { \
                         assert(!"NYI - op");
                     } break;
                 }
-                
+
             } break;
             case T_index: {
                 Obj value;
                 Obj idx;
                 exp->obj("value",&value);
                 exp->obj("index",&idx);
-                
+
                 Obj aggTypeO;
                 value.obj("type",&aggTypeO);
                 TType * aggType = getType(&aggTypeO);
                 Value * valueExp = emitExp(&value);
-                Value * idxExp = emitExp(&idx); 
-                
+                Value * idxExp = emitExp(&idx);
+
                 //if this is a vector index, emit an extractElement
                 if(aggType->type->isVectorTy()) {
                     idxExp = emitIndex(typeOfValue(&idx),32,idxExp);
@@ -1712,7 +1712,7 @@ if(baseT->isIntegerTy()) { \
                         return ConstantPointerNull::get(pt);
                     }
                     Type * objT = getType(&objType)->type;
-                
+
                     if(objT->isFunctionTy()) {
                         Obj func;
                         exp->obj("value",&func);
@@ -1746,7 +1746,7 @@ if(baseT->isIntegerTy()) { \
                 Obj type,objType;
                 exp->obj("type",&type);
                 type.obj("type", &objType);
-                
+
                 FunctionType * fntyp = cast<FunctionType>(getType(&objType)->type);
                 assert(fntyp);
                 Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"$", C->m);
@@ -1792,7 +1792,7 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("oftype",&typ);
                 TType * tt = getType(&typ);
                 return ConstantInt::get(Type::getInt64Ty(*C->ctx),C->td->getTypeAllocSize(tt->type));
-            } break;   
+            } break;
             case T_extractreturn: {
                 return emitExtractReturn(exp);
             } break;
@@ -1805,10 +1805,10 @@ if(baseT->isIntegerTy()) { \
                 Obj obj,typ;
                 exp->obj("value",&obj);
                 TType * vt = typeOfValue(&obj);
-                
+
                 obj.obj("type",&typ);
                 int offset = exp->number("index");
-                
+
                 Value * v = emitAddressOf(&obj);
                 Value * result = emitStructSelect(&typ,v,offset);
                 if(!exp->boolean("lvalue"))
@@ -1818,7 +1818,7 @@ if(baseT->isIntegerTy()) { \
             case T_constructor: case T_arrayconstructor: {
                 Obj expressions;
                 exp->obj("expressions",&expressions);
-                
+
                 Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
                 std::vector<Value *> values;
                 emitTreeList(&expressions,true,&values);
@@ -1909,16 +1909,16 @@ if(baseT->isIntegerTy()) { \
         BasicBlock * thenBB = createAndInsertBB("then");
         BasicBlock * continueif = createBB("else");
         emitBranchOnExpr(&cond, thenBB, continueif);
-        
+
         setInsertBlock(thenBB);
-        
+
         emitStmt(&body);
         B->CreateBr(footer);
         insertBB(continueif);
         setInsertBlock(continueif);
-        
+
     }
-    
+
     void initDebug() {
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*C->m);
@@ -1941,7 +1941,7 @@ if(baseT->isIntegerTy()) { \
         //set the break table for this loop to point to the loop exit
         Obj breaktable;
         loop->obj("breaktable",&breaktable);
-        
+
         lua_pushlightuserdata(L, exit);
         breaktable.setfield("value");
     }
@@ -1958,24 +1958,24 @@ if(baseT->isIntegerTy()) { \
         Obj paramlist;
         Obj paramtypes;
         Obj func;
-        
+
         call->obj("arguments",&paramlist);
         call->obj("paramtypes",&paramtypes);
         call->obj("value",&func);
-        
+
         Value * fn = emitExp(&func);
-        
+
         Obj fnptrtyp;
         func.obj("type",&fnptrtyp);
         Obj fntyp;
         fnptrtyp.obj("type",&fntyp);
-        
+
         std::vector<Value*> actuals;
         emitTreeList(&paramlist,true,&actuals);
-        
+
         return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
     }
-    
+
     void emitReturnUndef() {
         Type * rt = func->getReturnType();
         if(rt->isVoidTy()) {
@@ -2014,7 +2014,7 @@ if(baseT->isIntegerTy()) { \
             }
         } while(next.obj("next", &next));
     }
-    
+
     Value * emitExtractReturn(Obj * exp) {
         int idx = exp->number("index");
         Obj fncall;
@@ -2033,7 +2033,7 @@ if(baseT->isIntegerTy()) { \
         BasicBlock * bb = createAndInsertBB("dead");
         setInsertBlock(bb);
     }
-    
+
     void emitStmt(Obj * stmt) {
         setDebugPoint(stmt);
         T_Kind kind = stmt->kind("kind");
@@ -2049,7 +2049,7 @@ if(baseT->isIntegerTy()) { \
             case T_return: {
                 Obj exps;
                 stmt->obj("expressions",&exps);
-                
+
                 std::vector<Value *> results;
                 emitTreeList(&exps, true, &results);
                 Obj ftype;
@@ -2083,25 +2083,25 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("condition",&cond);
                 stmt->obj("body",&body);
                 BasicBlock * condBB = createAndInsertBB("condition");
-                
+
                 B->CreateBr(condBB);
-                
+
                 setInsertBlock(condBB);
-                
+
                 BasicBlock * loopBody = createAndInsertBB("whilebody");
-    
+
                 BasicBlock * merge = createBB("merge");
-                
+
                 setBreaktable(stmt,merge);
-                
+
                 emitBranchOnExpr(&cond, loopBody, merge);
-                
+
                 setInsertBlock(loopBody);
-                
+
                 emitStmt(&body);
-                
+
                 B->CreateBr(condBB);
-                
+
                 insertBB(merge);
                 setInsertBlock(merge);
             } break;
@@ -2126,28 +2126,28 @@ if(baseT->isIntegerTy()) { \
                 Obj cond,body;
                 stmt->obj("condition",&cond);
                 stmt->obj("body",&body);
-                
+
                 BasicBlock * loopBody = createAndInsertBB("repeatbody");
                 BasicBlock * merge = createBB("merge");
-                
+
                 setBreaktable(stmt,merge);
-                
+
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
                 emitStmt(&body);
                 emitBranchOnExpr(&cond, merge, loopBody);
                 insertBB(merge);
                 setInsertBlock(merge);
-                
+
             } break;
             case T_defvar: {
                 std::vector<Value *> rhs;
-                
+
                 Obj inits;
                 bool has_inits = stmt->obj("initializers",&inits);
                 if(has_inits)
                     emitTreeList(&inits, true, &rhs);
-                
+
                 Obj vars;
                 stmt->obj("variables",&vars);
                 int N = vars.size();
@@ -2206,27 +2206,27 @@ if(baseT->isIntegerTy()) { \
 
 static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = terra_getstate(L, 1);
-    
+
     //create lua table to hold object references anchored on stack
     int ref_table = lobj_newreftable(T->L);
-    
+
     {
         TerraCompiler c;
         c.run(T,ref_table);
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
+
     lobj_removereftable(T->L,ref_table);
-    
+
     return 0;
 }
 
 
 static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = terra_getstate(L, 1);
-    
+
     //create lua table to hold object references anchored on stack
     int ref_table = lobj_newreftable(T->L);
-    
+
     {
         CCallingConv CC;
         CC.init(T, T->C, NULL);
@@ -2235,9 +2235,9 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
         global.initFromStack(T->L, ref_table);
         GetGlobalVariable(&CC,&global,"anon");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
+
     lobj_removereftable(T->L,ref_table);
-    
+
     return 0;
 }
 
@@ -2260,9 +2260,9 @@ static int terra_llvmsizeof(lua_State * L) {
 
 static int terra_optimize(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
+
     int ref_table = lobj_newreftable(T->L);
-    
+
     {
         Obj jitobj;
         lua_pushvalue(L,-2); //original argument
@@ -2290,15 +2290,15 @@ static int terra_optimize(lua_State * L) {
         VERBOSE_ONLY(T) {
             printf("\n");
         }
-        
+
         T->C->mi->runOnSCC(scc);
-    
+
         for(int i = 0; i < N; i++) {
             Obj funcobj;
             funclist.objAt(i,&funcobj);
             Function * func = (Function*) funcobj.ud("llvm_function");
             assert(func);
-            
+
             VERBOSE_ONLY(T) {
                 std::string s = func->getName();
                 printf("optimizing %s\n",s.c_str());
@@ -2306,23 +2306,23 @@ static int terra_optimize(lua_State * L) {
             double begin = CurrentTimeInSeconds();
             T->C->fpm->run(*func);
             RecordTime(&funcobj,"opt",begin);
-            
+
             VERBOSE_ONLY(T) {
                 func->dump();
             }
         }
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
+
     lobj_removereftable(T->L,ref_table);
-    
+
     return 0;
 }
 
 static int terra_jit(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
+
     int ref_table = lobj_newreftable(T->L);
-    
+
     {
         Obj jitobj, funcobj, flags;
         lua_pushvalue(L,-2); //original argument
@@ -2332,7 +2332,7 @@ static int terra_jit(lua_State * L) {
         Function * func = (Function*) funcobj.ud("llvm_function");
         assert(func);
         ExecutionEngine * ee = T->C->ee;
-        
+
         if(flags.hasfield("usemcjit")) {
             //THIS IS AN ENOURMOUS HACK.
             //the execution engine will leak after this function
@@ -2359,19 +2359,19 @@ static int terra_jit(lua_State * L) {
         double begin = CurrentTimeInSeconds();
         void * ptr = ee->getPointerToFunction(func);
         RecordTime(&funcobj,"gen",begin);
-        
+
         lua_pushlightuserdata(L, ptr);
         funcobj.setfield("fptr");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
+
     lobj_removereftable(T->L,ref_table);
-    
+
     return 0;
 }
 
 static int terra_deletefunction(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
+
     Function ** fp = (Function**) lua_touserdata(L,-1);
     assert(fp);
     Function * func = (Function*) *fp;
@@ -2383,7 +2383,7 @@ static int terra_deletefunction(lua_State * L) {
         VERBOSE_ONLY(T) {
             printf("... and deleting generated code\n");
         }
-        T->C->ee->freeMachineCodeForFunction(func); 
+        T->C->ee->freeMachineCodeForFunction(func);
     }
     func->eraseFromParent();
     VERBOSE_ONLY(T) {
@@ -2395,7 +2395,7 @@ static int terra_deletefunction(lua_State * L) {
 }
 static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
+
     lua_getfield(L,-1,"fptr");
     void * addr = lua_touserdata(L, -1);
     TerraFunctionInfo & fi = T->C->functioninfo[addr];
@@ -2412,7 +2412,7 @@ static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
     int fd = mkstemps(tmpnamebuf,2);
     close(fd);
     return tmpnamebuf;
-} 
+}
 #else
 static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
     char firstbuf[256];
@@ -2430,9 +2430,9 @@ static int terra_saveobjimpl(lua_State * L) {
     int tbl = lua_gettop(L) - 2;
     bool isexe = luaL_checkint(L, -2);
     terra_State * T = terra_getstate(L, 1);
-    
+
     int ref_table = lobj_newreftable(T->L);
-    
+
     char tmpnamebuf[256];
     const char * objname = NULL;
     if(isexe) {
@@ -2440,12 +2440,12 @@ static int terra_saveobjimpl(lua_State * L) {
     } else {
         objname = filename;
     }
-    
+
     {
         lua_pushvalue(L,-2);
         Obj arguments;
         arguments.initFromStack(L,ref_table);
-    
+
         std::vector<Function *> livefns;
         std::vector<std::string> names;
         //iterate over the key value pairs in the table
@@ -2459,14 +2459,14 @@ static int terra_saveobjimpl(lua_State * L) {
             names.push_back(key);
             livefns.push_back(fnold);
         }
-        
+
         Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
-        
+
         VERBOSE_ONLY(T) {
             printf("extraced module is:\n");
             M->dump();
         }
-        
+
         //printf("saving %s\n",objname);
         std::string err = "";
         if(llvmutil_emitobjfile(M,T->C->tm,objname,&err)) {
@@ -2475,14 +2475,18 @@ static int terra_saveobjimpl(lua_State * L) {
             delete M;
             terra_reporterror(T,"llvm: %s\n",err.c_str());
         }
-        
+
         delete M;
         M = NULL;
-        
+
         if(isexe) {
             sys::Path linker;
 #ifndef _WIN32
+#ifdef LLVM_3_4
+            linker = sys::FindProgramByName("gcc");
+#else
             linker = sys::Program::FindProgramByName("gcc");
+#endif
             if (linker.isEmpty()) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: Failed to find gcc");
@@ -2490,13 +2494,13 @@ static int terra_saveobjimpl(lua_State * L) {
 #else
             linker = sys::Path(CLANG_EXECUTABLE);
 #endif
-            
+
             std::vector<const char *> args;
             args.push_back(linker.c_str());
             args.push_back(objname);
             args.push_back("-o");
             args.push_back(filename);
-            
+
             int N = arguments.size();
             for(int i = 0; i < N; i++) {
                 Obj arg;
@@ -2507,17 +2511,21 @@ static int terra_saveobjimpl(lua_State * L) {
             }
 
             args.push_back(NULL);
+#ifdef LLVM_3_4
+            int c = sys::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
+#else
             int c = sys::Program::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
+#endif
             if(0 != c) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);
             }
             unlink(objname);
         }
-                
+
     }
     lobj_removereftable(T->L, ref_table);
-    
+
     return 0;
 }
 
@@ -2537,7 +2545,7 @@ static int terra_pointertolightuserdata(lua_State * L) {
 #endif
 static int terra_isintegral(lua_State * L) {
     double v = luaL_checknumber(L,-1);
-    bool integral = ISFINITE(v) && (double)(int)v == v; 
+    bool integral = ISFINITE(v) && (double)(int)v == v;
     lua_pushboolean(L,integral);
     return 1;
 }
@@ -2545,7 +2553,7 @@ static int terra_isintegral(lua_State * L) {
 static int terra_linklibraryimpl(lua_State * L) {
     std::string Err;
     terra_State * T = terra_getstate(L, 1);
-    
+
     const char * filename = luaL_checkstring(L, -2);
     bool isbitcode = lua_toboolean(L,-1);
     if(isbitcode) {
