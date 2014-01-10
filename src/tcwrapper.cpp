@@ -434,13 +434,15 @@ public:
         return true;
     }
     void CreateFunction(const std::string & name, const std::string & internalname, Obj * typ) {
-        lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-        lua_getfield(L, -1, "newcfunction");
-        lua_remove(L,-2); //terra table
-        lua_pushstring(L, internalname.c_str());
-        typ->push();
-        lua_call(L, 2, 1);
-        general.setfield(name.c_str());
+        if(!general.hasfield(name.c_str())) {
+            lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+            lua_getfield(L, -1, "newcfunction");
+            lua_remove(L,-2); //terra table
+            lua_pushstring(L, internalname.c_str());
+            typ->push();
+            lua_call(L, 2, 1);
+            general.setfield(name.c_str());
+        }
     }
     void SetContext(ASTContext * ctx) {
         Context = ctx;
