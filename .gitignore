@@ -3,3 +3,12 @@ terra.lib
 terra.exe
 lua51.dll
 build/
+
+# Temp files
+*.orig
+*~
+.*.swp
+.*.swo
+*.tmp
+*.bak
+
