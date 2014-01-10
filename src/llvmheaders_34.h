@@ -17,4 +17,4 @@
 #define ADDFNATTR(attr) addFnAttr(Attribute :: attr)
 #define ATTRIBUTE Attributes
 #define TARGETDATA(nm) nm##DataLayout
-#define LLVM_VERSION "3.3"
+#define LLVM_VERSION "3.4"
