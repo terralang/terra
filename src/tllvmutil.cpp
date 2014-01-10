@@ -31,22 +31,22 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
 void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     //These passes are passes from PassManagerBuilder adapted to work a function at at time
     //inlining is handled as a preprocessing step before this gets called
-    
+
     //look here: http://lists.cs.uiuc.edu/pipermail/llvmdev/2011-December/045867.html
 
     // If all optimizations are disabled, just run the always-inline pass. (TODO: actually run the always-inline pass and disable other inlining)
     if(oi->OptLevel == 0)
         return;
-    
+
     //fpm->add(createTypeBasedAliasAnalysisPass()); //TODO: emit metadata so that this pass does something
     fpm->add(createBasicAliasAnalysisPass());
-    
-    
-    
+
+
+
     // Start of CallGraph SCC passes. (
     //if (!DisableUnitAtATime)
     //    fpm->add(createFunctionAttrsPass());       // Set readonly/readnone attrs (TODO: can we run this if we modify it to work with JIT?)
-    
+
     //if (OptLevel > 2)
     //    fpm->add(createArgumentPromotionPass());   // Scalarize uninlined fn args (TODO: can we run this if we modify it to work wit ==h JIT?)
 
@@ -56,7 +56,7 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
     if (!oi->DisableSimplifyLibCalls)
         fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
-    
+
     fpm->add(createJumpThreadingPass());         // Thread jumps.
     fpm->add(createCorrelatedValuePropagationPass()); // Propagate conditionals
     fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
@@ -74,7 +74,7 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     fpm->add(createLoopDeletionPass());          // Delete dead loops
     if (!oi->DisableUnrollLoops)
         fpm->add(createLoopUnrollPass());          // Unroll small loops
-    
+
     if (oi->OptLevel > 1)
         fpm->add(createGVNPass());                 // Remove redundancies
     fpm->add(createMemCpyOptPass());             // Remove memcpy / form memset
@@ -118,7 +118,11 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     std::string TripleName = llvm::sys::getDefaultTargetTriple();
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
-    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(TripleName);
+    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
+#ifdef LLVM_3_4
+            *TheTarget->createMCRegInfo(TripleName),
+#endif
+            TripleName);
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
@@ -165,9 +169,9 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, const char * Filenam
     PassManager pass;
 
     llvmutil_addtargetspecificpasses(&pass, TM);
-    
+
     TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
-    
+
     raw_fd_ostream dest(Filename, *ErrorMessage, raw_fd_ostream::F_Binary);
     formatted_raw_ostream destf(dest);
     if (!ErrorMessage->empty()) {
@@ -195,9 +199,9 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         ValueToValueMapTy VMap;
         Module * M = CloneModule(OrigMod, VMap);
         PassManager * MPM = new PassManager();
-        
+
         llvmutil_addtargetspecificpasses(MPM, TM);
-        
+
         std::vector<const char *> names;
         for(size_t i = 0; i < livefns->size(); i++) {
             Function * fn = cast<Function>(VMap[(*livefns)[i]]);
@@ -210,28 +214,28 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
             }
             names.push_back(name); //internalize pass has weird interface, so we need to copy the names here
         }
-        
+
         //at this point we run optimizations on the module
-        //first internalize all functions not mentioned in "names" using an internalize pass and then perform 
+        //first internalize all functions not mentioned in "names" using an internalize pass and then perform
         //standard optimizations
-        
+
         MPM->add(createVerifierPass()); //make sure we haven't messed stuff up yet
         MPM->add(createInternalizePass(names));
         MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
                                          //this will remove dead functions
-        
+
         PassManagerBuilder PMB;
         PMB.OptLevel = 3;
         PMB.DisableUnrollLoops = true;
-        
+
         PMB.populateModulePassManager(*MPM);
         //PMB.populateLTOPassManager(*MPM, false, false); //no need to re-internalize, we already did it
-    
+
         MPM->run(*M);
-        
+
         delete MPM;
         MPM = NULL;
-    
+
         //clean up the name list
         //if other symbols already had names the same as symbolnames, we need to rename those symbols
         //here so that the names refer to the requested symbols in the modules
@@ -248,7 +252,7 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
             free((char*)names[i]);
             names[i] = NULL;
         }
-    
+
         return M;
 }
 
@@ -265,7 +269,7 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
         }
     }
-    
+
     if(optManager) {
         if(!*optManager) {
             *optManager = new PassManager();
@@ -276,7 +280,7 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
         }
         (*optManager)->run(*src);
     }
-    
+
     return llvm::Linker::LinkModules(dst, src, 0, errmsg);
 }
 
