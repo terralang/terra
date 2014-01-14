@@ -7,6 +7,8 @@ if s~="Darwin\n" then
   return
 end
 
+terralib.linklibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa")
+
 C = terralib.includecstring [[
     #include <stdio.h>
     #include <stdlib.h>

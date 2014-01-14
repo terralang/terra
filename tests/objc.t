@@ -6,6 +6,9 @@ if s~="Darwin\n" then
   print("Warning, not running test b/c this isn't a mac")
 else
 
+terralib.linklibrary("/System/Library/Frameworks/Foundation.framework/Foundation")
+terralib.linklibrary("/System/Library/Frameworks/Cocoa.framework/Cocoa")
+
 local OC = terralib.require("lib/objc")
 
 terra main()
