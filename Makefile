@@ -63,7 +63,7 @@ LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]
 FLAGS += -D$(LLVM_VERSION)
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
-SO_FLAGS += -L$(shell $(LLVM_CONFIG) --libdir) -L$(CLANG_PREFIX)/lib
+SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
 
 # CLANG LIBS
 SO_FLAGS  += -lclangFrontend -lclangDriver \
@@ -273,9 +273,9 @@ package:
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
-	@g++ $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
+	@$(CXX) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
-	@gcc $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
+	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
 #if we are cleaning, then don't include dependencies (which would require the header files are built)	
 ifeq ($(findstring $(MAKECMDGOALS),purge clean),)

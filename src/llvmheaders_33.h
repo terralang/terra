@@ -13,6 +13,9 @@
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"
 
+
+#define LLVM_PATH_TYPE sys::Path
+#define RAW_FD_OSTREAM_F_BINARY raw_fd_ostream::F_Binary
 #define HASFNATTR(attr) getAttributes().hasAttribute(AttributeSet::FunctionIndex, Attribute :: attr)
 #define ADDFNATTR(attr) addFnAttr(Attribute :: attr)
 #define ATTRIBUTE Attributes

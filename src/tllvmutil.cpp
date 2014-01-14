@@ -54,8 +54,11 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     // Break up aggregate allocas, using SSAUpdater.
     fpm->add(createScalarReplAggregatesPass(-1, false));
     fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
+    
+#ifndef LLVM_3_4
     if (!oi->DisableSimplifyLibCalls)
         fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
+#endif
     
     fpm->add(createJumpThreadingPass());         // Thread jumps.
     fpm->add(createCorrelatedValuePropagationPass()); // Propagate conditionals
@@ -118,7 +121,11 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     std::string TripleName = llvm::sys::getDefaultTargetTriple();
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
-    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(TripleName);
+    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
+#ifdef LLVM_3_4
+            *TheTarget->createMCRegInfo(TripleName),
+#endif
+            TripleName);
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
@@ -168,7 +175,7 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, const char * Filenam
     
     TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
     
-    raw_fd_ostream dest(Filename, *ErrorMessage, raw_fd_ostream::F_Binary);
+    raw_fd_ostream dest(Filename, *ErrorMessage, RAW_FD_OSTREAM_F_BINARY);
     formatted_raw_ostream destf(dest);
     if (!ErrorMessage->empty()) {
         return true;
