@@ -12,7 +12,7 @@ terra base.fib(a : Num) : Num
     return c
 end
 
-function fib2(a) 
+function fib2(a)
     local i,c,p = 0,1,1
     while i < a do
         c,p = c + p,c

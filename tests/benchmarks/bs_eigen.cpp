@@ -20,7 +20,7 @@ static const double invSqrt2Pi = 0.39894228040;
 static const double LOG10 = log(10);
 
 void cndV(ArrayXd& X, ArrayXd& k, ArrayXd& w, ArrayXd& res) {
-  k = 1.0 / (1.0 + 0.2316419 * X.abs()); 
+  k = 1.0 / (1.0 + 0.2316419 * X.abs());
   w = (((((1.330274429*k) - 1.821255978)*k + 1.781477937)*k - 0.356563782)*k + 0.31938153)*k;
   w *=  invSqrt2Pi * (X * X * -.5).exp();
   res = (X>0).select(1-w,w);
@@ -44,7 +44,7 @@ int main() {
   TT.fill(2.0);
   r.fill(.02);
   v.fill(5.0);
-  
+
 
   ArrayXd delta(N_OPTIONS);
   ArrayXd d1(N_OPTIONS);
@@ -64,7 +64,7 @@ int main() {
 
   double begin = CurrentTimeInSeconds();
   double acc = 0.0;
-  
+
   for(int j = 0; j < N_BLACK_SCHOLES_ROUNDS; j++) {
         delta = v * TT.sqrt();
         d1 = ((S/X).log()/LOG10 + (r+v*v*0.5) * TT) / delta;

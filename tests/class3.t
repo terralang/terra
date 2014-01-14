@@ -11,8 +11,8 @@ struct Leaf {
 }
 Class.implements(Leaf,Prints)
 
-terra Leaf:print() : {} 
-  C.printf("%d\n",self.data) 
+terra Leaf:print() : {}
+  C.printf("%d\n",self.data)
 end
 
 
@@ -21,8 +21,8 @@ struct Node {
 }
 Class.extends(Node,Leaf)
 
-terra Node:print() : {} 
-  C.printf("%d\n",self.data) 
+terra Node:print() : {}
+  C.printf("%d\n",self.data)
   self.next:print()
 end
 

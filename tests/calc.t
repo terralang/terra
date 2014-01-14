@@ -1,4 +1,4 @@
-function makecalcfn(inst)    
+function makecalcfn(inst)
     local stk = {}
     for i,v in ipairs(inst) do
         if type(v) == "number" then
@@ -6,7 +6,7 @@ function makecalcfn(inst)
         else
             local b = table.remove(stk)
             local a = table.remove(stk)
-            
+
             if v == "+" then
                 table.insert(stk,`a + b)
             elseif v == "-" then
@@ -18,13 +18,13 @@ function makecalcfn(inst)
             end
         end
     end
-    
+
     local result = table.remove(stk)
-    
+
     local terra wrapper()
         return result
     end
-    
+
     return wrapper
 end
 

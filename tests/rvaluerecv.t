@@ -1,11 +1,11 @@
 struct A { a : int }
 
-terra A:foo() 
+terra A:foo()
     self.a = self.a + 1
     return self.a
 end
 
-terra A.methods.foo2(self : A) 
+terra A.methods.foo2(self : A)
     self.a = self.a + 1
     return self.a
 end

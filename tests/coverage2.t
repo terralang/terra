@@ -177,7 +177,7 @@ struct ATF {
 	a : int
 }
 
-ATF.metamethods.__getentries = function(self) 
+ATF.metamethods.__getentries = function(self)
 	local terra foo()
 		var a : ATF
 		return a.a

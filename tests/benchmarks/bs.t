@@ -10,8 +10,8 @@ invSqrt2Pi = 0.39894228040
 LOG10 = math.log(10);
 
 --[[
-double cnd(double X) {	
-	double k = 1.0 / (1.0 + 0.2316419 * fabs(X)); 
+double cnd(double X) {
+	double k = 1.0 / (1.0 + 0.2316419 * fabs(X));
 	double w = (((((1.330274429*k) - 1.821255978)*k + 1.781477937)*k - 0.356563782)*k + 0.31938153)*k;
 	w = w * invSqrt2Pi * exp(X * X * -.5);
 	if(X > 0) return 1.0-w;
@@ -65,16 +65,16 @@ terra main()
 	fill(&cnd2,0)
 	fill(&k,0)
 	fill(&w,0)
-	
+
 	var acc = Array.new(N_OPTIONS)
 	fill(&acc,0)
-	
+
 	var begin = C.CurrentTimeInSeconds();
 	--[[
 	for(int j = 0; j < N_BLACK_SCHOLES_ROUNDS; j++) {
 
 		delta = v * TT.sqrt();
-			
+
 		for(int i = 0; i < N_OPTIONS; i++) {
 			double delta = v[i] * sqrt(TT[i]);
 			double d1 = (log(S[i]/X[i])/LOG10 + (r[i] + v[i] * v[i] * .5) * TT[i]) / delta;
@@ -93,7 +93,7 @@ terra main()
 		acc:set(S * cnd1 - X * exp(-r*TT) * cnd2)
 		result = result + acc:sum()
 	end
-	result = result / (N_BLACK_SCHOLES_ROUNDS * N_OPTIONS) 
+	result = result / (N_BLACK_SCHOLES_ROUNDS * N_OPTIONS)
 	C.printf("Elapsed: %f\n",C.CurrentTimeInSeconds() - begin);
 	C.printf("%f\n",result);
 end

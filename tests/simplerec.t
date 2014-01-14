@@ -3,16 +3,16 @@
 
 local terra bar()
 	return 1
-end 
+end
 and struct A {
 	a : int
-} 
+}
 and local struct B {
 	a : int
 }
 and terra B:foo()
 	return self.a
-end 
+end
 and terra foo()
 	var b : B, a : A = {4}, {5}
 	return 1 + b:foo()

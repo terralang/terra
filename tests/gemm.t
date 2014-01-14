@@ -38,7 +38,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
 	local k = symbol("k")
-	
+
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 	local VT = vector(number,V)
 	local VP = &VT
@@ -55,7 +55,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	end
 
 	local calcc = terralib.newlist()
-	
+
 	for n = 0, RN-1 do
 		calcc:insert(quote
 			var [b[n]] = unalignedload(VP(&B[n*V]))
@@ -66,14 +66,14 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 			var [a[m]] = VT(A[m*lda])
 		end)
 	end
-	for m = 0, RM-1 do 
+	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			calcc:insert(quote
 				[c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
 			end)
 		end
 	end
-	
+
 	local result = terra([A] : &number, [B] : &number, [C] : &number, [lda] : int64,[ldb] : int64,[ldc] : int64,[boundaryargs])
 		for [mm] = 0, M, RM do
 			for [nn] = 0, N,RN*V do
@@ -129,7 +129,7 @@ function generatedgemm(NB,NBF,RM,RN,V)
 	local l1dgemm0b = genkernel(NB,1,1,1,0,true)
 	local l1dgemm1b = genkernel(NB,1,1,1,1,true)
 
-	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : number, A : &number, lda : int, B : &number, ldb : int, 
+	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : number, A : &number, lda : int, B : &number, ldb : int,
 		           beta : number, C : &number, ldc : int)
 		[ blockedloop(N,M,K,{NB2,NB},function(m,n,k) return quote
 								var MM,NN,KK = min(M-m,NB),min(N-n,NB),min(K-k,NB)
@@ -188,7 +188,7 @@ if dotune then
 							break
 						end
 						print(i,unpack(times))
-						local avg = times[1]	
+						local avg = times[1]
 						if  best.gflops < avg then
 							best = { gflops = avg, b = b, rm = rm, rn = rn, v = v }
 							terralib.tree.printraw(best)

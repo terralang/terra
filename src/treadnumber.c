@@ -12,7 +12,7 @@ int treadnumber(const char * buf, ReadNumber * result, int cstylesuffixes) {
         opt |= STRSCAN_OPT_C;
     else
         opt |= STRSCAN_OPT_IMAG;
-    
+
     fmt = lj_strscan_scan((const uint8_t*)buf, &o, opt);
     result->flags = 0;
     switch(fmt) {

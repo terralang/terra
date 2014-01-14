@@ -37,11 +37,11 @@ test.eq(aor(1,2),3)
 
 --[[
 function my_lua_fun()
-    
+
     val my_list = new_list()
     defer delete(my_list)
-    
-    
+
+
 
     return { ["a"] = 1, ["b"] = 2 }
 end

@@ -6,7 +6,7 @@ iamclean = macro(function(arg)
         return a,arg
     end
 end)
-    
+
 terra doit()
     var a = 4
     iamclean(a)

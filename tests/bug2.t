@@ -3,7 +3,7 @@ cstdio = terralib.includec("stdio.h")
 
 local vec4 = &vector(float,4)
 
-local align = terralib.aligned 
+local align = terralib.aligned
 terra lol( w : &float, out : &float)
   var a  = terralib.attrload(vec4(w),{align = 4})
   terralib.attrstore(vec4(out), a, {align = 4})

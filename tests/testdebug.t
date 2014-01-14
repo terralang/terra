@@ -21,7 +21,7 @@ terra findptr(a : &opaque)
   C.printf("p = %p, addr = %p, sz = %d, nm = %.*s\n",a,addr,[int](sz), nmL,nm)
   terralib.lookupline(addr,a, &nm, &nmL, &sz)
   C.printf("line = %.*s:%d\n",nmL,nm,[int](sz))
-  return sz 
+  return sz
 end
 --foo:disas()
 assert(11 == findptr(ptr+6))
@@ -34,7 +34,7 @@ terra testbt()
   for i = 0,N do
     C.printf("%p\n",frames[i])
     var nm : rawstring
-    var nmL : uint64 
+    var nmL : uint64
     if terralib.lookupsymbol(frames[i],nil,nil,&nm,&nmL) then
       C.printf("%.*s\n", nmL, nm)
     end

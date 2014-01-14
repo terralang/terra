@@ -2,7 +2,7 @@ terra bar(a : int) : int
     return a + 1
 end
 terra foo(a : int) : int
-    
+
     return a
 end
 

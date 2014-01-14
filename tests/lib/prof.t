@@ -42,13 +42,13 @@ terra helperthread(data : &opaque) : &opaque
     var ts : C.timespec
     ts.tv_sec = interval / 1000000
     ts.tv_nsec = (interval % 1000000) * 1000
-    
+
     while true do
         C.nanosleep(&ts, nil);
-        C.kill(0,C.SigProf()) 
+        C.kill(0,C.SigProf())
     end
     return nil
-end 
+end
 
 local starttime
 terra getinfo(ipstr : rawstring, cb : {rawstring,uint64,rawstring,uint64,uint64} -> {}, count: int)
@@ -73,7 +73,7 @@ terra getinfo(ipstr : rawstring, cb : {rawstring,uint64,rawstring,uint64,uint64}
     C.printf("%p: (%d)    %s\n",ip,count, @btstuff)
     C.free(btstuff)
   end
-end 
+end
 local pthread
 local function begin(F,N)
     F = F or 1000
@@ -87,7 +87,7 @@ local function begin(F,N)
     sa.sa_flags = C.SigInfo()
     sa.__sigaction_u.__sa_sigaction = handler:getdefinitions()[1]:getpointer()
     assert(0 == C.sigaction(C.SigProf(),sa,nil))
-    
+
     if false then
         local tv = terralib.new(C.itimerval)
         tv.it_interval.tv_sec = 0
@@ -102,7 +102,7 @@ local function begin(F,N)
             return pt
         end
         pthread = startthread()
-    end    
+    end
     starttime = os.clock()
 end
 
@@ -133,7 +133,7 @@ local function finish()
         table.insert(sortedcounts, {key = k, count = v})
     end
     table.sort(sortedcounts, function(a, b) return a.count > b.count end)
-    
+
     local data = {}
     local c
     local function cb(fn,fnL,fl,flL,ln)

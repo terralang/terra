@@ -31,7 +31,7 @@ local function gentrees(depth)
     end
     argassign = argassign .. " = ..."
     targs = targs .. ")"
-    
+
     argassign = argassign .. "\nreturn "
     targs = targs .. "\nreturn "
     for treeno,t in ipairs(trees) do
@@ -49,7 +49,7 @@ local function gentrees(depth)
         for i = 0, states - 1 do
             for s = 1, nargs do
                 actuals[s] = 0 ~= band(i,blshift(1,s-1))
-            end 
+            end
             local result = lfn(unpack(actuals))
             local result2 = tfn(unpack(actuals))
             assert(result == result2)

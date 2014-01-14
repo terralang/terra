@@ -1,6 +1,6 @@
 local terra foo() : {}
 	bar()
-end and 
+end and
 local terra bar() : {}
 	foo()
 end

@@ -31,7 +31,7 @@ end
 
 
 function genl1matmul(NB, NK, RM, RN, V,prefetch)
-	
+
 	assert(isinteger(NB / (RN*V)))
 	assert(isinteger(NB / RM))
 
@@ -49,7 +49,7 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 	local lda,ldb,ldc = symbol("lda"),symbol("ldb"), symbol("ldc")
 	local a,b,c = symmat("a",NB/V,RM), symmat("b",NB,RN), symmat("c",RM,RN)
 	local kk = symbol("kk")
-	
+
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 
 	for m = 0, RM-1 do
@@ -64,7 +64,7 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 	end
 
 	local calcc = terralib.newlist()
-	
+
 	for kb = 0, NK/V-1 do
 		local kbV = kb*V
 		for m = 0, RM-1 do
@@ -81,7 +81,7 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 					end)
 				end
 			end
-			for m = 0, RM-1 do 
+			for m = 0, RM-1 do
 				for n = 0, RN-1 do
 					calcc:insert(quote
 						[c[m][n]] = [c[m][n]] + [a[kb][m]][v] * [b[k][n]]
@@ -120,7 +120,7 @@ terra min(a : int, b : int)
 	return terralib.select(a < b, a, b)
 end
 
-terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
+terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int,
 	           beta : double, C : &double, ldc : int)
 	for mm = 0,M,NB2 do
 		for nn = 0,N,NB2 do

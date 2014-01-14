@@ -10,6 +10,6 @@ terra final(a : &A)
 end
 
 a = terralib.new(A)
-ffi.gc(a,function(a) 
+ffi.gc(a,function(a)
 print("GC CALLED")
 return final(a) end)

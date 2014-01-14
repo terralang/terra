@@ -25,7 +25,7 @@
 
 static void printstats(lua_State * L) {
 #if 0
-  //LINE COVERAGE INFORMATION 
+  //LINE COVERAGE INFORMATION
   lua_getfield(L, LUA_GLOBALSINDEX,"terra");
   lua_getfield(L, -1, "dumplineinfo");
   lua_call(L,0,0);
@@ -71,22 +71,22 @@ int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
-    
+
     terra_Options options;
     memset(&options, 0, sizeof(terra_Options));
-    
+
     bool interactive = false;
     int scriptidx;
 
     parse_args(L,argc,argv,&options,&interactive,&scriptidx);
-    
+
     if(terra_initwithoptions(L, &options))
         doerror(L);
-    
+
     setupsigsegv(L);
-    
+
     if(scriptidx < argc) {
-      int narg = getargs(L, argv, scriptidx);  
+      int narg = getargs(L, argv, scriptidx);
       lua_setglobal(L, "arg");
       const char * filename = argv[scriptidx];
       if(!strcmp(filename,"-"))
@@ -97,16 +97,16 @@ int main(int argc, char ** argv) {
       if(lua_pcall(L, narg, LUA_MULTRET, 0))
         doerror(L);
     }
-    
+
     if(isatty(0) && (interactive || scriptidx == argc)) {
         progname = NULL;
         dotty(L);
     }
-    
+
     printstats(L);
     lua_close(L);
     terra_llvmshutdown();
-    
+
     return 0;
 }
 
@@ -229,7 +229,7 @@ static int getargs (lua_State *L, char **argv, int n) {
 }
 
 #define LUA_MAXINPUT 512
-#define LUA_PROMPT "> " 
+#define LUA_PROMPT "> "
 #define LUA_PROMPT2 ">> "
 
 static const char *get_prompt (lua_State *L, int firstline) {

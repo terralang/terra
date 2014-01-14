@@ -1,7 +1,7 @@
 
 local bar2 = macro(function(typ)
 	return typ
-	
+
 end)
 
 terra foo() : int

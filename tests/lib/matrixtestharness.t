@@ -21,7 +21,7 @@ function CalcTime(fn)
 		current = terralib.currenttimeinseconds()
 		times = times + 1
 	until (current - begin) > 0.2
-	return (current - begin - adjust*times) / times 
+	return (current - begin - adjust*times) / times
 end
 local terra empty() end
 adjust = CalcTime(empty) --calculate function call overhead and subtract from tests
@@ -52,17 +52,17 @@ function MTH.timefunctions(typstring,M,K,N,...)
 		local C = ffi.new(ctyp,M*N)
 		for j = 0, M * N - 1 do
 			C[j] = -1
-		end	
+		end
 		Cs[i] = C
 	end
-	
+
 	local results = {}
 	for i,fn in ipairs(fns) do
 		local C = Cs[i]
 		local tocall = function() fn(M,K,N,A,B,C) end
 		tocall()
 		results[i] = M*N*K*2.0*1e-9 / CalcTime(tocall)
-		
+
 		if i ~= 1 then
 			local C0 = Cs[1]
 			local C1 = Cs[i]
@@ -79,7 +79,7 @@ function MTH.timefunctions(typstring,M,K,N,...)
 	end
 	return true,results
 end
---terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
+--terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int,
 --	           beta : double, C : &double, ldc : int)
 
 function MTH.comparetoaccelerate(NB,myfn)

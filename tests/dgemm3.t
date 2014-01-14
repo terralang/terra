@@ -35,7 +35,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
 	local k = symbol("k")
-	
+
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 	local VT = vector(double,V)
 	local VP = &VT
@@ -52,7 +52,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 	end
 
 	local calcc = terralib.newlist()
-	
+
 	for n = 0, RN-1 do
 		calcc:insert(quote
 			var [b[n]] = alignedload(VP(&B[n*V]))
@@ -63,15 +63,15 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 			var [a[m]] = VT(A[m*lda])
 		end)
 	end
-	for m = 0, RM-1 do 
+	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			calcc:insert(quote
 				[c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
 			end)
 		end
 	end
-	
-	
+
+
 	local result = terra([A] : &double, [B] : &double, [C] : &double, [lda] : int64,[ldb] : int64,[ldc] : int64,[boundaryargs])
 		for [mm] = 0, M, RM do
 			for [nn] = 0, N,RN*V do
@@ -101,7 +101,7 @@ local IO = terralib.includec("stdio.h")
 
 
 function generatedgemm(NB,NBF,RM,RN,V)
-	
+
 	if not isinteger(NB/(RN*V)) then
 		return false
 	end
@@ -121,7 +121,7 @@ function generatedgemm(NB,NBF,RM,RN,V)
 		return terralib.select(a < b, a, b)
 	end
 
-	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
+	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int,
 		           beta : double, C : &double, ldc : int)
 		for mm = 0,M,NB2 do
 			for nn = 0,N,NB2 do
@@ -193,7 +193,7 @@ if false then
 							break
 						end
 						print(i,unpack(times))
-						local avg = times[1]	
+						local avg = times[1]
 						if  best.gflops < avg then
 							best = { gflops = avg, b = b, rm = rm, rn = rn, v = v }
 							terralib.tree.printraw(best)

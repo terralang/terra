@@ -87,7 +87,7 @@ terra test8()
     var a0,a1 = 2 ~= 3, 2 == 3
     var b0,b1 = 2 < 3, 2 >= 3
     var c0,c1 = 2 > 3, 2 <= 3
-    
+
     return a0 and not a1 and b0 and not b1 and not c0 and c1
 end
 

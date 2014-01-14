@@ -19,7 +19,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	local lda,ldb,ldc = ld,ld,ld
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
 	local k = symbol("k")
-	
+
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 	local VT = vector(float,V)
 	local VP = &VT
@@ -36,7 +36,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 
 	local calcc = terralib.newlist()
-	
+
 	for n = 0, RN-1 do
 		calcc:insert(quote
 			var [b[n]] = @VP(&B[n*V])
@@ -47,15 +47,15 @@ function genkernel(NB, RM, RN, V,alpha)
 			var [a[m]] = VT(A[m*lda])
 		end)
 	end
-	for m = 0, RM-1 do 
+	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			calcc:insert(quote
 				[c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
 			end)
 		end
 	end
-	
-	
+
+
 	return terra([A] : &float, [B] : &float, [C] : &float, [ld] : int64)
 		for [mm] = 0, NB, RM do
 			for [nn] = 0, NB,RN*V do
@@ -93,9 +93,9 @@ end
 local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 
-terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int, 
+terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int,
 	           beta : float, C : &float, ldc : int)
-	
+
 
 	for mm = 0,M,NB2 do
 		for nn = 0,N,NB2 do

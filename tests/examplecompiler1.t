@@ -7,8 +7,8 @@ local def foo2(b : eg.number) : eg.number return 2 + b end
 
 assert(foo2(3) == 5)
 
-def foo.bar(a : eg.number) : eg.number 
-	return 1 + -2 * 3 + 1 + a - foo2(a) 
+def foo.bar(a : eg.number) : eg.number
+	return 1 + -2 * 3 + 1 + a - foo2(a)
 end
 
 assert(-6 == foo.bar(4))

@@ -8,7 +8,7 @@ var a = Rt.MatrixDouble{[&double](self.ptr) , i,j}
 end
 
 local r,e = terralib.loadstring[[
-	
+
 	terra foo()
 		var a = { [&double](4) = 3 }
 	end

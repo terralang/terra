@@ -11,8 +11,8 @@ end
 
 terra stuff()
 	var a = 0;
-	[makeloop(10,quote 
-		a = a + 1 
+	[makeloop(10,quote
+		a = a + 1
 	end)]
 	return a
 end

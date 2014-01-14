@@ -23,7 +23,7 @@ end
 local function getentries(self)
 	local md = metadata[self]
 
-	
+
 	md.vtable = terralib.types.newstruct()
 	md.methodimpl = {}
 
@@ -87,7 +87,7 @@ local function getentries(self)
 			end
 		end
 		local vtableglobal = global(imd.vtable)
-		md.interfaces[iface] = vtableglobal 
+		md.interfaces[iface] = vtableglobal
 		vtableinits:insert(quote
 			obj.[imd.name].[vtablesym] = &vtableglobal
 		end)
@@ -107,7 +107,7 @@ local function staticinitialize(self)
 	local vtbl = md.vtableglobal:get()
 	for methodname,impl in pairs(md.methodimpl) do
 		impl:compile(function()
-			vtbl[methodname] = impl:getpointer()  
+			vtbl[methodname] = impl:getpointer()
 		end)
 	end
 	for iface,ifacevtableglobal in pairs(md.interfaces) do
@@ -189,7 +189,7 @@ function Class.interface(ifacetable)
 	for methodname,methodtype in pairs(ifacetable) do
 		assert(type(methodname) == "string" and terralib.types.istype(methodtype) and methodtype:ispointertofunction())
 		local params = terralib.newlist { &uint8 }
-		for i,t in ipairs(methodtype.type.parameters) do 
+		for i,t in ipairs(methodtype.type.parameters) do
 			params:insert(t)
 		end
 		local fullmethodtype =  params -> methodtype.type.returns

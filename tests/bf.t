@@ -23,8 +23,8 @@ local function compile(code,N)
 			elseif c == "[" then
 				local target = { before = symbol(), after = symbol() }
 				table.insert(jumpstack,target)
-				stmt = quote 
-					::[target.before]:: 
+				stmt = quote
+					::[target.before]::
 					if data[ptr] == 0 then
 						goto [target.after]
 					end
@@ -32,7 +32,7 @@ local function compile(code,N)
 			elseif c == "]" then
 				local target = table.remove(jumpstack)
 				assert(target)
-				stmt = quote 
+				stmt = quote
 					goto [target.before]
 					:: [target.after] ::
 				end

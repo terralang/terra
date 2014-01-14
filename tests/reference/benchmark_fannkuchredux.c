@@ -12,7 +12,7 @@
 
 /* this depends highly on the platform.  It might be faster to use
    char type on 32-bit systems; it might be faster to use unsigned. */
-   
+
 typedef int elem;
 
 elem s[16], t[16];

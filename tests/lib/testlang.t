@@ -54,7 +54,7 @@ return {
 		local v = lex:expect(lex.number).value
 		return function(env)
 			return v,v+1
-		end, { {name}, name.."1" } 
+		end, { {name}, name.."1" }
 	end;
 	localstatement = function(self,lex)
 		lex:expect("image")

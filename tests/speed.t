@@ -1,4 +1,4 @@
-local c = terralib.includecstring [[ 
+local c = terralib.includecstring [[
     #include <stdio.h>
     #include <stdlib.h>
 ]]

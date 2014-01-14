@@ -37,7 +37,7 @@ TString *luaS_newlstr (terra_State *L, const char *str, size_t l) {
         lua_pop(L->L,3); //<userdata> <string> <table>
         return string;
     }
-    
+
 }
 
 

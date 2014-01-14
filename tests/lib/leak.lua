@@ -9,14 +9,14 @@ function leak.find(self)
   collectgarbage()
   collectgarbage()
   assert(type(self)=="table")
-  
+
   local env = { seen = {}, unscanned = {}, target = self[special] }
   self[special] = nil
 
   if not env.target then
     return false
   end
-   
+
   local function traverse(from, to, how, name)
     local t = type(to)
     if t == "string" or t == "number" or t == "boolean" or t == "nil" or --ignore types that don't reference anything
@@ -30,8 +30,8 @@ function leak.find(self)
 
   --initialize roots
   for i=2, math.huge do
-    local info = debug.getinfo(i, "f") 
-    if not info then break end 
+    local info = debug.getinfo(i, "f")
+    if not info then break end
     for j=1, math.huge do
       local n, v = debug.getlocal(i, j)
       if not n then break end
@@ -79,7 +79,7 @@ function leak.find(self)
     if "table" == t then
       local mtable = debug.getmetatable(obj)
       local weakkeys,weakvalues
-      if mtable then 
+      if mtable then
         traverse(obj, mtable, "ismetatable", nil)
         local m = mtable.__mode
         if type(m) == "string" then

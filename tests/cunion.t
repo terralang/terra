@@ -5,7 +5,7 @@ union testunion {
   float fdata;
 };
 
-typedef 
+typedef
 	union {
 		int a;
 		float b;

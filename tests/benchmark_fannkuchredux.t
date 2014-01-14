@@ -1,9 +1,9 @@
 --[[
   The Computer Language Benchmarks Game
   http://shootout.alioth.debian.org/
- 
+
   contributed by Ledrug Katz
- 
+
  ]]
 
 local C = terralib.includecstring [[
@@ -32,16 +32,16 @@ terra flip()
     var x : &elem = t
     var y : &elem = s
     var c : elem
-    
+
     while i > 0 do
         i = i - 1
         @x = @y
         x = x + 1
         y = y + 1
     end
-    
+
     i = 1
-    
+
     repeat
         x = t
         y = t + t[0]
@@ -62,7 +62,7 @@ end
 terra rotate(n : int)
     var c = s[0]
     for i = 0,n do
-        s[i] = s[i+1] 
+        s[i] = s[i+1]
     end
     s[n] = c
     --C.printf("rotate(%d) %d\n",n,c);
@@ -73,11 +73,11 @@ terra tk(n : int)
     var i = 0
     var f : int
     var c : elem[16]
-    
+
     for i = 0,16 do
         c[i] = 0
     end
-    
+
     while i < n do
         rotate(i)
         if c[i] >= i then
@@ -85,7 +85,7 @@ terra tk(n : int)
             i = i + 1
             goto continue
         end
-        
+
         c[i] = c[i] + 1
         i = 1
         odd = not odd
@@ -107,7 +107,7 @@ terra tk(n : int)
         end
         ::continue::
     end
-   
+
 end
 
 
@@ -120,7 +120,7 @@ terra doit(N : int)
       C.printf("range: must be 3 <= n <= 12\n")
       C.exit(1)
     end
-    
+
     for i = 0,max_n do
         s[i] = i
     end
@@ -134,7 +134,7 @@ terra main(argc : int, v : &&int8)
       C.printf("usage: %s number\n", v[0])
       C.exit(1);
     end
-    
+
     doit(C.atoi(v[1]))
     return 0
 end

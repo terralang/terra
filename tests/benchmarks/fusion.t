@@ -86,7 +86,7 @@ Array.methods.set = macro(function(self,exp)
 
 	local formal = terralib.newlist()
 	local actual = terralib.newlist()
-	
+
 	local function findargs(op)
 		if terralib.isquote(op) then
 			local sym = symbol(op:gettype())
@@ -104,14 +104,14 @@ Array.methods.set = macro(function(self,exp)
 	end
 
 	local newop = findargs(op)
-	
+
 	local i = symbol(int)
 
 	local function emitExp(op)
 		if terralib.issymbol(op) then
 			if op.type == Array then
 				return `@LT(&op.data[i])
-			else 
+			else
 				return `op
 			end
 		else
@@ -147,7 +147,7 @@ metamethodtable = {
 		return op and macro(function(...)
 			local typ = MakeExpType(op,terralib.newlist {...})
 			assert(typ)
-			return `typ {}			
+			return `typ {}
 		end)
 	end
 }

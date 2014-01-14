@@ -29,7 +29,7 @@ end
 
 terra anon2()
     var u : U = { {3} }
-    
+
     var fp : FP, fi : FI
     var fi2 : FI2 = fi
     var fp2 : FP2 = fp

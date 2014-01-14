@@ -23,7 +23,7 @@ theline = theline .. " " .. table.concat(arg," ",3) .. " -"
 local accumStr
 for a in theline:gmatch("([^ ]+) ?") do -- Tokenize on whitespace
     -- If this is an option, stop recording args and emit what we have
-    if a:find("^-") and accumStr then 
+    if a:find("^-") and accumStr then
         emitStr(accumStr:gsub("\\\\", "/")
                         :match("^%s*(.*%S)%s*$")
                         :match("^\"?([^\"]+)\"?$"))
@@ -34,7 +34,7 @@ for a in theline:gmatch("([^ ]+) ?") do -- Tokenize on whitespace
         emitStr(a)
         accumStr = ""
     -- If we are recording args, continue recording args
-    elseif accumStr then 
+    elseif accumStr then
         accumStr = accumStr .. a .. " "
     end
 end

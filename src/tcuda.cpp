@@ -48,37 +48,37 @@ static void markKernel(terra_State * T, llvm::Module * M, llvm::Function * kerne
     llvm::MDString * str = llvm::MDString::get(*T->C->ctx, "kernel");
     vals.push_back(kernel);
     vals.push_back(str);
-    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), 1));  
+    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), 1));
     llvm::MDNode * node = llvm::MDNode::get(*T->C->ctx, vals);
-    annot->addOperand(node); 
+    annot->addOperand(node);
 }
 
 
 CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     llvm::raw_string_ostream output(*buf);
     llvm::formatted_raw_ostream foutput(output);
-    
+
     LLVMInitializeNVPTXTargetInfo();
     LLVMInitializeNVPTXTarget();
     LLVMInitializeNVPTXAsmPrinter();
-    
+
     std::string err;
     const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
-    
-    
-    llvm::TargetMachine * TM = 
+
+
+    llvm::TargetMachine * TM =
         TheTarget->createTargetMachine("nvptx64", "sm_20",
                                        "", llvm::TargetOptions(),
                                        llvm::Reloc::Default,llvm::CodeModel::Default,
                                        llvm::CodeGenOpt::Aggressive);
-    
+
     llvm::PassManager PM;
     PM.add(new llvm::TARGETDATA()(*TM->TARGETDATA(get)()));
     if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
        printf("addPassesToEmitFile failed\n");
        return CUDA_ERROR_UNKNOWN;
     }
-    
+
     PM.run(*M);
     return CUDA_SUCCESS;
 }
@@ -88,9 +88,9 @@ int terra_cudacompile(lua_State * L) {
     initializeCUDAState(T);
 
     int tbl = lua_gettop(L);
-    
+
     std::vector<llvm::Function *> fns;
-    
+
     lua_pushnil(L);
     while (lua_next(L, tbl) != 0) {
         lua_getfield(L,-1,"llvm_function");
@@ -99,15 +99,15 @@ int terra_cudacompile(lua_State * L) {
         fns.push_back(fn);
         lua_pop(L,2);  /* variant, function pointer */
     }
-    
+
     llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &fns,NULL);
     M->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-    
+
     for(size_t i = 0; i < fns.size(); i++) {
         llvm::Function * kernel = M->getFunction(fns[i]->getName());
         markKernel(T,M,kernel);
     }
-    
+
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
     delete M;

@@ -42,15 +42,15 @@ end
 IO = terralib.includec("stdio.h")
 
 terra main()
-	
+
 	var M,N = 30,40;
 
 	[blockedloop({M,N}, {10,1}, function(m,n)
-		return quote 
+		return quote
 			IO.printf("%d %d\n",m,n)
 		end
 	end)]
-	
+
 end
 
 main:printpretty()

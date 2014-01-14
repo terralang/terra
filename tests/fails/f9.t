@@ -1,4 +1,4 @@
 
-terra foo() : 3 
+terra foo() : 3
 end
 foo()

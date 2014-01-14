@@ -39,7 +39,7 @@ local function hasbeenfrozen(self)
 	local vtbl = md.vtable:get()
 	for methodname,impl in pairs(md.methodimpl) do
 		impl:compile(function()
-			vtbl[methodname] = impl:getpointer()  
+			vtbl[methodname] = impl:getpointer()
 		end)
 	end
 end
@@ -51,7 +51,7 @@ local function copyparentlayout(self,parent)
 		md.vtabletype.entries:insert(m)
 		md.methodimpl[m.field] = pmd.methodimpl[m.field]
 	end
-	for i = 2,#parent.entries do 
+	for i = 2,#parent.entries do
 		self.entries:insert(i,parent.entries[i])
 	end
 end
@@ -73,7 +73,7 @@ local function finalizelayout(self)
 		copyparentlayout(self,md.parent)
 	end
 	for methodname,impl in pairs(self.methods) do
-		local impldef,typ = getdefinitionandtype(impl)			
+		local impldef,typ = getdefinitionandtype(impl)
 		if md.methodimpl[methodname] == nil then
 			md.vtabletype.entries:insert { field = methodname, type = &typ }
 		end
@@ -104,7 +104,7 @@ local function registermetamethods(c)
 end
 
 function Class.extends(child,parent)
-	registermetamethods(parent) 
+	registermetamethods(parent)
 	registermetamethods(child)
 	metadata[child].parent = parent
 end

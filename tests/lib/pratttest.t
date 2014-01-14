@@ -21,7 +21,7 @@ end
 
 local function rightbinary(P,lhs)
 	local op = P:next().type
-	local rhs = P:exp(op,"right") --parse the rhs, passing 'op' and then specify "right" associativity 
+	local rhs = P:exp(op,"right") --parse the rhs, passing 'op' and then specify "right" associativity
 	                              --indicates to parse expressions with precedence equal-to or higher-than 'op'
 	                              --this will result in right associative operators
 	return { name = op, lhs = lhs, rhs = rhs }

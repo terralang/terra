@@ -9,7 +9,7 @@ local V = 1
 local exp = terralib.intrinsic(("llvm.exp.v%df32"):format(V),vector(float,V) -> vector(float,V))
 
 terra foo(N : int)
-	
+
 	var d = vector(0.f,1.f,3.f,4.f)
 
 	C.dostuff(d)

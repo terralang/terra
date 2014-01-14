@@ -1,6 +1,6 @@
 
 
-local a = 
+local a =
 quote
 	var b = 1
 in
@@ -23,7 +23,7 @@ assert(f10 == 1)
 assert(f11 == 2)
 
 local c = symbol()
-local b = 
+local b =
 quote
 	var [c]  = 3
 in

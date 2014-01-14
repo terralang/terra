@@ -79,7 +79,7 @@ function Collection(members,format)
 			return quote
 				self.data = [&obj](C.malloc(sizeof(obj)*N))
 			end
-		end		
+		end
 	end
 	terra collection:init(N : int)
 		[ initmembers(self,N) ]
@@ -120,7 +120,7 @@ terra foo()
 	    o:setx(aa:getx() + aa:gety() + aa:getz() + aa:getw())
 	 end
 	 end
-	 var r = C.rand() % a.size	 
+	 var r = C.rand() % a.size
 	 var o = oo:get(r)
 	 IO.printf("elapsed %f, %f\n",time,o:getx())
 end
@@ -135,7 +135,7 @@ struct Tri {
 	c : int;
 }
 
-terra main() 
+terra main()
 	var file = IO.fopen("/Users/zdevito/Downloads/b1p2.obj","r")
 	-- This file is not in the repo
 	if file == nil then
@@ -145,7 +145,7 @@ terra main()
 	var mesh : Mesh
 
 	IO.fscanf(file,"%d %d\n",&nv,&nf);
-	
+
 	mesh:init(nv)
 	var tris = [&Tri](C.malloc(sizeof(Tri)*nf))
 
@@ -172,21 +172,21 @@ terra main()
 	var normalcalc = 0.0
 
 	while T.CalcTime(&times,&normalcalc) ~= 0 do
-		for i = 0, nf do 
+		for i = 0, nf do
 			--IO.printf("%d %d %d\n",tris[i].a,tris[i].b,tris[i].c)
 			var a = mesh:get(tris[i].a)
 			var b = mesh:get(tris[i].b)
 			var c = mesh:get(tris[i].c)
 
 
-			var ax,ay,az = a:getx() - c:getx(),a:gety() - c:gety(),a:getz() - c:getz() 
+			var ax,ay,az = a:getx() - c:getx(),a:gety() - c:gety(),a:getz() - c:getz()
 			--IO.printf("%f %f %f\n",ax,ay,az)
-			var bx,by,bz = b:getx() - c:getx(),b:gety() - c:gety(),b:getz() - c:getz() 
-			
+			var bx,by,bz = b:getx() - c:getx(),b:gety() - c:gety(),b:getz() - c:getz()
+
 			var nx,ny,nz = ay*bz - az*by,
 		                   az*bx - ax*bz,
 		                   ax*by - ay*bx
-		    
+
 		    a:setnx(a:getnx() + nx)
 		    a:setny(a:getny() + ny)
 		    a:setnz(a:getnz() + nz)
@@ -197,7 +197,7 @@ terra main()
 
 		    c:setnx(c:getnx() + nx)
 		    c:setny(c:getny() + ny)
-		    c:setnz(c:getnz() + nz) 
+		    c:setnz(c:getnz() + nz)
 		end
 	end
 
@@ -214,11 +214,11 @@ terra main()
 			p:setx(x1 + 12.0)
 			p:sety(y1 + 12.0)
 			p:setz(z1 + 12.0)
-			
+
 			p2:setx(x2 + 12.0)
 			p2:sety(y2 + 12.0)
 			p2:setz(z2 + 12.0)
-			
+
 		end
 	end
 	var togiga = 1.0/(1024*1024*1024)

@@ -26,12 +26,12 @@ local acc = global(int[N])
 terra forkedFn(args : &opaque) : &opaque
   var threadid = @[&int](args)
   C.printf("threadid %d\n",threadid)
-  
+
   var L = C.luaL_newstate();
   if L == nil then
     C.printf("can't initialize luajit\n")
   end
-  
+
   C.luaL_openlibs(L)
   C.terra_init(L)
 

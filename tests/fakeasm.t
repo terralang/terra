@@ -1,6 +1,6 @@
 
 
-local op = setmetatable({},{ __index = function(self,idx) 
+local op = setmetatable({},{ __index = function(self,idx)
     return idx
 end })
 C = terralib.includec("stdio.h")
