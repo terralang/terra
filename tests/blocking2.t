@@ -22,12 +22,12 @@ IO = terralib.includec("stdio.h")
 stdlib = terralib.includec("stdlib.h")
 
 terra main()
-	
+
 	var a : int[8][8]
 	var c = 0
 	var N = 8
 	[blockedloop(N, {4,2,1}, function(i,j)
-		return quote 
+		return quote
 			--IO.printf("%d %d\n",i,j)
 			a[i][j] = c
 			c = c + 1

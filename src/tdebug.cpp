@@ -131,7 +131,7 @@ static void printstacktrace(void * uap, void * data) {
     }
     int N = terra_backtrace(frames, maxN,rip,rbp);
     char ** symbols = backtrace_symbols(frames, N);
-    
+
     for(int i = 0 ; i < N; i++) {
         bool isNextInst = i > 0 || uap == NULL; //unless this is the first entry in suspended context then the address is really a pointer to the _next_ instruction
         uintptr_t ip = (uintptr_t) frames[i];
@@ -147,7 +147,7 @@ static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, const
     const TerraFunctionInfo * fi;
     if(!stacktrace_findsymbol(C, (uintptr_t)ip, &fi))
         return false;
-    
+
     if(fnaddr)
         *fnaddr = fi->addr;
     if(fnsize)

@@ -2,7 +2,7 @@
 
 local a = symbol()
 
-local q = quote 
+local q = quote
 	[a] = [a] + 1
 end
 

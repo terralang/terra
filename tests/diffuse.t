@@ -52,7 +52,7 @@ terra diffuse_reference(output : &float, N : int, M : int, stride : int, x : &fl
 	var nextline = stride - N
 	for i = 0, M do
 		for j = 0,N do
-			var r = 
+			var r =
 			   (x0[0]
 			+  (x[ - stride]
 			+  x[stride]
@@ -74,9 +74,9 @@ terra diffuse(output : &float, N : int, M : int, stride : int, x : &float, x0 : 
 	var invD = 1.f / (1 + 4.f*a)
 	var nextline = stride - N
 	for i = 0, M do
-		
+
 		for j = 0,N,V do
-			var r = 
+			var r =
 			   (uload(x0)
 			+  (uload(x - stride)
 			+  uload(x + stride)
@@ -85,13 +85,13 @@ terra diffuse(output : &float, N : int, M : int, stride : int, x : &float, x0 : 
 			--C.printf("%d %d\n",i,j)
 			--llvmprefetch(x + 4 * stride,0,3,1)
 			--llvmprefetch(x0 + 3 * stride,0,3,1)
-			
+
 			ustore(output,r)
 			x0 = x0 + V
 			x = x + V
 			output = output + V
 		end
-		
+
 		x0 = x0 + nextline --- stride
 		x = x + nextline   --- stride
 		output = output + nextline --- stride
@@ -110,7 +110,7 @@ terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 :
 
 		if i < M then
 			for j = 0,N,V do
-				var r = 
+				var r =
 				   (uload(x0)
 				+  (uload(x - stride)
 				+  uload(x + stride)
@@ -123,7 +123,7 @@ terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 :
 				x = x + V
 				xi = xi + V
 			end
-			
+
 			x0 = x0 + nextline --- stride
 			x = x + nextline   --- stride
 			xi = xi + nextline --- stride
@@ -134,7 +134,7 @@ terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 :
 
 		if i >= 1 then
 			for j = 0,N,V do
-				var r = 
+				var r =
 				   (uload(x02)
 				+  (uload(xi0)
 				+  uload(xi2)
@@ -148,7 +148,7 @@ terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 :
 				xi2 = xi2 + V
 				output = output + V
 			end
-			
+
 			x02 = x02 + nextline --- stride
 			xi0,xi1,xi2 = xi1 - N,xi2 - N, xi0 - N
 			output = output + nextline --- stride
@@ -175,7 +175,7 @@ terra doit(thea : float)
 	var to1 = [&float](C.malloc(NA*M1*sizeof(float)))
 	var to2 = [&float](C.malloc(NA*M1*sizeof(float)))
 
-	
+
 	for i = 0, N1 do
 		for j = 0, N1 do
 			x[i*N1+j] = C.rand() % 10
@@ -193,10 +193,10 @@ terra doit(thea : float)
 	diffuse_reference(ro2 + start,N,M,stride,ro1 + start,x0 + start,thea)
 
 
-	
+
 	var times  = 0
 	var mytime : double
-	
+
 	var fuse = true
 	while C.CalcTime(&times,&mytime) ~= 0 do
 		if not fuse then

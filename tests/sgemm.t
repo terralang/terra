@@ -67,16 +67,16 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,m,n,kk)
 
 	local function getA(i,j)
 		return get(as,i,j,function(sym)
-			return quote 
-				var [sym] = vecload(A, (m + i) * lda + k + j * V) 
+			return quote
+				var [sym] = vecload(A, (m + i) * lda + k + j * V)
 			end
 		end)
 	end
 
 	local function getB(i,j)
 		return get(bs,i,j,function(sym)
-			return quote 
-				var [sym] = vecload(B, (n + i) * K + k + j * V) 
+			return quote
+				var [sym] = vecload(B, (n + i) * K + k + j * V)
 			end
 		end)
 	end
@@ -86,7 +86,7 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,m,n,kk)
 			for j = 0, BR-1 do
 				local aa = getA(i,l)
 				local bb = getB(j,l)
-				kloopbody:insert(quote 
+				kloopbody:insert(quote
 					[cs[i][j]] = [cs[i][j]] + aa * bb
 				end)
 			end
@@ -132,9 +132,9 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,m,n,kk)
 	return stmts
 end)
 
-terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int, 
+terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int,
 	           beta : float, C : &float, ldc : int)
-	
+
 	var TB = [&float](stdlib.malloc(K * N * sizeof(float)))
 	for k = 0,K do
 		for n = 0,N do

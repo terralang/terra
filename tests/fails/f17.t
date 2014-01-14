@@ -1,5 +1,5 @@
 
 terra foo()
-    return true + 1 
+    return true + 1
 end
 foo()

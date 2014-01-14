@@ -147,7 +147,7 @@ function Array.methods.flush(self)
 			rhs = `@VP(&inst.data[idx])
 		elseif inst.op == "loadc" then
 			rhs = inst.constant
-		else 
+		else
 			local theop = optable[inst.op]
 			local theargs = inst.args:map(function(a) return `[ nodes[a] ] end)
 			rhs = theop(unpack(theargs))
@@ -180,14 +180,14 @@ function Array.methods.flush(self)
 	end
 	instrs = terralib.newlist()
 	--codeblock:disas()
-	
+
 	codeblock:compile()
 	local endcompile = terralib.currenttimeinseconds()
 	codeblock()
 	local endrun = terralib.currenttimeinseconds()
 
 	print("compile: ",endcompile-begin,"run: ",endrun - endcompile, "total",endrun-begin)
-	
+
 end
 
 local function createrecordforop(op)

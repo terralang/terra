@@ -1,5 +1,5 @@
 C,T = terralib.includecstring [[
-	
+
 	struct Foo {
 		int a;
 	};

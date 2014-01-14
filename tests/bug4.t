@@ -3,7 +3,7 @@ c = terralib.includecstring [[
 	#include<string.h>
 ]]
 struct exception { slug : int8[60]; code : int; msg : int8[960]; }
-EXC_INFO = terralib.new(exception)    
+EXC_INFO = terralib.new(exception)
 terra bar() c.memcpy(EXC_INFO.slug + 0, 'foobar', 7); c.printf('%s\n', EXC_INFO.slug + 0); end
 bar()
 

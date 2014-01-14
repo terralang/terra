@@ -24,8 +24,8 @@ function Interface.create(methods)
 
 	self.nextid = 0
 	self.allocatedsize = 256
-	self.implementedtypes = {} 
-	
+	self.implementedtypes = {}
+
 	self.methods = terralib.newlist()
 	self.vtabletype = terralib.types.newstruct("vtable")
 	for k,v in pairs(methods) do

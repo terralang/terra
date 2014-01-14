@@ -62,7 +62,7 @@ void naive_dgemm( const int M, const int N,
 		for(int n = 0; n < N; n++) {
 			float v = 0.f;
 			for(int k = 0; k < K; k++) {
-				v += A[m*lda + k] * B[k*ldb + n]; 
+				v += A[m*lda + k] * B[k*ldb + n];
 			}
 			C[m*ldc + n] = v;
 		}
@@ -100,7 +100,7 @@ void sgemm_ispc_32x32(float* a, float* b, float* c, int dim);
 //extern "C"
 //void sgemm_terra_32x32(float* a, float* b, float* c);
 
-//calculates C = alpha * AB + beta * C 
+//calculates C = alpha * AB + beta * C
 void testsize(int M, int K, int N) {
 
 	float * A = (float*) malloc(sizeof(float) * M * K);
@@ -122,7 +122,7 @@ void testsize(int M, int K, int N) {
 		}
 	}
 
-	for(int i = 0; i < M *N; i++) 
+	for(int i = 0; i < M *N; i++)
 		C[i] = C2[i] = C3[i] = 0;
 
 
@@ -133,7 +133,7 @@ void testsize(int M, int K, int N) {
 		//naive_dgemm(M,N,K,1.f,A,K,B,N,0.f,C,N);
 	//float begin2 = CurrentTimeInSeconds();
 	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
-	
+
 	double mytime;
 	times = 0;
 	while(CalcTime(&times,&mytime)) {
@@ -150,7 +150,7 @@ void testsize(int M, int K, int N) {
 		printf("\n");
 	}
 	printf("\n\n");
-	
+
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {
 			printf("%f ",C3[m*N + n]);

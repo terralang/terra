@@ -1,5 +1,5 @@
 local c = symbol()
-local b = 
+local b =
 quote
 	var [c]  = 3
 in

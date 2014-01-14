@@ -23,11 +23,11 @@ end
 assert(check3() == false)
 
 terra check4()
-    return not not T == T and not not F == F and true == T and false == F 
+    return not not T == T and not not F == F and true == T and false == F
 end
 
 assert(check4() == true)
 
 terra foo() return not false end
- 
-assert(foo() == true) 
+
+assert(foo() == true)

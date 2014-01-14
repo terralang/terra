@@ -31,7 +31,7 @@ terra f4() : {float,float}
 end
 
 terra c4()
-	return f4() + 1, f4() 
+	return f4() + 1, f4()
 end
 
 
@@ -130,7 +130,7 @@ struct S5 {
 	b : int;
 }
 
-terra f12a(a : S3) 
+terra f12a(a : S3)
 	return a.a[0] + a.a[1], a.b
 end
 
@@ -140,7 +140,7 @@ terra c12a()
 end
 test.meq({6.5,5.5,4},c12a())
 
-terra f12b(a : S4) 
+terra f12b(a : S4)
 	return a.a[0] + a.a[1], a.b
 end
 
@@ -344,7 +344,7 @@ struct S12 {
 	b : int;
 }
 
-terra f19(a : S12) 
+terra f19(a : S12)
 	return a.a, a.b
 end
 terra c19()

@@ -17,7 +17,7 @@ foo:getdefinitions()[1]:setinlined(true)
 
 terra bar()
 	foo()
-	return 4 
+	return 4
 end
 
 bar:compile()

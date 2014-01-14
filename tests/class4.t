@@ -7,7 +7,7 @@ struct Shape {
 Drawable = J.interface { draw = {} -> {} }
 
 struct Square {
-	length : int 
+	length : int
 }
 J.extends(Square,Shape)
 J.implements(Square,Drawable)

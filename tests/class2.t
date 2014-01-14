@@ -38,7 +38,7 @@ end
 terra foo()
 	var a = A { 0 }
 	var b = B { 2 }
-	return anInterface(&a) + anInterface(&b) 
+	return anInterface(&a) + anInterface(&b)
 end
 
 local test = require("test")

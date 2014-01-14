@@ -8,18 +8,18 @@ struct A {
 } and struct B {
   b : int;
   aa : &A
-} 
+}
 Class.extends(B,A)
 
 
 terra A:times2() : int
     return self.a*2
 end
-    
+
 terra B:combine(a : int) : int
     return self.b + self.a + a
 end
-    
+
 
 struct C {
   c : double

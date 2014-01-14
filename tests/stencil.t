@@ -64,10 +64,10 @@ terra runit(N : int, input : &float, output : &float)
 			[(function()
 				local C = symmat("C",NI,NJ)
 				local stmts = terralib.newlist()
-				for iii = 0,NI-1 do for jjj = 0,NJ-1 do 
-					stmts:insert(quote 
+				for iii = 0,NI-1 do for jjj = 0,NJ-1 do
+					stmts:insert(quote
 						var [C[iii][jjj]] : vector(float,V) = 0
-					end) 
+					end)
 				end end
 
 				for ii = -1,1 do
@@ -82,10 +82,10 @@ terra runit(N : int, input : &float, output : &float)
 						end end
 					end
 				end
-				for iii = 0,NI-1 do for jjj = 0,NJ-1 do 
-					stmts:insert(quote 
+				for iii = 0,NI-1 do for jjj = 0,NJ-1 do
+					stmts:insert(quote
 						ustore(output + N * (iii) + V*jjj, [C[iii][jjj]])
-					end) 
+					end)
 				end end
 				return stmts
 			end)()]

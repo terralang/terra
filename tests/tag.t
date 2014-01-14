@@ -1,2 +1,2 @@
-#!../terra 
+#!../terra
 print("FOO")

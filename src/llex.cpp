@@ -79,15 +79,15 @@ void luaX_init (terra_State *L) {
   lua_pushlightuserdata(L->L, &L->tstring_table);
   lua_pushvalue(L->L, -2);
   lua_rawset(L->L, LUA_REGISTRYINDEX);
-  
+
   //stack is: <tstring_table>
-  
+
   int i;
   for (i=0; i<NUM_RESERVED; i++) {
     TString *ts = luaS_new(L, luaX_tokens[i]);
     ts->reserved = cast_byte(i+1);  /* reserved word */
   }
-  
+
   lua_pop(L->L,1); //<tstring_table>
   assert(stk == lua_gettop(L->L));
 }
@@ -98,16 +98,16 @@ void luaX_pushtstringtable(terra_State * L) {
     lua_pushvalue(L->L,-1);
     lua_rawget(L->L, LUA_REGISTRYINDEX);
     assert(!lua_isnil(L->L, -1));
-    
+
     lua_newtable(L->L); //new tstring table
     lua_newtable(L->L); //metatable to link to old table
     lua_pushvalue(L->L, -3);
     lua_setfield(L->L, -2, "__index");
     lua_setmetatable(L->L, -2);
-    
+
     lua_remove(L->L,-2); //stack is: <userdata> <originaltable(need to remove)> <newtable>
     lua_rawset(L->L,LUA_REGISTRYINDEX);
-    
+
     assert(stk == lua_gettop(L->L));
 }
 
@@ -115,13 +115,13 @@ void luaX_poptstringtable(terra_State * L) {
     int stk = lua_gettop(L->L);
     lua_pushlightuserdata(L->L, &L->tstring_table);
     lua_pushvalue(L->L,-1);
-    
+
     lua_rawget(L->L, LUA_REGISTRYINDEX);
     lua_getmetatable(L->L, -1);
     lua_getfield(L->L, -1, "__index");
     lua_remove(L->L,-2); //<metatable>
     lua_remove(L->L,-2); //<oldtable>
-    
+
     lua_rawset(L->L,LUA_REGISTRYINDEX);
     assert(stk == lua_gettop(L->L));
 
@@ -273,7 +273,7 @@ void luaX_insertbeforecurrenttoken(LexState * ls, char c) {
 }
 void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N) {
     OutputBuffer * ob = &ls->output_buffer;
-    
+
     int buffer_begin = ls->t.seminfo.buffer_begin;
     int n_bytes = buffer_begin - begin_token->seminfo.buffer_begin;
     *output = ob->data + begin_token->seminfo.buffer_begin;
@@ -297,7 +297,7 @@ void luaX_patchend(LexState *ls, Token * begin_token) {
         if(ob->data[i] == '\n')
             nlines++;
     }
-    
+
     for(int line = begin_token->seminfo.linebegin + nlines;
         line < ls->t.seminfo.linebegin;
         line++) {
@@ -331,7 +331,7 @@ static int check_next (LexState *ls, const char *set) {
 static void read_numeral (LexState *ls, SemInfo *seminfo) {
   assert(lisdigit(ls->current));
   bool hasdecpoint = false;
- 
+
   bool endsinf = false;
   int c, xp = 'e';
   assert(lisdigit(ls->current));
@@ -347,7 +347,7 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
     save_and_next(ls);
   }
   save(ls, '\0');
-  
+
   /* string ends in 'f' but is not hexidecimal.
         this means that we have a single precision float */
   bool issinglefloat = ls->in_terra && c == 'f' && xp != 'p';
@@ -356,11 +356,11 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
     /* clear the 'f' so that treadnumber succeeds */
     ls->buff->buffer[luaZ_bufflen(ls->buff)-2] = '\0';
   }
-  
+
   ReadNumber num;
   if(treadnumber(ls->buff->buffer, &num, ls->in_terra && !issinglefloat))
     lexerror(ls, "malformed number", TK_NUMBER);
-  
+
   /* Terra handles 2 things differently from LuaJIT:
      1. if the number had a decimal place, it is always a floating point number. In constrast, treadnumber will convert it to an int if it can be represented as an int.
      2. if the number ends in an 'f' and isn't a hexidecimal number, it is treated as a single-precision floating point number
@@ -379,7 +379,7 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
     if (!issinglefloat)
         seminfo->flags = F_IS8BYTES;
   }
-  
+
 }
 
 
@@ -537,7 +537,7 @@ static void dump_stack(lua_State * L, int elem) {
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L,-4);
     lua_call(L, 1, 0);
-        
+
     lua_pop(L,3);
 }
 
@@ -595,7 +595,7 @@ static int llex (LexState *ls, SemInfo *seminfo) {
       case '<': {
         next(ls);
         if (ls->current == '=') { next(ls); return TK_LE; }
-        else if(ls->current == '<') { next(ls); return TK_LSHIFT; } 
+        else if(ls->current == '<') { next(ls); return TK_LSHIFT; }
         else return '<';
       }
       case '>': {

@@ -4,7 +4,7 @@ terra A:foo(a : int)
 	return self.a + a
 end
 
-terra A:foo(a : &int8) 
+terra A:foo(a : &int8)
 	return self.a
 end
 

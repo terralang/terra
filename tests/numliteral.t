@@ -10,5 +10,5 @@ local test = require("test")
 thetest:compile()
 local typ = thetest.definitions[1]:gettype()
 for i,e in ipairs(typ.returns) do
-	test.eq(tostring(e),exp[i]) 
+	test.eq(tostring(e),exp[i])
 end

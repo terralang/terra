@@ -23,7 +23,7 @@ function genkernel(NB, RM, RN, V,alpha)
   for m = 0, RM-1 do for n = 0, RN-1 do
       loadc:insert(quote
         var [caddr[m][n]] = C + m*ldc + n*V
-        var [c[m][n]] = 
+        var [c[m][n]] =
           alpha * @VP([caddr[m][n]])
       end)
       storec:insert(quote
@@ -44,7 +44,7 @@ function genkernel(NB, RM, RN, V,alpha)
   for m = 0, RM-1 do for n = 0, RN-1 do
       calcc:insert(quote
         [c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
-      end) 
+      end)
   end end
   return terra([A] : &double, [B] : &double, [C] : &double,
                [lda] : int64,[ldb] : int64,[ldc] : int64)
@@ -68,7 +68,7 @@ local a = genkernel(40,4,2,8,1)
 a:compile()
 a:printpretty()
 
-terra short_saxpy(a : float, 
+terra short_saxpy(a : float,
       x : vector(float,4), y : vector(float,4))
     return a*x + y
 end

@@ -6,7 +6,7 @@ terra foo(a : int, s : int)
             break
         end
         r = r + i
-        
+
     end
     return r
 end

@@ -71,12 +71,12 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,mm,nn,kk,m,n)
 		return get(as,i,j,function(sym)
 			local result
 			if BLOCKA then
-				result = quote 
-					var [sym] = vecload(A, mm * K + NB*(kk + m - mm + i) + k - kk + j *V) 
+				result = quote
+					var [sym] = vecload(A, mm * K + NB*(kk + m - mm + i) + k - kk + j *V)
 				end
 			else
-				result = quote 
-					var [sym] = vecload(A, (m + i) * lda + k + j * V) 
+				result = quote
+					var [sym] = vecload(A, (m + i) * lda + k + j * V)
 				end
 			end
 			return result
@@ -87,12 +87,12 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,mm,nn,kk,m,n)
 		return get(bs,i,j,function(sym)
 			local result
 			if BLOCKB then
-				result = quote 
+				result = quote
 					var [sym] = vecload(B, nn * K + NB*(kk + n - nn + i) + k - kk + j * V)
 				end
 			else
 				result = quote
-					var [sym] = vecload(B, (n + i) * K + k + j * V) 
+					var [sym] = vecload(B, (n + i) * K + k + j * V)
 				end
 			end
 			return result
@@ -104,7 +104,7 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,mm,nn,kk,m,n)
 			for j = 0, BR-1 do
 				local aa = getA(i,l)
 				local bb = getB(j,l)
-				kloopbody:insert(quote 
+				kloopbody:insert(quote
 					[cs[i][j]] = [cs[i][j]] + aa * bb
 				end)
 			end
@@ -150,9 +150,9 @@ blockregisters = macro(function(C,A,B,K,lda,ldc,mm,nn,kk,m,n)
 	return stmts
 end)
 
-terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int, 
+terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float, A : &float, lda : int, B : &float, ldb : int,
 	           beta : float, C : &float, ldc : int)
-	
+
 	var TB = [&float](stdlib.malloc(K * N * sizeof(float)))
 	var TA = A
 	for kk = 0,K,NK do
@@ -161,7 +161,7 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float,
 				for n = nn,nn+NB do
 					if BLOCKB then
 						TB[nn * K + NB*(kk + n - nn) + k - kk] = B[k*ldb + n]
-					else 
+					else
 						TB[n*K + k] = B[k*ldb + n]
 					end
 				end

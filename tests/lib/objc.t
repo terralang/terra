@@ -12,7 +12,7 @@ local mangleSelector
 
 
 --replace methods such as:   myobj:methodcall(arg0,arg1)
---with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
+--with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1)
 
 local struct Wrapper {
     data : &C.objc_object

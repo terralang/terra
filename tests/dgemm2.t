@@ -24,7 +24,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	local lda,ldb,ldc = NB,NB,NB
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
 	local k = symbol("k")
-	
+
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 	local VT = vector(double,V)
 	local VP = &VT
@@ -41,7 +41,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 
 	local calcc = terralib.newlist()
-	
+
 	for n = 0, RN-1 do
 		calcc:insert(quote
 			var [b[n]] = @VP(&B[k*ldb + nn + n*V])
@@ -52,15 +52,15 @@ function genkernel(NB, RM, RN, V,alpha)
 			var [a[m]] = VT(A[(mm+m)*lda + k])
 		end)
 	end
-	for m = 0, RM-1 do 
+	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			calcc:insert(quote
 				[c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
 			end)
 		end
 	end
-	
-	
+
+
 	return terra([A] : &double, [B] : &double, [C] : &double)
 		for [mm] = 0, NB, RM do
 			for [nn] = 0, NB,RN*V do
@@ -90,9 +90,9 @@ local stdlib = terralib.includec("stdlib.h")
 local IO = terralib.includec("stdio.h")
 local VP = &vector(double,V)
 
-terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int, 
+terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double, A : &double, lda : int, B : &double, ldb : int,
 	           beta : double, C : &double, ldc : int)
-	
+
 	var AA = [&double](stdlib.malloc(sizeof(double)*M*K))
 	var BB = [&double](stdlib.malloc(sizeof(double)*K*N))
 	var CC = [&double](stdlib.malloc(sizeof(double)*M*N))
@@ -108,7 +108,7 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 			end
 		end
 	end
-	i = 0 
+	i = 0
 	for kk = 0,K,NB do
 		for nn = 0,N,NB do
 			for k = kk,kk+NB do
@@ -118,7 +118,7 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 				end
 			end
 		end
-	end	
+	end
 
 	for mm = 0,M,NB2 do
 		for nn = 0,N,NB2 do
@@ -153,7 +153,7 @@ terra my_dgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : double
 				end
 			end
 		end
-	end	
+	end
 
 	stdlib.free(AA)
 	stdlib.free(BB)

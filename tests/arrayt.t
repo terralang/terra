@@ -51,7 +51,7 @@ struct Complex {
 	imag : float;
 }
 
-terra Complex:add(c : Complex) 
+terra Complex:add(c : Complex)
 	return Complex { self.real + c.real, self.imag + c.imag }
 end
 

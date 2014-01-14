@@ -15,10 +15,10 @@ P.default = terralib.languageextension.default
 -- or (2) Pratt parser objects
 
 --pratt parser objects behave like functions
---but their behavior is defined by adding rules for what to do when 
+--but their behavior is defined by adding rules for what to do when
 --a prefix or suffix is found
 --futhermore, when using a pratt parser object,  you can specify
---a precedence such that the parser will only parse expressions 
+--a precedence such that the parser will only parse expressions
 --with precedence _higher_ than that.
 --see tests/lib/pratttest.t for examples of how to use this interface
 --to parse common patters
@@ -43,7 +43,7 @@ function P.pratt:infix(tokentype,prec,rule)
 	if self.infixtable[tokentype] then
 		error("infix rule for "..tostring(tokentype).." already defined")
 	end
-	self.infixtable[tokentype] = { 
+	self.infixtable[tokentype] = {
 		prec = prec;
 		rule = rule;
 	}

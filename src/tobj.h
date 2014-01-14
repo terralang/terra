@@ -143,16 +143,16 @@ struct Obj {
     }
     void dump() {
         printf("object is:\n");
-        
+
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");
         lua_getfield(L,-1,"tree");
-        
+
         lua_getfield(L,-1,"printraw");
         push();
         lua_call(L, 1, 0);
-        
+
         lua_pop(L,2);
-        
+
         printf("stack is:\n");
         int n = lua_gettop(L);
         for (int i = 1; i <= n; i++) {
@@ -188,7 +188,7 @@ private:
     }
     int ref;
     int ref_table;
-    lua_State * L; 
+    lua_State * L;
 };
 
 static inline int lobj_newreftable(lua_State * L) {

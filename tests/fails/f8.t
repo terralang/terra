@@ -1,4 +1,4 @@
 
-terra foo() : {int,1} 
+terra foo() : {int,1}
 end
 foo()

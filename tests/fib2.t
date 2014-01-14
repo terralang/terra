@@ -12,7 +12,7 @@ terra fib(a : Num) : Num
     end
 end
 
-function fib2(a) 
+function fib2(a)
     if a == 0 then
         return 1
     elseif a == 1 then

@@ -9,7 +9,7 @@ assert(b + r == 4)
 
 terra testescapes()
 	var a  = [4]
-	[ quote 
+	[ quote
 		a = a + 1
 	  end
 	]

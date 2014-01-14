@@ -9,10 +9,10 @@ in
 	[quote
 		var b = 4
 	 in
-	 	[quote 
+	 	[quote
 	 		var c = 5.0
 	 	in
-	 		a,b,c, [quote 
+	 		a,b,c, [quote
 	 					var d = 6
 	 				in
 	 					[quote
@@ -30,7 +30,7 @@ terra bindit()
 	return a + b + c + d + e + f + g
 end
 
-local sum = 3+4+5+6+7+8+9 
+local sum = 3+4+5+6+7+8+9
 assert(sum == bindit())
 
 terra foo(z : int, a : int, b : int, c : int, d : int, e : int, f : int, g : int)

@@ -11,7 +11,7 @@ end
 local function failparse(str,match)
 	local r,msg = terralib.loadstring(str)
 	assert(not r)
-	local match = msg:match(match) 
+	local match = msg:match(match)
 	if not match then print(msg) end
 	assert(match)
 end

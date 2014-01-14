@@ -68,7 +68,7 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 		for(int n = 0; n < N; n++) {
 			double v = 0.f;
 			for(int k = 0; k < K; k++) {
-				v += A[m*lda + k] * B[k*ldb + n]; 
+				v += A[m*lda + k] * B[k*ldb + n];
 			}
 			C[m*ldc + n] = v;
 		}
@@ -101,7 +101,7 @@ bool CalcTime(int * times, double * start) {
 	return true;
 }
 
-//calculates C = alpha * AB + beta * C 
+//calculates C = alpha * AB + beta * C
 void testsize(int M, int K, int N) {
 
 	double * A = (double*) malloc(sizeof(double) * M * K);
@@ -123,7 +123,7 @@ void testsize(int M, int K, int N) {
 		}
 	}
 
-	for(int i = 0; i < M *N; i++) 
+	for(int i = 0; i < M *N; i++)
 		C[i] = C2[i] = C3[i] = -1.f;
 
 
@@ -135,12 +135,12 @@ void testsize(int M, int K, int N) {
 
 	//double begin2 = CurrentTimeInSeconds();
 	//naive_dgemm(CblasRowMajor, CblasNoTrans,CblasNoTrans, M,N,K,1.f,A,K,B,N,0.f,C2,N);
-	
+
 	double mytime;
 	times = 0;
 	while(CalcTime(&times,&mytime))
 		my_dgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
-	
+
 	/*
 	for(int m = 0; m < M; m++) {
 		for(int n = 0; n < N; n++) {

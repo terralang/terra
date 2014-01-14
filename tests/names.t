@@ -1,7 +1,7 @@
 struct A {
 }
 
-local B = (function() 
+local B = (function()
     local struct A {}
     return A
 end)()

@@ -51,17 +51,17 @@ function terralib.cudamakekernelwrapper(fn,funcdata)
     end
     local _,typ = fn:peektype()
     local arguments = typ.parameters:map(symbol)
-    
+
     local paramctor = arguments:map(function(s) return `&s end)
     return terra(params : &terralib.CUDAParams, [arguments])
-        
+
         var func : &C.CUfunction = [&C.CUfunction](funcdata)
         var paramlist = arrayof([&opaque],[paramctor])
         return C.cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
                                      params.blockDimX,params.blockDimY,params.blockDimZ,
                                      params.sharedMemBytes, params.hStream,paramlist,nil)
     end
-end 
+end
 
 ]]
 terracode()

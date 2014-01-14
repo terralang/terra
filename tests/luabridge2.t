@@ -40,7 +40,7 @@ terra structptr(a : &A)
     return a.a + a.b
 end
 
-global_arr = global(int[2]) 
+global_arr = global(int[2])
 global_arr:set({3,4})
 
 terra retarrptr()

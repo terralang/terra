@@ -4,7 +4,7 @@ A.methods.foo = terra(self : A, a : int)
 	return self.a + a
 end
 
-terra A:foo() 
+terra A:foo()
 	return self.a
 end
 

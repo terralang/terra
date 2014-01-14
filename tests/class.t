@@ -8,16 +8,16 @@ struct A {
 terra A:times2() : int
     return self.a*2
 end
-   
+
 struct B {
   b : int
-} 
+}
 Class.extends(B,A)
-    
+
 terra B:combine(a : int) : int
     return self.b + self.a + a
 end
-    
+
 
 struct C {
   c : double
@@ -71,7 +71,7 @@ end
 
 assert(23 == foobar())
 
-Doubles = Class.interface { times2 = {} -> int } 
+Doubles = Class.interface { times2 = {} -> int }
 
 Adds = Class.interface { add = int -> int }
 
@@ -179,7 +179,7 @@ terra doadd(a : &Add)
 end
 
 terra dopstuff(p : &P)
-    return p:add(2) + doadd(p) 
+    return p:add(2) + doadd(p)
 end
 
 terra dosubstuff(s : &Sub)

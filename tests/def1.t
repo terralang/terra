@@ -8,7 +8,7 @@ local d = b(10)
 def e(a) a + c
 local def f(a) a + c
 
-print(d, e(10), f(10)) 
+print(d, e(10), f(10))
 
 local test = require("test")
 test.eq(d,13)

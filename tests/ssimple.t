@@ -136,7 +136,7 @@ terra foo15() : int
 end
 assert(foo15() == 3)
 
-failit(function() 
+failit(function()
 	local terra foo16() : 3
 	end
 end)
@@ -153,7 +153,7 @@ assert(foo16() == 20)
 
 terra foo17()
 	var i = 0
-	repeat 
+	repeat
 		i = i + 1
 		var b = i + 1
 	until b == 10
@@ -473,7 +473,7 @@ assert(foo39() == 8)
 --expression macro expanded
 --expression macro that returns a multi-ret function
 --expression macro that returns a multi-ret function that was an argument
---function call, function call with multi-return, 
+--function call, function call with multi-return,
 --function call to overloaded function/undef function
 --overloaded operator with mixed macro/function stuff
 --reciever cast stuff

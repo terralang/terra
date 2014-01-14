@@ -111,7 +111,7 @@ terra test8()
     var a0,a1 = i2 ~= i3, i2 == i3
     var b0,b1 = i2 < i3, i2 >= i3
     var c0,c1 = i2 > i3, i2 <= i3
-    
+
     return (a0 and not a1 and b0 and not b1 and not c0 and c1)[1]
 end
 

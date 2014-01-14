@@ -2,6 +2,6 @@
 struct A { a : &A }
 
 terra foo()
-    var a : A    
+    var a : A
 end
 foo()

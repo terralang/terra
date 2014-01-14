@@ -3,7 +3,7 @@
  * http://shootout.alioth.debian.org/
  *
  * contributed by Christoph Bauer
- *  
+ *
  */
 
 #include <math.h>

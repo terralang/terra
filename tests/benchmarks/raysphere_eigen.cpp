@@ -18,7 +18,7 @@ int main() {
 	double xd = 1;
 	double yd = 0;
 	double zd = 0;
-	
+
   ArrayXd xc(n);
   ArrayXd yc(n);
   ArrayXd zc(n);
@@ -40,9 +40,9 @@ int main() {
 	double begin = current_time();
 
 	double a = 1;
-		
+
 	double r = DBL_MAX;
-	
+
   b = 2*(xd*(xo-xc)+yd*(yo-yc)+zd*(zo-zc));
   c = (xo-xc)*(xo-xc)+(yo-yc)*(yo-yc)+(zo-zc)*(zo-zc)-1;
   disc = b*b-4*c;
