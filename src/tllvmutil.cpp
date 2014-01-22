@@ -208,14 +208,16 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         std::vector<const char *> names;
         for(size_t i = 0; i < livefns->size(); i++) {
             Function * fn = cast<Function>(VMap[(*livefns)[i]]);
-            const char * name;
             if(symbolnames) {
-                GlobalAlias * ga = new GlobalAlias(fn->getType(), Function::ExternalLinkage, (*symbolnames)[i], fn, M);
-                name = copyName(ga->getName());
-            } else {
-                name = copyName(fn->getName());
+                std::string name = (*symbolnames)[i];
+                GlobalValue * gv = M->getNamedValue(name);
+                if(gv) { //if there is already a symbol with this name, rename it
+                    gv->setName(Twine((*symbolnames)[i],"_renamed"));
+                }
+                fn->setName(name); //and set our function to this name
+                assert(fn->getName() == name);
             }
-            names.push_back(name); //internalize pass has weird interface, so we need to copy the names here
+            names.push_back(copyName(fn->getName())); //internalize pass has weird interface, so we need to copy the names here
         }
         
         //at this point we run optimizations on the module
@@ -239,19 +241,7 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         delete MPM;
         MPM = NULL;
     
-        //clean up the name list
-        //if other symbols already had names the same as symbolnames, we need to rename those symbols
-        //here so that the names refer to the requested symbols in the modules
         for(size_t i = 0; i < names.size(); i++) {
-            if (symbolnames != NULL && names[i] != (*symbolnames)[i]) {
-                GlobalValue * gv = M->getNamedValue((*symbolnames)[i]);
-                if(gv) { /* it might have been deleted during internalization */
-                    gv->setName(Twine((*symbolnames)[i],"_renamed"));
-                }
-                gv = M->getNamedValue(names[i]);
-                assert(gv);
-                gv->setName((*symbolnames)[i]);
-            }
             free((char*)names[i]);
             names[i] = NULL;
         }
