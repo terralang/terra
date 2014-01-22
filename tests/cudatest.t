@@ -6,13 +6,16 @@ end
 local tid = cudalib.nvvm_read_ptx_sreg_tid_x--terralib.intrinsic("llvm.nvvm.read.ptx.sreg.tid.x",{} -> int)
 local ntid = cudalib.nvvm_read_ptx_sreg_ntid_x -- terralib.intrinsic("llvm.nvvm.read.ptx.sreg.ntid.x",{} -> int)
 
-
+fn = terra(result : &float)
+    var t = tid()
+	result[t] = t
+end
+fn:setinlined(false)
 --our very simple cuda kernel
 --more work needs to be done to expose the right CUDA intrinsics
 --to do more compilicated things
-terra foo(result : &float)
-	var t = tid()
-	result[t] = t
+foo = terra(result : &float)
+    fn(result)
 end
 
 terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
@@ -22,7 +25,7 @@ local C = terralib.includecstring [[
 #include <stdlib.h>
 #include <stdio.h>
 ]]
-local R = terralib.cudacompile({ foo = foo, bar = foo })
+local R = terralib.cudacompile({ bar = foo })
 
 terra doit(N : int)
 	var data : &float

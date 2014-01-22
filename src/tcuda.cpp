@@ -89,22 +89,25 @@ int terra_cudacompile(lua_State * L) {
 
     int tbl = lua_gettop(L);
     
+    std::vector<std::string> fnnames;
     std::vector<llvm::Function *> fns;
     
     lua_pushnil(L);
     while (lua_next(L, tbl) != 0) {
+        const char * key = luaL_checkstring(L,-2);
         lua_getfield(L,-1,"llvm_function");
         llvm::Function * fn = (llvm::Function*) lua_topointer(L,-1);
         assert(fn);
+        fnnames.push_back(key);
         fns.push_back(fn);
         lua_pop(L,2);  /* variant, function pointer */
     }
     
-    llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &fns,NULL);
+    llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &fns,&fnnames);
     M->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
     
-    for(size_t i = 0; i < fns.size(); i++) {
-        llvm::Function * kernel = M->getFunction(fns[i]->getName());
+    for(size_t i = 0; i < fnnames.size(); i++) {
+        llvm::Function * kernel = M->getFunction(fnnames[i]);
         markKernel(T,M,kernel);
     }
     
@@ -125,7 +128,7 @@ int terra_cudacompile(lua_State * L) {
     for(size_t i = 0; lua_next(L,tbl) != 0; i++) {
         const char * key = luaL_checkstring(L,-2);
         CUfunction func;
-        CUDA_DO(cuModuleGetFunction(&func, cudaM, fns[i]->getName().str().c_str()));
+        CUDA_DO(cuModuleGetFunction(&func, cudaM, key));
         //HACK: we need to get this value, as a constant, to the makewrapper function
         //currently the only constants that Terra supports programmatically are string constants
         //eventually we will change this to make a Terra constant of type CUfunction when we have
