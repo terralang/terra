@@ -2295,7 +2295,14 @@ static int terra_deletefunction(lua_State * L) {
         }
         T->C->ee->freeMachineCodeForFunction(func); 
     }
+    if(!func->use_empty()) {
+        VERBOSE_ONLY(T) {
+            printf("... uses not empty, removing body but keeping declaration.\n");
+        }
+        func->deleteBody();
+    } else {
     func->eraseFromParent();
+    }
     VERBOSE_ONLY(T) {
         printf("... finish delete.\n");
     }
@@ -2390,15 +2397,20 @@ static int terra_saveobjimpl(lua_State * L) {
         M = NULL;
         
         if(isexe) {
-            sys::Path linker;
+            LLVM_PATH_TYPE linker;
 #ifndef _WIN32
+#ifdef LLVM_3_4
+            linker = sys::FindProgramByName("gcc");
+            if (linker == "") {
+#else
             linker = sys::Program::FindProgramByName("gcc");
             if (linker.isEmpty()) {
+#endif
                 unlink(objname);
                 terra_reporterror(T,"llvm: Failed to find gcc");
             }
 #else
-            linker = sys::Path(CLANG_EXECUTABLE);
+            linker = LLVM_PATH_TYPE (CLANG_EXECUTABLE);
 #endif
             
             std::vector<const char *> args;
@@ -2417,7 +2429,11 @@ static int terra_saveobjimpl(lua_State * L) {
             }
 
             args.push_back(NULL);
+#ifdef LLVM_3_4
+            int c = sys::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
+#else
             int c = sys::Program::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
+#endif
             if(0 != c) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);

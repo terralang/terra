@@ -14,10 +14,10 @@
 #include "clang/Rewrite/Frontend/Rewriters.h"
 
 
-#define LLVM_PATH_TYPE sys::Path
-#define RAW_FD_OSTREAM_F_BINARY raw_fd_ostream::F_Binary
+#define LLVM_PATH_TYPE std::string
+#define RAW_FD_OSTREAM_F_BINARY sys::fs::F_Binary
 #define HASFNATTR(attr) getAttributes().hasAttribute(AttributeSet::FunctionIndex, Attribute :: attr)
 #define ADDFNATTR(attr) addFnAttr(Attribute :: attr)
 #define ATTRIBUTE Attributes
 #define TARGETDATA(nm) nm##DataLayout
-#define LLVM_VERSION "3.3"
+#define LLVM_VERSION "3.4"
