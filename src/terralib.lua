@@ -1109,16 +1109,17 @@ do
     
     local types = {}
     
-    types.type = {} --all types have this as their metatable
+    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_type = false, llvm_ccinfo = false, llvm_definingfunction = false} --all types have this as their metatable
     types.type.__index = function(self,key)
         local N = tonumber(key)
         if N then
             return types.array(self,N) -- int[3] should create an array
         else
-            return types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
+            local m = types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
+            if m == nil then error("type has no field "..tostring(key),2) end
+            return m
         end
     end
-    
     
     types.type.__tostring = memoizefunction(function(self)
         if self:isstruct() then 
@@ -1244,6 +1245,7 @@ do
         local errorresult = { "<errorresult>" }
         local key = "cached"..name
         local inside = "inget"..name
+        types.type[key],types.type[inside] = false,false
         return function(self,anchor)
             if not self[key] then
                 local diag = terra.getcompilecontext().diagnostics

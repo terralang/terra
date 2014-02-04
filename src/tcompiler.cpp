@@ -433,7 +433,7 @@ struct CCallingConv {
     }
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
-        if(typ->hasfield("llvm_definingfunction")) {
+        if(typ->boolean("llvm_definingfunction")) {
             Function * df = C->m->getFunction(typ->string("llvm_definingfunction"));
             int argpos = typ->number("llvm_argumentposition");
             StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
@@ -1312,8 +1312,9 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         return B->CreatePtrDiff(a, b);
     }
     void EnsurePointsToCompleteType(Obj * ptrTy) {
-        Obj objTy;
-        if(ptrTy->obj("type",&objTy)) {
+        if(ptrTy->kind("kind") == T_pointer) {
+            Obj objTy;
+            ptrTy->obj("type",&objTy);
             CC.EnsureTypeIsComplete(&objTy);
         } //otherwise it is niltype and already complete
     }
@@ -1664,11 +1665,11 @@ if(baseT->isIntegerTy()) { \
                     return ConstantFP::get(t->type, dbl);
                 } else if(t->type->isPointerTy()) {
                     PointerType * pt = cast<PointerType>(t->type);
-                    Obj objType;
-                    if(!type.obj("type",&objType)) {
-                        //null pointer type
+                    if(type.kind("kind") == T_niltype) {
                         return ConstantPointerNull::get(pt);
                     }
+                    Obj objType;
+                    type.obj("type",&objType);
                     Type * objT = getType(&objType)->type;
                 
                     if(objT->isFunctionTy()) {

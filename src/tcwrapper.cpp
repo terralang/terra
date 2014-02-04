@@ -125,7 +125,7 @@ public:
                 lua_pushboolean(L, thenamespace == &tagged);
                 lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
-                if(!tt->hasfield("llvm_definingfunction")) {
+                if(!tt->boolean("llvm_definingfunction")) {
                     std::string definingfunction;
                     size_t argpos;
                     RegisterRecordType(Context->getRecordType(rd), &definingfunction, &argpos);
