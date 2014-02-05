@@ -279,11 +279,18 @@ We have already seen some simple function definitions. In addition to taking mul
     end
     
     terra doit()
-        var a,b = sort2(4,3)
+        -- the multiple returns are returned
+        -- in a 'tuple' of type {int,int}: 
+        var ab : {int,int} = sort2(4,3)
+        -- tuples can be pattern matched, 
+        -- splitting them into seperate variables
+        var a : int, b : int = sort2(4,3)
         --now a == 3, b == 4
     end
     doit()
-   
+
+Multiple return values are packed into a [tuples](getting-started.html#tuples_and_anonymous_functions), which can be pattern matched in assignments, splitting them apart into multiple variables.
+
 As mentioned previously, compilation occurs when functions are first _needed_. In this example, when `doit()` is called, both `doit()` and `sort2` are compiled because `doit` refers to `sort2`. 
 
 ### Mutual Recursion ###
@@ -590,14 +597,6 @@ Like functions, symbols in struct definitions are resolved when the struct is de
 	end
 	
 	struct C { i : int }
-	
-They may also contain unnamed members:
-
-    var a : struct { float, float }
-    
-Unnamed members will be given the names based on their position in the struct (e.g, `_0` for the first field, `_1` for the second, etc.):
-
-    a._0 + a._1
 
 Terra has no explicit union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:
 
@@ -609,27 +608,28 @@ Terra has no explicit union type. Instead, you can declare that you want two or 
         } 
     }
     
-### Anonymous Structs ###
+### Tuples and Anonymous Structs ###
 
-In Terra you can also create struct types that have no name:
+In Terra you can also _tuples_, which are a special kind of struct that contain a list of elements:
 
-    var a : struct { real : float, imag : float } 
-    
-These structs are similar to the anonymous structs found in languages like C-sharp.
-    
-You can use a struct constructor syntax to quickly generate values that have an anonymous struct type:
+    var a : tuple(float,float) -- a pair of floats
+        
+You can use a constructor syntax to quickly generate tuple values:
 
-    var a = { 1,2,3,4 } --has type struct {int,int,int,int}
-    var b = { a = 3.0, b = 3 } --has type struct { a : double, b : int }
+    var a = { 1,2,3,4 } --has type tuple(int,int,int,int)
     
-Terra allows you to implicitly convert any anonymous struct to another struct that has a superset of its fields.
+Tuples can be cast to other struct types, which will initialize fields of the struct in order:
+
+    var c = Complex { 3,4 }
+    
+You can also add names to constructor syntax to create _anonymous structs_, similar to those in languages such as C-sharp:
+
+    var b = { a = 3.0, b = 3 }
+    
+Terra allows you to cast any anonymous struct to another struct that has a superset of its fields.
     
     struct Complex { real : float, imag : float}
-    var a : Complex = { real = 3, imag = 1 }
-    
-If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:
-    
-    var b : Complex = {1, 2}
+    var c = Complex { real = 3, imag = 1 }
     
 Since constructors like `{1,2}` are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a struct declaration.
 
@@ -653,6 +653,7 @@ Terra does not have a `void` type. Instead, functions may return zero arguments:
 
     terra zerorets() : {}
     end
+    
     
 Terra Types as Lua Values
 =========================
@@ -715,52 +716,24 @@ Here are some example literals:
 * `true` and `false` are `bool`
 
 
-Expression Lists
-================
+Assignments and Expression Lists
+================================
 
-In cases where multiple expressions can appear in a list, a function that returns multiple values will append _all_ of its values to the list if it is the final member of the list.
-This behavior occurs in declarations, assignments, return statements, and struct initializers.
+When a function returns multiple values, it implicitly creates a tuple of those values as the return type:
 
-Here are some examples (adapted from the Lua reference manual):
-
-    terra f()
-        return 1,2 --returns 2 values
+    terra returns2() return 1,2 end
+    terra example()
+        var a = returns2() -- has type tuple(int,int)
+        C.printf("%d %d\n",a._0,a._1)
     end
-    terra g(a : int, b : int)
-        return 1
-    end
-    terra h(a : int, b : int, c : int)
-        return 2
-    end
-    terra examples()
-        f()                -- statement, return values are ignored
-        
-        g(f(), x)          -- f() is adjusted to 1 result
+    
+To make it easier to use functions that return multiple values, we allow a tuple that is the last element of an expression list to match multiple variables on the left the left-hand size.
 
-        g(x, f())          -- error! passing 3 parameters to a
-                           -- function that takes only 2 arguments
-        h(x, f())          -- ok! h takes 3 arguments
-        
-        a,b = f(), x       -- f() is adjusted to 1 result
-        a,b,c = x, f()     -- f() has 2 results
-        a,b,c = f()        -- error! f() only returns two values
-
-        return f()         -- returns all results from f()
-        return x,y,f()     -- returns x, y, and all results from f()
-        
-        {f()}              -- creates a struct with all results from f()
-        {f(), nil}         -- f() is adjusted to 1 result
+    terra example2()
+        var a,b,c = 1,returns2()
+        var a,b,c = returns2(),1 --Error: returns2 is not the last element
     end
-     
-You can also truncate an expression that creates more than 1 result:
 
-    terra three() return 1,2,3 end
-    terra examples()
-        g(x, (three()) )          -- parens cause f() to 
-                                  -- truncate to 1 result
-        h(x, truncate(2,three())) --'truncate' macro truncates 
-                                  --'three' to 2 results.
-    end
 Methods
 =======
 
@@ -975,16 +948,16 @@ If you want to create a group of statements rather than expressions, you can usi
 		printit
 	end
 
-The `quote` keyword can also include an optional `in` statement that creates a list of expressions:
+The `quote` keyword can also include an optional `in` statement that creates an expression:
 
     myquote = quote
         var a = foo()
         var b = bar()
     in 
-        a + b, a - b
+        a + b
     end
 
-When used as an expression this quote will produce two values:
+When used as an expression this quote will produce that value.
 
     terra doit()
         var one,two = myquote

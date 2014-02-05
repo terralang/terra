@@ -410,15 +410,9 @@ Try to interpret this quote as if it were a Terra type object. This is normally 
 
 ---
 
-    typ = quoteobj:gettypes()
-
-If the quote object is a typed expression that was passed as an argument to a macro, this will return the list of types for the values that will result when it is evaluated. For simple quotes (e.g. with the backtick operator) this will return exactly one type. But for more complicated expressions (e.g. `quote var a = 1 in a, 2 * a end`), this may return zero or more types. 
-
----
-    
     typ = quoteobj:gettype()
 
-If the quote object is a typed expression that was passed as an argument to a macro, this returns the type of the value that will result when it is evaluated. Equivalent to `quoteobj:gettypes()[1]`. It is an error if the quoted expression results in no values.
+If the quote object is a typed expression that was passed as an argument to a macro, this will return the type of the value that will result when it is evaluated.
 
 ---
 
@@ -483,15 +477,21 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
 
 ---
 
-    parameters -> returns
+    parameters -> returntype
     
-Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. 
+Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. If returntype is a list, a `tuple` of the values in the list is the type returned from the function.
 
 ---
 
     struct { field0 : type2 , ..., fieldN : typeN }
 
 Constructs a structural type. We use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems for structs, so each call to `struct` returns a unique type. Structs are the primary user-defined data-type. See [Structs](#structs) for more information.
+
+---
+
+    tuple(type0,type1,...,typeN)
+
+Constructs a tuple, which is a special kind of `struct` that contains the values `type0`... `typeN` as fields `obj._0` .... `obj._N`.  Unlike normal structs, each call to `tuple` with the same arguments will return the same type.
 
 ---
 
@@ -551,7 +551,7 @@ True if `type` is an array. `type.N` is the length. `type.type` is the element t
 
     type:isfunction()
 
-True if `type` is a function (not a function pointer). `type.returns` is a list of return types. `type.parameters` is a list of parameter types.
+True if `type` is a function (not a function pointer). `type.parameters` is a list of parameter types. `type.returntype` is return type. If a function returns multiple values this type will be a `tuple` of the values. 
 
 ---
 
@@ -636,7 +636,7 @@ Constructs and returns a new struct. `displayname` is an option name that will b
 
 The `entries` field is a [List](#list) of field entries. Each field entry is one of:
 * A table `{ field = stringorsymbol, type = terratype }`, specifying a named field.
-* Type `terratype`, specifying an anonymous field that will be given a name based on its position in the struct (e.g. `_0` for the first field, `_2` for the third ...).
+* A table `{stringorsymbol,terratype}`, also specifying a named field.
 * A [List](#list) of field entries that will be allocated together in a union.
 
 ---
