@@ -660,12 +660,28 @@ struct CCallingConv {
         return Argument(C_AGGREGATE_REG,t->type,elements.size(),
                         StructType::get(*C->ctx,elements));
     }
-    
+    bool IsUnitType(Obj * t) {
+        t->pushfield("isunit");
+        t->push();
+        lua_call(L,1,1);
+        bool result = lua_toboolean(L,-1);
+        lua_pop(L,1);
+        return result;
+    }
     void Classify(Obj * ftype, Obj * params, Classification * info) {
         Obj returntype;
         ftype->obj("returntype",&returntype);
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero);
+        
+        #ifdef _WIN32
+        //windows classifies empty structs as pass by pointer, but we need a return value of unit (an empty tuple)
+        //to be translated to void. So if it is unit, force the return value to be void by overriding the normal 
+        //classification decision
+        if(IsUnitType(&returntype)) {
+            info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,0,StructType::get(*C->ctx));
+        }
+        #endif
         
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM ? 1 : 0; /*sret consumes RDI for the return value pointer so it counts towards the used integer registers*/

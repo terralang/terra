@@ -1192,6 +1192,10 @@ do
         return self.kind == terra.kinds.vector
     end
     
+    function types.type:isunit()
+      return types.unit == self
+    end
+    
     local applies_to_vectors = {"isprimitive","isintegral","isarithmetic","islogical", "canbeord"}
     for i,n in ipairs(applies_to_vectors) do
         types.type[n.."orvector"] = function(self)
@@ -1321,7 +1325,7 @@ do
                 self.cachedcstring = tostring(self)
             elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
                 local ftype = self.type
-                local rt = (ftype.returntype == types.unit and "void") or ftype.returntype:cstring()
+                local rt = (ftype.returntype:isunit() and "void") or ftype.returntype:cstring()
                 local function getcstring(t)
                     if t == types.rawstring then
                         --hack to make it possible to pass strings to terra functions
