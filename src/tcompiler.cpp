@@ -2416,7 +2416,7 @@ static int terra_saveobjimpl(lua_State * L) {
         if(isexe) {
             LLVM_PATH_TYPE linker;
 #ifndef _WIN32
-#ifdef LLVM_3_4
+#if defined(LLVM_3_4) || defined (LLVM_3_5)
             linker = sys::FindProgramByName("gcc");
             if (linker == "") {
 #else
@@ -2446,11 +2446,7 @@ static int terra_saveobjimpl(lua_State * L) {
             }
 
             args.push_back(NULL);
-#ifdef LLVM_3_4
-            int c = sys::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
-#else
             int c = sys::Program::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
-#endif
             if(0 != c) {
                 unlink(objname);
                 terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);

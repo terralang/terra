@@ -447,7 +447,7 @@ public:
     FunctionDecl * GetLivenessFunction() {
         IdentifierInfo & II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
         #elif defined(LLVM_3_2) || defined(LLVM_3_1)
         QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],outputtypes.size(), FunctionProtoType::ExtProtoInfo());
@@ -463,7 +463,7 @@ public:
             0));
         }
         F->setParams(params);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
         #elif defined(LLVM_3_2) || defined(LLVM_3_1)
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());

@@ -7,7 +7,7 @@
 
 -include Makefile.inc
 
-LLVM_CONFIG ?= $(shell which llvm-config)
+LLVM_CONFIG ?= $(shell which llvm-config-3.5)
 
 LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 
@@ -30,7 +30,7 @@ TERRA_CC  ?= $(CLANG)
 CUDA_HOME ?= /usr/local/cuda
 
 
-CXX := $(TERRA_CXX)
+CXX := $(TERRA_CXX) -stdlib=libc++
 CC := $(TERRA_CC)
 
 .SUFFIXES:
@@ -38,10 +38,10 @@ CC := $(TERRA_CC)
 UNAME := $(shell uname)
 
 
-AR = ar
-LD = ld
-FLAGS = -g $(INCLUDE_PATH) -fPIC
-LFLAGS = -g
+AR = llvm-ar-3.5
+LD = llvm-ld-3.5
+FLAGS = -g $(INCLUDE_PATH) -fPIC -nostdinc++ -I/usr/local/lib/llvm-3.5/include/c++/v1
+LFLAGS = -g -lcurses
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
 LUAJIT_VERSION=LuaJIT-2.0.2
@@ -60,7 +60,7 @@ FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1_\2/')
 
-FLAGS += -D$(LLVM_VERSION)
+FLAGS += -D$(LLVM_VERSION) -m64
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
@@ -238,12 +238,12 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
-	$(AR) -cq $@ $^
+	$(AR) cqv $@ $^
 
 $(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
 	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
 
-$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(addprefix build/, $(LIBOBJS))
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
 
 $(BIN2C):	src/bin2c.c
