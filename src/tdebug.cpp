@@ -8,9 +8,9 @@
 #include "tllvmutil.h"
 #include "terrastate.h"
 #include "tcompilerstate.h"
-//#ifdef __linux__
+#ifdef __linux__
 #include <unistd.h>
-//#endif
+#endif
 
 using namespace llvm;
 
