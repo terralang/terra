@@ -30,7 +30,7 @@ TERRA_CC  ?= $(CLANG)
 CUDA_HOME ?= /usr/local/cuda
 
 
-CXX := $(TERRA_CXX) -stdlib=libc++
+CXX := $(TERRA_CXX)
 CC := $(TERRA_CC)
 
 .SUFFIXES:
@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = llvm-ar-3.5
 LD = llvm-ld-3.5
-FLAGS = -g $(INCLUDE_PATH) -fPIC -nostdinc++ -I/usr/local/lib/llvm-3.5/include/c++/v1
+FLAGS = -g $(INCLUDE_PATH) -fPIC
 LFLAGS = -g -lcurses
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -182,7 +182,7 @@ INCLUDE_PATH += -I build
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 
+LFLAGS += -pagezero_size 10000 -image_base 100000000 -image_base 7fff04c4a000
 endif
 
 #so header include paths can be correctly configured on linux

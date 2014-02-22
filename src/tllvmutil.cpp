@@ -122,7 +122,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-#ifdef LLVM_3_4
+#if defined(LLVM_3_4) || defined(LLVM_3_5)
             *TheTarget->createMCRegInfo(TripleName),
 #endif
             TripleName);

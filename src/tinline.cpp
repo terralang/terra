@@ -650,7 +650,7 @@ public:
 // doInitialization - Initializes the vector of functions that have been
 // annotated with the noinline attribute.
 bool SimpleManualInliner::doInitialization() {
-#ifdef LLVM_3_3
+#if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
     PassManagerWrapper W;
     W.PM = &PM;
     W.add(new DataLayout(*TM->getDataLayout()));
