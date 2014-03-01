@@ -2488,7 +2488,6 @@ static int terra_isintegral(lua_State * L) {
 static int terra_linklibraryimpl(lua_State * L) {
     std::string Err;
     terra_State * T = terra_getstate(L, 1);
-    printf("here\n");
     
     const char * filename = luaL_checkstring(L, -2);
     bool isbitcode = lua_toboolean(L,-1);

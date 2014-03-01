@@ -3,8 +3,7 @@ local a = {}
 
 local c = terralib.includec("stdio.h")
 
--- b = `c.printf("hello\n")
-b = `84
+b = `c.printf("hello\n")
 
 terra foo()
 	return b

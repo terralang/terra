@@ -7,7 +7,7 @@
 
 -include Makefile.inc
 
-LLVM_CONFIG ?= $(shell which llvm-config-3.5)
+LLVM_CONFIG ?= $(shell which llvm-config)
 
 LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 
@@ -41,7 +41,7 @@ UNAME := $(shell uname)
 AR = ar
 LD = ld
 FLAGS = -g $(INCLUDE_PATH) -fPIC
-LFLAGS = -g -lcurses -fstrict-aliasing
+LFLAGS = -g -lcurses
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
 LUAJIT_VERSION=LuaJIT-2.0.2
@@ -54,7 +54,7 @@ LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 LFLAGS += -Lbuild -lluajit
 INCLUDE_PATH += -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
-FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -frtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
@@ -157,7 +157,6 @@ LLVM_FLAGS_MANUAL += \
 -lLLVMMC \
 -lLLVMObject \
 -lLLVMCore \
--lLLVMIR \
 -lLLVMSupport
 
 
@@ -245,9 +244,7 @@ $(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
 	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
-	#rebase -low_address 10000 -high_address 100000000 $^
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
-	#rebase -low_address 10000 -high_address 100000000 $@
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<

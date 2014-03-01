@@ -18,8 +18,12 @@ using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
     fpm->add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
-    //fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
+#ifdef LLVM_3_5
     fpm->add(new DataLayoutPass(*TM->getDataLayout()));
+#else
+    fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
+#endif
+
 #ifdef LLVM_3_2
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));

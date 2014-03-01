@@ -500,13 +500,6 @@ public:
     std::string livenessfunction;
 };
 
-/*
-class ASTContextPublic : public ASTContext {
-public:
-  TypeInfoMap& getMemoizedTypeInfo() { return MemoizedTypeInfo; };
-};
-*/
-
 class CodeGenProxy : public ASTConsumer {
 public:
   CodeGenProxy(CodeGenerator * CG_, Obj * result, size_t importid)
@@ -515,24 +508,8 @@ public:
   IncludeCVisitor Visitor;
   virtual ~CodeGenProxy() {}
   virtual void Initialize(ASTContext &Context) {
-    printf("here 1\n");
     Visitor.SetContext(&Context);
-    printf("here 2\n");
-    //printf("image_base: %lu\n", __image_base__);
-    printf("CG pointer: %d\n", CG);
-    printf("alignment: %d\n", Context.getTargetInfo().getPointerAlign(0));
-    printf("char type: %d\n", bool(Context.CharTy));
-    //Context.InitBuiltinTypes(Context.getTargetInfo());
-    //printf("initted builtin types\n");
-
-    //ASTContextPublic* ctx = dynamic_cast<ASTContextPublic*>(&Context);
-
-    printf("bool type ptr: %ul\n", Context.BoolTy.getTypePtr());
-    Context.BoolTy.getTypePtr()->dump();
-    printf("bool size: %ul\n", Context.getTypeSize(Context.BoolTy));
-    printf("char width: %ul\n", Context.getCharWidth());
     CG->Initialize(Context);
-    printf("here 3\n");
   }
   virtual bool HandleTopLevelDecl(DeclGroupRef D) {
     for (DeclGroupRef::iterator b = D.begin(), e = D.end();
@@ -577,7 +554,6 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     TheCompInst->createDiagnostics();
     #endif
 
-    printf("%d\n", TheCompInst->hasDiagnostics());
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
     //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
     //this cannot go before CreateFromArgs
@@ -599,9 +575,6 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     TheCompInst->createPreprocessor();
     TheCompInst->createASTContext();
 
-    // CI->getCodeGenOpts().EmitDeclMetadata = 1; // For unloading, for later
-    //TheCompInst->getCodeGenOpts().DebugInfo = 1; // want debug info
-
     // Set the main file handled by the source manager to the input file.
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
@@ -609,37 +582,12 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
                                            PP.getLangOpts());
 
-    IdentifierTable &idents = TheCompInst->getASTContext().Idents;
-    IdentifierInfo &ident = idents.get("__builtin_va_list");
-    printf("%s\n", ident.getName().data());
-
-    printf("%d\n", PP.getTargetInfo().hasInt128Type());
-    IdentifierInfo &ident2 = idents.get("__int128_t");
-    printf("%s\n", ident2.getName().data());
-    IdentifierInfo &ident3 = idents.get("__uint128_t");
-    printf("%s\n", ident3.getName().data());
 }
 
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
-    CompilerInstance *ci = new CompilerInstance();
-    CompilerInstance &TheCompInst = *ci;
-
-    TheCompInst.getCodeGenOpts().OptimizationLevel = 0; // see pure SSA, that comes out
-
-    TheCompInst.getCodeGenOpts().BackendOptions.push_back("-image_base");
-    TheCompInst.getCodeGenOpts().BackendOptions.push_back("100000000");
-    TheCompInst.getCodeGenOpts().BackendOptions.push_back("-pagezero_size");
-    TheCompInst.getCodeGenOpts().BackendOptions.push_back("10000");
-
-    TheCompInst.getFrontendOpts().LLVMArgs.push_back("-image_base");
-    TheCompInst.getFrontendOpts().LLVMArgs.push_back("100000000");
-    TheCompInst.getFrontendOpts().LLVMArgs.push_back("-pagezero_size");
-    TheCompInst.getFrontendOpts().LLVMArgs.push_back("10000");
-
-    printf("dofile: %u\n", strlen(code));
-    printf("%s\n", code);
+    CompilerInstance TheCompInst;
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
     
@@ -648,12 +596,10 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     #else
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
     #endif
-
-    printf("codegen: %d\n", codegen);
     
-    CodeGenProxy *proxy = new CodeGenProxy(codegen,result,T->C->next_unused_id++);
+    CodeGenProxy proxy(codegen,result,T->C->next_unused_id++);
     ParseAST(TheCompInst.getPreprocessor(),
-            proxy,
+            &proxy,
             TheCompInst.getASTContext());
 
     llvm::Module * mod = codegen->ReleaseModule();
@@ -697,13 +643,6 @@ int include_c(lua_State * L) {
     args.push_back("-fmsc-version=" __indirect(_MSC_VER));
 #endif
 
-    /*
-    args.push_back("-pagezero_size");
-    args.push_back("10000");
-    args.push_back("-image_base");
-    args.push_back("100000000");
-    */
-    args.push_back("-O1");
     args.push_back("-I");
     args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
 
