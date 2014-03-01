@@ -38,10 +38,10 @@ CC := $(TERRA_CC)
 UNAME := $(shell uname)
 
 
-AR = llvm-ar-3.5
-LD = llvm-ld-3.5
+AR = ar
+LD = ld
 FLAGS = -g $(INCLUDE_PATH) -fPIC
-LFLAGS = -g -lcurses
+LFLAGS = -g -lcurses -fstrict-aliasing
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
 LUAJIT_VERSION=LuaJIT-2.0.2
@@ -54,13 +54,13 @@ LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 LFLAGS += -Lbuild -lluajit
 INCLUDE_PATH += -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
-FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -frtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1_\2/')
 
-FLAGS += -D$(LLVM_VERSION) -m64
+FLAGS += -D$(LLVM_VERSION)
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
@@ -157,6 +157,7 @@ LLVM_FLAGS_MANUAL += \
 -lLLVMMC \
 -lLLVMObject \
 -lLLVMCore \
+-lLLVMIR \
 -lLLVMSupport
 
 
@@ -182,7 +183,7 @@ INCLUDE_PATH += -I build
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 -image_base 7fff04c4a000
+LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 #so header include paths can be correctly configured on linux
@@ -238,13 +239,15 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
-	$(AR) cqv $@ $^
+	$(AR) -cq $@ $^
 
 $(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
-	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
+	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)
 
-$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(addprefix build/, $(LIBOBJS))
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
+	#rebase -low_address 10000 -high_address 100000000 $^
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
+	#rebase -low_address 10000 -high_address 100000000 $@
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<

@@ -23,7 +23,13 @@
 #include "clang/Parse/ParseAST.h"
 #include "clang/AST/ASTContext.h"
 #include "llvm/Analysis/Passes.h"
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >=5
+#include "llvm/IR/Verifier.h"
+#else
 #include "llvm/Analysis/Verifier.h"
+#endif
+
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"

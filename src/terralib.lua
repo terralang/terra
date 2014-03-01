@@ -3409,12 +3409,15 @@ end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
 function terra.includecstring(code,...)
-    local args = terra.newlist {"-O3","-Wno-deprecated",...}
+    print('includecstring 1')
+    local args = terra.newlist {"-O0","-Wno-deprecated",...}
     for p in terra.includepath:gmatch("([^;]+);?") do
         args:insert("-I")
         args:insert(p)
     end
+    print('includecstring 2')
     local result = terra.registercfile(code,args)
+    print('includecstring 3')
     local general,tagged,errors = result.general,result.tagged,result.errors
     local mt = { __index = includetableindex, errors = result.errors }
     for k,v in pairs(tagged) do

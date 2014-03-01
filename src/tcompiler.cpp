@@ -2488,6 +2488,7 @@ static int terra_isintegral(lua_State * L) {
 static int terra_linklibraryimpl(lua_State * L) {
     std::string Err;
     terra_State * T = terra_getstate(L, 1);
+    printf("here\n");
     
     const char * filename = luaL_checkstring(L, -2);
     bool isbitcode = lua_toboolean(L,-1);
@@ -2496,7 +2497,16 @@ static int terra_linklibraryimpl(lua_State * L) {
         error_code ec = MemoryBuffer::getFile(filename,mb);
         if(ec)
             terra_reporterror(T, "llvm: %s\n", ec.message().c_str());
-        Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
+
+        Module * m = NULL;
+#ifdef LLVM_3_5
+        ErrorOr<Module *> em = parseBitcodeFile(mb.get(), *T->C->ctx);
+        if(!em)
+            terra_reporterror(T, "llvm: %s\n", em.getError().message().c_str());
+        m = em.get();
+#else
+        m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
+#endif
         m->setTargetTriple(T->C->m->getTargetTriple());
         if(!m)
             terra_reporterror(T, "llvm: %s\n", Err.c_str());

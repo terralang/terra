@@ -653,7 +653,7 @@ bool SimpleManualInliner::doInitialization() {
 #if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
     PassManagerWrapper W;
     W.PM = &PM;
-    W.add(new DataLayout(*TM->getDataLayout()));
+    W.add(new DataLayoutPass(*TM->getDataLayout()));
     TM->addAnalysisPasses(W);
     
     for(int i = 0; i < W.passes.size(); i++) {
