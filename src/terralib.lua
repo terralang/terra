@@ -3482,8 +3482,10 @@ terra.unpackstruct = terra.internalmacro(function(diag,tree,obj)
     return result
 end,
 function(cdata)
-    local t = terra.typeof(cdata)
-    if not t or not t:isstruct() then error("expected a struct value",2) end
+    local t = type(cdata) == "cdata" and terra.typeof(cdata)
+    if not t or not t:isstruct() or t.convertible ~= "tuple" then 
+      return cdata
+    end
     local results = terralib.newlist()
     for i,e in ipairs(t:getentries()) do
         if e.field then
@@ -3494,6 +3496,7 @@ function(cdata)
     return unpack(results)
 end)
 _G["unpackstruct"] = terra.unpackstruct
+_G["unpacktuple"] = terra.unpackstruct
 _G["tuple"] = terra.types.tuple
 _G["global"] = terra.global
 
