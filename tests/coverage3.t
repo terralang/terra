@@ -68,9 +68,10 @@ end)
 
 C = terralib.includec("stdio.h")
 
-failit("cannot import",function()
-local a = C.__sputc
-end)
+--TODO: __sputc isn't consistent across architectures, so this is a bad test
+--failit("cannot import",function()
+--local a = C.__sputc
+--end)
 
 failit("not found",function()
 local a = C.nothing
