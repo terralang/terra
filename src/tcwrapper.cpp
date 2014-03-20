@@ -358,7 +358,12 @@ public:
         resulttable->newlist(&parameters);
         
         bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
+
+#ifdef LLVM_3_5
+        QualType RT = f->getReturnType();
+#else
         QualType RT = f->getResultType();
+#endif
         if(RT->isVoidType()) {
             PushTypeField("unit");
             returntype.initFromStack(L, ref_table);
@@ -372,8 +377,18 @@ public:
         //proto is null if the function was declared without an argument list (e.g. void foo() and not void foo(void))
         //we don't support old-style C parameter lists, we just treat them as empty
         if(proto) {
-            for(size_t i = 0; i < proto->getNumArgs(); i++) {
+#ifdef LLVM_3_5
+            size_t numParams = proto->getNumParams();
+#else
+            size_t numParams = proto->getNumArgs()
+#endif
+
+            for(size_t i = 0; i < numParams; i++) {
+#ifdef LLVM_3_5
+                QualType PT = proto->getParamType(i);
+#else
                 QualType PT = proto->getArgType(i);
+#endif
                 Obj pt;
                 if(!GetType(PT,&pt)) {
                     valid = false; //keep going with attempting to parse type to make sure we see all the reasons why we cannot support this function
@@ -447,7 +462,7 @@ public:
     FunctionDecl * GetLivenessFunction() {
         IdentifierInfo & II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
         #elif defined(LLVM_3_2) || defined(LLVM_3_1)
         QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],outputtypes.size(), FunctionProtoType::ExtProtoInfo());
@@ -463,7 +478,7 @@ public:
             0));
         }
         F->setParams(params);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if defined(LLVM_3_3) || defined(LLVM_3_4) || defined(LLVM_3_5)
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
         #elif defined(LLVM_3_2) || defined(LLVM_3_1)
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
@@ -538,7 +553,7 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     #else
     TheCompInst->createDiagnostics();
     #endif
-    
+
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
     //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
     //this cannot go before CreateFromArgs
@@ -566,7 +581,7 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     Preprocessor &PP = TheCompInst->getPreprocessor();
     PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
                                            PP.getLangOpts());
-    
+
 }
 
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
@@ -627,10 +642,10 @@ int include_c(lua_State * L) {
 #define __indirect(x) __stringify(x)
     args.push_back("-fmsc-version=" __indirect(_MSC_VER));
 #endif
-    
+
     args.push_back("-I");
     args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
-    
+
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);
         args.push_back(luaL_checkstring(L,-1));

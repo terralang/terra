@@ -18,7 +18,12 @@ using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
     fpm->add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+#ifdef LLVM_3_5
+    fpm->add(new DataLayoutPass(*TM->getDataLayout()));
+#else
     fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
+#endif
+
 #ifdef LLVM_3_2
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));
@@ -55,11 +60,11 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     fpm->add(createScalarReplAggregatesPass(-1, false));
     fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
     
-#ifndef LLVM_3_4
+#if !(defined(LLVM_3_4) || defined(LLVM_3_5))
     if (!oi->DisableSimplifyLibCalls)
         fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
 #endif
-    
+
     fpm->add(createJumpThreadingPass());         // Thread jumps.
     fpm->add(createCorrelatedValuePropagationPass()); // Propagate conditionals
     fpm->add(createCFGSimplificationPass());     // Merge & remove BBs
@@ -122,7 +127,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-#ifdef LLVM_3_4
+#if defined(LLVM_3_4) || defined(LLVM_3_5)
             *TheTarget->createMCRegInfo(TripleName),
 #endif
             TripleName);

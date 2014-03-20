@@ -23,7 +23,13 @@
 #include "clang/Parse/ParseAST.h"
 #include "clang/AST/ASTContext.h"
 #include "llvm/Analysis/Passes.h"
+
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >=5
+#include "llvm/IR/Verifier.h"
+#else
 #include "llvm/Analysis/Verifier.h"
+#endif
+
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"
@@ -54,6 +60,8 @@
 #include "llvmheaders_33.h"
 #elif LLVM_3_4
 #include "llvmheaders_34.h"
+#elif LLVM_3_5
+#include "llvmheaders_35.h"
 #else
 #error "unsupported LLVM version"
 #include "llvmheaders_33.h" //for OSX code completion

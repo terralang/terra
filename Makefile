@@ -41,7 +41,7 @@ UNAME := $(shell uname)
 AR = ar
 LD = ld
 FLAGS = -g $(INCLUDE_PATH) -fPIC
-LFLAGS = -g
+LFLAGS = -g -lcurses
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
 LUAJIT_VERSION=LuaJIT-2.0.2
@@ -182,7 +182,7 @@ INCLUDE_PATH += -I build
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 
+LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 #so header include paths can be correctly configured on linux
@@ -241,7 +241,7 @@ $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	$(AR) -cq $@ $^
 
 $(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
-	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
+	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
