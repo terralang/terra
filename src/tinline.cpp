@@ -40,6 +40,9 @@
 
 using namespace llvm;
 
+//fix linking errors due to Valgrind.h
+extern "C" LLVM_ATTRIBUTE_WEAK void AnnotateHappensAfter(const char *file, int line, const volatile void *cv) {}
+
 STATISTIC(NumInlined, "Number of functions inlined");
 STATISTIC(NumCallsDeleted, "Number of call sites deleted, not inlined");
 STATISTIC(NumDeleted, "Number of functions deleted because all callers found");
