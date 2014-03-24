@@ -20,7 +20,7 @@ struct terra_CompilerState {
     llvm::PassManager * cwrapperpm;
     llvm::TargetMachine * tm;
     const llvm :: TARGETDATA() * td;
-    llvm::ManualInliner * mi;
+    ManualInliner * mi;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
     size_t next_unused_id; //for creating names for dummy functions
 };

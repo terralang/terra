@@ -245,8 +245,7 @@ int terra_compilerinit(struct terra_State * T) {
     }
     
     T->C->tm = TM;
-    T->C->mi = createManualFunctionInliningPass(T->C->tm);
-    T->C->mi->doInitialization();
+    T->C->mi = new ManualInliner(T->C->tm,T->C->m);
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
     
@@ -2218,7 +2217,7 @@ static int terra_optimize(lua_State * L) {
             printf("\n");
         }
         
-        T->C->mi->runOnSCC(scc);
+        T->C->mi->run(&scc);
     
         for(int i = 0; i < N; i++) {
             Obj funcobj;
@@ -2318,7 +2317,7 @@ static int terra_deletefunction(lua_State * L) {
         }
         func->deleteBody();
     } else {
-    func->eraseFromParent();
+        T->C->mi->eraseFunction(func);
     }
     VERBOSE_ONLY(T) {
         printf("... finish delete.\n");
