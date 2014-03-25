@@ -9,6 +9,7 @@
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/DIBuilder.h"
 #include "llvm/DebugInfo.h"
+#include "llvm/ExecutionEngine/ObjectImage.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"
@@ -21,3 +22,4 @@
 #define ATTRIBUTE Attributes
 #define TARGETDATA(nm) nm##DataLayout
 #define LLVM_VERSION "3.4"
+#define TERRA_CAN_USE_MCJIT

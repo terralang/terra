@@ -48,7 +48,7 @@
 #include "llvmheaders_34.h"
 #else
 #error "unsupported LLVM version"
-#include "llvmheaders_33.h" //for OSX code completion
+#include "llvmheaders_34.h" //for OSX code completion
 #endif
 
 #endif

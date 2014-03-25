@@ -109,6 +109,7 @@ void usage() {
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
            "    -p <path> append <path> to package.path before executing code\n"
+           "    -m use LLVM's MCJIT\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
 
@@ -120,12 +121,13 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
         { "debugsymbols",   0,     NULL,           'g' },
         { "interactive",     0,     NULL,     'i' },
         { "path",      0,     NULL,           'p' },
+        { "mcjit", 0, NULL, 'm' },
         { NULL,        0,     NULL,            0 }
     };
     int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(argc, argv, "+hvgip:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvgimp:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
                 options->verbose++;
@@ -144,6 +146,9 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
                 break;
             case 'g':
                 options->debug = 1;
+                break;
+            case 'm':
+                options->usemcjit = 1;
                 break;
             case ':':
             case 'h':

@@ -77,6 +77,31 @@ struct DisassembleFunctionListener : public JITEventListener {
             fi.efd = EFD;
         }
     }
+#ifdef TERRA_CAN_USE_MCJIT
+    virtual void NotifyObjectEmitted(const ObjectImage &Obj) {
+        error_code err;
+        for(object::symbol_iterator I = Obj.begin_symbols(), E = Obj.end_symbols(); I != E; I.increment(err)) {
+            StringRef name;
+            err = I->getName(name);
+            object::SymbolRef::Type t;
+            I->getType(t);
+            if(t == object::SymbolRef::ST_Function && !name.endswith(".eh") && name.startswith("_")) {
+                uint64_t sz;
+                I->getSize(sz);
+                StringRef fname = name.substr(1);
+                Function * F = T->C->m->getFunction(fname);
+                if(F) {
+                    void * addr = (void*) T->C->ee->getFunctionAddress(fname);
+                    assert(addr);
+                    TerraFunctionInfo & fi = T->C->functioninfo[addr];
+                    fi.fn = F;
+                    fi.addr = addr;
+                    fi.size = sz;
+                }
+            }
+        }
+    }
+#endif
 };
 
 static double CurrentTimeInSeconds() {
@@ -207,7 +232,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
-    T->C->m = new Module("terra",*T->C->ctx);
+    
     
     TargetOptions options;
     DEBUG_ONLY(T) {
@@ -220,16 +245,32 @@ int terra_compilerinit(struct terra_State * T) {
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
     
-    T->C->ee = EngineBuilder(T->C->m).setErrorStr(&err)
-                                     .setEngineKind(EngineKind::JIT)
-                                     .setAllocateGVsWithCode(false)
-                                     .setTargetOptions(options)
-                                     .setOptLevel(CodeGenOpt::Aggressive)
-                                     .setJITMemoryManager(JMM)
-                                     .create();
+    if(T->options.usemcjit) {
+#ifndef TERRA_CAN_USE_MCJIT
+        terra_pusherror(T, "mcjit is not supported using LLVM " LLVM_VERSION);
+        return LUA_ERRRUN;
+#endif
+    }
+    
+    Module * topeemodule = new Module("terra",*T->C->ctx);
+    
+    T->C->ee = EngineBuilder(topeemodule).setErrorStr(&err)
+                                         .setEngineKind(EngineKind::JIT)
+                                         .setAllocateGVsWithCode(false)
+                                         .setUseMCJIT(T->options.usemcjit)
+                                         .setTargetOptions(options)
+                                         .setOptLevel(CodeGenOpt::Aggressive)
+                                         .setJITMemoryManager(JMM)
+                                         .create();
     if (!T->C->ee) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
+    }
+    
+    if(T->options.usemcjit) {
+        T->C->m = new Module("terra",*T->C->ctx);
+    } else {
+        T->C->m = topeemodule;
     }
     
     T->C->fpm = new FunctionPassManager(T->C->m);
@@ -2243,6 +2284,54 @@ static int terra_optimize(lua_State * L) {
     
     return 0;
 }
+#ifdef TERRA_CAN_USE_MCJIT
+struct CopyConnectedComponent : public ValueMaterializer {
+    ExecutionEngine * EE;
+    Module * dest;
+    Module * src;
+    ValueToValueMapTy VMap;
+    CopyConnectedComponent(ExecutionEngine * EE_, Module * dest_, Function * start)
+    : EE(EE_), dest(dest_), src(start->getParent()) {
+        copy(start);
+    }
+    Function * copy(Function * fn) {
+        Function * newfn = dest->getFunction(fn->getName());
+        if(!newfn) {
+            newfn = Function::Create(fn->getFunctionType(),fn->getLinkage(), fn->getName(),dest);
+            newfn->copyAttributesFrom(fn);
+        }
+        if(!fn->isDeclaration() && newfn->isDeclaration() && 0 == EE->getFunctionAddress(fn->getName())) {
+            for(Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(), E = fn->arg_end(); I != E; ++I, ++II) {
+                II->setName(I->getName());
+                VMap[I] = II;
+            }
+            VMap[fn] = newfn;
+            SmallVector<ReturnInst*,8> Returns;
+            CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+        }
+        return newfn;
+    }
+    virtual Value * materializeValueFor(Value * V) {
+        if(Function * F = dyn_cast<Function>(V)) {
+            assert(F->getParent() == src);
+            return copy(F);
+        } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
+            GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName());
+            newGV->copyAttributesFrom(GV);
+            if(!GV->isDeclaration()) {
+                if(0 != EE->getGlobalValueAddress(GV->getName())) {
+                    newGV->setExternallyInitialized(true);
+                } else if(GV->hasInitializer()) {
+                    Value * C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                    newGV->setInitializer(cast<Constant>(C));
+                }
+            }
+            return newGV;
+        }
+        return NULL;
+    }
+};
+#endif
 
 static int terra_jit(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
@@ -2259,31 +2348,21 @@ static int terra_jit(lua_State * L) {
         assert(func);
         ExecutionEngine * ee = T->C->ee;
         
-        if(flags.hasfield("usemcjit")) {
-            //THIS IS AN ENOURMOUS HACK.
-            //the execution engine will leak after this function
-            //eventually llvm will fix MCJIT so it can handle Modules that add functions later
-            //for now if we need it, we deal with the hacks...
-            LLVMLinkInJIT();
-            LLVMLinkInMCJIT();
-            std::vector<std::string> attr;
-            attr.push_back("+avx");
-            std::string err;
-            ee = EngineBuilder(T->C->m)
-                 .setUseMCJIT(true)
-                 .setMAttrs(attr)
-                 .setErrorStr(&err)
-                 .setEngineKind(EngineKind::JIT)
-                 .create(T->C->tm);
-            if (!ee) {
-                printf("llvm: %s\n",err.c_str());
-                abort();
-            }
-            ee->RegisterJITEventListener(T->C->jiteventlistener);
-
-        }
         double begin = CurrentTimeInSeconds();
-        void * ptr = ee->getPointerToFunction(func);
+        void * ptr;
+        if (T->options.usemcjit) {
+            #ifdef TERRA_CAN_USE_MCJIT
+            ptr = (void*) ee->getFunctionAddress(func->getName());
+            if(!ptr) {
+                Module * m = new Module(func->getName(),*T->C->ctx);
+                CopyConnectedComponent copy(T->C->ee,m,func);
+                ee->addModule(m);
+                ptr = (void*) ee->getFunctionAddress(func->getName());
+            }
+            #endif
+        } else {
+            ptr = ee->getPointerToFunction(func);
+        }
         RecordTime(&funcobj,"gen",begin);
         
         lua_pushlightuserdata(L, ptr);
@@ -2333,7 +2412,7 @@ static int terra_disassemble(lua_State * L) {
     void * addr = lua_touserdata(L, -1);
     TerraFunctionInfo & fi = T->C->functioninfo[addr];
     fi.fn->dump();
-    printf("assembly for function at address %p\n",fi.addr);
+    printf("assembly for function at address %p\n",addr);
     llvmutil_disassemblefunction(fi.addr, fi.size,0);
     return 0;
 }
