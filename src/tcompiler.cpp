@@ -1022,7 +1022,7 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
             size_t align = C->td->getPrefTypeAlignment(typ->type);
             Constant * arr = ConstantDataArray::get(*C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
             gv = new GlobalVariable(*C->m, arr->getType(),
-                                    true, GlobalValue::PrivateLinkage,
+                                    true, GlobalValue::ExternalLinkage,
                                     arr, "const");
             gv->setAlignment(align);
             gv->setUnnamedAddr(true);
@@ -1058,7 +1058,7 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
 
 
 static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const char * name) {
-    GlobalVariable * gv = (GlobalVariable *) global->ud("value");
+    GlobalVariable * gv = (GlobalVariable *) global->ud("llvm_value");
     if (gv == NULL) {
         Obj t;
         global->obj("type",&t);
@@ -1071,16 +1071,8 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
         }
         gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name);
         lua_pushlightuserdata(CC->L, gv);
-        global->setfield("value");
-        //TODO: eventually the initialization constant can be a constant expression that hasn't been defined yet
-        //so this would not be safe to do here
-        void * data = CC->C->ee->getPointerToGlobal(gv);
-        assert(data);
-        lua_pushlightuserdata(CC->L,data);
-        global->setfield("llvm_ptr");
+        global->setfield("llvm_value");
     }
-    void ** data = (void**) CC->C->ee->getPointerToGlobal(gv);
-    assert(gv != NULL);
     return gv;
 }
 
@@ -1115,7 +1107,7 @@ struct TerraCompiler {
     }
     
     void getOrCreateFunction(Obj * funcobj, Function ** rfn, TType ** rtyp) {
-        Function * fn = (Function *) funcobj->ud("llvm_function");
+        Function * fn = (Function *) funcobj->ud("llvm_value");
         Obj ftype;
         funcobj->obj("type",&ftype);
         *rtyp = getType(&ftype);
@@ -1132,7 +1124,7 @@ struct TerraCompiler {
                 }
             }
             lua_pushlightuserdata(L,fn);
-            funcobj->setfield("llvm_function");
+            funcobj->setfield("llvm_value");
 
             //attach a userdata object to the function that will call terra_deletefunction 
             //when the function variant is GC'd in lua
@@ -1758,16 +1750,9 @@ if(baseT->isIntegerTy()) { \
                 return GetConstant(&CC,&value);
             } break;
             case T_luafunction: {
-                Obj type,objType;
-                exp->obj("type",&type);
-                type.obj("type", &objType);
-                
-                FunctionType * fntyp = cast<FunctionType>(getType(&objType)->type);
-                assert(fntyp);
-                Function * fn = Function::Create(fntyp, Function::ExternalLinkage,"$", C->m);
                 void * ptr = exp->ud("fptr");
-                C->ee->addGlobalMapping(fn, ptr); //if we deserialize this function it will be necessary to relink this to the lua runtime
-                return fn;
+                Constant * ptrint = ConstantInt::get(C->td->getIntPtrType(*C->ctx), (intptr_t)ptr);
+                return ConstantExpr::getIntToPtr(ptrint, typeOfValue(exp)->type);
             } break;
             case T_apply: {
                 return emitCall(exp);
@@ -2187,27 +2172,6 @@ static int terra_codegen(lua_State * L) { //entry point into compiler from lua c
     return 0;
 }
 
-
-static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
-    terra_State * T = terra_getstate(L, 1);
-    
-    //create lua table to hold object references anchored on stack
-    int ref_table = lobj_newreftable(T->L);
-    
-    {
-        CCallingConv CC;
-        CC.init(T, T->C, NULL);
-        Obj global;
-        lua_pushvalue(T->L,-2); //original argument
-        global.initFromStack(T->L, ref_table);
-        GetGlobalVariable(&CC,&global,"anon");
-    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
-    lobj_removereftable(T->L,ref_table);
-    
-    return 0;
-}
-
 static int terra_llvmsizeof(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     int ref_table = lobj_newreftable(L);
@@ -2246,7 +2210,7 @@ static int terra_optimize(lua_State * L) {
         for(int i = 0; i < N; i++) {
             Obj funcobj;
             funclist.objAt(i,&funcobj);
-            Function * func = (Function*) funcobj.ud("llvm_function");
+            Function * func = (Function*) funcobj.ud("llvm_value");
             assert(func);
             scc.push_back(func);
             VERBOSE_ONLY(T) {
@@ -2263,7 +2227,7 @@ static int terra_optimize(lua_State * L) {
         for(int i = 0; i < N; i++) {
             Obj funcobj;
             funclist.objAt(i,&funcobj);
-            Function * func = (Function*) funcobj.ud("llvm_function");
+            Function * func = (Function*) funcobj.ud("llvm_value");
             assert(func);
             
             VERBOSE_ONLY(T) {
@@ -2290,31 +2254,28 @@ struct CopyConnectedComponent : public ValueMaterializer {
     Module * dest;
     Module * src;
     ValueToValueMapTy VMap;
-    CopyConnectedComponent(ExecutionEngine * EE_, Module * dest_, Function * start)
+    CopyConnectedComponent(ExecutionEngine * EE_, Module * dest_, GlobalValue * start)
     : EE(EE_), dest(dest_), src(start->getParent()) {
-        copy(start);
-    }
-    Function * copy(Function * fn) {
-        Function * newfn = dest->getFunction(fn->getName());
-        if(!newfn) {
-            newfn = Function::Create(fn->getFunctionType(),fn->getLinkage(), fn->getName(),dest);
-            newfn->copyAttributesFrom(fn);
-        }
-        if(!fn->isDeclaration() && newfn->isDeclaration() && 0 == EE->getFunctionAddress(fn->getName())) {
-            for(Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(), E = fn->arg_end(); I != E; ++I, ++II) {
-                II->setName(I->getName());
-                VMap[I] = II;
-            }
-            VMap[fn] = newfn;
-            SmallVector<ReturnInst*,8> Returns;
-            CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
-        }
-        return newfn;
+        materializeValueFor(start);
     }
     virtual Value * materializeValueFor(Value * V) {
-        if(Function * F = dyn_cast<Function>(V)) {
-            assert(F->getParent() == src);
-            return copy(F);
+        if(Function * fn = dyn_cast<Function>(V)) {
+            assert(fn->getParent() == src);
+            Function * newfn = dest->getFunction(fn->getName());
+            if(!newfn) {
+                newfn = Function::Create(fn->getFunctionType(),fn->getLinkage(), fn->getName(),dest);
+                newfn->copyAttributesFrom(fn);
+            }
+            if(!fn->isDeclaration() && newfn->isDeclaration() && 0 == EE->getFunctionAddress(fn->getName())) {
+                for(Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(), E = fn->arg_end(); I != E; ++I, ++II) {
+                    II->setName(I->getName());
+                    VMap[I] = II;
+                }
+                VMap[fn] = newfn;
+                SmallVector<ReturnInst*,8> Returns;
+                CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+            }
+            return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
             GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName());
             newGV->copyAttributesFrom(GV);
@@ -2333,6 +2294,26 @@ struct CopyConnectedComponent : public ValueMaterializer {
 };
 #endif
 
+static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
+    ExecutionEngine * ee = T->C->ee;
+    double begin = CurrentTimeInSeconds();
+    void * ptr;
+    if (T->options.usemcjit) {
+        #ifdef TERRA_CAN_USE_MCJIT
+        ptr = (void*) ee->getGlobalValueAddress(gv->getName());
+        if(!ptr) {
+            Module * m = new Module(gv->getName(),*T->C->ctx);
+            CopyConnectedComponent copy(T->C->ee,m,gv);
+            ee->addModule(m);
+            ptr = (void*) ee->getGlobalValueAddress(gv->getName());
+        }
+        #endif
+    } else {
+        ptr = ee->getPointerToGlobal(gv);
+    }
+    return ptr;
+}
+
 static int terra_jit(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     
@@ -2344,29 +2325,38 @@ static int terra_jit(lua_State * L) {
         jitobj.initFromStack(L, ref_table);
         jitobj.obj("func", &funcobj);
         jitobj.obj("flags",&flags);
-        Function * func = (Function*) funcobj.ud("llvm_function");
+        Function * func = (Function*) funcobj.ud("llvm_value");
         assert(func);
-        ExecutionEngine * ee = T->C->ee;
         
         double begin = CurrentTimeInSeconds();
-        void * ptr;
-        if (T->options.usemcjit) {
-            #ifdef TERRA_CAN_USE_MCJIT
-            ptr = (void*) ee->getFunctionAddress(func->getName());
-            if(!ptr) {
-                Module * m = new Module(func->getName(),*T->C->ctx);
-                CopyConnectedComponent copy(T->C->ee,m,func);
-                ee->addModule(m);
-                ptr = (void*) ee->getFunctionAddress(func->getName());
-            }
-            #endif
-        } else {
-            ptr = ee->getPointerToFunction(func);
-        }
+        void * ptr = JITGlobalValue(T,func);
         RecordTime(&funcobj,"gen",begin);
         
         lua_pushlightuserdata(L, ptr);
-        funcobj.setfield("fptr");
+        funcobj.setfield("llvm_ptr");
+    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
+    
+    lobj_removereftable(T->L,ref_table);
+    
+    return 0;
+}
+
+static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
+    terra_State * T = terra_getstate(L, 1);
+    
+    //create lua table to hold object references anchored on stack
+    int ref_table = lobj_newreftable(T->L);
+    
+    {
+        CCallingConv CC;
+        CC.init(T, T->C, NULL);
+        Obj global;
+        lua_pushvalue(T->L,-2); //original argument
+        global.initFromStack(T->L, ref_table);
+        GlobalVariable * gv = GetGlobalVariable(&CC,&global,"anon");
+        void * ptr = JITGlobalValue(T, gv);
+        lua_pushlightuserdata(L,ptr);
+        global.setfield("llvm_ptr");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);
@@ -2466,7 +2456,7 @@ static int terra_saveobjimpl(lua_State * L) {
             const char * key = luaL_checkstring(L, -2);
             Obj obj;
             obj.initFromStack(L, ref_table);
-            Function * fnold = (Function*) obj.ud("llvm_function");
+            Function * fnold = (Function*) obj.ud("llvm_value");
             assert(fnold);
             names.push_back(key);
             livefns.push_back(fnold);

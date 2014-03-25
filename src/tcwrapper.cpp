@@ -663,10 +663,10 @@ int register_c_function(lua_State * L) {
         llvm::Function * llvmfn = T->C->m->getFunction(name);
         assert(llvmfn);
         lua_pushlightuserdata(L, llvmfn);
-        fn.setfield("llvm_function");
+        fn.setfield("llvm_value");
         void * fptr = T->C->ee->getPointerToFunction(llvmfn);
         lua_pushlightuserdata(L, fptr);
-        fn.setfield("fptr");
+        fn.setfield("llvm_ptr");
     }
     lobj_removereftable(L, ref_table);
     

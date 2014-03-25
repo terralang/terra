@@ -95,7 +95,7 @@ int terra_cudacompile(lua_State * L) {
     lua_pushnil(L);
     while (lua_next(L, tbl) != 0) {
         const char * key = luaL_checkstring(L,-2);
-        lua_getfield(L,-1,"llvm_function");
+        lua_getfield(L,-1,"llvm_value");
         llvm::Function * fn = (llvm::Function*) lua_topointer(L,-1);
         assert(fn);
         fnnames.push_back(key);
