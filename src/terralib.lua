@@ -541,7 +541,7 @@ function terra.funcdefinition:initializecfunction(anchor)
     terra.registercfunction(self)
     --make sure all types for function are registered
     self.type:completefunction(anchor)
-    self.state = "compiled"
+    self.state = "emittedllvm"
 end
 
 function terra.funcdefinition:emitllvm(cont)
@@ -726,6 +726,7 @@ function terra.globalvar:getpointer()
         self.type:complete()
         terra.createglobal(self)
     end
+
     if not self.cdata_ptr then
         self.cdata_ptr = terra.cast(terra.types.pointer(self.type),self.llvm_ptr)
     end

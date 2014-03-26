@@ -651,39 +651,12 @@ int include_c(lua_State * L) {
     return 1;
 }
 
-int register_c_function(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    
-    int ref_table = lobj_newreftable(L);
-    {
-        Obj fn;
-        lua_pushvalue(L, -2);
-        fn.initFromStack(L,ref_table);
-        const char * name = fn.string("name");
-        llvm::Function * llvmfn = T->C->m->getFunction(name);
-        assert(llvmfn);
-        lua_pushlightuserdata(L, llvmfn);
-        fn.setfield("llvm_value");
-        void * fptr = T->C->ee->getPointerToFunction(llvmfn);
-        lua_pushlightuserdata(L, fptr);
-        fn.setfield("llvm_ptr");
-    }
-    lobj_removereftable(L, ref_table);
-    
-    
-    return 0;
-}
-
 void terra_cwrapperinit(terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,include_c,1);
     lua_setfield(T->L,-2,"registercfile");
-    
-    lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,register_c_function,1);
-    lua_setfield(T->L,-2,"registercfunction");
     
     lua_pop(T->L,-1); //terra object
 }

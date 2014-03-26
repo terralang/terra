@@ -1,5 +1,5 @@
 /* See Copyright Notice in ../LICENSE.txt */
-
+#include <pthread.h>
 #include "tcompiler.h"
 #include "tkind.h"
 #include "terrastate.h"
@@ -45,6 +45,7 @@ using namespace llvm;
                     all callee's of these functions that are not in this scc have already been optimized*/\
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
     _(createglobal,1) \
+    _(registercfunction,1) \
     _(llvmsizeof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
@@ -129,10 +130,11 @@ static int terra_currenttimeinseconds(lua_State * L) {
 static void RecordTime(Obj * obj, const char * name, double begin) {
     lua_State * L = obj->getState();
     Obj stats;
-    obj->obj("stats",&stats);
-    double end = CurrentTimeInSeconds();
-    lua_pushnumber(L, end - begin);
-    stats.setfield(name);
+    if(obj->obj("stats",&stats)) {
+        double end = CurrentTimeInSeconds();
+        lua_pushnumber(L, end - begin);
+        stats.setfield(name);
+    }
 }
 
 static void AddLLVMOptions(int N,...) {
@@ -2293,25 +2295,27 @@ struct CopyConnectedComponent : public ValueMaterializer {
     }
 };
 #endif
-
 static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     ExecutionEngine * ee = T->C->ee;
     double begin = CurrentTimeInSeconds();
     void * ptr;
     if (T->options.usemcjit) {
         #ifdef TERRA_CAN_USE_MCJIT
-        ptr = (void*) ee->getGlobalValueAddress(gv->getName());
-        if(!ptr) {
-            Module * m = new Module(gv->getName(),*T->C->ctx);
-            CopyConnectedComponent copy(T->C->ee,m,gv);
-            ee->addModule(m);
-            ptr = (void*) ee->getGlobalValueAddress(gv->getName());
+        if(gv->isDeclaration()) {
+            return ee->getPointerToNamedFunction(gv->getName());
         }
+        void * ptr = (void*) ee->getGlobalValueAddress(gv->getName());
+        if(ptr) {
+            return ptr;
+        }
+        Module * m = new Module(gv->getName(),*T->C->ctx);
+        CopyConnectedComponent copy(T->C->ee,m,gv);
+        ee->addModule(m);
+        return (void*) ee->getGlobalValueAddress(gv->getName());
         #endif
     } else {
-        ptr = ee->getPointerToGlobal(gv);
+        return ee->getPointerToGlobal(gv);
     }
-    return ptr;
 }
 
 static int terra_jit(lua_State * L) {
@@ -2364,7 +2368,25 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
     return 0;
 }
 
+static int terra_registercfunction(lua_State * L) {
+    terra_State * T = terra_getstate(L, 1);
+    int ref_table = lobj_newreftable(L);
+    {
+        Obj fn;
+        lua_pushvalue(L, -2);
+        fn.initFromStack(L,ref_table);
+        const char * name = fn.string("name");
+        llvm::Function * llvmfn = T->C->m->getFunction(name);
+        assert(llvmfn);
+        lua_pushlightuserdata(L, llvmfn);
+        fn.setfield("llvm_value");
+    }
+    lobj_removereftable(L, ref_table);
+    return 0;
+}
+
 static int terra_deletefunction(lua_State * L) {
+    return 0;
     terra_State * T = terra_getstate(L, 1);
     
     Function ** fp = (Function**) lua_touserdata(L,-1);
@@ -2374,7 +2396,8 @@ static int terra_deletefunction(lua_State * L) {
     VERBOSE_ONLY(T) {
         printf("deleting function: %s\n",func->getName().str().c_str());
     }
-    if(T->C->ee->getPointerToGlobalIfAvailable(func)) {
+    //MCJIT can't free individual functions, so we need to leak the generated code
+    if(!T->options.usemcjit && T->C->ee->getPointerToGlobalIfAvailable(func)) {
         VERBOSE_ONLY(T) {
             printf("... and deleting generated code\n");
         }
@@ -2398,7 +2421,7 @@ static int terra_deletefunction(lua_State * L) {
 static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     
-    lua_getfield(L,-1,"fptr");
+    lua_getfield(L,-1,"llvm_ptr");
     void * addr = lua_touserdata(L, -1);
     TerraFunctionInfo & fi = T->C->functioninfo[addr];
     fi.fn->dump();
