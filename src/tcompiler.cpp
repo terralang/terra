@@ -2386,9 +2386,7 @@ static int terra_registercfunction(lua_State * L) {
 }
 
 static int terra_deletefunction(lua_State * L) {
-    return 0;
     terra_State * T = terra_getstate(L, 1);
-    
     Function ** fp = (Function**) lua_touserdata(L,-1);
     assert(fp);
     Function * func = (Function*) *fp;
@@ -2403,7 +2401,7 @@ static int terra_deletefunction(lua_State * L) {
         }
         T->C->ee->freeMachineCodeForFunction(func); 
     }
-    if(!func->use_empty()) {
+    if(!func->use_empty() || T->options.usemcjit) { //for MCJIT, we need to keep the declaration so another function doesn't get the same name
         VERBOSE_ONLY(T) {
             printf("... uses not empty, removing body but keeping declaration.\n");
         }
