@@ -256,14 +256,19 @@ int terra_compilerinit(struct terra_State * T) {
     
     Module * topeemodule = new Module("terra",*T->C->ctx);
     
-    T->C->ee = EngineBuilder(topeemodule).setErrorStr(&err)
-                                         .setEngineKind(EngineKind::JIT)
-                                         .setAllocateGVsWithCode(false)
-                                         .setUseMCJIT(T->options.usemcjit)
-                                         .setTargetOptions(options)
-                                         .setOptLevel(CodeGenOpt::Aggressive)
-                                         .setJITMemoryManager(JMM)
-                                         .create();
+    EngineBuilder eb(topeemodule);
+    eb.setErrorStr(&err)
+      .setEngineKind(EngineKind::JIT)
+      .setAllocateGVsWithCode(false)
+      .setUseMCJIT(T->options.usemcjit)
+      .setTargetOptions(options)
+      .setOptLevel(CodeGenOpt::Aggressive);
+    
+    if(!T->options.usemcjit) //make sure we don't use JMM for MCJIT, since it will not correctly invalidate icaches on archiectures that need it
+        eb.setJITMemoryManager(JMM);
+ 
+    T->C->ee = eb.create();
+    
     if (!T->C->ee) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
