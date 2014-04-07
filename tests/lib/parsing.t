@@ -93,13 +93,12 @@ P.pratt.__call = function(pratt,parser,precortoken,fixity)
 	return unpack(results)
 end
 
---entry-point that starts parsing
+
+--create a parser
 --langtable is the table of non-terminal functions and/or pratt parser objects
 --lexer is the lexer object given by the language extension interface
---nonterminal is the name (e.g. "expression") of the non-terminal to use as the starting point in the langtable
---returns the AST produced by non-terminal rule
-function P.Parse(langtable,lexer,nonterminal)
-	local instance = {}
+function P.Parser(langtable,lexer)
+    local instance = {}
 	for k,v in pairs(lexer) do
 		if type(v) == "function" then
 			instance[k] = function(self,...) return v(lexer,...) end
@@ -111,7 +110,15 @@ function P.Parse(langtable,lexer,nonterminal)
 		if instance[k] then error("language nonterminal overlaps with lexer function "..k) end
 		instance[k] = v
 	end
-	return instance[nonterminal](instance)
+	return instance
 end
+
+--create a parser and run a non-terminal in one go
+--nonterminal is the name (e.g. "expression") of the non-terminal to use as the starting point in the langtable
+function P.Parse(langtable,lexer,nonterminal)
+	local self = P.Parser(langtable,lexer)
+	return self[nonterminal](self)
+end
+
 
 return P
