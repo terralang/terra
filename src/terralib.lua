@@ -3023,10 +3023,13 @@ function terra.funcdefinition:typecheck()
                 if v.type:isstruct() then
                     local ret, success = insertselect(v,field)
                     if not success then
-                        --struct has no member field, look for a getter __get<field>
-                        local getter = type(v.type.metamethods.__get) == "table" and v.type.metamethods.__get[field]
-                        if getter then
-                            getter = terra.createterraexpression(diag, e, getter) 
+                        --struct has no member field, call metamethod __entrymissing
+                        local typ = v.type
+                        if terra.ismacro(typ.metamethods.__entrymissing) then
+                            local named = terra.internalmacro(function(ctx,tree,...)
+                                return typ.metamethods.__entrymissing:run(ctx,tree,field,...)
+                            end)
+                            local getter = terra.createterraexpression(diag, e, named) 
                             return checkcall(v, terra.newlist{ getter }, terra.newlist { v }, "first", false, false)
                         else
                             diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
