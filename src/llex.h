@@ -30,7 +30,7 @@ enum RESERVED {
 };
 
 /* number of reserved words */
-#define NUM_RESERVED    (cast(int, TK_IMPORT-FIRST_RESERVED+1))
+#define NUM_RESERVED    (cast(int, TK_DEFER-FIRST_RESERVED+1))
 
 
 typedef struct {

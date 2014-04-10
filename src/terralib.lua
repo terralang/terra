@@ -3335,6 +3335,12 @@ function terra.funcdefinition:typecheck()
             return checkmethod(s,true)
         elseif s:is "treelist" then
             return checklet(s,s.trees or s.statements, s.expressions)
+        elseif s:is "defer" then
+            local call = checkexp(s.expression)
+            if not call:is "apply" then
+                diag:reporterror(s.expression,"deferred statement must resolve to a function call")
+            end
+            return s:copy { expression = call }
         else
             return checkexp(s)
         end
@@ -3697,6 +3703,10 @@ local function printpretty(toptree,returntype)
             emitParamList(s.lhs)
             emit(" = ")
             emitParamList(s.rhs)
+            emit("\n")
+        elseif s:is "defer" then
+            begin("defer ")
+            emitExp(s.expression)
             emit("\n")
         else
             begin("")

@@ -1761,7 +1761,7 @@ if(baseT->isIntegerTy()) { \
                 return ConstantExpr::getIntToPtr(ptrint, typeOfValue(exp)->type);
             } break;
             case T_apply: {
-                return emitCall(exp);
+                return emitCall(exp,false);
             } break;
             case T_cast: {
                 Obj a;
@@ -1968,7 +1968,7 @@ if(baseT->isIntegerTy()) { \
         }
         return bb;
     }
-    Value * emitCall(Obj * call) {
+    Value * emitCall(Obj * call, bool defer) {
         Obj paramlist;
         Obj paramtypes;
         Obj func;
@@ -1986,6 +1986,8 @@ if(baseT->isIntegerTy()) { \
         
         std::vector<Value*> actuals;
         emitExpressionList(&paramlist,true,&actuals);
+        
+        //TODO: if defer is true, issue call to a new basic block and add it to the list BB to be run at scope exit
         
         return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
     }
@@ -2154,6 +2156,11 @@ if(baseT->isIntegerTy()) { \
                 int N = lhsexps.size();
                 for(int i = 0; i < N; i++)
                     B->CreateStore(rhsexps[i],lhsexps[i]);
+            } break;
+            case T_defer: {
+                Obj expression;
+                stmt->obj("expression",&expression);
+                emitCall(&expression, true);
             } break;
             default: {
                 emitExp(stmt,false);
