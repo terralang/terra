@@ -247,11 +247,6 @@ struct FileInfo {
     FILE * file;
     char buf[512];
 };
-static const char * file_reader(lua_State * T, void * fi, size_t *sz) {
-    FileInfo * fileinfo = (FileInfo*) fi;
-    *sz = fread(fileinfo->buf,1,512,fileinfo->file);
-    return fileinfo->buf;
-}
 
 int terra_load(lua_State *L,lua_Reader reader, void *data, const char *chunkname) {
     int st = lua_gettop(L);

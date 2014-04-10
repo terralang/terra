@@ -233,12 +233,6 @@ static void refvariable(LexState * ls, TString * varname) {
   }
 }
 
-/* semantic error */
-static l_noret semerror (LexState *ls, const char *msg) {
-  ls->t.token = 0;  /* remove 'near to' from final message */
-  luaX_syntaxerror(ls, msg);
-}
-
 static l_noret error_expected (LexState *ls, int token) {
   luaX_syntaxerror(ls,
       luaS_cstringf(ls->LP, "%s expected", luaX_token2str(ls, token)));
@@ -355,10 +349,6 @@ static void enterblock (FuncState *fs, BlockCnt *bl, lu_byte isloop) {
   //printf("previous is %lld\n", (long long int)bl->previous);
 }
 
-static void breaklabel (LexState *ls) {
-
-}
-
 static void leaveblock (FuncState *fs) {
   BlockCnt *bl = fs->bl;
   LexState *ls = fs->ls;
@@ -394,8 +384,6 @@ static void leaveterra(LexState * ls) {
 }
 
 static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
-  terra_State *L = ls->LP;
-  Proto *f;
   fs->prev = ls->fs;  /* linked list of funcstates */
   fs->bl = (fs->prev) ? ls->fs->bl : NULL;
   fs->ls = ls;
@@ -408,7 +396,6 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
 
 
 static void close_func (LexState *ls) {
-  terra_State *L = ls->LP;
   FuncState *fs = ls->fs;
   leaveblock(fs);
   ls->fs = fs->prev;
@@ -473,17 +460,6 @@ static void statlist (LexState *ls) {
       add_entry(ls,tbl);
     }
   }
-}
-
-
-static void fieldsel (LexState *ls) {
-  /* fieldsel -> ['.' | ':'] NAME */
-  FuncState *fs = ls->fs;
-  luaX_next(ls);  /* skip the dot or colon */
-  int tbl = new_table_before(ls,T_selectconst, true);
-  add_field(ls,tbl,"value");
-  push_string(ls,str_checkname(ls));
-  add_field(ls,tbl,"field");
 }
 
 static void push_literal(LexState * ls, const char * typ) {
@@ -605,7 +581,6 @@ static void field (LexState *ls, struct ConsControl *cc) {
 static void constructor (LexState *ls) {
   /* constructor -> '{' [ field { sep field } [sep] ] '}'
      sep -> ',' | ';' */
-  FuncState *fs = ls->fs;
   int line = ls->linenumber;
   struct ConsControl cc;
   cc.na = cc.nh = 0;
@@ -785,8 +760,6 @@ static int explist (LexState *ls) {
 
 
 static void funcargs (LexState *ls, int line) {
-  FuncState *fs = ls->fs;
-  int base, nparams;
   switch (ls->t.token) {
     case '(': {  /* funcargs -> `(' [ explist ] `)' */
       luaX_next(ls);
@@ -870,7 +843,6 @@ static int issplitprimary(LexState * ls) {
 static void primaryexp (LexState *ls) {
   /* primaryexp ->
         prefixexp { `.' NAME | `[' exp `]' | `:' NAME funcargs | funcargs } */
-  FuncState *fs = ls->fs;
   int line = ls->linenumber;
   RETURNS_1(prefixexp(ls));
   for (;;) {
@@ -967,7 +939,6 @@ static void doquote(LexState * ls, bool isexp) {
         check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
     }
-    int tbl = lua_gettop(ls->L);
     
     luaX_patchbegin(ls,&begin);
     int id = store_value(ls);
@@ -1197,8 +1168,6 @@ static BinOpr subexpr (LexState *ls, int limit) {
   Token begintoken = ls->t;
   
   if (uop != OPR_NOUNOPR) {
-    
-    int line = ls->linenumber;
     int tbl = new_table(ls,T_operator);
     push_kind(ls,luaX_token2rawstr(ls,ls->t.token));
     add_field(ls,tbl,"operator");
@@ -1228,7 +1197,6 @@ static BinOpr subexpr (LexState *ls, int limit) {
   check_lua_operator(ls,ls->t.token);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     BinOpr nextop;
-    int line = ls->linenumber;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
     int tbl = new_table_before(ls,T_operator,true); //need to create this before we call next to ensure we record the right position
@@ -1304,9 +1272,6 @@ static void luaexpr(LexState * ls) {
     RETURNS_1(expr(ls));
     leaveblock(fs);
     ls->in_terra = in_terra;
-    
-    const char * output;
-    int N;
     
     ExprReaderData data;
     data.step = 0;
@@ -1396,9 +1361,6 @@ static void cond (LexState *ls) {
 
 
 static void gotostat (LexState *ls) {
-  int line = ls->linenumber;
-  TString *label;
-  int g;
   if (testnext(ls, TK_GOTO)) {
     int tbl = new_table(ls,T_goto);
     
@@ -1406,9 +1368,8 @@ static void gotostat (LexState *ls) {
     add_field(ls,tbl,"label");
 
   } else {
-    int tbl = new_table(ls,T_break);
+    new_table(ls,T_break);
     luaX_next(ls);  /* skip break */
-    label = luaS_new(ls->LP, "break");
   }
 
 }
@@ -1418,7 +1379,6 @@ static void labelstat (LexState *ls) {
   /* label -> '::' NAME '::' */
   int tbl = new_table(ls,T_label);
   RETURNS_1(checksymbol(ls,NULL));
-  FuncState *fs = ls->fs;
   checknext(ls, TK_DBCOLON);  /* skip double colon */
   /* create new entry for this label */
   /* skip other no-op statements */
@@ -1431,7 +1391,6 @@ static void whilestat (LexState *ls, int line) {
   FuncState *fs = ls->fs;
   //int whileinit;
   int tbl = new_table(ls,T_while);
-  int condexit;
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
   RETURNS_1(cond(ls));
@@ -1447,7 +1406,6 @@ static void whilestat (LexState *ls, int line) {
 
 static void repeatstat (LexState *ls, int line) {
   /* repeatstat -> REPEAT block UNTIL cond */
-  int condexit;
   FuncState *fs = ls->fs;
   BlockCnt bl1, bl2;
   enterblock(fs, &bl1, 1);  /* loop block */
@@ -1486,7 +1444,6 @@ static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl
 
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
-  FuncState *fs = ls->fs;
   int tbl = new_table_before(ls,T_fornum);
   add_field(ls,tbl,"varname");
   checknext(ls, '=');
@@ -1512,7 +1469,6 @@ static void fornum (LexState *ls, TString *varname, int line) {
 
 static void forlist (LexState *ls, TString *indexname) {
   /* forlist -> NAME {,NAME} IN explist forbody */
-  FuncState *fs = ls->fs;
   int nvars = 4;  /* gen, state, control, plus at least one declared var */
   int line;
   int tbl = new_table_before(ls,T_forlist);
@@ -1560,7 +1516,6 @@ static void forstat (LexState *ls, int line) {
 static void test_then_block (LexState *ls) {
   /* test_then_block -> [IF | ELSEIF] cond THEN block */
   BlockCnt bl;
-  FuncState *fs = ls->fs;
   luaX_next(ls);  /* skip IF or ELSEIF */
   int tbl = new_table(ls,T_ifbranch);
   RETURNS_1(cond(ls));  /* read condition */
@@ -1572,7 +1527,6 @@ static void test_then_block (LexState *ls) {
 
 static void ifstat (LexState *ls, int line) {
   /* ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END */
-  FuncState *fs = ls->fs;
   int tbl = new_table(ls,T_if);
   int branches = new_list(ls);
   RETURNS_1(test_then_block(ls));  /* IF cond THEN block */
@@ -1590,39 +1544,11 @@ static void ifstat (LexState *ls, int line) {
 }
 
 static void localfunc (LexState *ls) {
-  FuncState *fs = ls->fs;
   TString * name = str_checkname(ls);
   definevariable(ls, name);
   body(ls, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
   
-}
-
-static TString * varappendname(LexState * ls, int nametable, Name * name) {
-  TString * vname = str_checkname(ls);
-  Name_add(name,vname);
-  push_string(ls, vname);
-  add_entry(ls, nametable);
-  return vname;
-}
-
-//terra variables appearing at global scope
-static void varname (LexState *ls, int islocal, Name * name) {
-  /* funcname -> NAME {fieldsel} */
-  int nametable = new_list(ls);
-  
-  TString * vname = varappendname(ls,nametable,name);
-  while(!islocal && testnext(ls, '.'))
-    varappendname(ls, nametable, name);
-    
-  int tbl = new_table_before(ls, T_entry);
-  add_field(ls,tbl,"name");
-
-  if(testnext(ls, ':')) {
-    RETURNS_1(terratype(ls));
-    add_field(ls,tbl,"type");
-  }
-
 }
 
 void print_name_list(LexState * ls, std::vector<Name> * definednames) {
@@ -1864,7 +1790,6 @@ static void terrastats(LexState * ls, bool emittedlocal) {
 
 static void exprstat (LexState *ls) {
   /* stat -> func | assignment */
-  FuncState *fs = ls->fs;
   RETURNS_1(lhsexp(ls));
   if(ls->t.token != '=' && ls->t.token != ',')  { /* stat -> func */
     //nop
@@ -1878,7 +1803,6 @@ static void exprstat (LexState *ls) {
 
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
-  FuncState *fs = ls->fs;
   int tbl = new_table(ls,T_return);
   int first, nret;  /* registers with returned values */
   if (block_follow(ls, 1) || ls->t.token == ';') {
@@ -2098,7 +2022,6 @@ static int le_luaexpr(lua_State * L) {
 static void languageextension(LexState * ls, int isstatement, int islocal) {
     lua_State * L = ls->L;
     Token begin = ls->t;
-    int ismethod;
     std::vector<Name> names;
     TerraCnt tc;
     
@@ -2216,6 +2139,9 @@ static void cleanup(LexState * ls) {
 
 int luaY_parser (terra_State *T, ZIO *z,
                     const char *name, int firstchar) {
+  (void)dump; //suppress warning for unused debugging functions
+  (void)dump_stack; 
+  (void)printtreesandnames;
   LexState lexstate;
   FuncState funcstate;
   //memset(&lexstate,0,sizeof(LexState));

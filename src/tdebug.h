@@ -2,7 +2,7 @@
 #define _tdebug_h
 
 struct terra_State;
-namespace llvm { struct JITMemoryManager; }
+namespace llvm { class JITMemoryManager; }
 
 int terra_debuginit(struct terra_State * T, llvm::JITMemoryManager * JMM);
 

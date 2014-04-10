@@ -151,7 +151,7 @@ static void AddLLVMOptions(int N,...) {
 
 //useful for debugging GC problems. You can attach it to 
 static int terra_gcdebug(lua_State * L) {
-    Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function*));
+    lua_newuserdata(L,sizeof(void*));
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"llvm_gcdebugmetatable");
     lua_setmetatable(L,-3);
@@ -1321,7 +1321,6 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         }
         */
         
-        BasicBlock * startB = B->GetInsertBlock();
         BasicBlock * stmtB = createAndInsertBB((isAnd) ? "and.rhs" : "or.rhs");
         BasicBlock * mergeB = createBB((isAnd) ? "and.end" : "or.end");
         
@@ -1806,7 +1805,7 @@ if(baseT->isIntegerTy()) { \
             case T_select: {
                 Obj obj,typ;
                 exp->obj("value",&obj);
-                TType * vt = typeOfValue(&obj);
+                /*TType * vt =*/typeOfValue(&obj);
                 
                 obj.obj("type",&typ);
                 int offset = exp->number("index");
@@ -2302,8 +2301,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #endif
 static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     ExecutionEngine * ee = T->C->ee;
-    double begin = CurrentTimeInSeconds();
-    void * ptr;
     if (T->options.usemcjit) {
         #ifdef TERRA_CAN_USE_MCJIT
         if(gv->isDeclaration()) {

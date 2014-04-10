@@ -332,7 +332,6 @@ static void read_numeral (LexState *ls, SemInfo *seminfo) {
   assert(lisdigit(ls->current));
   bool hasdecpoint = false;
  
-  bool endsinf = false;
   int c, xp = 'e';
   assert(lisdigit(ls->current));
   if ((c = ls->current) == '0') {
@@ -542,6 +541,7 @@ static void dump_stack(lua_State * L, int elem) {
 }
 
 static int llex (LexState *ls, SemInfo *seminfo) {
+  (void) dump_stack; //suppress unused warning for debugging function
   luaZ_resetbuffer(ls->buff);
   seminfo->buffer_begin = ls->output_buffer.N - 1; //- 1 because we already recorded the first token
   seminfo->linebegin = ls->linenumber; //no -1 because we haven't incremented line info for this token yet

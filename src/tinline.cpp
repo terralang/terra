@@ -28,7 +28,7 @@ ManualInliner::ManualInliner(TargetMachine * TM, Module * m) {
 void ManualInliner::eraseFunction(Function * F) {
     CallGraphNode * n = CG->getOrInsertFunction(F);
     n->removeAllCalledFunctions();
-    Function * FF = CG->removeFunctionFromModule(n);
+    CG->removeFunctionFromModule(n);
     delete F;
 }
 void ManualInliner::run(std::vector<Function *> * fns) {

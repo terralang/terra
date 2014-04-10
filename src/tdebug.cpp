@@ -143,7 +143,6 @@ static void printstacktrace(void * uap, void * data) {
 }
 
 static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, const char ** name, size_t * N, terra_CompilerState * C) {
-    const Function * fn;
     const TerraFunctionInfo * fi;
     if(!stacktrace_findsymbol(C, (uintptr_t)ip, &fi))
         return false;

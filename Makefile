@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -g $(INCLUDE_PATH) -fPIC
+FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)

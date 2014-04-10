@@ -124,7 +124,6 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
         { "mcjit", 0, NULL, 'm' },
         { NULL,        0,     NULL,            0 }
     };
-    int verbose = 0;
     /*  Parse commandline options  */
     opterr = 0;
     while ((ch = getopt_long(argc, argv, "+hvgimp:", longopts, NULL)) != -1) {

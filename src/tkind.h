@@ -78,7 +78,6 @@ _(vectorconstructor,"vectorconstructor") \
 _(arrayconstructor,"arrayconstructor") \
 _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
-_(selectconst, "selectconst") \
 _(treelist, "treelist") \
 _(typedexpression, "typedexpression") \
 _(intrinsic, "intrinsic") \
