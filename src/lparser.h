@@ -15,15 +15,6 @@
 ** Expression descriptor
 */
 
-typedef enum {
-  ECALL,
-  EVOID
-} expkind;
-
-typedef struct expdesc {
-  expkind k;
-} expdesc;
-
 /* control of blocks */
 struct BlockCnt;  /* defined in lparser.c */
 
