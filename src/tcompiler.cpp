@@ -2099,7 +2099,7 @@ if(baseT->isIntegerTy()) { \
                 Obj lbl;
                 stmt->obj("definition",&lbl);
                 BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
-                //TODO: emitDeferred
+                emitDeferred(stmt->number("deferred"));
                 B->CreateBr(bb);
                 startDeadCode();
             } break;
@@ -2108,7 +2108,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("breaktable",&def);
                 BasicBlock * breakpoint = (BasicBlock *) def.ud("value");
                 assert(breakpoint);
-                //TODO: emitDeferred
+                emitDeferred(stmt->number("deferred"));
                 B->CreateBr(breakpoint);
                 startDeadCode();
             } break;

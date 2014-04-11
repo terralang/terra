@@ -9,7 +9,7 @@ terra d(a : int)
         error(cur)
     end
     cur = cur + 1
-    C.printf("d%d\n",a)
+    --C.printf("d%d\n",a)
 end
 d:setinlined(false)
 

@@ -3216,14 +3216,43 @@ function terra.funcdefinition:typecheck()
     
     local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
     local loopstmts = terra.newlist() -- stack of loopstatements (for resolving where a break goes)
+    local scopeposition = terra.newlist() --list(int), count of number of defer statements seens at each level of block scope, used for unwinding defer statements during break/goto
     
+    
+    local function getscopeposition()
+        local sp = terra.newlist()
+        for i,p in ipairs(scopeposition) do sp[i] = p end
+        return sp
+    end
     local function enterloop()
-        local bt = {}
+        local bt = {position = getscopeposition()}
         loopstmts:insert(bt)
         return bt
     end
     local function leaveloop()
         loopstmts:remove()
+    end
+    --calculate the number of deferred statements that will fire when jumping from stack position 'from' to 'to'
+    --if a goto crosses a deferred statement, we detect that and report an error
+    local function numberofdeferredpassed(anchor,from,to)
+        local N = math.max(#from,#to)
+        for i = 1,N do
+            local t,f = to[i] or 0, from[i] or 0
+            if t < f then
+                local c = f - t
+                for j = i+1,N do
+                    if (to[j] or 0) ~= 0 then
+                        diag:reporterror(anchor,"goto crosses the scope of a deferred statement")
+                    end
+                    c = c + (from[j] or 0)
+                end
+                return c
+            elseif t > f then
+                diag:reporterror(anchor,"goto crosses the scope of a deferred statement")
+                return 0
+            end
+        end
+        return 0
     end
     
     local function createassignment(anchor,lhs,rhs)
@@ -3258,7 +3287,9 @@ function terra.funcdefinition:typecheck()
     function checkstmt(s)
         if s:is "block" then
             symbolenv:enterblock()
+            scopeposition:insert(0)
             local r = checkstmt(s.body)
+            table.remove(scopeposition)
             symbolenv:leaveblock()
             return s:copy {body = r}
         elseif s:is "return" then
@@ -3269,6 +3300,7 @@ function terra.funcdefinition:typecheck()
             local ss = s:copy {}
             local label = checksymbol(ss.value)
             ss.labelname = tostring(label)
+            ss.position = getscopeposition()
             local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
                 diag:reporterror(s,"label defined twice")
@@ -3276,6 +3308,7 @@ function terra.funcdefinition:typecheck()
             else
                 for _,v in ipairs(lbls) do
                     v.definition = ss
+                    v.deferred = numberofdeferredpassed(v,v.position,ss.position)
                 end
             end
             labels[label] = ss
@@ -3286,7 +3319,9 @@ function terra.funcdefinition:typecheck()
             local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
                 ss.definition = lbls
+                ss.deferred = numberofdeferredpassed(s,scopeposition,ss.definition.position)
             else
+                ss.position = getscopeposition()
                 lbls:insert(ss)
             end
             labels[label] = lbls
@@ -3297,6 +3332,7 @@ function terra.funcdefinition:typecheck()
                 diag:reporterror(s,"break found outside a loop")
             else
                 ss.breaktable = loopstmts[#loopstmts]
+                ss.deferred = numberofdeferredpassed(s,scopeposition,ss.breaktable.position)
             end
             return ss
         elseif s:is "while" then
@@ -3340,6 +3376,7 @@ function terra.funcdefinition:typecheck()
             if not call:is "apply" then
                 diag:reporterror(s.expression,"deferred statement must resolve to a function call")
             end
+            scopeposition[#scopeposition] = scopeposition[#scopeposition] + 1
             return s:copy { expression = call }
         else
             return checkexp(s)
@@ -3657,9 +3694,9 @@ local function printpretty(toptree,returntype)
         elseif s:is "label" then
             begin("::%s::\n",s.labelname or s.value)
         elseif s:is "goto" then
-            begin("goto %s\n",s.definition and s.definition.labelname or s.label)
+            begin("goto %s (%s)\n",s.definition and s.definition.labelname or s.label,s.deferred or "")
         elseif s:is "break" then
-            begin("break\n")
+            begin("break (%s)\n",s.deferred or "")
         elseif s:is "while" then
             begin("while ")
             emitExp(s.condition)
