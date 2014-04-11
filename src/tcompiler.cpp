@@ -1096,6 +1096,7 @@ struct TerraCompiler {
     Function * func;
     TType * func_type;
     CCallingConv CC;
+    std::vector<BasicBlock *> deferred;
     
     TType * getType(Obj * v) {
         return CC.GetType(v);
@@ -1986,10 +1987,15 @@ if(baseT->isIntegerTy()) { \
         
         std::vector<Value*> actuals;
         emitExpressionList(&paramlist,true,&actuals);
-        
-        //TODO: if defer is true, issue call to a new basic block and add it to the list BB to be run at scope exit
-        
-        return CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
+        BasicBlock * cur = B->GetInsertBlock();
+        if(defer) {
+            BasicBlock * bb = createAndInsertBB("defer");
+            setInsertBlock(bb);
+            deferred.push_back(bb);
+        }
+        Value * r = CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
+        setInsertBlock(cur); //defer may have changed it
+        return r;
     }
     
     void emitReturnUndef() {
@@ -2042,15 +2048,36 @@ if(baseT->isIntegerTy()) { \
         BasicBlock * bb = createAndInsertBB("dead");
         setInsertBlock(bb);
     }
-    
+    //emit an exit path that includes the most recent num deferred statements
+    //this is used by gotos,returns, and breaks. unlike scope ends it copies the dtor stack
+    void emitDeferred(size_t num) {
+        ValueToValueMapTy VMap;
+        for(size_t i = 0; i < num; i++) {
+            BasicBlock * bb = deferred[deferred.size() - 1 - i];
+            bb = CloneBasicBlock(bb, VMap);
+            insertBB(bb);
+            B->CreateBr(bb);
+            setInsertBlock(bb);
+        }
+    }
+    //unwind deferred and remove them from dtor stack, no need to copy the BB, since this is its last use
+    void unwindDeferred(size_t to) {
+        for(; deferred.size() > to; deferred.pop_back()) {
+            BasicBlock * bb = deferred.back();
+            B->CreateBr(bb);
+            setInsertBlock(bb);
+        }
+    }
     void emitStmt(Obj * stmt) {
         setDebugPoint(stmt);
         T_Kind kind = stmt->kind("kind");
         switch(kind) {
             case T_block: {
+                size_t N = deferred.size();
                 Obj treelist;
                 stmt->obj("body",&treelist);
                 emitStmt(&treelist);
+                unwindDeferred(N);
             } break;
             case T_return: {
                 Obj exp;
@@ -2058,6 +2085,7 @@ if(baseT->isIntegerTy()) { \
                 Value * result = emitExp(&exp);;
                 Obj ftype;
                 funcobj.obj("type",&ftype);
+                emitDeferred(deferred.size());
                 CC.EmitReturn(&ftype,func,result);
                 startDeadCode();
             } break;
@@ -2071,6 +2099,7 @@ if(baseT->isIntegerTy()) { \
                 Obj lbl;
                 stmt->obj("definition",&lbl);
                 BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
+                //TODO: emitDeferred
                 B->CreateBr(bb);
                 startDeadCode();
             } break;
@@ -2079,6 +2108,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("breaktable",&def);
                 BasicBlock * breakpoint = (BasicBlock *) def.ud("value");
                 assert(breakpoint);
+                //TODO: emitDeferred
                 B->CreateBr(breakpoint);
                 startDeadCode();
             } break;
@@ -2138,11 +2168,23 @@ if(baseT->isIntegerTy()) { \
                 
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
+                size_t N = deferred.size();
                 emitStmt(&body);
+                if(N < deferred.size()) { //because the body and the conditional are in the same block scope
+                                          //we need special handling for deferred
+                                          //along the back edge of the loop we must emit the deferred blocks
+                    BasicBlock * backedge = createAndInsertBB("repeatdeferred");
+                    setInsertBlock(backedge);
+                    emitDeferred(deferred.size() - N);
+                    B->CreateBr(loopBody);
+                    setInsertBlock(loopBody);
+                    loopBody = backedge;
+                }
                 emitBranchOnExpr(&cond, merge, loopBody);
+                
                 insertBB(merge);
                 setInsertBlock(merge);
-                
+                unwindDeferred(N);
             } break;
             case T_assignment: {
                 std::vector<Value *> rhsexps;
