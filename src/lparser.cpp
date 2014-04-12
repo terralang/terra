@@ -605,22 +605,31 @@ static void structfield (LexState *ls) {
   add_field(ls,tbl,"type");
 }
 
-static void structconstructor(LexState * ls, T_Kind kind) {
-    // already parsed 'struct' or 'struct' name.
-    //starting at '{'
+static void structbody(LexState * ls) {
     int line = ls->linenumber;
-    int tbl = new_table(ls,kind);
     int records = new_list(ls);
     checknext(ls,'{');
     do {
        if (ls->t.token == '}') break;
        if(testnext(ls, TK_UNION))
-         RETURNS_1(structconstructor(ls,T_union));
+         RETURNS_1(structbody(ls));
        else
          RETURNS_1(structfield(ls));
        add_entry(ls,records);
     } while(testnext(ls, ',') || testnext(ls, ';'));
     check_match(ls,'}','{',line);
+}
+static void structconstructor(LexState * ls) {
+    // already parsed 'struct' or 'struct' name.
+    //starting at '{' or '('
+    int tbl = new_table(ls,T_struct);
+    int line = ls->linenumber;
+    if(testnext(ls,'(')) {
+        RETURNS_1(luaexpr(ls));
+        add_field(ls,tbl,"metatype");
+        check_match(ls,')','(',line);
+    }
+    structbody(ls);
     add_field(ls,tbl,"records");
 }
 
@@ -1052,7 +1061,7 @@ static void simpleexp (LexState *ls) {
         TerraCnt tc;
         enterterra(ls, &tc);
         
-        structconstructor(ls,T_struct);
+        structconstructor(ls);
         int id = store_value(ls);
     
         luaX_patchbegin(ls,&begin);
@@ -1722,8 +1731,8 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             } break;
             case TK_STRUCT: {
                 structdecls.push_back(idx);
-                if(ls->t.token == '{') {
-                    structconstructor(ls,T_struct);
+                if(ls->t.token == '{' || ls->t.token == '(') {
+                    structconstructor(ls);
                     int tree = store_value(ls);
                     TDefn tdefn = { 's', idx, tree};
                     defs.push_back(tdefn);
