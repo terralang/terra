@@ -1597,7 +1597,6 @@ do
         end
         return fnlike
     end
-
     function types.type:getmethod(methodname)
         if not self:isstruct() then return nil, "not a struct" end
         local gm = (type(self.metamethods.__getmethod) == "function" and self.metamethods.__getmethod) or defaultgetmethod
@@ -1770,6 +1769,7 @@ do
     globaltype("ptrdiff",types.int64)
     globaltype("rawstring",types.pointer(types.int8))
     terra.types = types
+    terra.memoize = memoizefunction
 end
 
 -- END TYPE
