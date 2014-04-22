@@ -15,7 +15,7 @@ function terralib.cudacompile(module)
                                     -- we should modify gettype to allow the return of a type for a non-jitted function
         assert(success)
 
-        if #typ.returns ~= 0 then
+        if not typ.returntype:isunit() then
             error(k..": kernels must return no arguments.")
         end
 
