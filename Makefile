@@ -190,7 +190,13 @@ FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VE
 
 ifdef ENABLE_CUDA
 FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
-SO_FLAGS += -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/lib64
+ifeq ($(UNAME), Darwin)
+CUDALIBNAME = lib
+else
+CUDALIBNAME = lib64
+endif
+
+SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME)
 endif
 
 ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))
