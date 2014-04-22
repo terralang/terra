@@ -28,8 +28,7 @@ struct terra_CUDAState {
 #define CUDA_DO(err) do { \
     CUresult e = err; \
     if(e != CUDA_SUCCESS) { \
-        terra_pusherror(T,"%s:%d: %s cuda reported error %d",__FILE__,__LINE__,#err,e); \
-        return e; \
+        terra_reporterror(T,"%s:%d: %s cuda reported error %d",__FILE__,__LINE__,#err,e); \
     } \
 } while(0)
 
