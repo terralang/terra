@@ -60,7 +60,7 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     LLVMInitializeNVPTXTargetInfo();
     LLVMInitializeNVPTXTarget();
     LLVMInitializeNVPTXAsmPrinter();
-    LLVMInitializeNVPTXTargetMC();    
+    LLVMInitializeNVPTXTargetMC();
     
     std::string err;
     const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
@@ -71,8 +71,8 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
                                        "", llvm::TargetOptions(),
                                        llvm::Reloc::Default,llvm::CodeModel::Default,
                                        llvm::CodeGenOpt::Aggressive);
-    
     assert(TM->getMCAsmInfo());
+    
     llvm::PassManager PM;
     PM.add(new llvm::TARGETDATA()(*TM->TARGETDATA(get)()));
     if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
@@ -82,6 +82,20 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     
     PM.run(*M);
     return CUDA_SUCCESS;
+}
+
+//cuda doesn't like llvm generic names, so we replace non-identifier symbols here
+static std::string sanitizeName(std::string name) {
+    std::string s;
+    llvm::raw_string_ostream out(s);
+    for(int i = 0; i < name.size(); i++) {
+        char c = name[i];
+        if(isalnum(c) || c == '_')
+            out << c;
+        else
+            out << "_$" << (int) c << "_";
+    }
+    return s;
 }
 
 int terra_cudacompile(lua_State * L) {
@@ -112,6 +126,15 @@ int terra_cudacompile(lua_State * L) {
         markKernel(T,M,kernel);
     }
     
+    //sanitize names
+    for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
+        if(!it->isDeclaration())
+            it->setName(sanitizeName(it->getName()));
+    }
+    for(llvm::Module::global_iterator it = M->global_begin(), end = M->global_end(); it != end; ++it) {
+        it->setName(sanitizeName(it->getName()));
+    }
+    
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
     delete M;
@@ -129,7 +152,7 @@ int terra_cudacompile(lua_State * L) {
     for(size_t i = 0; lua_next(L,tbl) != 0; i++) {
         const char * key = luaL_checkstring(L,-2);
         CUfunction func;
-        CUDA_DO(cuModuleGetFunction(&func, cudaM, key));
+        CUDA_DO(cuModuleGetFunction(&func, cudaM, sanitizeName(key).c_str()));
         //HACK: we need to get this value, as a constant, to the makewrapper function
         //currently the only constants that Terra supports programmatically are string constants
         //eventually we will change this to make a Terra constant of type CUfunction when we have
