@@ -60,6 +60,7 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     LLVMInitializeNVPTXTargetInfo();
     LLVMInitializeNVPTXTarget();
     LLVMInitializeNVPTXAsmPrinter();
+    LLVMInitializeNVPTXTargetMC();    
     
     std::string err;
     const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
@@ -71,6 +72,7 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
                                        llvm::Reloc::Default,llvm::CodeModel::Default,
                                        llvm::CodeGenOpt::Aggressive);
     
+    assert(TM->getMCAsmInfo());
     llvm::PassManager PM;
     PM.add(new llvm::TARGETDATA()(*TM->TARGETDATA(get)()));
     if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
