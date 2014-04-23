@@ -39,15 +39,14 @@ end
 --since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 local terracode = terra.loadstring [[
 local C --load cuda header lazily to speed startup time
-
+struct terralib.CUDAParams {
+    gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
+    blockDimX : uint, blockDimY : uint, blockDimZ : uint,
+    sharedMemBytes : uint, hStream :  &opaque
+}
 function terralib.cudamakekernelwrapper(fn,funcdata)
     if not C then
-        C = terralib.includec("cuda.h")
-        struct terralib.CUDAParams {
-            gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
-            blockDimX : uint, blockDimY : uint, blockDimZ : uint,
-            sharedMemBytes : uint, hStream :  C.CUstream
-        }
+        C = terralib.includec("cuda.h")    
     end
     local _,typ = fn:peektype()
     local arguments = typ.parameters:map(symbol)
@@ -59,7 +58,7 @@ function terralib.cudamakekernelwrapper(fn,funcdata)
         var paramlist = arrayof([&opaque],[paramctor])
         return C.cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
                                      params.blockDimX,params.blockDimY,params.blockDimZ,
-                                     params.sharedMemBytes, params.hStream,paramlist,nil)
+                                     params.sharedMemBytes, C.CUstream(params.hStream),paramlist,nil)
     end
 end 
 
@@ -367,3 +366,4 @@ return {
     nvvm_membar_sys =  {} -> {};
     ptx_bar_sync =  int -> {};
 } ]]
+
