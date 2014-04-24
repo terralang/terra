@@ -682,31 +682,33 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 
 /* }====================================================================== */
 
+static int vardecl(LexState *ls, int requiretype, TString ** vname) {
+    int entry = new_table(ls,T_entry);
+    int wasstring = checksymbol(ls, vname);
+    add_field(ls, entry, "name");
+    if (ls->in_terra && ( (wasstring && requiretype) || ls->t.token == ':')) {
+        checknext(ls, ':');
+        RETURNS_1(terratype(ls));
+        add_field(ls,entry,"type");
+    }
+    return wasstring;
+}
+
 static void parlist (LexState *ls) {
   /* parlist -> [ param { `,' param } ] */
   FuncState *fs = ls->fs;
   Proto *f = &fs->f;
   int tbl = new_list(ls);
-  int nparams = 0;
   f->is_vararg = 0;
   std::vector<TString *> vnames;
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
     do {
       switch (ls->t.token) {
         case TK_NAME: case '[': {  /* param -> NAME */
-          int entry = new_table(ls,T_entry);
           TString * vname;
-          int wasstring = checksymbol(ls,&vname);
-          add_field(ls,entry,"name");
-          if(vname)
+          if(vardecl(ls, 1, &vname))
             vnames.push_back(vname);
-          if(ls->in_terra && (wasstring || ls->t.token == ':')) {
-            checknext(ls,':');
-            RETURNS_1(terratype(ls));
-            add_field(ls,entry,"type");
-          }
           add_entry(ls,tbl);
-          nparams++;
           break;
         }
         case TK_DOTS: {  /* param -> `...' */
@@ -1570,32 +1572,19 @@ void print_name_list(LexState * ls, std::vector<Name> * definednames) {
 
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
-  int nvars = 0;
-  int nexps;
   int tbl = new_table(ls,T_defvar);
   int vars = new_list(ls);
   std::vector<TString *> declarednames;
   do {
-    int entry = new_table(ls,T_entry);
-    TString * vname = NULL;
-    RETURNS_1(checksymbol(ls,&vname));
-    if(vname)
+    TString * vname;
+    if(vardecl(ls, 0, &vname))
       declarednames.push_back(vname);
-    add_field(ls,entry,"name");
-    if(ls->in_terra && testnext(ls,':')) {
-      RETURNS_1(terratype(ls));
-      add_field(ls,entry,"type");
-    }
     add_entry(ls,vars);
-    nvars++;
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
-    RETURNS_1(nexps = explist(ls));
+    RETURNS_1(explist(ls));
     add_field(ls,tbl,"initializers");
-  } else {
-    //blank initializers
-    nexps = 0;
   }
   for(size_t i = 0; i < declarednames.size(); i++) {
     definevariable(ls, declarednames[i]);
