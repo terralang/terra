@@ -2611,6 +2611,9 @@ function terra.funcdefinition:typecheck()
         ["select"] = { checkifelse, "__select"}
     }
     
+    local defersinlocalscope,checklocaldefers --functions used to determine if defer statements are in the wrong places
+                                              --defined with machinery for checking statements
+    
     local function checkoperator(ee)
         local op_string = terra.kinds[ee.operator]
         
@@ -2630,6 +2633,8 @@ function terra.funcdefinition:typecheck()
             diag:reporterror(ee,"operator ",op_string," not defined in terra code.")
             return ee:copy { type = terra.types.error }
         end
+        
+        local ndefers = defersinlocalscope()
         local operands = ee.operands:map(checkexp)
         
         local overloads = terra.newlist()
@@ -2646,9 +2651,12 @@ function terra.funcdefinition:typecheck()
         if #overloads > 0 then
             return checkcall(ee, overloads, operands, "all", true, false)
         else
-            return op(ee,operands)
+            local r = op(ee,operands)
+            if (op_string == "and" or op_string == "or") and operands[1].type:islogical() then
+                checklocaldefers(ee, ndefers)
+            end
+            return r
         end
-
     end
 
     --functions to handle typecheck invocations (functions,methods,macros,operator overloads)
@@ -3200,8 +3208,14 @@ function terra.funcdefinition:typecheck()
         end
         return e
     end
+    local function checkcond(c)
+        local N = defersinlocalscope()
+        local r = checkexptyp(c,terra.types.bool)
+        checklocaldefers(c,N)
+        return r
+    end
     local function checkcondbranch(s)
-        local e = checkexptyp(s.condition,terra.types.bool)
+        local e = checkcond(s.condition)
         local b = checkstmt(s.body)
         return s:copy {condition = e, body = b}
     end
@@ -3240,6 +3254,14 @@ function terra.funcdefinition:typecheck()
     end
     local function leaveloop()
         loopstmts:remove()
+    end
+    function defersinlocalscope()
+        return scopeposition[#scopeposition]
+    end
+    function checklocaldefers(anchor,c)
+        if defersinlocalscope() ~= c then
+            diag:reporterror(anchor, "defer statements are not allowed in conditional expressions")
+        end
     end
     --calculate the number of deferred statements that will fire when jumping from stack position 'from' to 'to'
     --if a goto crosses a deferred statement, we detect that and report an error
@@ -3357,7 +3379,7 @@ function terra.funcdefinition:typecheck()
         elseif s:is "repeat" then
             local breaktable = enterloop()
             local new_body = checkstmt(s.body)
-            local e = checkexptyp(s.condition,terra.types.bool)
+            local e = checkcond(s.condition)
             leaveloop()
             return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
