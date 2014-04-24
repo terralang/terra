@@ -2043,7 +2043,7 @@ function terra.specialize(origtree, luaenv, depth)
 
         local newvaras = terra.newtree(s, { 
             kind = terra.kinds.defvar;
-            variables = terra.newlist{ terra.newtree(s, { kind = terra.kinds.entry, name = s.varname }) };
+            variables = terra.newlist{ s.variable };
             initializers = terra.newlist{mkvar("<i>")}
         })
         newstmts:insert(newvaras)
