@@ -1323,7 +1323,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         */
         
         BasicBlock * stmtB = createAndInsertBB((isAnd) ? "and.rhs" : "or.rhs");
-        BasicBlock * mergeB = createBB((isAnd) ? "and.end" : "or.end");
+        BasicBlock * mergeB = createAndInsertBB((isAnd) ? "and.end" : "or.end");
         
         emitBranchOnExpr(ao, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
         
@@ -1339,7 +1339,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         Value * b = emitCond(bo);
         stmtB = B->GetInsertBlock();
         B->CreateBr(mergeB);
-        insertBB(mergeB);
+        followsBB(mergeB);
         setInsertBlock(mergeB);
         result->addIncoming(b, stmtB);
         return B->CreateZExt(result, t->type);
@@ -1894,17 +1894,11 @@ if(baseT->isIntegerTy()) { \
             } break;
         }
     }
-    BasicBlock * createBB(const char * name) {
-        BasicBlock * bb = BasicBlock::Create(*C->ctx, name);
-        return bb;
+    BasicBlock * createAndInsertBB(StringRef name) {
+        return BasicBlock::Create(*C->ctx, name,func);
     }
-    BasicBlock * createAndInsertBB(const char * name) {
-        BasicBlock * bb = createBB(name);
-        insertBB(bb);
-        return bb;
-    }
-    void insertBB(BasicBlock * bb) {
-        func->getBasicBlockList().push_back(bb);
+    void followsBB(BasicBlock * b) {
+        b->moveAfter(B->GetInsertBlock());
     }
     Value * emitCond(Obj * cond) {
         return emitCond(emitExp(cond));
@@ -1922,14 +1916,14 @@ if(baseT->isIntegerTy()) { \
         ifbranch->obj("condition", &cond);
         ifbranch->obj("body",&body);
         BasicBlock * thenBB = createAndInsertBB("then");
-        BasicBlock * continueif = createBB("else");
+        BasicBlock * continueif = createAndInsertBB("else");
         emitBranchOnExpr(&cond, thenBB, continueif);
         
         setInsertBlock(thenBB);
         
         emitStmt(&body);
         B->CreateBr(footer);
-        insertBB(continueif);
+        followsBB(continueif);
         setInsertBlock(continueif);
         
     }
@@ -1963,7 +1957,7 @@ if(baseT->isIntegerTy()) { \
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
         BasicBlock * bb = (BasicBlock *) lbl->ud("basicblock");
         if(!bb) {
-            bb = createBB(lbl->string("labelname"));
+            bb = createAndInsertBB(lbl->string("labelname"));
             lua_pushlightuserdata(L,bb);
             lbl->setfield("basicblock");
         }
@@ -2054,8 +2048,7 @@ if(baseT->isIntegerTy()) { \
         ValueToValueMapTy VMap;
         for(size_t i = 0; i < num; i++) {
             BasicBlock * bb = deferred[deferred.size() - 1 - i];
-            bb = CloneBasicBlock(bb, VMap);
-            insertBB(bb);
+            bb = CloneBasicBlock(bb, VMap, "", func);
             B->CreateBr(bb);
             setInsertBlock(bb);
         }
@@ -2092,7 +2085,7 @@ if(baseT->isIntegerTy()) { \
             case T_label: {
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt);
                 B->CreateBr(bb);
-                insertBB(bb);
+                followsBB(bb);
                 setInsertBlock(bb);
             } break;
             case T_goto: {
@@ -2124,7 +2117,7 @@ if(baseT->isIntegerTy()) { \
                 
                 BasicBlock * loopBody = createAndInsertBB("whilebody");
     
-                BasicBlock * merge = createBB("merge");
+                BasicBlock * merge = createAndInsertBB("merge");
                 
                 setBreaktable(stmt,merge);
                 
@@ -2136,14 +2129,14 @@ if(baseT->isIntegerTy()) { \
                 
                 B->CreateBr(condBB);
                 
-                insertBB(merge);
+                followsBB(merge);
                 setInsertBlock(merge);
             } break;
             case T_if: {
                 Obj branches;
                 stmt->obj("branches",&branches);
                 int N = branches.size();
-                BasicBlock * footer = createBB("merge");
+                BasicBlock * footer = createAndInsertBB("merge");
                 for(int i = 0; i < N; i++) {
                     Obj branch;
                     branches.objAt(i,&branch);
@@ -2153,7 +2146,7 @@ if(baseT->isIntegerTy()) { \
                 if(stmt->obj("orelse",&orelse))
                     emitStmt(&orelse);
                 B->CreateBr(footer);
-                insertBB(footer);
+                followsBB(footer);
                 setInsertBlock(footer);
             } break;
             case T_repeat: {
@@ -2162,7 +2155,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("body",&body);
                 
                 BasicBlock * loopBody = createAndInsertBB("repeatbody");
-                BasicBlock * merge = createBB("merge");
+                BasicBlock * merge = createAndInsertBB("merge");
                 
                 setBreaktable(stmt,merge);
                 
@@ -2182,7 +2175,7 @@ if(baseT->isIntegerTy()) { \
                 }
                 emitBranchOnExpr(&cond, merge, loopBody);
                 
-                insertBB(merge);
+                followsBB(merge);
                 setInsertBlock(merge);
                 unwindDeferred(N);
             } break;
