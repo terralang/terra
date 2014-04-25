@@ -1241,8 +1241,7 @@ struct TerraCompiler {
                 break;
         }
     }
-    Value * emitCompare(Obj * exp, Obj * ao, Value * a, Value * b) {
-        TType * t = typeOfValue(ao);
+    Value * emitCompare(T_Kind op, TType * t, Value * a, Value * b) {
         Type * baseT = getPrimitiveType(t);
 #define RETURN_OP(op) \
 if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
@@ -1261,7 +1260,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
 }
         
-        switch(exp->kind("operator")) {
+        switch(op) {
             case T_ne: RETURN_OP(NE) break;
             case T_eq: RETURN_OP(EQ) break;
             case T_lt: RETURN_SOP(LT) break;
@@ -1438,7 +1437,7 @@ if(baseT->isIntegerTy()) { \
             case T_and: return B->CreateAnd(a,b);
             case T_or: return B->CreateOr(a,b);
             case T_ne: case T_eq: case T_lt: case T_gt: case T_ge: case T_le: {
-                Value * v = emitCompare(exp,ao,a,b);
+                Value * v = emitCompare(exp->kind("operator"),typeOfValue(ao),a,b);
                 return B->CreateZExt(v, t->type);
             } break;
             case T_lshift:
@@ -2129,6 +2128,37 @@ if(baseT->isIntegerTy()) { \
                 
                 B->CreateBr(condBB);
                 
+                followsBB(merge);
+                setInsertBlock(merge);
+            } break;
+            case T_fornum: {
+                Obj initial,step,limit,variable,body;
+                stmt->obj("initial",&initial);
+                bool hasstep = stmt->obj("step",&step);
+                stmt->obj("limit",&limit);
+                stmt->obj("variable",&variable);
+                stmt->obj("body",&body);
+                TType * t = typeOfValue(&variable);
+                Value * initialv = emitExp(&initial);
+                Value * limitv = emitExp(&limit);
+                Value * stepv = (hasstep) ? emitExp(&step) : ConstantInt::get(t->type,1);
+                Value * vp = emitExp(&variable,false);
+                Value * zero = ConstantInt::get(t->type,0);
+                B->CreateStore(initialv, vp);
+                BasicBlock * cond = createAndInsertBB("forcond");
+                B->CreateBr(cond);
+                setInsertBlock(cond);
+                Value * v = B->CreateLoad(vp);
+                Value * c = B->CreateOr(B->CreateAnd(emitCompare(T_lt,t, v, limitv), emitCompare(T_gt,t,stepv,zero)),
+                                        B->CreateAnd(emitCompare(T_gt,t, v, limitv), emitCompare(T_le,t,stepv,zero)));
+                BasicBlock * loopBody = createAndInsertBB("forbody");
+                BasicBlock * merge = createAndInsertBB("merge");
+                setBreaktable(stmt,merge);
+                B->CreateCondBr(c,loopBody,merge);
+                setInsertBlock(loopBody);
+                emitStmt(&body);
+                B->CreateStore(B->CreateAdd(v, stepv),vp);
+                B->CreateBr(cond);
                 followsBB(merge);
                 setInsertBlock(merge);
             } break;

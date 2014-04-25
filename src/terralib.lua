@@ -1826,7 +1826,7 @@ function terra.specialize(origtree, luaenv, depth)
     local env = terra.newenvironment(luaenv)
     local diag = terra.newdiagnostics()
     diag:begin()
-    local translatetree, translategenerictree, translatelist, resolvetype, createformalparameterlist, desugarfornum
+    local translatetree, translategenerictree, translatelist, resolvetype, createformalparameterlist
     local function evaltype(anchor,typ)
         local success, v = terra.evalluaexpression(diag,env:combinedenv(),typ)
         if success and terra.types.istype(v) then return v end
@@ -1904,8 +1904,15 @@ function terra.specialize(origtree, luaenv, depth)
             local body = translatetree(e.body)
             return e:copy { parameters = parameters, returntype = returntype, body = body }
         elseif e:is "fornum" then
-            --we desugar this early on so that we don't have to have special handling for the definitions/scoping
-            return translatetree(desugarfornum(e))
+            local initial,limit,step = translatetree(e.initial),translatetree(e.limit), e.step and translatetree(e.step)
+            env:enterblock()
+            local variables = createformalparameterlist(terra.newlist { e.variable }, false)
+            if #variables ~= 1 then
+                diag:reporterror(e.variable, "expected a single iteration variable but found ",#variables)
+            end
+            local body = translatetree(e.body)
+            env:leaveblock()
+            return e:copy { initial = initial, limit = limit, step = step, variable = variables[1], body = body }
         elseif e:is "block" then
             env:enterblock()
             local r = translategenerictree(e)
@@ -2000,80 +2007,6 @@ function terra.specialize(origtree, luaenv, depth)
             end
         end
         return result
-    end
-    function desugarfornum(s)
-        local function mkdefs(...)
-            local lst = terra.newlist()
-            for i,v in pairs({...}) do
-                local sym = terra.newtree(s,{ kind = terra.kinds.symbol, name = v})
-                lst:insert( terra.newtree(s,{ kind = terra.kinds.entry, name = sym }) )
-            end
-            return lst
-        end
-        
-        local function mkvar(a)
-            assert(type(a) == "string")
-            return terra.newtree(s,{ kind = terra.kinds["var"], name = a })
-        end
-        
-        local function mkop(op,a,b)
-           a = (type(a) == "string" and mkvar(a)) or a
-           b = (type(b) == "string" and mkvar(b)) or b
-           return terra.newtree(s, {
-            kind = terra.kinds.operator;
-            operator = terra.kinds[op];
-            operands = terra.newlist { a, b };
-            })
-        end
-
-        local dv = terra.newtree(s, { 
-            kind = terra.kinds.defvar;
-            variables = mkdefs("<i>","<limit>","<step>");
-            initializers = terra.newlist({s.initial,s.limit,s.step})
-        })
-        local zero = terra.createterraexpression(diag,s,0LL)
-        local lt = mkop("<","<i>","<limit>")
-        local gt = mkop(">","<i>","<limit>")
-        local slt = mkop("<","<step>",zero)
-        local sgt = mkop(">","<step>",zero)
-        local cond = mkop("or",mkop("and",sgt,lt),
-                               mkop("and",slt,gt))
-        
-        local newstmts = terra.newlist()
-
-        local newvaras = terra.newtree(s, { 
-            kind = terra.kinds.defvar;
-            variables = terra.newlist{ s.variable };
-            initializers = terra.newlist{mkvar("<i>")}
-        })
-        newstmts:insert(newvaras)
-        for _,v in pairs(s.body.body.statements) do
-            newstmts:insert(v)
-        end
-        
-        local p1 = mkop("+","<i>","<step>")
-        local as = terra.newtree(s, {
-            kind = terra.kinds.assignment;
-            lhs = terra.newlist({mkvar("<i>")});
-            rhs = terra.newlist({p1});
-        })
-        
-        newstmts:insert(as)
-        
-        local nbody = terra.newtree(s, {
-            kind = terra.kinds.block;
-            body = terra.newtree(s, { kind = terra.kinds.treelist, statements = newstmts });
-        })
-        
-        local wh = terra.newtree(s, {
-            kind = terra.kinds["while"];
-            condition = cond;
-            body = nbody;
-        })
-
-        local newlist = terra.newtree(s, { kind = terra.kinds.treelist, statements = terra.newlist {dv,wh} } )
-    
-        return terra.newtree(s, { kind = terra.kinds.block, body = newlist } )
     end
     --recursively translate any tree or list of trees.
     --new objects are only created when we find a new value
@@ -3219,17 +3152,19 @@ function terra.funcdefinition:typecheck()
         local b = checkstmt(s.body)
         return s:copy {condition = e, body = b}
     end
-
-    local function checkformalparameterlist(params)
-        for i, p in ipairs(params) do
-            assert(type(p.name) == "string")
-            assert(terra.issymbol(p.symbol))
-            if p.type then
-                assert(terra.types.istype(p.type))
-                p.type:complete(p)
-            end
+    local function checkformalparameter(p)
+        assert(type(p.name) == "string")
+        assert(terra.issymbol(p.symbol))
+        if p.type then
+            assert(terra.types.istype(p.type))
+            p.type:complete(p)
         end
-        return params:map(function(p) return terra.newtree(p, {kind = terra.kinds.allocvar, name = p.name, symbol = p.symbol, type = p.type, lvalue = true})  end)
+        local r = terra.newtree(p, {kind = terra.kinds.allocvar, name = p.name, symbol = p.symbol, type = p.type, lvalue = true})
+        symbolenv:localenv()[p.symbol] = r
+        return r
+    end
+    local function checkformalparameterlist(params)
+        return params:map(checkformalparameter)
     end
 
 
@@ -3372,6 +3307,20 @@ function terra.funcdefinition:typecheck()
             r.breaktable = breaktable
             leaveloop()
             return r
+        elseif s:is "fornum" then
+            local initial, limit, step = checkexp(s.initial), checkexp(s.limit), s.step and checkexp(s.step)
+            local t = typemeet(initial,initial.type,limit.type) 
+            t = step and typemeet(limit,t,step.type) or t
+            local breaktable = enterloop()
+            symbolenv:enterblock()
+            local variable = checkformalparameter(s.variable)
+            variable.type = variable.type or t
+            if not variable.type:isintegral() then diag:reporterror(variable,"expected an integral type for loop initialization but found ",variable.type) end
+            initial,step,limit = insertcast(initial,variable.type), step and insertcast(step,variable.type), insertcast(limit,variable.type)
+            local body = checkstmt(s.body)
+            symbolenv:leaveblock()
+            leaveloop()
+            return s:copy { initial = initial, limit = limit, step = step, breaktable = breaktable, variable = variable, body = body }
         elseif s:is "if" then
             local br = s.branches:map(checkcondbranch)
             local els = (s.orelse and checkstmt(s.orelse))
@@ -3383,14 +3332,10 @@ function terra.funcdefinition:typecheck()
             leaveloop()
             return s:copy { body = new_body, condition = e, breaktable = breaktable }
         elseif s:is "defvar" then
+            local rhs = s.initializers and checkexpressions(s.initializers)
             local lhs = checkformalparameterlist(s.variables)
-            local res = s.initializers and createassignment(s,lhs,checkexpressions(s.initializers)) 
+            local res = s.initializers and createassignment(s,lhs,rhs) 
                         or terra.newtree(s, {kind = terra.kinds.treelist, statements = lhs})
-            --add the variables to current environment
-            for i,v in ipairs(lhs) do
-                assert(terra.issymbol(v.symbol))
-                symbolenv:localenv()[v.symbol] = v
-            end
             return res
         elseif s:is "assignment" then
             local rhs = checkexpressions(s.rhs)
@@ -3421,14 +3366,7 @@ function terra.funcdefinition:typecheck()
 
     --  generate types for parameters, if return types exists generate a types for them as well
     local typed_parameters = checkformalparameterlist(ftree.parameters)
-    local parameter_types = terra.newlist() --just the types, used to create the function type
-    for _,v in ipairs(typed_parameters) do
-        assert(terra.types.istype(v.type))
-        assert(terra.issymbol(v.symbol))
-        parameter_types:insert( v.type )
-        symbolenv:localenv()[v.symbol] = v
-    end
-
+    local parameter_types = typed_parameters:map("type")
 
     local result = checkstmt(ftree.body)
 
@@ -3731,6 +3669,15 @@ local function printpretty(toptree,returntype)
         elseif s:is "while" then
             begin("while ")
             emitExp(s.condition)
+            emit(" do\n")
+            emitStmt(s.body)
+            begin("end\n")
+        elseif s:is "fornum" then
+            begin("for ")
+            emitParam(s.variable)
+            emit(" = ")
+            emitExp(s.initial) emit(",") emitExp(s.limit) 
+            if s.step then emit(",") emitExp(s.step) end
             emit(" do\n")
             emitStmt(s.body)
             begin("end\n")

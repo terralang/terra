@@ -146,3 +146,5 @@ end
 --print(test.time(run))
 
 terralib.saveobj("benchmark_nbody",{ main = main } )
+energy:disas()
+energy:printpretty()

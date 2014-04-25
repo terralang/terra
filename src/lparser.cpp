@@ -1437,12 +1437,6 @@ static void repeatstat (LexState *ls, int line) {
   //repeat is translated into { kind = block; body = { kind = repeat; body = { kind = treelist, statements = <bodystmts>}; cond = <cond> } }
 }
 
-
-static void exp1 (LexState *ls) {
-  expr(ls);
-}
-
-
 static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
   /* forbody -> DO block */
   FuncState *fs = ls->fs;
@@ -1452,24 +1446,20 @@ static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
   leaveblock(fs);  /* end of scope for declared variables */
 }
 
-
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   int tbl = new_table_before(ls,T_fornum);
   add_field(ls,tbl,"variable");
   checknext(ls, '=');
-  RETURNS_1(exp1(ls));  /* initial value */
+  RETURNS_1(expr(ls));  /* initial value */
   add_field(ls,tbl,"initial");
   checknext(ls, ',');
-  RETURNS_1(exp1(ls));  /* limit */
+  RETURNS_1(expr(ls));  /* limit */
   add_field(ls,tbl,"limit");
   if (testnext(ls, ',')) {
-    RETURNS_1(exp1(ls));  /* optional step */
-  } else {  /* default step = 1 */
-    push_integer(ls, 1);
-    push_literal(ls, "int64");
+    RETURNS_1(expr(ls));  /* optional step */
+    add_field(ls,tbl,"step");
   }
-  add_field(ls,tbl,"step");
   BlockCnt bl;
   if(varname)
     definevariable(ls, varname);
