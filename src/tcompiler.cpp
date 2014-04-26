@@ -2493,12 +2493,18 @@ static int terra_deletefunction(lua_State * L) {
 static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     
+    lua_getfield(L,-1,"llvm_value");
+    Function * fn = (Function*) lua_touserdata(L,-1);
+    lua_pop(L,1); //llvm_value
+    fn->dump();
+    
     lua_getfield(L,-1,"llvm_ptr");
     void * addr = lua_touserdata(L, -1);
-    TerraFunctionInfo & fi = T->C->functioninfo[addr];
-    fi.fn->dump();
-    printf("assembly for function at address %p\n",addr);
-    llvmutil_disassemblefunction(fi.addr, fi.size,0);
+    if(T->C->functioninfo.count(addr)) {
+        TerraFunctionInfo & fi = T->C->functioninfo[addr];
+        printf("assembly for function at address %p\n",addr);
+        llvmutil_disassemblefunction(fi.addr, fi.size,0);
+    }
     return 0;
 }
 

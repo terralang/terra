@@ -1,7 +1,6 @@
-local i = {}
 terra foo(a : uint64, s : uint64)
     var r = 0
-    for [i] = 0,a,s do
+    for i = "a",a,s do
         r = r + i
     end
     return r
