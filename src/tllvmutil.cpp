@@ -261,6 +261,9 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
         if(fn->hasAvailableExternallyLinkage()) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
         }
+        if(fn->hasDLLImportLinkage()) { //clear dll import linkage because it messes up the jit on window
+            fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
+        }
     }
     
     if(optManager) {
