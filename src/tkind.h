@@ -64,7 +64,6 @@ _(structentry, "structentry") \
 _(type, "type") \
 _(proxy, "proxy") \
 _(array, "array") \
-_(explicitcast, "explicitcast") \
 _(sizeof, "sizeof") \
 _(niltype, "niltype") \
 _(union, "union") \

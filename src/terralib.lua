@@ -1913,6 +1913,13 @@ function terra.specialize(origtree, luaenv, depth)
             local body = translatetree(e.body)
             env:leaveblock()
             return e:copy { initial = initial, limit = limit, step = step, variable = variables[1], body = body }
+        elseif e:is "forlist" then
+            local iterator = translatetree(e.iterator)
+            env:enterblock()
+            local variables = createformalparameterlist(e.variables,false)
+            local body = translatetree(e.body)
+            env:leaveblock()
+            return e:copy { iterator = iterator, variables = variables, body = body }
         elseif e:is "block" then
             env:enterblock()
             local r = translategenerictree(e)
@@ -2795,6 +2802,9 @@ function terra.funcdefinition:typecheck()
         end
         return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, isstatement)
     end
+    local function createuntypedcast(value,totype,explicit)
+        return terra.newtree(value, { kind = terra.kinds.cast, value = value, totype = totype, explicit = explicit})
+    end
     function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, isstatement)
         --arguments are always typed trees, or a lua object
         assert(#fnlikelist > 0)
@@ -2812,7 +2822,7 @@ function terra.funcdefinition:typecheck()
                     break
                 elseif terra.types.istype(fn.value) then
                     local castmacro = terra.internalmacro(function(diag,tree,arg)
-                        return terra.newtree(tree, { kind = terra.kinds.explicitcast, value = arg.tree, totype = fn.value })
+                        return createuntypedcast(arg.tree,fn.value,true)
                     end)
                     fnlike = castmacro
                     break
@@ -2941,15 +2951,21 @@ function terra.funcdefinition:typecheck()
             elseif e:is "var" then
                 assert(e.value) --value should be added during specialization. it is a symbol in the currently symbol environment if this is a local variable
                                 --otherwise it a reference to the global variable object to which it refers
-                local definition = (terra.isglobalvar(e.value) and e.value) or symbolenv:localenv()[e.value]
-
-                if not definition then
-                    diag:reporterror(e, "definition of this variable is not in scope")
-                    return e:copy { type = terra.types.error }
+                local definition
+                if terra.isglobalvar(e.value) then
+                    definition = e.value
+                else
+                    definition = symbolenv:localenv()[e.value]
+                    if not definition then
+                        diag:reporterror(e, "definition of this variable is not in scope")
+                        return e:copy { type = terra.types.error }
+                    end
+                    if not definition:is "allocvar" then
+                        --this binding was introduced by a forlist statement
+                        return checkexp(definition,allowluaobjects)
+                    end
+                    assert(terra.types.istype(definition.type))
                 end
-                assert(terra.istree(definition) or terra.isglobalvar(definition))
-                assert(terra.types.istype(definition.type))
-
                 return e:copy { type = definition.type, definition = definition }
             elseif e:is "select" then
                 local v = checkexp(e.value,true)
@@ -3019,8 +3035,8 @@ function terra.funcdefinition:typecheck()
                     end
                 end
                 return e:copy { type = typ, lvalue = lvalue, value = v, index = idx }
-            elseif e:is "explicitcast" then
-                return insertexplicitcast(checkexp(e.value),e.totype)
+            elseif e:is "cast" then
+                return e.explicit and insertexplicitcast(checkexp(e.value),e.totype) or insertcast(checkexp(e.value),e.totype)
             elseif e:is "sizeof" then
                 e.oftype:complete(e)
                 return e:copy { type = terra.types.uint64 }
@@ -3321,6 +3337,39 @@ function terra.funcdefinition:typecheck()
             symbolenv:leaveblock()
             leaveloop()
             return s:copy { initial = initial, limit = limit, step = step, breaktable = breaktable, variable = variable, body = body }
+        elseif s:is "forlist" then
+            local iterator = checkexp(s.iterator)
+            local typ = iterator.type
+            if not typ:isstruct() or type(typ.metamethods.__for) ~= "function" then
+                diag:reporterror(iterator,"expected a struct with a __for metamethod but found ",typ)
+                return s
+            end
+            local result,generator = s,typ.metamethods.__for
+            entermacroscope()
+            local symbols = s.variables:map("symbol")
+            local success,variables,impl = terra.invokeuserfunction(s, false ,generator,symbols,terra.newquote(createtypedexpression(iterator)), terra.newquote(s.body))
+            if success then
+                if type(variables) ~= "table" then
+                    diag:reporterror(iterator, "expected a table of variable bindings but found ", type(variables))
+                elseif #variables ~= #s.variables then
+                    diag:reporterror(iterator, "expected ", #s.variables, " variable bindings but found ", #variables)
+                else
+                    symbolenv:enterblock()
+                    local lenv = symbolenv:localenv()
+                    for i,e in ipairs(variables) do
+                        local texp = terra.createterraexpression(diag,s.variables[i],e)
+                        local typ = s.variables[i].type or symbols[i].type
+                        if typ then
+                            texp = createuntypedcast(texp,typ,false)
+                        end
+                        lenv[symbols[i]] = texp
+                    end
+                    result = checkstmt(terra.createterraexpression(diag,iterator,impl))
+                    symbolenv:leaveblock()
+                end
+            end
+            leavemacroscope()
+            return result 
         elseif s:is "if" then
             local br = s.branches:map(checkcondbranch)
             local els = (s.orelse and checkstmt(s.orelse))
@@ -3681,6 +3730,14 @@ local function printpretty(toptree,returntype)
             emit(" do\n")
             emitStmt(s.body)
             begin("end\n")
+        elseif s:is "forlist" then
+            begin("for ")
+            emitList(s.variables,"",", ","",emitParam)
+            emit(" in ")
+            emitExp(s.iterator)
+            emit(" do\n")
+            emitStmt(s.body)
+            begin("end\n")
         elseif s:is "if" then
             for i,b in ipairs(s.branches) do
                 if i == 1 then
@@ -3807,7 +3864,7 @@ local function printpretty(toptree,returntype)
             end
         elseif e:is "luafunction" then
             emit("<lua %s>",tostring(e.callback))
-        elseif e:is "cast" or e:is "explicitcast" then
+        elseif e:is "cast" then
             emit("[")
             emitType(e.to or e.totype)
             emit("](")
