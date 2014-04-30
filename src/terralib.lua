@@ -4260,6 +4260,9 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
             tok.type = terra.languageextension.tokenkindtotoken[tok.type]
             assert(type(tok.type) == "table") 
         end
+        if type(tok.value) == "userdata" then -- 64-bit number in pointer
+            tok.value = terra.cast(terra.types.pointer(tok.valuetype),tok.value)[0]
+        end
         return tok
     end
     function lex:cur()

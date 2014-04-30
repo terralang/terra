@@ -462,11 +462,19 @@ static void statlist (LexState *ls) {
   }
 }
 
+static void push_type(LexState * ls, const char * typ) {
+    if(ls->in_terra) {
+        luaX_globalgetfield(ls, TA_TERRA_OBJECT, "types");
+        lua_getfield(ls->L,-1,typ);
+        lua_remove(ls->L,-2); //types object
+    }
+}
+
 static void push_literal(LexState * ls, const char * typ) {
     if(ls->in_terra) {
         int lit = new_table_before(ls,T_literal);
         add_field(ls,lit,"value");
-        lua_getglobal(ls->L,typ);
+        push_type(ls,typ);
         add_field(ls,lit,"type");
     }
 }
@@ -960,29 +968,36 @@ static void doquote(LexState * ls, bool isexp) {
     leaveterra(ls);
 }
 
+//buf should be at least 128 chars
+static void number_type(LexState * ls, int flags, char * buf) {
+    if(ls->in_terra) {
+      if(flags & F_ISINTEGER) {
+        const char * sign = (flags & F_ISUNSIGNED) ? "u" : "";
+        const char * sz = (flags & F_IS8BYTES) ? "64" : "";
+        sprintf(buf,"%sint%s",sign,sz);
+      } else {
+        sprintf(buf,"%s",(flags & F_IS8BYTES) ? "double" : "float");
+      }
+    }
+}
+
 static void simpleexp (LexState *ls) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | primaryexp */
   switch (ls->t.token) {
     case TK_NUMBER: {
-      //v->u.nval = ls->t.seminfo.r;
+      char buf[128];
       int flags = ls->t.seminfo.flags;
+      number_type(ls, flags, &buf[0]);
       if(flags & F_ISINTEGER) {
         push_integer(ls,ls->t.seminfo.i);
-        const char * sign = (flags & F_ISUNSIGNED) ? "u" : "";
-        const char * sz = (flags & F_IS8BYTES) ? "64" : "";
-        char buf[128];
-        sprintf(buf,"%sint%s",sign,sz);
         push_literal(ls,buf);
         sprintf(buf,"%"PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
         add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
         push_double(ls,ls->t.seminfo.r);
-        if(flags & F_IS8BYTES)
-            push_literal(ls,"double");
-        else
-            push_literal(ls,"float");
+        push_literal(ls, buf);
       }
       break;
     }
@@ -1957,12 +1972,22 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"value");
         break;
-    case TK_NUMBER:
+    case TK_NUMBER: {
+        char buf[128];
         lua_pushinteger(ls->L,T_numbertoken);
         lua_setfield(ls->L,-2,"type");
-        lua_pushnumber(ls->L,t->seminfo.r);
+        int flags = t->seminfo.flags;
+        number_type(ls, flags, &buf[0]);
+        push_type(ls,buf);
+        lua_setfield(ls->L,-2,"valuetype");
+        if (flags & F_IS8BYTES && flags & F_ISINTEGER) {
+            uint64_t * ip = (uint64_t*) lua_newuserdata(ls->L,sizeof(uint64_t));
+            *ip = t->seminfo.i;
+        } else {
+            lua_pushnumber(ls->L,t->seminfo.r);
+        }
         lua_setfield(ls->L,-2,"value");
-        break;
+    } break;
     case TK_SPECIAL:
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"type");
