@@ -1094,7 +1094,13 @@ The _token type_. For keywords and operators this is just a string (e.g. `"and"`
 
     token.value
 
-For names, strings, and numbers this is the specific value (e.g. `3.3`). Currently numbers are always represented as Lua numbers (i.e. doubles). In the future, we will extend this to include integral types as well.
+For names, strings, and numbers this is the specific value (e.g. `3.3`). Numbers are represented as Lua numbers when they would fit (floating point or 32-bit integers) and '[u]int64_t' cdata types for 64-bit integers.
+
+---
+
+    token.valuetype
+
+For numbers this is the Terra type of the literal parsed. `3` will have type `int`, `3.3` is `double`, `3.f` is `float`, `3ULL` is `uint64`, `3LL` is `int64`, and `3U` is `uint`.
 
 ---
 
