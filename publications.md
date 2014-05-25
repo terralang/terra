@@ -8,7 +8,7 @@ Publications
 
 **[Terra: A Multi-Stage Language for High-Performance Computing](pldi071-devito.pdf)** <br/>
 _Zachary DeVito, James Hegarty, Alex Aiken, Pat Hanrahan, and Jan Vitek_<br/>
-To appear in PLDI '13
+PLDI '13
 
 High-performance computing applications, such as auto-tuners and
 domain-specific languages, rely on generative programming techniques to
@@ -26,6 +26,12 @@ systems entirely in Terra. Our Terra-based auto-tuner for BLAS routines
 performs within 20% of ATLAS, and our DSL for stencil computations runs
 2.3x faster than hand-written C.
 
+**[First-class Runtime Generation of High-performance Types using Exotypes](pldi083-devito.pdf)** <br/>
+_Zachary DeVito, Daniel Ritchie, Matt Fisher, Alex Aiken, Pat Hanrahan_<br/>
+To appear in PLDI '14
 
+We introduce \emph{exotypes}, user-defined types that combine the flexibility of meta-object protocols in dynamically-typed languages with the performance control of low-level languages. Like objects in dynamic languages, exotypes are defined programmatically at runtime, allowing behavior based on external data such as a database schema. To achieve high performance, we use staged programming to define the behavior of an exotype during a runtime compilation step and implement exotypes in Terra, a low-level staged programming language.
+
+We show how exotype constructors compose, and use exotypes to implement high-performance libraries for serialization, dynamic assembly, automatic differentiation, and probabilistic programming. Each exotype achieves expressiveness similar to libraries written in dynamically-typed languages but implements optimizations that exceed the performance of existing libraries written in low-level statically-typed languages. Though each implementation is significantly shorter, our serialization library is 11 times faster than Kryo, and our dynamic assembler is 3--20 times faster than Google's Chrome assembler.
 
     
