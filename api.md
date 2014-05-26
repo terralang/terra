@@ -134,7 +134,7 @@ Terra functions are entry-points into Terra code. Each function can contain 0 or
     [local] terra myfunctionname
     
 _Terra function declaration_. If `myfunctionname` is not already a Terra function, it creates a new function with 0 definitions and stores it the Lua variable `myfunctionname`. If `myfunctionname` is already a function, then it does not modify it.
-If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`). If `mystruct` is a [Struct](#structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`.
+If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`). If `mystruct` is a [Struct](#exotypes_structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`.
 
 ---
 
@@ -144,7 +144,7 @@ If the optional `local` keyword is used, then `myfunctionname` is first defined 
             [...] 
     end 
 
-_Terra function definition_. Adds the [function definition](#function_definition) specified by the code to the Terra function `myfunctionname`. If `myfunctionname` is not a Terra function, then it first creates a new function declaration using the same rules as Terra function declarations.  If `myfunctionname` is a method specifier (e.g. `terra mystruct:mymethod(arg0 : type0,...)`), then it is desugared to `terra mystruct.methods.mymethod(self : &mystruct, arg0 : type0,...)`.
+_Terra function definition_. Adds the [function definition](#function_definition) specified by the code to the Terra function `myfunctionname`. If `myfunctionname` is not a Terra function, then it first creates a new function declaration using the same rules as Terra function declarations.  
 
 ---
 
@@ -447,7 +447,7 @@ Construct a new symbol. This symbol will be unique from any other symbol. `typ` 
 Types
 -----
 
-Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [Struct](#structs) can be declared before their members and methods are fully specified.When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
+Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [structs](#exotypes_structs) can be declared before their members and methods are fully specified. When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
 
 ---
     
@@ -485,7 +485,7 @@ Constructs a function pointer. Both  `parameters`  and `returns` can be lists of
 
     struct { field0 : type2 , ..., fieldN : typeN }
 
-Constructs a structural type. We use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems for structs, so each call to `struct` returns a unique type. Structs are the primary user-defined data-type. See [Structs](#structs) for more information.
+Constructs a user-defined type, or exotype. Each call to `struct` creates a unique type since we use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems. See [Exotypes](#exotypes_structs) for more information.
 
 ---
 
@@ -557,7 +557,7 @@ True if `type` is a function (not a function pointer). `type.parameters` is a li
 
     type:isstruct()
 
-True if `type` is a [struct](#structs).
+True if `type` is a [struct](#exotypes_structs).
 
 ---
 
@@ -601,15 +601,112 @@ True if the `type` is a primitive type with the requested property, or if it is 
 
 Forces the type to be complete. For structs, this will calculate the layout of the struct (possibly calling `__getentries` and `__staticinitialize` if defined), and recursively complete any types that this type references.
 
-Structs 
--------
+Exotypes (Structs)
+------------------
 
-Structs are Terra's user-defined Type. Each struct has a list of `entries` which describe the layout of the type in memory, a table of `methods` which can be invoked using the `obj:method(arg)` syntax sugar, and a table of `metamethods` which allow you to define custom behavior for the type (e.g. custom type conversions). 
+We refer to Terra's way of creating user-defined aggregate types as exotypes
+because they are defined *external* to Terra itself, using a Lua API.
+The design tries to provide the raw mechanisms for defining the behavior of user-defined types without imposing any language-specific policies. Policy-based class systems such as those found in Java or C++ can then be created as libraries on top of these raw mechanisms. For conciseness and familiarity, we use the keyword `struct` to refer to these types in the language itself.
+
+We also provide syntax sugar for defining exotypes for the most common cases. 
+This section first discuses the Lua API itself, and then shows how the syntax sugar translates into it.
+
+More information on the rationale for this design is available in our [publications](publications.html).
+
+### Lua API
+
+A new user-defined type is created with the following call:
+        
+        mystruct = terralib.types.newstruct([displayname])
+
+`displayname` is an optional name that will be displayed by error messages, but each call to `newstruct` creates a unique type regardless of name (We use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type system. The type can then be used in Terra programs:
+
+    terra foo()
+        var a : mystruct --instance of mystruct type
+    end
+
+The memory layout and behavior of the type when used in Terra programs is defined by setting *property functions* in the types `metamethods` table:
+
+    mystruct.metamethods.myproperty = function ...
+
+When the Terra typechecker needs to know information about the type, it will call the property function in the metamethods table of the type. If a property is not set, it may have a default behavior which is discussed for each property individually.
+
+The following fields in `metamethods` are supported: 
+
+----
+
+    entries = __getentries(self)
+
+A _Lua_ function that determines the fields in a struct computationally. The `__getentries` function will be called by the compiler once when it first requires the list of entries in the struct. Since the type is not yet complete during this call, doing anything in this method that requires the type to be complete will result in an error. `entries` is a [List](#list) of field entries. Each field entry is one of:
+
+* A table `{ field = stringorsymbol, type = terratype }`, specifying a named field.
+* A table `{stringorsymbol,terratype}`, also specifying a named field.
+* A [List](#list) of field entries that will be allocated together in a union sharing the same memory. 
+
+By default, `__getentries` just returns the `self.entries` table, which is set by the `struct` definition syntax.
+
+----
+
+    method = __getmethod(self,methodname)
+    
+A _Lua_ function looks up a method for a struct when the compiler sees a method invocation `mystruct:mymethod(...)` or a static method lookup `mystruct.mymethod`.  `mymethod` may be either a string or a [symbol](#symbol). This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls. 
+`method` may be a Terra function, a Lua function, or a [macros](#macro) which will run during typechecking.  
+
+Assuming that `__getmethod` returns the value `method`, then in Terra code the expression `myobj:mymethod(arg0,...argN)` turns into `[method](myobj,arg0,...,argN)` if type of `myobj` is `T`. 
+
+If the type of `myobj` is `&T` then it desugars to `[method](@myobj,arg0,...,argN)`.
+If, when a method is invoked, `myobj` has type `T` but the formal parameter has type `&T` then the argument will be automatically converted to a pointer by taking its address. This _method receiver cast_ allows method calls on objects to modify the object.
+ 
+By default, `__getmethod(self,methodname)` will return `self.methods[methodname]`, which is set by the method definition syntax sugar. If the table does not contain the method, then the typechecker will call `__methodmissing` as described below.
+
+----
+
+    __staticinitialize(self)
+
+A _Lua_ function called after the type is complete but before the compiler returns to user-defined code. Since the type is complete, you can now do things that require a complete type such as create vtables, or examine offsets using the `terralib.offsetof`. The static initializers for entries in a struct will run before the static initializer for the struct itself.
+
+----
+
+    castedexp = __cast(from,to,exp)`
+    
+A _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works (i.e. does not call `error`).
+
+----
+
+    __methodmissing(mymethod,myobj,arg1,...,argN)
+
+When a method is called `myobj:mymethod(arg0,...,argN)` and `__getmethod` is not set, then the macro `__methodmissing` will be called if `mymethod` is not found in the method table of the type. It should return a Terra [quote](#quote) to use in place of the method call.
+
+----
+
+    __entrymissing(entryname,myobj)
+    
+If `myobj` does not contain the filed `entryname`, then `__entrymissing` will be called whenever the typechecker sees the expression `myobj.entryname`. It should return a Terra [quote](#quote) to use in place of the field.
+
+Custom operators:
+
+    __sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,
+    __eq, __ne, __and, __or, __not, __xor, __lshift, __rshift, 
+    __select, __apply
+
+Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
+
+----
+
+    __typename(self)
+
+A _Lua_ function that generates a string that names the type. This name will be used in error messages and `tostring`.
+
+
+### Syntax Sugar
 
 ---
+
     [local] struct mystruct
     
-_Struct declaration_ If `mystruct` is not already a Terra struct, it creates a new struct and stores it the Lua variable `mystruct`. If `mystruct` is already a struct, then it does not modify it. If the optional `local` keyword is used, then `mystruct` is first defined as a new local Lua variable.  When used without the `local` keyword, `mystruct` can be a table specifier (e.g. `a.b.c`).
+_Struct declaration_ If `mystruct` is not already a Terra struct, it creates a new struct by calling `terralib.types.newstruct("mystruct")` and stores it in the Lua variable `mystruct`. If `mystruct` is already a struct, then it does not modify it. If the optional `local` keyword is used, then `mystruct` is first defined as a new local Lua variable.  When used without the `local` keyword, `mystruct` can be a table specifier (e.g. `a.b.c`).
+
+----
 
     [local] struct mystruct {
         field0 : type0;
@@ -622,44 +719,23 @@ _Struct declaration_ If `mystruct` is not already a Terra struct, it creates a n
         fieldN : typeN;
     }
 
-_Struct definition_. If `mystruct` is not already a Struct, then it creates a new struct with the behavior of struct declarations. It then fills in the `entries` table of the struct with the fields and types specified in the body of the defintion. The `union` block can be used to specify that a group of fields should share the same location in memory. If `mystruct` was previously given a definition, then defining it again will result in an error.
+_Struct definition_. If `mystruct` is not already a Struct, then it creates a new struct with the behavior of struct declarations. It then fills in the `entries` table of the struct with the fields and types specified in the body of the definition. The `union` block can be used to specify that a group of fields should share the same location in memory. If `mystruct` was previously given a definition, then defining it again will result in an error.
 
----
+----
+    
+    terra mystruct:mymethod
+        
+_Method declaration_. Creates a new Terra function with definitions at `mystruct.methods.mymethod` if one does not already exist.
 
-    terralib.types.newstruct([displayname])
+----
 
-Constructs and returns a new struct. `displayname` is an option name that will be displayed by error messages.
+    terra mystruct:mymethod(arg0 : type0,..., argN : typeN)
+        ...
+    end
+    
+    
+_Method definition_. If `mystruct.methods.mymethod` is not a Terra function, it creates one. Then it adds the method definition. The formal parameter `self` with type `&mystruct` will be added to beginning of the formal parameter list.
 
----
-
-    mystruct.entries
-
-The `entries` field is a [List](#list) of field entries. Each field entry is one of:
-* A table `{ field = stringorsymbol, type = terratype }`, specifying a named field.
-* A table `{stringorsymbol,terratype}`, also specifying a named field.
-* A [List](#list) of field entries that will be allocated together in a union.
-
----
-
-    mystruct.methods
-
-The `methods` field is a table mapping strings or [symbols](#symbol) to functions (both Lua/Terra) or [macros](#macros). In Terra code the expression `myobj:mymethod(arg0,...argN)` will be desugared to `[T.methods.mymethod](myobj,arg0,...,argN)` if type of `myobj` is `T`. If the type of `myobj` is `&T` then this desugars to `[T.methods.mymethod](@myobj,arg0,...,argN)`. Additionally, when a method is invoked as a method and its first argument has `T` but the formal parameter has type `&T` then the argument will be automatically converted to a pointer by taking its address. This _method reciever cast_ allows method calls on objects to modify the object.
-
----
-
-    mystruct.metamethods
-
-The `metamethods` field can be used to extend the behavior of structs by defining the following fields:
-
-* `entries = __getentries(self)` -- a _Lua_ function that overrides the default behavior that determines the fields in a struct. By default, `__getentries` just returns the `self.entries` table. It can be overridden to determine the fields in the struct computationally. The `__getentries` function will be called by the compiler once when it first requires the list of entries in the struct. Since the type is not yet complete during this call, doing anything in this method that requires the type to be complete will result in an error.
-* `method = __getmethod(self,methodname)` -- a _Lua_ function that overrides the default behavior that looks up a method for a struct statically. By default, `__getmethod(self,methodname)` will return `self.methods[methodname]`. If the resulting value is `nil` then it will call `__methodmissing` as described below. By defining `__getmethod`, you can change the behavior of method lookup. This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls. 
-* `__staticinitialize(self)` -- a _Lua_ function called after the type is complete but before the compiler returns to user-defined code. Since the type is complete, you can now do things that require a complete type such as create vtables, or examine offsets using the `terralib.offsetof`. The static initializers for entries in a struct will run before the static initializer for the struct itself.
-* `castedexp = __cast(from,to,exp)` -- a _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works.
-* `__methodmissing(methodname,arg0,...,argN)` -- A terra macro that is called when `methodname` is not found in the method table of the type. It should return a Terra expression to use in place of the method call.
-* custom operators: `__sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,`
-    `__eq, __ne, __and, __or, __not, __xor, __lshift, __rshift,` 
-    `__select, __apply, __get` Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, `__get` for field selection `mystruct.missingfield` for a field that doesn't exist in the struct, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
-* `__typename(self)` -- a _Lua_ function that generates a string that names the type. This name will be used in error messages and `tostring`.
 
 C Backwards Compatibility
 -------------------------
@@ -801,7 +877,7 @@ When converting Terra values back into Lua values (e.g. from the results of a fu
 Asynchronous Compilation
 ------------------------
 
-When the Terra compiler encounters a [macro](#macros) or [metamethod](#structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
+When the Terra compiler encounters a [macro](#macros) or [metamethod](#exotypes_structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
 
 If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately). 
 
