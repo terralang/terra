@@ -209,6 +209,8 @@ static void statement (LexState *ls);
 static void expr (LexState *ls);
 static void terratype(LexState * ls);
 static void luaexpr(LexState * ls);
+static void luacode(LexState * ls, int isexp);
+static void doquote(LexState * ls);
 static void languageextension(LexState * ls, int isstatement, int islocal);
 
 static void definevariable(LexState * ls, TString * varname) {
@@ -805,6 +807,12 @@ static void funcargs (LexState *ls, int line) {
       luaX_next(ls);  /* must use `seminfo' before `next' */
       break;
     }
+    case '`': case TK_QUOTE: {
+        int exps = new_list(ls);
+        doquote(ls);
+        add_entry(ls, exps);
+        break;
+    }
     default: {
       luaX_syntaxerror(ls, "function arguments expected");
     }
@@ -833,7 +841,7 @@ static void prefixexp (LexState *ls) {
       return;
     }
     case '[': {
-      check_terra(ls, "antiquotation");
+      check_terra(ls, "escape");
       int line = ls->linenumber;
       luaX_next(ls);
       RETURNS_1(luaexpr(ls));
@@ -901,7 +909,7 @@ static void primaryexp (LexState *ls) {
         if(issplitprimary(ls))
             return;
         /* fallthrough */
-      case TK_STRING: case '{': {
+      case TK_STRING: case '{': case '`': case TK_QUOTE: {
         //luaK_exp2nextreg(fs, v);
         int tbl = new_table_before(ls,T_apply,true);
         add_field(ls,tbl,"value");
@@ -931,7 +939,8 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
     OutputBuffer_printf(&ls->output_buffer," }, { __index = terra.makeenvunstrict(getfenv()) }) end");
 }
 
-static void doquote(LexState * ls, bool isexp) {
+static void doquote(LexState * ls) {
+    bool isexp = ls->t.token == '`';
     check_no_terra(ls, isexp ? "`" : "quote");
     
     TerraCnt tc;
@@ -961,9 +970,9 @@ static void doquote(LexState * ls, bool isexp) {
     
     luaX_patchbegin(ls,&begin);
     int id = store_value(ls);
-    OutputBuffer_printf(&ls->output_buffer,"terra.definequote(_G.terra._trees[%d],",id);
+    OutputBuffer_printf(&ls->output_buffer,"(terra.definequote(_G.terra._trees[%d],",id);
     print_captured_locals(ls,&tc);
-    OutputBuffer_printf(&ls->output_buffer,")");
+    OutputBuffer_printf(&ls->output_buffer,"))");
     luaX_patchend(ls,&begin);
     leaveterra(ls);
 }
@@ -979,6 +988,14 @@ static void number_type(LexState * ls, int flags, char * buf) {
         sprintf(buf,"%s",(flags & F_IS8BYTES) ? "double" : "float");
       }
     }
+}
+
+static void blockescape(LexState * ls) {
+    check_terra(ls, "escape");
+    int line = ls->linenumber;
+    luaX_next(ls);
+    luacode(ls, 0);
+    check_match(ls, TK_END, TK_ESCAPE, line);
 }
 
 static void simpleexp (LexState *ls) {
@@ -1034,12 +1051,12 @@ static void simpleexp (LexState *ls) {
       constructor(ls);
       return;
     }
-    case '`': { /* quote expression */
-        doquote(ls,true);
+    case '`': case TK_QUOTE: { /* quote expression */
+        doquote(ls);
         return;
     }
-    case TK_QUOTE: {
-        doquote(ls,false);
+    case TK_ESCAPE: {
+        blockescape(ls);
         return;
     }
     case TK_FUNCTION: {
@@ -1281,7 +1298,7 @@ const char * expr_reader(lua_State * L, void * data, size_t * size) {
 }
 
 
-static void luaexpr(LexState * ls) {
+static void luacode(LexState * ls, int isexp) {
     assert(ls->in_terra);
     
     //terra types are lua expressions.
@@ -1295,12 +1312,15 @@ static void luaexpr(LexState * ls) {
     FuncState * fs = ls->fs;
     BlockCnt bl;
     enterblock(ls->fs, &bl, 0);
-    RETURNS_1(expr(ls));
+    if(isexp)
+        expr(ls);
+    else
+        statlist(ls);
     leaveblock(fs);
     ls->in_terra = in_terra;
     
     ExprReaderData data;
-    data.step = 0;
+    data.step = isexp ? 0 : 1;
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     
     if(lua_load(ls->L, expr_reader, &data, "$terra$") != 0) {
@@ -1317,7 +1337,12 @@ static void luaexpr(LexState * ls) {
     }
     
     add_field(ls, tbl, "expression");
-    
+    push_boolean(ls, isexp);
+    add_field(ls, tbl, "isexpression");
+}
+
+static void luaexpr(LexState * ls) {
+    luacode(ls, 1);
 }
 
 static void terratype(LexState * ls) {
@@ -1925,6 +1950,10 @@ static void statement (LexState *ls) {
         luaX_next(ls);
         expr(ls);
         add_field(ls, tbl, "expression");
+        break;
+    }
+    case TK_ESCAPE: {
+        blockescape(ls);
         break;
     }
       /*otherwise, fallthrough to the normal error message.*/
