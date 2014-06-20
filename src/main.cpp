@@ -249,6 +249,7 @@ static int pushline (lua_State *L, int firstline) {
     lua_pushfstring(L, "return %s", b+1);  /* change it to `return' */
   else
     lua_pushstring(L, b);
+  lua_saveline(L, -1);
   lua_freeline(L, b);
   return 1;
 }
@@ -267,7 +268,6 @@ static int loadline (lua_State *L) {
     lua_insert(L, -2);  /* ...between the two lines */
     lua_concat(L, 3);  /* join them */
   }
-  lua_saveline(L, 1);
   lua_remove(L, 1);  /* remove line */
   return status;
 }

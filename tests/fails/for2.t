@@ -1,0 +1,13 @@
+terra foo(a : uint64, s : uint64)
+    var r = 0
+    for i = "a",a,s do
+        r = r + i
+    end
+    return r
+end
+
+
+
+local test = require("test")
+test.eq(foo(10,1),45)
+test.eq(foo(10,2),20)

@@ -7,8 +7,9 @@ local sumlanguage = {
 		lex:expect("sum") --first token should be "sum"
 		if not lex:matches("done") then
 			repeat
-				local v = lex:expect(lex.number).value --parse a number, return its value
-				sum = sum + v
+			    local t = lex:expect(lex.number)
+			    print(t.valuetype,type(t.value))
+				sum = sum + t.value --parse a number, return its value
 			until not lex:nextif(",") --if there is a comma, consume it and continue
 		end
 

@@ -462,11 +462,19 @@ static void statlist (LexState *ls) {
   }
 }
 
+static void push_type(LexState * ls, const char * typ) {
+    if(ls->in_terra) {
+        luaX_globalgetfield(ls, TA_TERRA_OBJECT, "types");
+        lua_getfield(ls->L,-1,typ);
+        lua_remove(ls->L,-2); //types object
+    }
+}
+
 static void push_literal(LexState * ls, const char * typ) {
     if(ls->in_terra) {
         int lit = new_table_before(ls,T_literal);
         add_field(ls,lit,"value");
-        lua_getglobal(ls->L,typ);
+        push_type(ls,typ);
         add_field(ls,lit,"type");
     }
 }
@@ -682,31 +690,33 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 
 /* }====================================================================== */
 
+static int vardecl(LexState *ls, int requiretype, TString ** vname) {
+    int entry = new_table(ls,T_entry);
+    int wasstring = checksymbol(ls, vname);
+    add_field(ls, entry, "name");
+    if (ls->in_terra && ( (wasstring && requiretype) || ls->t.token == ':')) {
+        checknext(ls, ':');
+        RETURNS_1(terratype(ls));
+        add_field(ls,entry,"type");
+    }
+    return wasstring;
+}
+
 static void parlist (LexState *ls) {
   /* parlist -> [ param { `,' param } ] */
   FuncState *fs = ls->fs;
   Proto *f = &fs->f;
   int tbl = new_list(ls);
-  int nparams = 0;
   f->is_vararg = 0;
   std::vector<TString *> vnames;
   if (ls->t.token != ')') {  /* is `parlist' not empty? */
     do {
       switch (ls->t.token) {
         case TK_NAME: case '[': {  /* param -> NAME */
-          int entry = new_table(ls,T_entry);
           TString * vname;
-          int wasstring = checksymbol(ls,&vname);
-          add_field(ls,entry,"name");
-          if(vname)
+          if(vardecl(ls, 1, &vname))
             vnames.push_back(vname);
-          if(ls->in_terra && (wasstring || ls->t.token == ':')) {
-            checknext(ls,':');
-            RETURNS_1(terratype(ls));
-            add_field(ls,entry,"type");
-          }
           add_entry(ls,tbl);
-          nparams++;
           break;
         }
         case TK_DOTS: {  /* param -> `...' */
@@ -958,29 +968,36 @@ static void doquote(LexState * ls, bool isexp) {
     leaveterra(ls);
 }
 
+//buf should be at least 128 chars
+static void number_type(LexState * ls, int flags, char * buf) {
+    if(ls->in_terra) {
+      if(flags & F_ISINTEGER) {
+        const char * sign = (flags & F_ISUNSIGNED) ? "u" : "";
+        const char * sz = (flags & F_IS8BYTES) ? "64" : "";
+        sprintf(buf,"%sint%s",sign,sz);
+      } else {
+        sprintf(buf,"%s",(flags & F_IS8BYTES) ? "double" : "float");
+      }
+    }
+}
+
 static void simpleexp (LexState *ls) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | primaryexp */
   switch (ls->t.token) {
     case TK_NUMBER: {
-      //v->u.nval = ls->t.seminfo.r;
+      char buf[128];
       int flags = ls->t.seminfo.flags;
+      number_type(ls, flags, &buf[0]);
       if(flags & F_ISINTEGER) {
         push_integer(ls,ls->t.seminfo.i);
-        const char * sign = (flags & F_ISUNSIGNED) ? "u" : "";
-        const char * sz = (flags & F_IS8BYTES) ? "64" : "";
-        char buf[128];
-        sprintf(buf,"%sint%s",sign,sz);
         push_literal(ls,buf);
         sprintf(buf,"%"PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
         add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
         push_double(ls,ls->t.seminfo.r);
-        if(flags & F_IS8BYTES)
-            push_literal(ls,"double");
-        else
-            push_literal(ls,"float");
+        push_literal(ls, buf);
       }
       break;
     }
@@ -1435,13 +1452,7 @@ static void repeatstat (LexState *ls, int line) {
   //repeat is translated into { kind = block; body = { kind = repeat; body = { kind = treelist, statements = <bodystmts>}; cond = <cond> } }
 }
 
-
-static void exp1 (LexState *ls) {
-  expr(ls);
-}
-
-
-static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl) {
+static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
   /* forbody -> DO block */
   FuncState *fs = ls->fs;
   checknext(ls, TK_DO);
@@ -1450,36 +1461,30 @@ static void forbody (LexState *ls, int line, int nvars, int isnum, BlockCnt * bl
   leaveblock(fs);  /* end of scope for declared variables */
 }
 
-
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
   int tbl = new_table_before(ls,T_fornum);
-  add_field(ls,tbl,"varname");
+  add_field(ls,tbl,"variable");
   checknext(ls, '=');
-  RETURNS_1(exp1(ls));  /* initial value */
+  RETURNS_1(expr(ls));  /* initial value */
   add_field(ls,tbl,"initial");
   checknext(ls, ',');
-  RETURNS_1(exp1(ls));  /* limit */
+  RETURNS_1(expr(ls));  /* limit */
   add_field(ls,tbl,"limit");
   if (testnext(ls, ',')) {
-    RETURNS_1(exp1(ls));  /* optional step */
-  } else {  /* default step = 1 */
-    push_integer(ls, 1);
-    push_literal(ls, "int64");
+    RETURNS_1(expr(ls));  /* optional step */
+    add_field(ls,tbl,"step");
   }
-  add_field(ls,tbl,"step");
   BlockCnt bl;
   if(varname)
     definevariable(ls, varname);
-  RETURNS_1(forbody(ls, line, 1, 1, &bl));
+  RETURNS_1(forbody(ls, line, 1, &bl));
   add_field(ls,tbl,"body");
 }
 
 
 static void forlist (LexState *ls, TString *indexname) {
   /* forlist -> NAME {,NAME} IN explist forbody */
-  int nvars = 4;  /* gen, state, control, plus at least one declared var */
-  int line;
   int tbl = new_table_before(ls,T_forlist);
   int vars = new_list_before(ls);
   add_entry(ls,vars);
@@ -1489,19 +1494,20 @@ static void forlist (LexState *ls, TString *indexname) {
     definevariable(ls, indexname);
   
   while (testnext(ls, ',')) {
-    TString * name = NULL;
-    checksymbol(ls,&name);
-    add_entry(ls,vars);
-    if(name)
+    TString * name;
+    if(vardecl(ls, 0, &name))
       definevariable(ls,name);
-    nvars++;
+    add_entry(ls,vars);
   }
   add_field(ls,tbl,"variables");
   checknext(ls, TK_IN);
-  line = ls->linenumber;
-  RETURNS_1(explist(ls));
-  add_field(ls,tbl,"iterators");
-  RETURNS_1(forbody(ls, line, nvars - 3, 0, &bl));
+  int line = ls->linenumber;
+  if(ls->in_terra)
+    RETURNS_1(expr(ls));
+  else
+    RETURNS_1(explist(ls));
+  add_field(ls,tbl,"iterator");
+  RETURNS_1(forbody(ls, line, 0, &bl));
   add_field(ls,tbl,"body");
 }
 
@@ -1512,7 +1518,9 @@ static void forstat (LexState *ls, int line) {
   BlockCnt bl;
   enterblock(fs, &bl, 1);  /* scope for loop and control variables */
   luaX_next(ls);  /* skip `for' */
-  checksymbol(ls,&varname);
+  
+  vardecl(ls, 0, &varname);
+  
   switch (ls->t.token) {
     case '=': RETURNS_0(fornum(ls, varname, line)); break;
     case ',': case TK_IN: RETURNS_0(forlist(ls, varname)); break;
@@ -1570,32 +1578,19 @@ void print_name_list(LexState * ls, std::vector<Name> * definednames) {
 
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
-  int nvars = 0;
-  int nexps;
   int tbl = new_table(ls,T_defvar);
   int vars = new_list(ls);
   std::vector<TString *> declarednames;
   do {
-    int entry = new_table(ls,T_entry);
-    TString * vname = NULL;
-    RETURNS_1(checksymbol(ls,&vname));
-    if(vname)
+    TString * vname;
+    if(vardecl(ls, 0, &vname))
       declarednames.push_back(vname);
-    add_field(ls,entry,"name");
-    if(ls->in_terra && testnext(ls,':')) {
-      RETURNS_1(terratype(ls));
-      add_field(ls,entry,"type");
-    }
     add_entry(ls,vars);
-    nvars++;
   } while (testnext(ls, ','));
   add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
-    RETURNS_1(nexps = explist(ls));
+    RETURNS_1(explist(ls));
     add_field(ls,tbl,"initializers");
-  } else {
-    //blank initializers
-    nexps = 0;
   }
   for(size_t i = 0; i < declarednames.size(); i++) {
     definevariable(ls, declarednames[i]);
@@ -1977,12 +1972,22 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"value");
         break;
-    case TK_NUMBER:
+    case TK_NUMBER: {
+        char buf[128];
         lua_pushinteger(ls->L,T_numbertoken);
         lua_setfield(ls->L,-2,"type");
-        lua_pushnumber(ls->L,t->seminfo.r);
+        int flags = t->seminfo.flags;
+        number_type(ls, flags, &buf[0]);
+        push_type(ls,buf);
+        lua_setfield(ls->L,-2,"valuetype");
+        if (flags & F_IS8BYTES && flags & F_ISINTEGER) {
+            uint64_t * ip = (uint64_t*) lua_newuserdata(ls->L,sizeof(uint64_t));
+            *ip = t->seminfo.i;
+        } else {
+            lua_pushnumber(ls->L,t->seminfo.r);
+        }
         lua_setfield(ls->L,-2,"value");
-        break;
+    } break;
     case TK_SPECIAL:
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"type");

@@ -1242,8 +1242,7 @@ struct TerraCompiler {
                 break;
         }
     }
-    Value * emitCompare(Obj * exp, Obj * ao, Value * a, Value * b) {
-        TType * t = typeOfValue(ao);
+    Value * emitCompare(T_Kind op, TType * t, Value * a, Value * b) {
         Type * baseT = getPrimitiveType(t);
 #define RETURN_OP(op) \
 if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
@@ -1262,7 +1261,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
 }
         
-        switch(exp->kind("operator")) {
+        switch(op) {
             case T_ne: RETURN_OP(NE) break;
             case T_eq: RETURN_OP(EQ) break;
             case T_lt: RETURN_SOP(LT) break;
@@ -1324,7 +1323,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         */
         
         BasicBlock * stmtB = createAndInsertBB((isAnd) ? "and.rhs" : "or.rhs");
-        BasicBlock * mergeB = createBB((isAnd) ? "and.end" : "or.end");
+        BasicBlock * mergeB = createAndInsertBB((isAnd) ? "and.end" : "or.end");
         
         emitBranchOnExpr(ao, (isAnd) ? stmtB : mergeB, (isAnd) ? mergeB : stmtB);
         
@@ -1340,7 +1339,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         Value * b = emitCond(bo);
         stmtB = B->GetInsertBlock();
         B->CreateBr(mergeB);
-        insertBB(mergeB);
+        followsBB(mergeB);
         setInsertBlock(mergeB);
         result->addIncoming(b, stmtB);
         return B->CreateZExt(result, t->type);
@@ -1439,7 +1438,7 @@ if(baseT->isIntegerTy()) { \
             case T_and: return B->CreateAnd(a,b);
             case T_or: return B->CreateOr(a,b);
             case T_ne: case T_eq: case T_lt: case T_gt: case T_ge: case T_le: {
-                Value * v = emitCompare(exp,ao,a,b);
+                Value * v = emitCompare(exp->kind("operator"),typeOfValue(ao),a,b);
                 return B->CreateZExt(v, t->type);
             } break;
             case T_lshift:
@@ -1895,17 +1894,11 @@ if(baseT->isIntegerTy()) { \
             } break;
         }
     }
-    BasicBlock * createBB(const char * name) {
-        BasicBlock * bb = BasicBlock::Create(*C->ctx, name);
-        return bb;
+    BasicBlock * createAndInsertBB(StringRef name) {
+        return BasicBlock::Create(*C->ctx, name,func);
     }
-    BasicBlock * createAndInsertBB(const char * name) {
-        BasicBlock * bb = createBB(name);
-        insertBB(bb);
-        return bb;
-    }
-    void insertBB(BasicBlock * bb) {
-        func->getBasicBlockList().push_back(bb);
+    void followsBB(BasicBlock * b) {
+        b->moveAfter(B->GetInsertBlock());
     }
     Value * emitCond(Obj * cond) {
         return emitCond(emitExp(cond));
@@ -1923,14 +1916,14 @@ if(baseT->isIntegerTy()) { \
         ifbranch->obj("condition", &cond);
         ifbranch->obj("body",&body);
         BasicBlock * thenBB = createAndInsertBB("then");
-        BasicBlock * continueif = createBB("else");
+        BasicBlock * continueif = createAndInsertBB("else");
         emitBranchOnExpr(&cond, thenBB, continueif);
         
         setInsertBlock(thenBB);
         
         emitStmt(&body);
         B->CreateBr(footer);
-        insertBB(continueif);
+        followsBB(continueif);
         setInsertBlock(continueif);
         
     }
@@ -1964,7 +1957,7 @@ if(baseT->isIntegerTy()) { \
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
         BasicBlock * bb = (BasicBlock *) lbl->ud("basicblock");
         if(!bb) {
-            bb = createBB(lbl->string("labelname"));
+            bb = createAndInsertBB(lbl->string("labelname"));
             lua_pushlightuserdata(L,bb);
             lbl->setfield("basicblock");
         }
@@ -2055,8 +2048,7 @@ if(baseT->isIntegerTy()) { \
         ValueToValueMapTy VMap;
         for(size_t i = 0; i < num; i++) {
             BasicBlock * bb = deferred[deferred.size() - 1 - i];
-            bb = CloneBasicBlock(bb, VMap);
-            insertBB(bb);
+            bb = CloneBasicBlock(bb, VMap, "", func);
             B->CreateBr(bb);
             setInsertBlock(bb);
         }
@@ -2093,7 +2085,7 @@ if(baseT->isIntegerTy()) { \
             case T_label: {
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt);
                 B->CreateBr(bb);
-                insertBB(bb);
+                followsBB(bb);
                 setInsertBlock(bb);
             } break;
             case T_goto: {
@@ -2125,7 +2117,7 @@ if(baseT->isIntegerTy()) { \
                 
                 BasicBlock * loopBody = createAndInsertBB("whilebody");
     
-                BasicBlock * merge = createBB("merge");
+                BasicBlock * merge = createAndInsertBB("merge");
                 
                 setBreaktable(stmt,merge);
                 
@@ -2137,14 +2129,45 @@ if(baseT->isIntegerTy()) { \
                 
                 B->CreateBr(condBB);
                 
-                insertBB(merge);
+                followsBB(merge);
+                setInsertBlock(merge);
+            } break;
+            case T_fornum: {
+                Obj initial,step,limit,variable,body;
+                stmt->obj("initial",&initial);
+                bool hasstep = stmt->obj("step",&step);
+                stmt->obj("limit",&limit);
+                stmt->obj("variable",&variable);
+                stmt->obj("body",&body);
+                TType * t = typeOfValue(&variable);
+                Value * initialv = emitExp(&initial);
+                Value * limitv = emitExp(&limit);
+                Value * stepv = (hasstep) ? emitExp(&step) : ConstantInt::get(t->type,1);
+                Value * vp = emitExp(&variable,false);
+                Value * zero = ConstantInt::get(t->type,0);
+                B->CreateStore(initialv, vp);
+                BasicBlock * cond = createAndInsertBB("forcond");
+                B->CreateBr(cond);
+                setInsertBlock(cond);
+                Value * v = B->CreateLoad(vp);
+                Value * c = B->CreateOr(B->CreateAnd(emitCompare(T_lt,t, v, limitv), emitCompare(T_gt,t,stepv,zero)),
+                                        B->CreateAnd(emitCompare(T_gt,t, v, limitv), emitCompare(T_le,t,stepv,zero)));
+                BasicBlock * loopBody = createAndInsertBB("forbody");
+                BasicBlock * merge = createAndInsertBB("merge");
+                setBreaktable(stmt,merge);
+                B->CreateCondBr(c,loopBody,merge);
+                setInsertBlock(loopBody);
+                emitStmt(&body);
+                B->CreateStore(B->CreateAdd(v, stepv),vp);
+                B->CreateBr(cond);
+                followsBB(merge);
                 setInsertBlock(merge);
             } break;
             case T_if: {
                 Obj branches;
                 stmt->obj("branches",&branches);
                 int N = branches.size();
-                BasicBlock * footer = createBB("merge");
+                BasicBlock * footer = createAndInsertBB("merge");
                 for(int i = 0; i < N; i++) {
                     Obj branch;
                     branches.objAt(i,&branch);
@@ -2154,7 +2177,7 @@ if(baseT->isIntegerTy()) { \
                 if(stmt->obj("orelse",&orelse))
                     emitStmt(&orelse);
                 B->CreateBr(footer);
-                insertBB(footer);
+                followsBB(footer);
                 setInsertBlock(footer);
             } break;
             case T_repeat: {
@@ -2163,7 +2186,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("body",&body);
                 
                 BasicBlock * loopBody = createAndInsertBB("repeatbody");
-                BasicBlock * merge = createBB("merge");
+                BasicBlock * merge = createAndInsertBB("merge");
                 
                 setBreaktable(stmt,merge);
                 
@@ -2183,7 +2206,7 @@ if(baseT->isIntegerTy()) { \
                 }
                 emitBranchOnExpr(&cond, merge, loopBody);
                 
-                insertBB(merge);
+                followsBB(merge);
                 setInsertBlock(merge);
                 unwindDeferred(N);
             } break;
@@ -2471,12 +2494,18 @@ static int terra_deletefunction(lua_State * L) {
 static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     
+    lua_getfield(L,-1,"llvm_value");
+    Function * fn = (Function*) lua_touserdata(L,-1);
+    lua_pop(L,1); //llvm_value
+    fn->dump();
+    
     lua_getfield(L,-1,"llvm_ptr");
     void * addr = lua_touserdata(L, -1);
-    TerraFunctionInfo & fi = T->C->functioninfo[addr];
-    fi.fn->dump();
-    printf("assembly for function at address %p\n",addr);
-    llvmutil_disassemblefunction(fi.addr, fi.size,0);
+    if(T->C->functioninfo.count(addr)) {
+        TerraFunctionInfo & fi = T->C->functioninfo[addr];
+        printf("assembly for function at address %p\n",addr);
+        llvmutil_disassemblefunction(fi.addr, fi.size,0);
+    }
     return 0;
 }
 
