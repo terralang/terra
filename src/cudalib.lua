@@ -82,6 +82,9 @@ cudalib = setmetatable({}, { __index = function(self,builtin)
     return result
 end })
 
+function cudalib.sharedmemory(typ)
+    return terralib.global(typ,nil,3)
+end
 
 
 

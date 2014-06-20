@@ -1076,7 +1076,8 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
         if(global->obj("initializer",&constant)) {
             llvmconstant = GetConstant(CC,&constant);
         }
-        gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name);
+        int as = global->number("addressspace");
+        gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL, GlobalVariable::NotThreadLocal, as);
         lua_pushlightuserdata(CC->L, gv);
         global->setfield("llvm_value");
     }
