@@ -137,6 +137,11 @@ int terra_cudacompile(lua_State * L) {
     
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
+    VERBOSE_ONLY(T) {
+        fprintf(stderr,"CUDA Module\n");
+        M->dump();
+        fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
+    }
     delete M;
     CUmodule cudaM;
     CUDA_DO(cuModuleLoadDataEx(&cudaM, ptx.c_str(), 0, 0, 0));
