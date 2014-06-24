@@ -1873,9 +1873,17 @@ function terra.specialize(origtree, luaenv, depth)
                 return ee
             end
             return terra.createterraexpression(diag,e,selected)
-        elseif e:is "luaexpression" then     
-            local success, value = terra.evalluaexpression(diag,env:combinedenv(),e)
-            if not success then value = {} end
+        elseif e:is "luaexpression" then
+            local value = {}
+            if e.isexpression then
+                local success, returnvalue = terra.evalluaexpression(diag,env:combinedenv(),e)
+                if success then value = returnvalue end
+            else
+                env:enterblock()
+                env:localenv().emit = function(arg) table.insert(value,arg) end
+                terra.evalluaexpression(diag,env:combinedenv(),e)
+                env:leaveblock()
+            end
             return terra.createterraexpression(diag, e, value)
         elseif e:is "symbol" then
             local v
