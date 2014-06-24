@@ -24,7 +24,7 @@ local C = terralib.includecstring [[
 #include <stdio.h>
 ]]
 
-local R = terralib.cudacompile({ bar = bar })
+local R = terralib.cudacompile({ bar = bar },true)
 
 
 terra doit(N : int)

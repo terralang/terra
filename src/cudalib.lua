@@ -1,5 +1,5 @@
 -- See Copyright Notice in ../LICENSE.txt
-function terralib.cudacompile(module)
+function terralib.cudacompile(module,dumpmodule)
     local tbl = {}
     for k,v in pairs(module) do
         if not terra.isfunction(v) then
@@ -27,7 +27,7 @@ function terralib.cudacompile(module)
         tbl[k] = definitions[1]
     end
     --call into tcuda.cpp to perform compilation
-    return terralib.cudacompileimpl(tbl)
+    return terralib.cudacompileimpl(tbl,dumpmodule)
 end
 
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels

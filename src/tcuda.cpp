@@ -101,8 +101,8 @@ static std::string sanitizeName(std::string name) {
 int terra_cudacompile(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeCUDAState(T);
-
-    int tbl = lua_gettop(L);
+    int tbl = 1;
+    int dumpmodule = lua_toboolean(L,2);
     
     std::vector<std::string> fnnames;
     std::vector<llvm::Function *> fns;
@@ -137,8 +137,8 @@ int terra_cudacompile(lua_State * L) {
     
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
-    VERBOSE_ONLY(T) {
-        fprintf(stderr,"CUDA Module\n");
+    if(dumpmodule) {
+        fprintf(stderr,"CUDA Module:\n");
         M->dump();
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
