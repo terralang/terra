@@ -507,7 +507,7 @@ struct CCallingConv {
                         t->type = FunctionPointerType();
                     } else {
                         TType * baset = GetTypeIncomplete(&base);
-                        t->type = PointerType::getUnqual(baset->type);
+                        t->type = PointerType::get(baset->type,typ->number("addressspace"));
                     }
                 } break;
                 case T_array: {

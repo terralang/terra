@@ -1659,10 +1659,10 @@ do
         end
     end
     
-    types.pointer = memoizefunction(function(typ)
+    types.pointer = memoizefunction(function(typ,as)
         checkistype(typ)
         if typ == types.error then return types.error end
-        return mktyp { kind = terra.kinds.pointer, type = typ }
+        return mktyp { kind = terra.kinds.pointer, type = typ, addressspace = tonumber(as) or 0 }
     end)
     local function checkarraylike(typ, N_)
         local N = tonumber(N_)

@@ -20,8 +20,8 @@ function terralib.cudacompile(module)
         end
 
         for _,p in ipairs(typ.parameters) do
-            if not p:ispointer() or p:isprimitive() then
-                error(k..": kernels arguments can only be primitive types or pointers but kernel has type ", typ)
+            if not (p:ispointer() or p:isprimitive()) then
+                error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
             end
         end
         tbl[k] = definitions[1]
@@ -29,11 +29,6 @@ function terralib.cudacompile(module)
     --call into tcuda.cpp to perform compilation
     return terralib.cudacompileimpl(tbl)
 end
-
-
-
-
-
 
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
 --since this file is loaded as Lua, we use terra.loadstring to inject some terra code
@@ -61,9 +56,11 @@ function terralib.cudamakekernelwrapper(fn,funcdata)
                                      params.sharedMemBytes, C.CUstream(params.hStream),paramlist,nil)
     end
 end 
-
+function cudalib.sharedmemory(typ,N)
+    local gv = terralib.global(typ[N],nil,3)
+    return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
+end
 ]]
-terracode()
 
 local builtintablestring = nil --at the end of the file
 local builtintable
@@ -76,18 +73,12 @@ cudalib = setmetatable({}, { __index = function(self,builtin)
         error("unknown builtin: "..builtin,2)
     end
     local rename = "llvm."..builtin:gsub("_",".")
-    print(rename)
     local result = terra.intrinsic(rename,typ)
     self[builtin] = result
     return result
 end })
 
-function cudalib.sharedmemory(typ)
-    return terralib.global(typ,nil,3)
-end
-
-
-
+terracode()
 
 builtintablestring = [[
 return {
@@ -368,5 +359,6 @@ return {
     nvvm_membar_gl =  {} -> {};
     nvvm_membar_sys =  {} -> {};
     ptx_bar_sync =  int -> {};
+    nvvm_ptr_shared_to_gen_p0i8_p3i8 = terralib.types.pointer(opaque,3) -> &opaque;
 } ]]
 

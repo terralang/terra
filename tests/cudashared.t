@@ -7,7 +7,7 @@ local tid = cudalib.nvvm_read_ptx_sreg_tid_x--terralib.intrinsic("llvm.nvvm.read
 
 N = 1024
 
-somedata = cudalib.sharedmemory(int[N])
+somedata = cudalib.sharedmemory(int,N)
 
 terra bar(result : &int)
     var t = tid()
