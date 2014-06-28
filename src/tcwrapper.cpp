@@ -433,7 +433,7 @@ public:
     void CreateFunction(const std::string & name, const std::string & internalname, Obj * typ) {
         if(!general.hasfield(name.c_str())) {
             lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-            lua_getfield(L, -1, "newcfunction");
+            lua_getfield(L, -1, "externfunction");
             lua_remove(L,-2); //terra table
             lua_pushstring(L, internalname.c_str());
             typ->push();

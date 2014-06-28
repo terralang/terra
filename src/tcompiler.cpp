@@ -45,7 +45,7 @@ using namespace llvm;
                     all callee's of these functions that are not in this scc have already been optimized*/\
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
     _(createglobal,1) \
-    _(registercfunction,1) \
+    _(registerexternfunction,1) \
     _(llvmsizeof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
@@ -817,10 +817,9 @@ struct CCallingConv {
         }
     }
     
-    Function * CreateFunction(Obj * ftype, const char * name) {
+    Function * CreateFunction(Obj * ftype, const Twine & name) {
         TType * llvmtyp = GetType(ftype);
-        //function name is $+name so that it can't conflict with any symbols imported from the C namespace
-        Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage,Twine(StringRef("$"),name), C->m);
+        Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage, name, C->m);
         Classification * info = ClassifyFunction(ftype);
         AttributeFnOrCall(fn,info);
         return fn;
@@ -1122,8 +1121,9 @@ struct TerraCompiler {
         *rtyp = getType(&ftype);
         if(!fn) {
             const char * name = funcobj->string("name");
-            
-            fn = CC.CreateFunction(&ftype, name);
+        
+            //function name is $+name so that it can't conflict with any symbols imported from the C namespace
+            fn = CC.CreateFunction(&ftype, Twine(StringRef("$"),name));
             
             if(funcobj->hasfield("alwaysinline")) {
                 if(funcobj->boolean("alwaysinline")) {
@@ -2443,7 +2443,7 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
     return 0;
 }
 
-static int terra_registercfunction(lua_State * L) {
+static int terra_registerexternfunction(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     int ref_table = lobj_newreftable(L);
     {
@@ -2452,6 +2452,13 @@ static int terra_registercfunction(lua_State * L) {
         fn.initFromStack(L,ref_table);
         const char * name = fn.string("name");
         llvm::Function * llvmfn = T->C->m->getFunction(name);
+        if(!llvmfn) { //declared directly from Terra, so the declaration was not linked in by C
+            CCallingConv CC;
+            CC.init(T, T->C, NULL);
+            Obj typ;
+            fn.obj("type",&typ);
+            llvmfn = CC.CreateFunction(&typ,name);
+        }
         assert(llvmfn);
         lua_pushlightuserdata(L, llvmfn);
         fn.setfield("llvm_value");

@@ -538,7 +538,7 @@ end
 
 function terra.funcdefinition:initializecfunction(anchor)
     assert(self.state == "uninitializedc")
-    terra.registercfunction(self)
+    terra.registerexternfunction(self)
     --make sure all types for function are registered
     self.type:completefunction(anchor)
     self.state = "emittedllvm"
@@ -1048,7 +1048,8 @@ do  --constructor functions for terra functions and variables
         return fn
     end
 
-    function terra.newcfunction(name,typ)
+    function terra.externfunction(name,typ)
+        typ = typ:ispointertofunction() and typ.type or typ
         local obj = { type = typ, state = "uninitializedc" }
         setmetatable(obj,terra.funcdefinition)
         

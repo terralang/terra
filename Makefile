@@ -189,7 +189,7 @@ endif
 FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)/include\""
 
 ifdef ENABLE_CUDA
-FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include
+FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/lib64/libcudadevrt.a\""
 ifeq ($(UNAME), Darwin)
 CUDALIBNAME = lib
 else

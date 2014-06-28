@@ -112,6 +112,10 @@ int terra_cudacompile(lua_State * L) {
         const char * key = luaL_checkstring(L,-2);
         lua_getfield(L,-1,"llvm_value");
         llvm::Function * fn = (llvm::Function*) lua_topointer(L,-1);
+        if(dumpmodule) {
+            fprintf(stderr,"Add Function:\n");
+            fn->dump();
+        }
         assert(fn);
         fnnames.push_back(key);
         fns.push_back(fn);
@@ -128,6 +132,9 @@ int terra_cudacompile(lua_State * L) {
     
     //sanitize names
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
+        const char * prefix = "cudart:";
+        if(it->getName().startswith(prefix))
+            it->setName(it->getName().substr(strlen(prefix)));
         if(!it->isDeclaration())
             it->setName(sanitizeName(it->getName()));
     }
@@ -144,7 +151,16 @@ int terra_cudacompile(lua_State * L) {
     }
     delete M;
     CUmodule cudaM;
-    CUDA_DO(cuModuleLoadDataEx(&cudaM, ptx.c_str(), 0, 0, 0));
+    
+    CUlinkState linkState;
+    void * cubin;
+    size_t cubinSize;
+    CUDA_DO(cuLinkCreate(0,NULL,NULL,&linkState));
+    CUDA_DO(cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0));
+    CUDA_DO(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL));
+    CUDA_DO(cuLinkComplete(linkState,&cubin,&cubinSize));
+    CUDA_DO(cuModuleLoadData(&cudaM, cubin));
+    CUDA_DO(cuLinkDestroy(linkState));
 
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(L,-1,"cudamakekernelwrapper");
