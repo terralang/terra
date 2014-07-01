@@ -614,12 +614,6 @@ int include_c(lua_State * L) {
     int N = lua_objlen(L, -1);
     std::vector<const char *> args;
 
-    const char ** cpaths = clang_paths;
-    while(*cpaths) {
-        args.push_back(*cpaths);
-        cpaths++;
-    }
-
 #ifdef _WIN32
     args.push_back("-fms-extensions");
     args.push_back("-fms-compatibility");
@@ -628,15 +622,21 @@ int include_c(lua_State * L) {
     args.push_back("-fmsc-version=" __indirect(_MSC_VER));
 #endif
     
-    args.push_back("-I");
-    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
-    
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, -1, i+1);
         args.push_back(luaL_checkstring(L,-1));
         lua_pop(L,1);
     }
-
+    
+    const char ** cpaths = clang_paths;
+    while(*cpaths) {
+        args.push_back(*cpaths);
+        cpaths++;
+    }
+    
+    args.push_back("-resource-dir");
+    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
+    
     lua_newtable(L); //return a table of loaded functions
     int ref_table = lobj_newreftable(L);
     {
