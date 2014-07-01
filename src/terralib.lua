@@ -2130,7 +2130,14 @@ function terra.funcdefinition:typecheck()
     local checkstmt -- (e.g. var a = 3)
     local checkcall -- any invocation (method, function call, macro, overloaded operator) gets translated into a call to checkcall (e.g. sizeof(int), foobar(3), obj:method(arg))
     local checklet -- (e.g. 3,4 of foo(3,4))
-
+    local function checktree(tree,location)
+        if location == "statement" then
+            return checkstmt(tree)
+        else
+            return checkexp(tree,location)
+        end
+    end
+    
     --tree constructors for trees created in the typechecking process
     local function createcast(exp,typ)
         return terra.newtree(exp, { kind = terra.kinds.cast, from = exp.type, to = typ, type = typ:complete(exp), expression = exp })
@@ -2597,7 +2604,7 @@ function terra.funcdefinition:typecheck()
         end
         
         if #overloads > 0 then
-            return checkcall(ee, overloads, operands, "all", true, false)
+            return checkcall(ee, overloads, operands, "all", true, "expression")
         else
             local r = op(ee,operands)
             if (op_string == "and" or op_string == "or") and operands[1].type:islogical() then
@@ -2628,10 +2635,10 @@ function terra.funcdefinition:typecheck()
         end
     end
     
-    local function checkexpressions(expressions,allowluaobject)
+    local function checkexpressions(expressions,location)
         local nes = terra.newlist()
         for i,e in ipairs(expressions) do
-            local ne = checkexp(e,allowluaobject)
+            local ne = checkexp(e,location)
             if ne:is "treelist" and not ne.statements then
                 nes:insertall(ne.expressions)
             else
@@ -2758,7 +2765,7 @@ function terra.funcdefinition:typecheck()
         return tryinsertcasts(anchor, terra.newlist { typelist }, "none", false, false, paramlist)
     end
 
-    local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, isstatement)
+    local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, location)
         local objtyp
         reciever.type:complete(anchor)
         if reciever.type:isstruct() then
@@ -2789,31 +2796,31 @@ function terra.funcdefinition:typecheck()
         for i,a in ipairs(arguments) do
             fnargs:insert(a)
         end
-        return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, isstatement)
+        return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
-    local function checkmethod(exp, isstatement)
+    local function checkmethod(exp, location)
         local methodname = exp.name
         assert(type(methodname) == "string" or terra.issymbol(methodname))
         local reciever = checkexp(exp.value)
-        local arguments = checkexpressions(exp.arguments,true)
-        return checkmethodwithreciever(exp, false, methodname, reciever, arguments, isstatement)
+        local arguments = checkexpressions(exp.arguments,"luavalue")
+        return checkmethodwithreciever(exp, false, methodname, reciever, arguments, location)
     end
 
-    local function checkapply(exp, isstatement)
-        local fnlike = checkexp(exp.value,true)
-        local arguments = checkexpressions(exp.arguments,true)
+    local function checkapply(exp, location)
+        local fnlike = checkexp(exp.value,"luavalue")
+        local arguments = checkexpressions(exp.arguments,"luavalue")
         if not fnlike:is "luaobject" then
             if fnlike.type:isstruct() or fnlike.type:ispointertostruct() then
-                return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, isstatement) 
+                return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, location) 
             end
         end
-        return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, isstatement)
+        return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, location)
     end
     local function createuntypedcast(value,totype,explicit)
         return terra.newtree(value, { kind = terra.kinds.cast, value = value, totype = totype, explicit = explicit})
     end
-    function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, isstatement)
+    function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, location)
         --arguments are always typed trees, or a lua object
         assert(#fnlikelist > 0)
         
@@ -2900,7 +2907,7 @@ function terra.funcdefinition:typecheck()
                 local success, result = terra.invokeuserfunction(anchor, false, fnlike.run, fnlike, diag, anchor, unpack(quotes))
                 if success then
                     local newexp = terra.createterraexpression(diag,anchor,result)
-                    result = isstatement and checkstmt(newexp) or checkexp(newexp,true)
+                    result = checktree(newexp,location)
                 else
                     result = anchor:copy { type = terra.types.error }
                 end
@@ -2943,7 +2950,9 @@ function terra.funcdefinition:typecheck()
         return sym
     end
 
-    function checkexp(e_, allowluaobjects)
+    function checkexp(e_, location)
+        location = location or "expression"
+        assert(type(location) == "string")
         local function docheck(e)
             if not terra.istree(e) then
                 print("not a tree?")
@@ -2970,13 +2979,13 @@ function terra.funcdefinition:typecheck()
                     end
                     if not definition:is "allocvar" then
                         --this binding was introduced by a forlist statement
-                        return checkexp(definition,allowluaobjects)
+                        return checkexp(definition,location)
                     end
                     assert(terra.types.istype(definition.type))
                 end
                 return e:copy { type = definition.type, definition = definition }
             elseif e:is "select" then
-                local v = checkexp(e.value,true)
+                local v = checkexp(e.value,"luavalue")
                 local field = checksymbol(e.field)
                 --check for and handle Type.staticmethod
                 if v:is "luaobject" and terra.types.istype(v.value) and v.value:isstruct() then
@@ -3004,7 +3013,7 @@ function terra.funcdefinition:typecheck()
                                 return typ.metamethods.__entrymissing:run(ctx,tree,field,...)
                             end)
                             local getter = terra.createterraexpression(diag, e, named) 
-                            return checkcall(v, terra.newlist{ getter }, terra.newlist { v }, "first", false, false)
+                            return checkcall(v, terra.newlist{ getter }, terra.newlist { v }, "first", false, location)
                         else
                             diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
                             return e:copy { type = terra.types.error }
@@ -3099,9 +3108,9 @@ function terra.funcdefinition:typecheck()
                 local value = insertcast(checkexp(e.operands[2]),addr.type.type)
                 return e:copy { address = addr, value = value, type = terra.types.unit }
             elseif e:is "apply" then
-                return checkapply(e,false)
+                return checkapply(e,location)
             elseif e:is "method" then
-                return checkmethod(e,false)
+                return checkmethod(e,location)
             elseif e:is "treelist" then
                 symbolenv:enterblock()
                 local result = checklet(e,e.statements, e.trees or e.expressions)
@@ -3148,7 +3157,7 @@ function terra.funcdefinition:typecheck()
         end
 
         --remove any lua objects if they are not allowed in this context
-        if not allowluaobjects then
+        if location ~= "luavalue" then
             result = removeluaobject(result)
         end
         
@@ -3399,9 +3408,9 @@ function terra.funcdefinition:typecheck()
             local lhs = checkexpressions(s.lhs)
             return createassignment(s,lhs,rhs)
         elseif s:is "apply" then
-            return checkapply(s,true)
+            return checkapply(s,"statement")
         elseif s:is "method" then
-            return checkmethod(s,true)
+            return checkmethod(s,"statement")
         elseif s:is "treelist" then
             return checklet(s,s.trees or s.statements, s.expressions)
         elseif s:is "defer" then
