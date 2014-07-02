@@ -2221,13 +2221,23 @@ if(baseT->isIntegerTy()) { \
                 Obj rhss;
                 stmt->obj("rhs",&rhss);
                 emitExpressionList(&rhss,true,&rhsexps);
-                std::vector<Value *> lhsexps;
                 Obj lhss;
                 stmt->obj("lhs",&lhss);
-                emitExpressionList(&lhss,false,&lhsexps);
-                int N = lhsexps.size();
-                for(int i = 0; i < N; i++)
-                    B->CreateStore(rhsexps[i],lhsexps[i]);
+                int N = lhss.size();
+                for(int i = 0; i < N; i++) {
+                    Obj lhs;
+                    lhss.objAt(i,&lhs);
+                    if(lhs.kind("kind") == T_setter) {
+                        Obj rhsvar,setter;
+                        lhs.obj("rhs",&rhsvar);
+                        lhs.obj("setter",&setter);
+                        Value * rhsvarV = emitExp(&rhsvar,false);
+                        B->CreateStore(rhsexps[i],rhsvarV);
+                        emitExp(&setter);
+                    } else {
+                        B->CreateStore(rhsexps[i],emitExp(&lhs,false));
+                    }
+                }
             } break;
             case T_defer: {
                 Obj expression;

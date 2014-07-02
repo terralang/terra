@@ -2179,7 +2179,7 @@ function terra.funcdefinition:typecheck()
     end
     
     local function insertvar(anchor, typ, name, definition)
-        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(anchor), name = name, definition = definition, lvalue = true }) 
+        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(anchor), name = name, definition = definition, value = definition.value, lvalue = true }) 
     end
 
     local function insertselect(v, field)
@@ -2200,10 +2200,6 @@ function terra.funcdefinition:typecheck()
         if not e.lvalue then
             diag:reporterror(e,"argument to operator must be an lvalue")
         end
-    end
-    local function checklvalue(ee)
-        local e = checkexp(ee)
-        ensurelvalue(e) 
         return e
     end
 
@@ -2219,7 +2215,7 @@ function terra.funcdefinition:typecheck()
     
     --create a new variable allocation and a var node that refers to it, used to create temporary variables
     local function allocvar(anchor,typ,name)
-        local av = terra.newtree(anchor, { kind = terra.kinds.allocvar, name = name , type = typ:complete(anchor), lvalue = true })
+        local av = terra.newtree(anchor, { kind = terra.kinds.allocvar, name = name , type = typ:complete(anchor), value = terra.newsymbol(name), lvalue = true })
         local v = insertvar(anchor,typ,name,av)
         return av,v
     end
@@ -2577,7 +2573,7 @@ function terra.funcdefinition:typecheck()
             local e = checkexp(ee.operands[1])
             return insertdereference(e)
         elseif op_string == "&" then
-            local e = checklvalue(ee.operands[1])
+            local e = ensurelvalue(checkexp(ee.operands[1]))
             local ty = terra.types.pointer(e.type)
             return ee:copy { type = ty, operands = terra.newlist{e} }
         end
@@ -2811,7 +2807,16 @@ function terra.funcdefinition:typecheck()
         local fnlike = checkexp(exp.value,"luavalue")
         local arguments = checkexpressions(exp.arguments,"luavalue")
         if not fnlike:is "luaobject" then
-            if fnlike.type:isstruct() or fnlike.type:ispointertostruct() then
+            local typ = fnlike.type
+            typ = typ:ispointer() and typ.type or typ
+            if typ:isstruct() then
+                if location == "lexpression" and typ.metamethods.__update then
+                    local function setter(rhs)
+                        arguments:insert(rhs)
+                        return checkmethodwithreciever(exp, true, "__update", fnlike, arguments, "statement") 
+                    end
+                    return terralib.newtree(exp, { kind = terra.kinds.setter, setter = setter })
+                end
                 return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, location) 
             end
         end
@@ -3008,12 +3013,21 @@ function terra.funcdefinition:typecheck()
                     if not success then
                         --struct has no member field, call metamethod __entrymissing
                         local typ = v.type
-                        if terra.ismacro(typ.metamethods.__entrymissing) then
+                        
+                        local function checkmacro(metamethod,arguments,location)
                             local named = terra.internalmacro(function(ctx,tree,...)
-                                return typ.metamethods.__entrymissing:run(ctx,tree,field,...)
+                                return typ.metamethods[metamethod]:run(ctx,tree,field,...)
                             end)
                             local getter = terra.createterraexpression(diag, e, named) 
-                            return checkcall(v, terra.newlist{ getter }, terra.newlist { v }, "first", false, location)
+                            return checkcall(v, terra.newlist{ getter }, arguments, "first", false, location)
+                        end
+                        if location == "lexpression" and typ.metamethods.__setentry then
+                            local function setter(rhs)
+                                return checkmacro("__setentry", terra.newlist { v , rhs }, "statement")
+                            end
+                            return terralib.newtree(v, { kind = terra.kinds.setter, setter = setter })
+                        elseif terra.ismacro(typ.metamethods.__entrymissing) then
+                            return checkmacro("__entrymissing",terra.newlist { v },location)
                         else
                             diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
                             return e:copy { type = terra.types.error }
@@ -3151,7 +3165,7 @@ function terra.funcdefinition:typecheck()
         
         local result = docheck(e_)
         --freeze all types returned by the expression (or list of expressions)
-        if not result:is "luaobject" then
+        if not result:is "luaobject" and not result:is "setter" then
             assert(terra.types.istype(result.type))
             result.type:complete(result)
         end
@@ -3255,7 +3269,6 @@ function terra.funcdefinition:typecheck()
     end
     
     local function createassignment(anchor,lhs,rhs)
-        for i,exp in ipairs(lhs) do ensurelvalue(exp) end
         if #lhs > #rhs and #rhs > 0 then
             local last = rhs[#rhs]
             if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
@@ -3278,7 +3291,14 @@ function terra.funcdefinition:typecheck()
         local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
         rhs = insertcasts(anchor,vtypes,rhs)
         for i,v in ipairs(lhs) do
-            v.type = rhs[i] and rhs[i].type or terra.types.error
+            local rhstype = rhs[i] and rhs[i].type or terra.types.error
+            if v:is "setter" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                v.setter,v.rhs = v.setter(r),rv
+            else
+                ensurelvalue(v)
+            end
+            v.type = rhstype
         end
         return terra.newtree(anchor,{kind = terra.kinds.assignment, lhs = lhs, rhs = rhs })
     end
@@ -3405,7 +3425,7 @@ function terra.funcdefinition:typecheck()
             return res
         elseif s:is "assignment" then
             local rhs = checkexpressions(s.rhs)
-            local lhs = checkexpressions(s.lhs)
+            local lhs = checkexpressions(s.lhs,"lexpression")
             return createassignment(s,lhs,rhs)
         elseif s:is "apply" then
             return checkapply(s,"statement")
@@ -3846,6 +3866,8 @@ local function printpretty(toptree,returntype)
         elseif e:is "allocvar" then
             emit("var ")
             emitParam(e)
+        elseif e:is "setter" then
+            emitStmt(e.setter)
         elseif e:is "operator" then
             local op = terra.kinds[e.operator]
             local function emitOperand(o,isrhs)

@@ -89,7 +89,8 @@ _(attrload,"attrload") \
 _(attrstore,"attrstore") \
 _(opaque, "opaque") \
 _(allocvar, "allocvar") \
-_(defer, "defer")
+_(defer, "defer") \
+_(setter,"setter")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,
