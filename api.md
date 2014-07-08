@@ -834,6 +834,18 @@ Load the terra code `modulename`. `require` first checks if `modulename` has alr
     
 The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `terralib.require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.path` is set to the environment variable `LUA_PATH`. If `LUA_PATH` is not set then `package.path` will contain `./?.t` as a path.
 
+Saving Terra Code
+-------------------
+
+---
+
+    terralib.saveobj(filename [, filetype], functiontable[, arguments])
+
+Save Terra code to an external representation such as an object file, or executable. `filetype` can be one of `"object"` (an object file `*.o`), `"bitcode"` (LLVM bitcode `*.bc`), `"llvmir"` (LLVM textual IR `*.ll`), or `"executable"` (no extension).
+If `filetype` is missing then it is inferred from the extension. `functiontable` is a table from strings to Terra functions. These functions will be included in the code that is written out with the name given in the table.
+`arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string.
+
+
 Converting between Lua values and Terra values
 ----------------------------------------------
 
