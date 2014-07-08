@@ -3377,6 +3377,9 @@ function terra.funcdefinition:typecheck()
         elseif s:is "forlist" then
             local iterator = checkexp(s.iterator)
             local typ = iterator.type
+            if typ:ispointertostruct() then
+                typ,iterator = typ.type, insertdereference(iterator)
+            end
             if not typ:isstruct() or type(typ.metamethods.__for) ~= "function" then
                 diag:reporterror(iterator,"expected a struct with a __for metamethod but found ",typ)
                 return s
