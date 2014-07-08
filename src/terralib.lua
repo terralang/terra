@@ -4059,8 +4059,34 @@ end
 
 
 -- END DEBUG
+local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true }
 
-function terra.saveobj(filename,env,arguments)
+function terra.saveobj(filename,filekind,env,arguments)
+    if type(filekind) ~= "string" then
+        --filekind is missing, shift arguments to the right
+        filekind,env,arguments = nil,filekind,env
+    end
+    
+    if filekind == nil and filename ~= nil then
+        --infer filekind from string
+        if filename:match("%.o$") then
+            filekind = "object"
+        elseif filename:match("%.bc") then
+            filekind = "bitcode"
+        elseif filename:match("%.ll") then
+            filekind = "llvmir"
+        else
+            filekind = "executable"
+        end
+    end
+    
+    if not allowedfilekinds[filekind] then
+        error("unknown output format type: " .. tostring(filekind))
+    end
+    if filekind == "executable" and filename == nil then
+        error("exectuables must be written to a file")
+    end
+    
     local cleanenv = {}
     for k,v in pairs(env) do
         if terra.isfunction(v) then
@@ -4072,16 +4098,8 @@ function terra.saveobj(filename,env,arguments)
             cleanenv[k] = definitions[1]
         end
     end
-    local isexe
-    if filename:sub(-2) == ".o" then
-        isexe = 0
-    else
-        isexe = 1
-    end
-    if not arguments then
-        arguments = {}
-    end
-    return terra.saveobjimpl(filename,cleanenv,isexe,arguments)
+    
+    return terra.saveobjimpl(filename,filekind,cleanenv,arguments or {})
 end
 
 

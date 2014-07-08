@@ -2552,29 +2552,93 @@ static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
 }
 #endif
 
+static bool FindLinker(LLVM_PATH_TYPE * linker) {
+#ifndef _WIN32
+    #ifdef LLVM_3_4
+        *linker = sys::FindProgramByName("gcc");
+        return *linker == "";
+    #else
+        *linker = sys::Program::FindProgramByName("gcc");
+        return linker.isEmpty();
+    #endif
+#else
+    *linker = LLVM_PATH_TYPE (CLANG_EXECUTABLE);
+#endif
+    return false;
+}
+
+static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename) {
+    char tmpnamebuf[256];
+    GetTemporaryFile(tmpnamebuf,256);
+    std::string err;
+    raw_fd_ostream tmp(tmpnamebuf,err,RAW_FD_OSTREAM(F_Binary));
+    if(!err.empty()) {
+        terra_pusherror(T,"llvm: %s",err.c_str());
+        unlink(tmpnamebuf);
+        return true;
+    }
+    if(llvmutil_emitobjfile(M,T->C->tm,tmp,&err)) {
+        terra_pusherror(T,"llvm: %s",err.c_str());
+        unlink(tmpnamebuf);
+        return true;
+    }
+    LLVM_PATH_TYPE linker;
+    if(FindLinker(&linker)) {
+        unlink(tmpnamebuf);
+        terra_pusherror(T,"llvm: failed to find linker");
+        return true;
+    }
+    std::vector<const char *> cmd;
+    cmd.push_back(linker.c_str());
+    cmd.push_back(tmpnamebuf);
+    cmd.push_back("-o");
+    cmd.push_back(filename);
+    cmd.insert(cmd.end(),args->begin(),args->end());
+    cmd.push_back(NULL);
+#ifdef LLVM_3_4
+    int c = sys::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
+#else
+    int c = sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
+#endif
+    if(0 != c) {
+        unlink(tmpnamebuf);
+        unlink(filename);
+        terra_pusherror(T,"llvm: %s (%d)\n",err.c_str(),c);
+        return true;
+    }
+    return false;
+}
+
+static bool SaveObject(terra_State * T, Module * M, const std::string & filekind, raw_ostream & dest) {
+    std::string err;
+    if(filekind == "object") {
+        if(llvmutil_emitobjfile(M,T->C->tm,dest,&err)) {
+            terra_pusherror(T,"llvm: %s\n",err.c_str());
+            return true;
+        }
+    } else if(filekind == "bitcode") {
+        llvm::WriteBitcodeToFile(M,dest);
+    } else if(filekind == "llvmir") {
+        dest << *M;
+    }
+    return false;
+}
+
 static int terra_saveobjimpl(lua_State * L) {
-    const char * filename = luaL_checkstring(L, -4);
-    int tbl = lua_gettop(L) - 2;
-    bool isexe = luaL_checkint(L, -2);
     terra_State * T = terra_getstate(L, 1);
     
+    const char * filename = lua_tostring(L, 1); //NULL means write to memory
+    std::string filekind = lua_tostring(L,2); 
+    int tbl = 3;
+    int argument_index = 4;
+    
+    std::vector<Function *> livefns;
+    std::vector<std::string> names;
+    Module * M;
+    std::vector<const char *> args;
+    
     int ref_table = lobj_newreftable(T->L);
-    
-    char tmpnamebuf[256];
-    const char * objname = NULL;
-    if(isexe) {
-        objname = GetTemporaryFile(tmpnamebuf,256);
-    } else {
-        objname = filename;
-    }
-    
     {
-        lua_pushvalue(L,-2);
-        Obj arguments;
-        arguments.initFromStack(L,ref_table);
-    
-        std::vector<Function *> livefns;
-        std::vector<std::string> names;
         //iterate over the key value pairs in the table
         lua_pushnil(L);
         while (lua_next(L, tbl) != 0) {
@@ -2587,74 +2651,57 @@ static int terra_saveobjimpl(lua_State * L) {
             livefns.push_back(fnold);
         }
         
-        Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
+        M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
         
         VERBOSE_ONLY(T) {
-            printf("extraced module is:\n");
+            printf("extracted module is:\n");
             M->dump();
         }
         
-        //printf("saving %s\n",objname);
-        std::string err = "";
-        if(llvmutil_emitobjfile(M,T->C->tm,objname,&err)) {
-            if(isexe)
-                unlink(objname);
-            delete M;
-            terra_reporterror(T,"llvm: %s\n",err.c_str());
-        }
+        lua_pushvalue(L,argument_index);
+        Obj arguments;
+        arguments.initFromStack(L,ref_table);
         
-        delete M;
-        M = NULL;
-        
-        if(isexe) {
-            LLVM_PATH_TYPE linker;
-#ifndef _WIN32
-#ifdef LLVM_3_4
-            linker = sys::FindProgramByName("gcc");
-            if (linker == "") {
-#else
-            linker = sys::Program::FindProgramByName("gcc");
-            if (linker.isEmpty()) {
-#endif
-                unlink(objname);
-                terra_reporterror(T,"llvm: Failed to find gcc");
-            }
-#else
-            linker = LLVM_PATH_TYPE (CLANG_EXECUTABLE);
-#endif
-            
-            std::vector<const char *> args;
-            args.push_back(linker.c_str());
-            args.push_back(objname);
-            args.push_back("-o");
-            args.push_back(filename);
-            
-            int N = arguments.size();
-            for(int i = 0; i < N; i++) {
-                Obj arg;
-                arguments.objAt(i,&arg);
-                arg.push();
-                args.push_back(luaL_checkstring(L,-1));
-                lua_pop(L,1);
-            }
-
-            args.push_back(NULL);
-#ifdef LLVM_3_4
-            int c = sys::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
-#else
-            int c = sys::Program::ExecuteAndWait(linker, &args[0], 0, 0, 0, 0, &err);
-#endif
-            if(0 != c) {
-                unlink(objname);
-                terra_reporterror(T,"llvm: %s (%d)\n",err.c_str(),c);
-            }
-            unlink(objname);
+        int N = arguments.size();
+        for(int i = 0; i < N; i++) {
+            Obj arg;
+            arguments.objAt(i,&arg);
+            arg.push();
+            args.push_back(luaL_checkstring(L,-1));
+            lua_pop(L,1);
         }
-                
     }
     lobj_removereftable(T->L, ref_table);
     
-    return 0;
+    bool result = false;
+    int N = 0;
+    
+    if (filekind == "executable") {
+        result = SaveExecutable(T,M,&args,filename);
+    } else {
+        if(filename != NULL) {
+            std::string err;
+            raw_fd_ostream dest(filename, err, (filekind == "llvmir") ? RAW_FD_OSTREAM(F_None) : RAW_FD_OSTREAM(F_Binary));
+            if (!err.empty()) {
+                terra_pusherror(T, "llvm: %s", err.c_str());
+                result = true;
+            } else {
+                result = SaveObject(T,M, filekind, dest);
+            }
+        } else {
+            SmallVector<char,256> mem;
+            raw_svector_ostream dest(mem);
+            result = SaveObject(T,M,filekind,dest);
+            N = 1;
+            lua_pushlstring(L,&mem[0],mem.size());
+        }
+    }
+    
+    delete M;
+    if(result)
+        lua_error(T->L);
+    
+    return N;
 }
 
 static int terra_pointertolightuserdata(lua_State * L) {

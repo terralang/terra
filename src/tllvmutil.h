@@ -24,7 +24,7 @@ struct OptInfo {
 void llvmutil_addtargetspecificpasses(llvm::PassManagerBase * fpm, llvm::TargetMachine * tm);
 void llvmutil_addoptimizationpasses(llvm::PassManagerBase * fpm, const OptInfo * oi);
 extern "C" void llvmutil_disassemblefunction(void * data, size_t sz, size_t inst);
-bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, const char * Filename, std::string * ErrorMessage);
+bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, llvm::raw_ostream & dest, std::string * ErrorMessage);
 llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachine * TM, std::vector<llvm::Function*> * livefns, std::vector<std::string> * symbolnames);
 
 //link src into dst, optimizing src in a way that won't delete its symbols before being linked to dst
