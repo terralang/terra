@@ -188,7 +188,7 @@ endif
 #so header include paths can be correctly configured on linux
 FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)\""
 
-ifdef ENABLE_CUDA
+ifeq ($(ENABLE_CUDA),1)
 ifeq ($(UNAME), Darwin)
 CUDALIBNAME = lib
 else

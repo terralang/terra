@@ -2415,6 +2415,8 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         CopyConnectedComponent copy(T->C->ee,m,gv);
         ee->addModule(m);
         return (void*) ee->getGlobalValueAddress(gv->getName());
+        #else
+        return NULL; //silence warning
         #endif
     } else {
         return ee->getPointerToGlobal(gv);
@@ -2571,7 +2573,7 @@ static bool FindLinker(LLVM_PATH_TYPE * linker) {
         return *linker == "";
     #else
         *linker = sys::Program::FindProgramByName("gcc");
-        return linker.isEmpty();
+        return linker->isEmpty();
     #endif
 #else
     *linker = LLVM_PATH_TYPE (CLANG_EXECUTABLE);
@@ -2583,7 +2585,7 @@ static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *
     char tmpnamebuf[256];
     GetTemporaryFile(tmpnamebuf,256);
     std::string err;
-    raw_fd_ostream tmp(tmpnamebuf,err,RAW_FD_OSTREAM(F_Binary));
+    raw_fd_ostream tmp(tmpnamebuf,err,RAW_FD_OSTREAM_BINARY);
     if(!err.empty()) {
         terra_pusherror(T,"llvm: %s",err.c_str());
         unlink(tmpnamebuf);
@@ -2693,7 +2695,7 @@ static int terra_saveobjimpl(lua_State * L) {
     } else {
         if(filename != NULL) {
             std::string err;
-            raw_fd_ostream dest(filename, err, (filekind == "llvmir") ? RAW_FD_OSTREAM(F_None) : RAW_FD_OSTREAM(F_Binary));
+            raw_fd_ostream dest(filename, err, (filekind == "llvmir") ? RAW_FD_OSTREAM_NONE : RAW_FD_OSTREAM_BINARY);
             if (!err.empty()) {
                 terra_pusherror(T, "llvm: %s", err.c_str());
                 result = true;
