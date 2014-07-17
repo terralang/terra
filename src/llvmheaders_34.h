@@ -6,6 +6,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/InlineAsm.h"
 #include "llvm/Analysis/CallGraphSCCPass.h"
 #include "llvm/DIBuilder.h"
 #include "llvm/DebugInfo.h"

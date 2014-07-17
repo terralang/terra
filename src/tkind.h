@@ -90,7 +90,8 @@ _(attrstore,"attrstore") \
 _(opaque, "opaque") \
 _(allocvar, "allocvar") \
 _(defer, "defer") \
-_(setter,"setter")
+_(setter,"setter") \
+_(inlineasm,"inlineasm")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

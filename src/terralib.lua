@@ -906,6 +906,12 @@ function terra.intrinsic(str, typ)
     end
     return terra.internalmacro(intrinsiccall)
 end
+
+terra.asm = terra.internalmacro(function(diag,tree,returntype, asm, constraints,volatile,...)
+    local args = terra.newlist({...}):map(function(e) return e.tree end)
+    return terra.newtree(tree, { kind = terra.kinds.inlineasm, type = returntype:astype(), asm = tostring(asm:asvalue()), volatile = not not volatile:asvalue(), constraints = tostring(constraints:asvalue()), arguments = args })
+end)
+
     
 
 -- CONSTRUCTORS
@@ -3157,6 +3163,8 @@ function terra.funcdefinition:typecheck()
                 return e:copy { type = typ:complete(e), expressions = paramlist }
             elseif e:is "intrinsic" then
                 return checkintrinsic(e)
+            elseif e:is "inlineasm" then
+                return e:copy { arguments = checkexpressions(e.arguments) }
             else
                 diag:reporterror(e,"statement found where an expression is expected ", terra.kinds[e.kind])
                 return e:copy { type = terra.types.error }

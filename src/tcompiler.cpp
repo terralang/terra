@@ -1855,7 +1855,19 @@ if(baseT->isIntegerTy()) { \
                 FunctionType * fntype = cast<FunctionType>(itype->type);
                 Value * fn = C->m->getOrInsertFunction(name, fntype);
                 return B->CreateCall(fn, values);
-            }
+            } break;
+            case T_inlineasm: {
+                Obj arguments;
+                exp->obj("arguments",&arguments);
+                std::vector<Value *> values;
+                emitExpressionList(&arguments,true,&values);
+                TType * rtype = typeOfValue(exp);
+                std::vector<Type*> ptypes;
+                for(size_t i = 0; i < values.size(); i++)
+                    ptypes.push_back(values[i]->getType());
+                Value * fn = InlineAsm::get(FunctionType::get(rtype->type, ptypes, false),exp->string("asm"),exp->string("constraints"),exp->boolean("volatile"));
+                return B->CreateCall(fn,values);
+            } break;
             case T_attrload: {
                 Obj addr,type,attr;
                 exp->obj("type",&type);

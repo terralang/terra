@@ -7,6 +7,7 @@
 #include "llvm/CallGraphSCCPass.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/InlineAsm.h"
 #include "llvm/DIBuilder.h"
 #include "llvm/DebugInfo.h"
 
