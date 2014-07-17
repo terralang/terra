@@ -19,7 +19,13 @@ static char * vstringf(const char * fmt, va_list ap) {
     int N = 128;
     char * buf = (char*) malloc(N);
     while(1) {
-        int n = vsnprintf(buf, N, fmt, ap);
+        va_list cp;
+        #ifdef _WIN32
+        cp = ap;
+        #else
+        va_copy(cp,ap);
+        #endif
+        int n = vsnprintf(buf, N, fmt, cp);
         if(n > -1 && n < N) {
             return buf;
         }

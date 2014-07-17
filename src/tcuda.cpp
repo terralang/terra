@@ -153,10 +153,18 @@ int terra_cudacompile(lua_State * L) {
     CUmodule cudaM;
     
     CUlinkState linkState;
+    char error_log[8192];
+    
+    CUjit_option options[] = {CU_JIT_ERROR_LOG_BUFFER,CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES};
+    void * option_values[] = { error_log, (void*)8192 };
     void * cubin;
     size_t cubinSize;
-    CUDA_DO(cuLinkCreate(0,NULL,NULL,&linkState));
-    CUDA_DO(cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0));
+    CUDA_DO(cuLinkCreate(2,options,option_values,&linkState));
+    
+    CUresult err = cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0);
+    if(err != CUDA_SUCCESS) {
+        terra_reporterror(T,"%s:%d: %s",__FILE__,__LINE__,error_log);
+    }
     CUDA_DO(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL));
     CUDA_DO(cuLinkComplete(linkState,&cubin,&cubinSize));
     CUDA_DO(cuModuleLoadData(&cudaM, cubin));

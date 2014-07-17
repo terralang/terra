@@ -1861,12 +1861,17 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("arguments",&arguments);
                 std::vector<Value *> values;
                 emitExpressionList(&arguments,true,&values);
-                TType * rtype = typeOfValue(exp);
+                Obj typ;
+                exp->obj("type",&typ);
+                bool isvoid = CC.IsUnitType(&typ);
+                Type * ttype = getType(&typ)->type;
+                Type * rtype = (isvoid) ? Type::getVoidTy(*C->ctx) : ttype;
                 std::vector<Type*> ptypes;
                 for(size_t i = 0; i < values.size(); i++)
                     ptypes.push_back(values[i]->getType());
-                Value * fn = InlineAsm::get(FunctionType::get(rtype->type, ptypes, false),exp->string("asm"),exp->string("constraints"),exp->boolean("volatile"));
-                return B->CreateCall(fn,values);
+                Value * fn = InlineAsm::get(FunctionType::get(rtype, ptypes, false),exp->string("asm"),exp->string("constraints"),exp->boolean("volatile"));
+                Value * call = B->CreateCall(fn,values);
+                return (isvoid) ? UndefValue::get(ttype) : call;
             } break;
             case T_attrload: {
                 Obj addr,type,attr;
