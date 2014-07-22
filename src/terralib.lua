@@ -310,7 +310,7 @@ end
 
 function terra.getcompilecontext()
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({definitions = {}, diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
+        terra.globalcompilecontext = setmetatable({diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
     end
     return terra.globalcompilecontext
 end
@@ -844,6 +844,8 @@ function terra.quote:asvalue()
         elseif e:is "operator" and e.operator == terra.kinds["-"] and #e.operands == 1 then
             local v,er = getvalue(e.operands[1])
             return type(v) == "number" and -v, er
+        elseif e:is "var" and terra.issymbol(e.value) then
+            return e.value
         else
             return nil, "not a constant value (note: :asvalue() isn't implement for all constants yet)"
         end
@@ -2111,6 +2113,13 @@ function terra.invokeuserfunction(anchor, speculate, userfn,  ...)
     return unpack(results)
 end
 
+local unsafesymbolenv
+function terra.unsafetypeofsymbol(sym)
+    assert(terra.issymbol(sym))
+    local def = unsafesymbolenv:localenv()[sym]
+    return def.type
+end
+
 function terra.funcdefinition:typecheck()
 
     assert(self.state == "untyped")
@@ -2127,6 +2136,11 @@ function terra.funcdefinition:typecheck()
     local ftree = self.untypedtree
     
     local symbolenv = terra.newenvironment()
+    
+    --temporary hack to expose a way to map symbols to their type outside of the typechecker
+    --this interface will change in the future
+    local oldsymbolenv = unsafesymbolenv
+    unsafesymbolenv = symbolenv
     
     local diag = terra.getcompilecontext().diagnostics
 
@@ -3503,6 +3517,7 @@ function terra.funcdefinition:typecheck()
     dbprintraw(2,self.typedtree)
 
     ctx:finish(ftree)
+    unsafesymbolenv = oldsymbolenv
 end
 --cache for lua functions called by terra, to prevent making multiple callback functions
 terra.__wrappedluafunctions = {}
