@@ -217,6 +217,7 @@ fn()
 <select id="examples" onchange="updatecontent()">
 </select>
 </div>
+<br/>
 <div id="editor">
 </div>
 <script>
@@ -231,7 +232,7 @@ var codemirror = CodeMirror(document.getElementById("editor"), {
 function updatecontent() {
 	var o = document.getElementById("examples")
 	var name = o.options[o.selectedIndex].value
-	var content = document.getElementById(name).innerText
+	var content = document.getElementById(name).textContent
 	codemirror.setValue(content.replace(/^\n/,""))
 	codemirror.setCursor(codemirror.lineCount(),0)
 	codemirror.focus()
@@ -239,7 +240,7 @@ function updatecontent() {
 function finishresult(data) {
 	var r = document.getElementById("result")
 	var code = document.createElement("code")
-	code.innerText = atob(data)
+	code.textContent = atob(data)
 	var pre = document.createElement("pre")
 	pre.appendChild(code)
 	r.innerHTML = ""
@@ -256,7 +257,7 @@ var selector = document.getElementById("examples")
 var examples = document.getElementsByClassName("example")
 for (var i = 0; i < examples.length; i++) {
 	var o = document.createElement("option")
-	o.innerText = examples[i].id
+	o.textContent = examples[i].id
 	selector.appendChild(o)
 }
 updatecontent()
