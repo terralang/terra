@@ -2169,10 +2169,14 @@ function terra.funcdefinition:typecheck()
         local k = {}
         validexpressionkeys[k] = true
         table.insert(validkeystack,k)
+        diag:begin()
     end
-    local function leavemacroscope()
+    local function leavemacroscope(anchor)
         local k = table.remove(validkeystack)
         validexpressionkeys[k] = nil
+        if diag:finish() then
+            diag:reporterror(anchor,"previous errors occurred while typechecking this macro")
+        end
     end
     local function createtypedexpression(exp)
         return terra.newtree(exp, { kind = terra.kinds.typedexpression, expression = exp, key = validkeystack[#validkeystack] })
@@ -2322,10 +2326,10 @@ function terra.funcdefinition:typecheck()
                     if result.type ~= typ then 
                         diag:reporterror(exp,"user-defined cast returned expression with the wrong type.")
                     end
-                    leavemacroscope()
+                    leavemacroscope(exp)
                     return result,true
                 else
-                    leavemacroscope()
+                    leavemacroscope(exp)
                     errormsgs:insert(result)
                 end
             end
@@ -2937,7 +2941,7 @@ function terra.funcdefinition:typecheck()
                     result = anchor:copy { type = terra.types.error }
                 end
                 
-                leavemacroscope()
+                leavemacroscope(anchor)
                 return result
             elseif type(fnlike) == "function" then
                 local callee,paramlist = generatenativewrapper(fnlike)
@@ -3430,7 +3434,7 @@ function terra.funcdefinition:typecheck()
                     symbolenv:leaveblock()
                 end
             end
-            leavemacroscope()
+            leavemacroscope(s)
             return result 
         elseif s:is "if" then
             local br = s.branches:map(checkcondbranch)
