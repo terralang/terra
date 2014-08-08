@@ -17,7 +17,14 @@
 using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
-    fpm->add(new TargetLibraryInfo(Triple(TM->getTargetTriple())));
+    TargetLibraryInfo * TLI = new TargetLibraryInfo(Triple(TM->getTargetTriple()));
+#if defined(TERRA_ENABLE_CUDA) && defined(__APPLE__)
+    //currently there isn't a seperate pathway for optimization when code will be running on CUDA
+    //so we need to avoid generating functions that don't exist there like memset_pattern16 for all code
+    //we only do this if cuda is enabled on OSX where the problem occurs to avoid slowing down other code
+    TLI->setUnavailable(LibFunc::memset_pattern16);
+#endif
+    fpm->add(TLI);
     fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
 #ifdef LLVM_3_2
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
