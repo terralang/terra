@@ -2360,55 +2360,26 @@ static int terra_optimize(lua_State * L) {
     
     return 0;
 }
+
 #ifdef TERRA_CAN_USE_MCJIT
-struct CopyConnectedComponent : public ValueMaterializer {
-    ExecutionEngine * EE;
-    Module * dest;
-    Module * src;
-    ValueToValueMapTy VMap;
-    CopyConnectedComponent(ExecutionEngine * EE_, Module * dest_, GlobalValue * start)
-    : EE(EE_), dest(dest_), src(start->getParent()) {
-        materializeValueFor(start);
+static bool MCJITShouldCopy(GlobalValue * G, void * data) {
+    ExecutionEngine * EE = (ExecutionEngine*) data;
+    if(Function * fn = dyn_cast<Function>(G)) {
+        //function has not been emitted yet, so we need to copy it
+        return 0 == EE->getFunctionAddress(fn->getName());
+    } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(G)) {
+        //global has not been emitted, copy it
+        return 0 == EE->getGlobalValueAddress(GV->getName());
     }
-    virtual Value * materializeValueFor(Value * V) {
-        if(Function * fn = dyn_cast<Function>(V)) {
-            assert(fn->getParent() == src);
-            Function * newfn = dest->getFunction(fn->getName());
-            if(!newfn) {
-                newfn = Function::Create(fn->getFunctionType(),fn->getLinkage(), fn->getName(),dest);
-                newfn->copyAttributesFrom(fn);
-            }
-            if(!fn->isDeclaration() && newfn->isDeclaration() && 0 == EE->getFunctionAddress(fn->getName())) {
-                for(Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(), E = fn->arg_end(); I != E; ++I, ++II) {
-                    II->setName(I->getName());
-                    VMap[I] = II;
-                }
-                VMap[fn] = newfn;
-                SmallVector<ReturnInst*,8> Returns;
-                CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
-            }
-            return newfn;
-        } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
-            GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName());
-            newGV->copyAttributesFrom(GV);
-            if(!GV->isDeclaration()) {
-                if(0 != EE->getGlobalValueAddress(GV->getName())) {
-                    newGV->setExternallyInitialized(true);
-                } else if(GV->hasInitializer()) {
-                    Value * C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
-                    newGV->setInitializer(cast<Constant>(C));
-                }
-            }
-            return newGV;
-        }
-        return NULL;
-    }
-};
+    return true;
+}
+
 #endif
+
 static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     ExecutionEngine * ee = T->C->ee;
     if (T->options.usemcjit) {
-        #ifdef TERRA_CAN_USE_MCJIT
+#ifdef TERRA_CAN_USE_MCJIT
         if(gv->isDeclaration()) {
             return ee->getPointerToNamedFunction(gv->getName());
         }
@@ -2416,13 +2387,12 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         if(ptr) {
             return ptr;
         }
-        Module * m = new Module(gv->getName(),*T->C->ctx);
-        CopyConnectedComponent copy(T->C->ee,m,gv);
+        Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,ee);
         ee->addModule(m);
         return (void*) ee->getGlobalValueAddress(gv->getName());
-        #else
-        return NULL; //silence warning
-        #endif
+#else
+        return NULL;
+#endif
     } else {
         return ee->getPointerToGlobal(gv);
     }
