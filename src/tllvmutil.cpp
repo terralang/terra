@@ -200,16 +200,16 @@ static char * copyName(const StringRef & name) {
     return strdup(name.str().c_str());
 }
 
-#if defined(LLVM_33) ||  defined(LLVM_34)
+#if defined(LLVM_3_3) ||  defined(LLVM_3_4)
 
 struct CopyConnectedComponent : public ValueMaterializer {
     Module * dest;
     Module * src;
-    ValueToValueMapTy VMap;
     llvmutil_Property copyGlobal;
     void * data;
-    CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_)
-    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_) {
+    ValueToValueMapTy & VMap;
+    CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
+    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_) {
     }
     virtual Value * materializeValueFor(Value * V) {
         if(Function * fn = dyn_cast<Function>(V)) {
@@ -230,7 +230,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
-            GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName());
+            GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName(),NULL,GlobalVariable::NotThreadLocal,GV->getType()->getAddressSpace());
             newGV->copyAttributesFrom(GV);
             if(!GV->isDeclaration()) {
                 if(!copyGlobal(GV,data)) {
@@ -246,19 +246,26 @@ struct CopyConnectedComponent : public ValueMaterializer {
     }
 };
 
-llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data) {
+llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap) {
     Module * Dest = new Module(DestName,Src->getContext());
-    CopyConnectedComponent cp(Dest,Src,copyGlobal,data);
+    CopyConnectedComponent cp(Dest,Src,copyGlobal,data,VMap);
     for(size_t i = 0; i < N; i++)
         cp.materializeValueFor(gvs[i]);
     return Dest;
 }
+static bool AlwaysCopy(GlobalValue * G, void *) { return true; }
 #endif
+
+
 
 Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames) {
         assert(symbolnames == NULL || livefns->size() == symbolnames->size());
         ValueToValueMapTy VMap;
+        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livefns)[0], livefns->size(), AlwaysCopy, NULL, VMap);
+        #else
         Module * M = CloneModule(OrigMod, VMap);
+        #endif
         PassManager * MPM = new PassManager();
         
         llvmutil_addtargetspecificpasses(MPM, TM);

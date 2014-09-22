@@ -2387,7 +2387,8 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         if(ptr) {
             return ptr;
         }
-        Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,ee);
+        llvm::ValueToValueMapTy VMap;
+        Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,ee, VMap);
         ee->addModule(m);
         return (void*) ee->getGlobalValueAddress(gv->getName());
 #else

@@ -26,9 +26,9 @@ void llvmutil_addoptimizationpasses(llvm::PassManagerBase * fpm, const OptInfo *
 extern "C" void llvmutil_disassemblefunction(void * data, size_t sz, size_t inst);
 bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, llvm::raw_ostream & dest, std::string * ErrorMessage);
 
-#if defined(LLVM_33) ||  defined(LLVM_34)
+#if defined(LLVM_3_3) ||  defined(LLVM_3_4)
 typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);
-llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data);
+llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap);
 #endif
 
 llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachine * TM, std::vector<llvm::Function*> * livefns, std::vector<std::string> * symbolnames);
