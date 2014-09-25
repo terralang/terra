@@ -2641,7 +2641,7 @@ static int terra_saveobjimpl(lua_State * L) {
             livefns.push_back(fnold);
         }
         
-        M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names);
+        M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names, true);
         
         VERBOSE_ONLY(T) {
             printf("extracted module is:\n");

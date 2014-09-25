@@ -258,13 +258,14 @@ static bool AlwaysCopy(GlobalValue * G, void *) { return true; }
 
 
 
-Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames) {
+Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames, bool internalize) {
         assert(symbolnames == NULL || livefns->size() == symbolnames->size());
         ValueToValueMapTy VMap;
         #if defined(LLVM_3_3) || defined(LLVM_3_4)
         Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livefns)[0], livefns->size(), AlwaysCopy, NULL, VMap);
         #else
         Module * M = CloneModule(OrigMod, VMap);
+        internalize = true; //we need to do this regardless of the input because it is the only way we can extract just the needed functions from the module
         #endif
         PassManager * MPM = new PassManager();
         
@@ -290,7 +291,8 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         //standard optimizations
         
         MPM->add(createVerifierPass()); //make sure we haven't messed stuff up yet
-        MPM->add(createInternalizePass(names));
+        if (internalize)
+            MPM->add(createInternalizePass(names));
         MPM->add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
                                          //this will remove dead functions
         
