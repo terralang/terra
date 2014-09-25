@@ -33,27 +33,23 @@ end
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
 --since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 local terracode = terra.loadstring [[
-local C --load cuda header lazily to speed startup time
 struct terralib.CUDAParams {
     gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
     blockDimX : uint, blockDimY : uint, blockDimZ : uint,
     sharedMemBytes : uint, hStream :  &opaque
 }
+local cuLaunchKernel = terralib.externfunction("cuLaunchKernel",{&opaque,uint32,uint32,uint32,uint32,uint32,uint32,uint32,&opaque,&&opaque,&&opaque} -> uint32)
 function terralib.cudamakekernelwrapper(fn,funcdata)
-    if not C then
-        C = terralib.includec("cuda.h")    
-    end
     local _,typ = fn:peektype()
     local arguments = typ.parameters:map(symbol)
     
     local paramctor = arguments:map(function(s) return `&s end)
     return terra(params : &terralib.CUDAParams, [arguments])
-        
-        var func : &C.CUfunction = [&C.CUfunction](funcdata)
+        var func : &&opaque = [&&opaque](funcdata)
         var paramlist = arrayof([&opaque],[paramctor])
-        return C.cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
+        return cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
                                      params.blockDimX,params.blockDimY,params.blockDimZ,
-                                     params.sharedMemBytes, C.CUstream(params.hStream),paramlist,nil)
+                                     params.sharedMemBytes, params.hStream,paramlist,nil)
     end
 end 
 function cudalib.sharedmemory(typ,N)
