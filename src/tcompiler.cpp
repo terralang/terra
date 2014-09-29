@@ -2442,6 +2442,8 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
         void * ptr = JITGlobalValue(T, gv);
         lua_pushlightuserdata(L,ptr);
         global.setfield("llvm_ptr");
+        lua_pushstring(L,gv->getName().data());
+        global.setfield("llvm_name");
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);

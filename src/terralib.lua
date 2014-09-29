@@ -1812,6 +1812,10 @@ function terra.createterraexpression(diag,anchor,v)
             else 
                 return terra.newtree(anchor, { kind = terra.kinds.constant, value = v, type = v.type, lvalue = v.type:isaggregate()})
             end
+        end
+        local mt = getmetatable(v)
+        if type(mt) == "table" and mt.__toterraexpression then
+            return terra.createterraexpression(diag,anchor,mt.__toterraexpression(v))
         else
             if not (terra.isfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "function" or type(v) == "table") then
                 diag:reporterror(anchor,"lua object of type ", type(v), " not understood by terra code.")
