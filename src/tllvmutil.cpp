@@ -230,14 +230,17 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
-            GlobalVariable * newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName(),NULL,GlobalVariable::NotThreadLocal,GV->getType()->getAddressSpace());
-            newGV->copyAttributesFrom(GV);
-            if(!GV->isDeclaration()) {
-                if(!copyGlobal(GV,data)) {
-                    newGV->setExternallyInitialized(true);
-                } else if(GV->hasInitializer()) {
-                    Value * C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
-                    newGV->setInitializer(cast<Constant>(C));
+            GlobalVariable * newGV = dest->getGlobalVariable(GV->getName(),true);
+            if(!newGV) {
+                newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName(),NULL,GlobalVariable::NotThreadLocal,GV->getType()->getAddressSpace());
+                newGV->copyAttributesFrom(GV);
+                if(!GV->isDeclaration()) {
+                    if(!copyGlobal(GV,data)) {
+                        newGV->setExternallyInitialized(true);
+                    } else if(GV->hasInitializer()) {
+                        Value * C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                        newGV->setInitializer(cast<Constant>(C));
+                    }
                 }
             }
             return newGV;
@@ -258,11 +261,11 @@ static bool AlwaysCopy(GlobalValue * G, void *) { return true; }
 
 
 
-Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<Function*> * livefns, std::vector<std::string> * symbolnames, bool internalize) {
-        assert(symbolnames == NULL || livefns->size() == symbolnames->size());
+Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<llvm::GlobalValue*> * livevalues, std::vector<std::string> * symbolnames, bool internalize) {
+        assert(symbolnames == NULL || livevalues->size() == symbolnames->size());
         ValueToValueMapTy VMap;
         #if defined(LLVM_3_3) || defined(LLVM_3_4)
-        Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livefns)[0], livefns->size(), AlwaysCopy, NULL, VMap);
+        Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livevalues)[0], livevalues->size(), AlwaysCopy, NULL, VMap);
         #else
         Module * M = CloneModule(OrigMod, VMap);
         internalize = true; //we need to do this regardless of the input because it is the only way we can extract just the needed functions from the module
@@ -272,8 +275,8 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         llvmutil_addtargetspecificpasses(MPM, TM);
         
         std::vector<const char *> names;
-        for(size_t i = 0; i < livefns->size(); i++) {
-            Function * fn = cast<Function>(VMap[(*livefns)[i]]);
+        for(size_t i = 0; i < livevalues->size(); i++) {
+            GlobalValue * fn = cast<GlobalValue>(VMap[(*livevalues)[i]]);
             if(symbolnames) {
                 std::string name = (*symbolnames)[i];
                 GlobalValue * gv = M->getNamedValue(name);
@@ -312,7 +315,6 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
             free((char*)names[i]);
             names[i] = NULL;
         }
-    
         return M;
 }
 

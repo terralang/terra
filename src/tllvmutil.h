@@ -31,7 +31,7 @@ typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap);
 #endif
 
-llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachine * TM, std::vector<llvm::Function*> * livefns, std::vector<std::string> * symbolnames, bool internalize);
+llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachine * TM, std::vector<llvm::GlobalValue*> * livevalues, std::vector<std::string> * symbolnames, bool internalize);
 
 //link src into dst, optimizing src in a way that won't delete its symbols before being linked to dst
 //if optManager is NULL, then it won't perform optimizations,

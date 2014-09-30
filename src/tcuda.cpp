@@ -104,29 +104,29 @@ int terra_cudacompile(lua_State * L) {
     int tbl = 1;
     int dumpmodule = lua_toboolean(L,2);
     
-    std::vector<std::string> fnnames;
-    std::vector<llvm::Function *> fns;
+    std::vector<std::string> globalnames;
+    std::vector<llvm::GlobalValue *> globals;
     
     lua_pushnil(L);
     while (lua_next(L, tbl) != 0) {
         const char * key = luaL_checkstring(L,-2);
         lua_getfield(L,-1,"llvm_value");
-        llvm::Function * fn = (llvm::Function*) lua_topointer(L,-1);
+        llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
         if(dumpmodule) {
-            fprintf(stderr,"Add Function:\n");
-            fn->dump();
+            fprintf(stderr,"Add Global Value:\n");
+            v->dump();
         }
-        assert(fn);
-        fnnames.push_back(key);
-        fns.push_back(fn);
-        lua_pop(L,2);  /* variant, function pointer */
+        assert(v);
+        globalnames.push_back(key);
+        globals.push_back(v);
+        lua_pop(L,2);  /* variant, value pointer */
     }
     
-    llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &fns,&fnnames, false);
+    llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &globals,&globalnames, false);
     M->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
     
-    for(size_t i = 0; i < fnnames.size(); i++) {
-        llvm::Function * kernel = M->getFunction(fnnames[i]);
+    for(size_t i = 0; i < globalnames.size(); i++) {
+        llvm::Function * kernel = M->getFunction(globalnames[i]);
         markKernel(T,M,kernel);
     }
     
@@ -180,21 +180,32 @@ int terra_cudacompile(lua_State * L) {
     lua_pushnil(L);
     for(size_t i = 0; lua_next(L,tbl) != 0; i++) {
         const char * key = luaL_checkstring(L,-2);
-        CUfunction func;
-        CUDA_DO(cuModuleGetFunction(&func, cudaM, sanitizeName(key).c_str()));
-        //HACK: we need to get this value, as a constant, to the makewrapper function
-        //currently the only constants that Terra supports programmatically are string constants
-        //eventually we will change this to make a Terra constant of type CUfunction when we have
-        //the appropriate API
-        lua_pushlstring(L,(char*)&func,sizeof(CUfunction));
-        lua_pushvalue(L,mkwrapper);
-        lua_insert(L,-3); /*stack is now <mkwrapper> <variant (value from table)> <string of CUfunction> <mkwrapper> (TOP) */
-        lua_call(L,2,1);
+        lua_getfield(L,-1,"llvm_value");
+        llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
+        lua_pop(L,1);
+        if(llvm::dyn_cast<llvm::Function>(v)) {
+            CUfunction func;
+            CUDA_DO(cuModuleGetFunction(&func, cudaM, sanitizeName(key).c_str()));
+            //HACK: we need to get this value, as a constant, to the makewrapper function
+            //currently the only constants that Terra supports programmatically are string constants
+            //eventually we will change this to make a Terra constant of type CUfunction when we have
+            //the appropriate API
+            lua_pushlstring(L,(char*)&func,sizeof(CUfunction));
+            lua_pushvalue(L,mkwrapper);
+            lua_insert(L,-3); /*stack is now <mkwrapper> <variant (value from table)> <string of CUfunction> <mkwrapper> (TOP) */
+            lua_call(L,2,1);
+        } else {
+            assert(llvm::dyn_cast<llvm::GlobalVariable>(v));
+            CUdeviceptr dptr;
+            size_t bytes;
+            CUDA_DO(cuModuleGetGlobal(&dptr,&bytes,cudaM,sanitizeName(key).c_str()));
+            lua_pop(L,1); //remove value
+            lua_pushlightuserdata(L,(void*)dptr);
+        }
 
         lua_setfield(L,resulttbl,key);
         /* stack is now the key */
     }
-
     /* stack is now the table holding the terra functions */
 
     return 1;

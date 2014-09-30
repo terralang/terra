@@ -2624,7 +2624,7 @@ static int terra_saveobjimpl(lua_State * L) {
     int tbl = 3;
     int argument_index = 4;
     
-    std::vector<Function *> livefns;
+    std::vector<GlobalValue *> livefns;
     std::vector<std::string> names;
     Module * M;
     std::vector<const char *> args;

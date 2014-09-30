@@ -2,32 +2,48 @@
 function terralib.cudacompile(module,dumpmodule)
     local tbl = {}
     for k,v in pairs(module) do
-        if not terra.isfunction(v) then
-            error("module must contain only terra functions")
-        end
-        v:emitllvm()
-        local definitions =  v:getdefinitions()
-        if #definitions > 1 then
-            error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
-        end
-        local fn = definitions[1]
-        local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
-                                    -- we should modify gettype to allow the return of a type for a non-jitted function
-        assert(success)
+        if terra.isfunction(v) then        
+            v:emitllvm()
+            local definitions =  v:getdefinitions()
+            if #definitions > 1 then
+                error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
+            end
+            local fn = definitions[1]
+            local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
+                                        -- we should modify gettype to allow the return of a type for a non-jitted function
+            assert(success)
 
-        if not typ.returntype:isunit() then
-            error(k..": kernels must return no arguments.")
-        end
+            if not typ.returntype:isunit() then
+                error(k..": kernels must return no arguments.")
+            end
 
-        for _,p in ipairs(typ.parameters) do
-            if not (p:ispointer() or p:isprimitive()) then
-                error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
+            for _,p in ipairs(typ.parameters) do
+                if not (p:ispointer() or p:isprimitive()) then
+                    error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
+                end
+            end
+            tbl[k] = definitions[1]
+        else
+            if cudalib.isconstant(v) then
+                v = v.global
+            end
+            if terralib.isglobalvar(v) then
+                v:getpointer() -- ensure llvm_value exists for compiler
+                tbl[k] = v
+            else
+                error("module must contain only terra functions, globals, or cuda constants")
             end
         end
-        tbl[k] = definitions[1]
     end
     --call into tcuda.cpp to perform compilation
-    return terralib.cudacompileimpl(tbl,dumpmodule)
+    local result = terralib.cudacompileimpl(tbl,dumpmodule)
+    for k,v in pairs(result) do
+        -- wrap global addresses as cdata
+        if type(v) == "userdata" then
+            result[k] = terralib.cast(terralib.types.pointer(terralib.types.opaque),v)
+        end
+    end
+    return result
 end
 
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
@@ -55,6 +71,18 @@ end
 function cudalib.sharedmemory(typ,N)
     local gv = terralib.global(typ[N],nil,3)
     return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
+end
+local constant = {
+    __toterraexpression = function(self)
+        return `[&self.type](cudalib.nvvm_ptr_constant_to_gen_p0i8_p4i8([terralib.types.pointer(self.type,4)](&[self.global][0])))
+    end
+}
+function cudalib.isconstant(c)
+    return getmetatable(c) == constant
+end
+function cudalib.constantmemory(typ,N)
+    local c = { type = typ, global = terralib.global(typ[N],nil,4) }
+    return setmetatable(c,constant)
 end
 ]]
 
@@ -356,5 +384,6 @@ return {
     nvvm_membar_sys =  {} -> {};
     ptx_bar_sync =  int -> {};
     nvvm_ptr_shared_to_gen_p0i8_p3i8 = terralib.types.pointer(opaque,3) -> &opaque;
+    nvvm_ptr_constant_to_gen_p0i8_p4i8 = terralib.types.pointer(opaque,4) -> &opaque;
 } ]]
 
