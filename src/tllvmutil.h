@@ -26,7 +26,7 @@ void llvmutil_addoptimizationpasses(llvm::PassManagerBase * fpm, const OptInfo *
 extern "C" void llvmutil_disassemblefunction(void * data, size_t sz, size_t inst);
 bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, llvm::raw_ostream & dest, std::string * ErrorMessage);
 
-#if defined(LLVM_3_3) ||  defined(LLVM_3_4)
+#if LLVM_VERSION >= 33
 typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap);
 #endif

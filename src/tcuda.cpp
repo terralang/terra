@@ -74,7 +74,14 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     assert(TM->getMCAsmInfo());
     
     llvm::PassManager PM;
-    PM.add(new llvm::TARGETDATA()(*TM->TARGETDATA(get)()));
+    
+    llvm::TARGETDATA() * TD = new llvm::TARGETDATA()(*TM->TARGETDATA(get)());
+#if LLVM_VERSION <= 34
+    PM.add(TD);
+#else
+    PM.add(new llvm::DataLayoutPass(*TD));
+#endif
+    
     if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
        printf("addPassesToEmitFile failed\n");
        return CUDA_ERROR_UNKNOWN;

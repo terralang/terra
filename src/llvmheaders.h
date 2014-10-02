@@ -15,12 +15,10 @@
 #include "clang/Parse/ParseAST.h"
 #include "clang/AST/ASTContext.h"
 #include "llvm/Analysis/Passes.h"
-#include "llvm/Analysis/Verifier.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"
 
-#include "llvm/Linker.h"
 #include "llvm/PassManager.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetSelect.h"
@@ -36,19 +34,24 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/Support/system_error.h"
 
-#if LLVM_3_1
+#if LLVM_VERSION == 31
 #include "llvmheaders_31.h"
-#elif LLVM_3_2
+#elif LLVM_VERSION == 32
 #include "llvmheaders_32.h"
-#elif LLVM_3_3
+#elif LLVM_VERSION == 33
 #include "llvmheaders_33.h"
-#elif LLVM_3_4
+#elif LLVM_VERSION == 34
 #include "llvmheaders_34.h"
+#elif LLVM_VERSION == 35
+#include "llvmheaders_35.h"
 #else
 #error "unsupported LLVM version"
 #include "llvmheaders_34.h" //for OSX code completion
+#endif
+
+#if LLVM_VERSION >= 34
+#define TERRA_CAN_USE_MCJIT
 #endif
 
 #endif

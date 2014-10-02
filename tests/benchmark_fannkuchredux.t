@@ -6,13 +6,11 @@
  
  ]]
 
-local C = terralib.includecstring [[
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-
-]]
+local C = {
+    printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true)),
+    exit = terralib.externfunction("exit", int -> {}),
+    atoi = terralib.externfunction("atoi", rawstring -> int)
+}
 
 -- this depends highly on the platform.  It might be faster to use
 -- char type on 32-bit systems; it might be faster to use unsigned.
@@ -139,13 +137,11 @@ terra main(argc : int, v : &&int8)
     return 0
 end
 
-
 local test = require("test")
 
 doit:compile()
 print(test.time(function()
     test.eq(doit(10),73196)
 end))
-
 
 terralib.saveobj("benchmark_fannkuchredux", { main = main } )

@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC
+FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC 
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -58,9 +58,9 @@ FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_
 
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
-LLVM_VERSION=LLVM_$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1_\2/')
+LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
 
-FLAGS += -D$(LLVM_VERSION)
+FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
 # LLVM LIBS (STATIC, slow to link against but built by default)
 SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
@@ -160,10 +160,20 @@ LLVM_FLAGS_MANUAL += \
 -lLLVMSupport
 
 
-ifeq ($(LLVM_VERSION), LLVM_3_1)
+ifeq ($(LLVM_VERSION), 31)
 SO_FLAGS += $(LLVM_FLAGS_MANUAL) -lclangRewrite
 else
-SO_FLAGS += $(shell $(LLVM_CONFIG) --libs) -lclangRewriteCore
+SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+
+ifneq ($(LLVM_VERSION), 35)
+SO_FLAGS += -lclangRewriteCore
+endif
+
+endif
+
+ifeq ($(LLVM_VERSION), 35)
+CPPFLAGS = -std=c++11 
+SO_FLAGS += -lz -lcurses
 endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
@@ -228,7 +238,7 @@ test:	$(EXECUTABLE)
 	(cd tests; ./run)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
-	$(CXX) $(FLAGS) $< -c -o $@
+	$(CXX) $(FLAGS) $(CPPFLAGS) $< -c -o $@
 
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
@@ -282,7 +292,7 @@ package:
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
-	@$(CXX) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
+	@$(CXX) $(FLAGS) $(CPPFLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 

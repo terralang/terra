@@ -10,6 +10,10 @@
 #include "llvm/InlineAsm.h"
 #include "llvm/DIBuilder.h"
 #include "llvm/DebugInfo.h"
+#include "llvm/Analysis/Verifier.h"
+#include "llvm/Linker.h"
+#include "llvm/Support/system_error.h"
+#include "llvm/Support/CFG.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"
@@ -22,4 +26,3 @@
 #define ADDFNATTR(attr) addFnAttr(Attributes :: attr)
 #define ATTRIBUTE Attributes
 #define TARGETDATA(nm) nm##DataLayout
-#define LLVM_VERSION "3.2"

@@ -12,6 +12,9 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#if LLVM_VERSION >= 35
+#include "llvm/MC/MCContext.h"
+#endif
 #include "llvm/Support/MemoryObject.h"
 
 using namespace llvm;
@@ -25,11 +28,17 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
     TLI->setUnavailable(LibFunc::memset_pattern16);
 #endif
     fpm->add(TLI);
-    fpm->add(new TARGETDATA()(*TM->TARGETDATA(get)()));
-#ifdef LLVM_3_2
+    TARGETDATA() * TD = new TARGETDATA()(*TM->TARGETDATA(get)());
+#if LLVM_VERSION <= 34
+    fpm->add(TD);
+#else
+    fpm->add(new DataLayoutPass(*TD));
+#endif
+    
+#if LLVM_VERSION == 32
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));
-#elif LLVM_3_3
+#elif LLVM_VERSION >= 33
     TM->addAnalysisPasses(*fpm);
 #endif
 }
@@ -62,7 +71,7 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm, const OptInfo * oi) {
     fpm->add(createScalarReplAggregatesPass(-1, false));
     fpm->add(createEarlyCSEPass());              // Catch trivial redundancies
     
-#ifndef LLVM_3_4
+#if LLVM_VERSION <= 33
     if (!oi->DisableSimplifyLibCalls)
         fpm->add(createSimplifyLibCallsPass());    // Library Call Optimizations
 #endif
@@ -129,7 +138,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-#ifdef LLVM_3_4
+#if LLVM_VERSION >= 34
             *TheTarget->createMCRegInfo(TripleName),
 #endif
             TripleName);
@@ -145,7 +154,12 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
                                                                   FeaturesStr);
     assert(STI && "Unable to create subtarget info!");
 
+#if LLVM_VERSION >= 35
+    MCContext Ctx(MAI,MRI, NULL);
+    MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI,Ctx);
+#else
     MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI);
+#endif
     assert(DisAsm && "Unable to create disassembler!");
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
@@ -159,7 +173,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     uint64_t Size;
     fflush(stdout);
     raw_fd_ostream Out(fileno(stdout), false);
-    for(int i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
+    for(size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
@@ -200,7 +214,7 @@ static char * copyName(const StringRef & name) {
     return strdup(name.str().c_str());
 }
 
-#if defined(LLVM_3_3) ||  defined(LLVM_3_4)
+#if LLVM_VERSION >= 34
 
 struct CopyConnectedComponent : public ValueMaterializer {
     Module * dest;
@@ -264,7 +278,7 @@ static bool AlwaysCopy(GlobalValue * G, void *) { return true; }
 Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<llvm::GlobalValue*> * livevalues, std::vector<std::string> * symbolnames, bool internalize) {
         assert(symbolnames == NULL || livevalues->size() == symbolnames->size());
         ValueToValueMapTy VMap;
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if LLVM_VERSION >= 34
         Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livevalues)[0], livevalues->size(), AlwaysCopy, NULL, VMap);
         #else
         Module * M = CloneModule(OrigMod, VMap);
@@ -330,9 +344,14 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
         if(fn->hasAvailableExternallyLinkage()) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
         }
-        if(fn->hasDLLImportLinkage()) { //clear dll import linkage because it messes up the jit on window
+    #if LLVM_VERSION >= 35
+        if(fn->hasDLLImportStorageClass()) //clear dll import linkage because it messes up the jit on window
+            fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
+    #else
+        if(fn->hasDLLImportLinkage()) //clear dll import linkage because it messes up the jit on window
             fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-        }
+        
+    #endif
     }
     
     if(optManager) {

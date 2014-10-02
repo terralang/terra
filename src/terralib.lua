@@ -538,9 +538,9 @@ end
 
 function terra.funcdefinition:initializecfunction(anchor)
     assert(self.state == "uninitializedc")
-    terra.registerexternfunction(self)
     --make sure all types for function are registered
     self.type:completefunction(anchor)
+    terra.registerexternfunction(self)
     self.state = "emittedllvm"
 end
 

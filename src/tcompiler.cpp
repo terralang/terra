@@ -34,7 +34,10 @@ extern "C" {
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
-#include "llvm/Support/CFG.h"
+
+#if LLVM_VERSION >= 35
+using std::error_code;
+#endif
 
 using namespace llvm;
 
@@ -81,7 +84,14 @@ struct DisassembleFunctionListener : public JITEventListener {
 #ifdef TERRA_CAN_USE_MCJIT
     virtual void NotifyObjectEmitted(const ObjectImage &Obj) {
         error_code err;
-        for(object::symbol_iterator I = Obj.begin_symbols(), E = Obj.end_symbols(); I != E; I.increment(err)) {
+        for(object::symbol_iterator I = Obj.begin_symbols(), E = Obj.end_symbols();
+            I != E;
+#if LLVM_VERSION <=34
+            I.increment(err)
+#else
+          ++I
+#endif
+        ) {
             StringRef name;
             err = I->getName(name);
             object::SymbolRef::Type t;
@@ -185,13 +195,15 @@ bool OneTimeInit(struct terra_State * T) {
         InitializeNativeTarget();
         InitializeNativeTargetAsmPrinter();
         InitializeNativeTargetAsmParser();
-    } else { 
+    } else {
+        #if LLVM_VERSION <= 34
         if(!llvm_is_multithreaded()) {
             if(!llvm_start_multithreaded()) {
                 terra_pusherror(T,"llvm failed to start multi-threading\n");
                 success = false;
             }
         }
+        #endif //after 3.5, this isn't needed
     }
     terrainitlock.release();
     return success;
@@ -221,7 +233,7 @@ int terra_compilerinit(struct terra_State * T) {
     TERRALIB_FUNCTIONS(REGISTER_FN)
     #undef REGISTER_FN
 
-    lua_pushstring(T->L,LLVM_VERSION);
+    lua_pushnumber(T->L,LLVM_VERSION);
     lua_setfield(T->L,-2, "llvmversion");
     
     lua_pop(T->L,1); //remove terra from stack
@@ -241,15 +253,23 @@ int terra_compilerinit(struct terra_State * T) {
         options.NoFramePointerElim = true;
     }
     CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
+    
+    #if LLVM_VERSION >= 33
+    std::string Triple = llvm::sys::getProcessTriple();
+    #else
     std::string Triple = llvm::sys::getDefaultTargetTriple();
+    #endif
+    
+    std::string CPU = llvm::sys::getHostCPUName();
+    
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
-    TargetMachine * TM = TheTarget->createTargetMachine(Triple, "", HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, CPU, HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
     
     if(T->options.usemcjit) {
 #ifndef TERRA_CAN_USE_MCJIT
-        terra_pusherror(T, "mcjit is not supported using LLVM " LLVM_VERSION);
+        terra_pusherror(T, "mcjit is not supported using LLVM %d",LLVM_VERSION);
         return LUA_ERRRUN;
 #endif
     }
@@ -258,6 +278,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     EngineBuilder eb(topeemodule);
     eb.setErrorStr(&err)
+      .setMCPU(CPU)
       .setEngineKind(EngineKind::JIT)
       .setAllocateGVsWithCode(false)
       .setUseMCJIT(T->options.usemcjit)
@@ -758,12 +779,12 @@ struct CCallingConv {
     
     template<typename FnOrCall>
     void addSRetAttr(FnOrCall * r, int idx) {
-        #ifdef LLVM_3_2
+        #if LLVM_VERSION == 32
             AttrBuilder builder;
             builder.addAttribute(Attributes::StructRet);
             builder.addAttribute(Attributes::NoAlias);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_3_1
+        #elif LLVM_VERSION == 31
             r->addAttribute(idx,Attributes(Attribute::StructRet | Attribute::NoAlias));
         #else
             r->addAttribute(idx,Attribute::StructRet);
@@ -772,11 +793,11 @@ struct CCallingConv {
     }
     template<typename FnOrCall>
     void addByValAttr(FnOrCall * r, int idx) {
-        #ifdef LLVM_3_2
+        #if LLVM_VERSION == 32
             AttrBuilder builder;
             builder.addAttribute(Attributes::ByVal);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_3_1
+        #elif LLVM_VERSION == 31
             r->addAttribute(idx,Attributes(Attribute::ByVal));
         #else
             r->addAttribute(idx,Attribute::ByVal);
@@ -784,11 +805,11 @@ struct CCallingConv {
     }
     template<typename FnOrCall>
     void addZeroExtAttr(FnOrCall * r, int idx) {
-        #ifdef LLVM_3_2
+        #if LLVM_VERSION == 32
             AttrBuilder builder;
             builder.addAttribute(Attributes::ZExt);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_3_1
+        #elif LLVM_VERSION == 31
             r->addAttribute(idx,Attributes(Attribute::ZExt));
         #else
             r->addAttribute(idx,Attribute::ZExt);
@@ -804,7 +825,7 @@ struct CCallingConv {
             addSRetAttr(r, argidx);
             argidx++;
         }
-        for(int i = 0; i < info->paramtypes.size(); i++) {
+        for(size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument * v = &info->paramtypes[i];
             if(v->kind == C_AGGREGATE_MEM) {
                 #ifndef _WIN32
@@ -914,7 +935,7 @@ struct CCallingConv {
                     Value * scratch = CreateAlloca(a->type);
                     B->CreateStore(actual,scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
-                    for(size_t j = 0; j < a->nargs; j++) {
+                    for(int j = 0; j < a->nargs; j++) {
                         arguments.push_back(B->CreateLoad(B->CreateConstGEP2_32(casted,0,j)));
                     }
                 } break;
@@ -985,7 +1006,7 @@ struct CCallingConv {
                     arguments.push_back(Ptr(a->type));
                     break;
                 case C_AGGREGATE_REG: {
-                    for(size_t j = 0; j < a->nargs; j++) {
+                    for(int j = 0; j < a->nargs; j++) {
                         arguments.push_back(a->cctype->getElementType(j));
                     }
                 } break;
@@ -1018,7 +1039,7 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
     ConstantFolder B;
     if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
         Type * ptyp = PointerType::getUnqual(typ->type);
-        GlobalValue * gv = (GlobalVariable*) v->ud("llvm_value");
+        GlobalVariable * gv = (GlobalVariable*) v->ud("llvm_value");
         if(gv == NULL) {
             v->pushfield("object");
             const void * data = lua_topointer(L,-1);
@@ -1026,7 +1047,7 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
             lua_pop(L,1); // remove pointer
             size_t size = C->td->getTypeAllocSize(typ->type);
             size_t align = C->td->getPrefTypeAlignment(typ->type);
-            Constant * arr = ConstantDataArray::get(*C->ctx,ArrayRef<uint8_t>((uint8_t*)data,size));
+            Constant * arr = ConstantDataArray::get(*C->ctx,ArrayRef<uint8_t>((const uint8_t*)data,size));
             gv = new GlobalVariable(*C->m, arr->getType(),
                                     true, GlobalValue::ExternalLinkage,
                                     arr, "const");
@@ -1048,11 +1069,11 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
             memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
             return ConstantInt::get(typ->type, integer);
         } else if(typ->type->isFloatTy()) {
-            return ConstantFP::get(typ->type, *(float*)data);
+            return ConstantFP::get(typ->type, *(const float*)data);
         } else if(typ->type->isDoubleTy()) {
-            return ConstantFP::get(typ->type, *(double*)data);
+            return ConstantFP::get(typ->type, *(const double*)data);
         } else if(typ->type->isPointerTy()) {
-            Constant * ptrint = ConstantInt::get(C->td->getIntPtrType(*C->ctx), *(intptr_t*)data);
+            Constant * ptrint = ConstantInt::get(C->td->getIntPtrType(*C->ctx), *(const intptr_t*)data);
             return ConstantExpr::getIntToPtr(ptrint, typ->type);
         } else {
             typ->type->dump();
@@ -1077,7 +1098,7 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
         }
         int as = global->number("addressspace");
         gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL, 
-                            #ifdef LLVM_3_1
+                            #if LLVM_VERSION == 31
                                 false,
                             #else
                                 GlobalVariable::NotThreadLocal, 
@@ -1554,7 +1575,7 @@ if(baseT->isIntegerTy()) { \
         Value * result = UndefValue::get(toT->type);
         VectorType * vt = cast<VectorType>(toT->type);
         Type * integerType = Type::getInt32Ty(*C->ctx);
-        for(int i = 0; i < vt->getNumElements(); i++)
+        for(size_t i = 0; i < vt->getNumElements(); i++)
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
     }
@@ -1746,7 +1767,7 @@ if(baseT->isIntegerTy()) { \
                         exp->pushfield("value");
                         size_t len;
                         const char * rawstr = lua_tolstring(L,-1,&len);
-                        Value * str = B->CreateGlobalString(StringRef(rawstr,len));
+                        Value * str = B->CreateGlobalString(StringRef(rawstr,len),"$string"); //needs a name to make mcjit work in 3.5
                         lua_pop(L,1);
                         return  B->CreateBitCast(str, pt);
                     } else {
@@ -2546,7 +2567,7 @@ static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
 
 static bool FindLinker(LLVM_PATH_TYPE * linker) {
 #ifndef _WIN32
-    #ifdef LLVM_3_4
+    #if LLVM_VERSION >= 34
         *linker = sys::FindProgramByName("gcc");
         return *linker == "";
     #else
@@ -2587,7 +2608,7 @@ static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *
     cmd.push_back(filename);
     cmd.insert(cmd.end(),args->begin(),args->end());
     cmd.push_back(NULL);
-#ifdef LLVM_3_4
+#if LLVM_VERSION >= 34
     int c = sys::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
 #else
     int c = sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
@@ -2724,6 +2745,7 @@ static int terra_linklibraryimpl(lua_State * L) {
     const char * filename = luaL_checkstring(L, -2);
     bool isbitcode = lua_toboolean(L,-1);
     if(isbitcode) {
+    #if LLVM_VERSION <= 34
         OwningPtr<MemoryBuffer> mb;
         error_code ec = MemoryBuffer::getFile(filename,mb);
         if(ec)
@@ -2732,6 +2754,16 @@ static int terra_linklibraryimpl(lua_State * L) {
         m->setTargetTriple(T->C->m->getTargetTriple());
         if(!m)
             terra_reporterror(T, "llvm: %s\n", Err.c_str());
+    #else
+        ErrorOr<std::unique_ptr<MemoryBuffer> > mb = MemoryBuffer::getFile(filename);
+        if(!mb)
+            terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
+        ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*T->C->ctx);
+        if(!mm)
+            terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
+        Module * m = mm.get();
+    #endif
+        m->setTargetTriple(T->C->m->getTargetTriple());
         bool failed = llvmutil_linkmodule(T->C->m, m, T->C->tm, NULL, &Err);
         delete m;
         if(failed)

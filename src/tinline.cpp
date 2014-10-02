@@ -13,15 +13,29 @@ ManualInliner::ManualInliner(TargetMachine * TM, Module * m) {
     //Trick the Module-at-a-time inliner into running on a single SCC
     //First we run it on the (currently empty) module to initialize
     //the inlining pass with the Analysis passes it needs.
-    PM.add(new TARGETDATA()(*TM->TARGETDATA(get)()));
-    #if defined(LLVM_3_3) || defined(LLVM_3_4)
+    TARGETDATA() * TD = new TARGETDATA()(*TM->TARGETDATA(get)());
+    
+    #if LLVM_VERSION <= 34
+    PM.add(TD);
+    #else
+    PM.add(new DataLayoutPass(*TD));
+    #endif
+    
+    #if LLVM_VERSION >= 33
     TM->addAnalysisPasses(PM);
     #endif
     SI = (CallGraphSCCPass*) createFunctionInliningPass();
     PM.add(SI);
     PM.run(*m);
     //save the call graph so we can keep it up to date
+    #if LLVM_VERSION <= 34
     CG = &SI->getAnalysis<CallGraph>();
+    #else
+    CallGraphWrapperPass & CGW = SI->getAnalysis<CallGraphWrapperPass>();
+    CGW.runOnModule(*m); //force it to realloc the CG
+    CG = &CGW.getCallGraph();
+    assert(CG);
+    #endif
 }
 //Inliner handles erasing functions since it also maintains a copy of the callgraph
 //that needs to be kept up to date with the functions in the module

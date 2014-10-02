@@ -358,7 +358,11 @@ public:
         resulttable->newlist(&parameters);
         
         bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
+    #if LLVM_VERSION <= 34
         QualType RT = f->getResultType();
+    #else
+        QualType RT = f->getReturnType();
+    #endif
         if(RT->isVoidType()) {
             PushTypeField("unit");
             returntype.initFromStack(L, ref_table);
@@ -372,8 +376,13 @@ public:
         //proto is null if the function was declared without an argument list (e.g. void foo() and not void foo(void))
         //we don't support old-style C parameter lists, we just treat them as empty
         if(proto) {
+        #if LLVM_VERSION >= 35
+            for(size_t i = 0; i < proto->getNumParams(); i++) {
+                QualType PT = proto->getParamType(i);
+        #else
             for(size_t i = 0; i < proto->getNumArgs(); i++) {
                 QualType PT = proto->getArgType(i);
+        #endif
                 Obj pt;
                 if(!GetType(PT,&pt)) {
                     valid = false; //keep going with attempting to parse type to make sure we see all the reasons why we cannot support this function
@@ -447,9 +456,9 @@ public:
     FunctionDecl * GetLivenessFunction() {
         IdentifierInfo & II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if LLVM_VERSION >= 33
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
-        #elif defined(LLVM_3_2) || defined(LLVM_3_1)
+        #else
         QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],outputtypes.size(), FunctionProtoType::ExtProtoInfo());
         #endif
         FunctionDecl * F = FunctionDecl::Create(*Context, Context->getTranslationUnitDecl(), SourceLocation(), SourceLocation(), N,T, 0, SC_Extern);
@@ -457,15 +466,15 @@ public:
         std::vector<ParmVarDecl *> params;
         for(size_t i = 0; i < outputtypes.size(); i++) {
             params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(), SourceLocation(), 0, outputtypes[i], /*TInfo=*/0, SC_None,
-            #if defined(LLVM_3_2) || defined(LLVM_3_1)
+            #if LLVM_VERSION <= 32
             SC_None,
             #endif
             0));
         }
         F->setParams(params);
-        #if defined(LLVM_3_3) || defined(LLVM_3_4)
+        #if LLVM_VERSION >= 33
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
-        #elif defined(LLVM_3_2) || defined(LLVM_3_1)
+        #else
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
         #endif
         F->setBody(stmts);
@@ -519,11 +528,10 @@ public:
   virtual ASTDeserializationListener *GetASTDeserializationListener() { return CG->GetASTDeserializationListener(); }
   virtual void PrintStats() { CG->PrintStats(); }
 
-#if LLVM_3_1
-#elif LLVM_3_2
+#if LLVM_VERSION == 32
   virtual void HandleImplicitImportDecl(ImportDecl *D) { CG->HandleImplicitImportDecl(D); }
   virtual PPMutationListener *GetPPMutationListener() { return CG->GetPPMutationListener(); }
-#elif LLVM_3_3
+#elif LLVM_VERSION >= 33
   virtual void HandleImplicitImportDecl(ImportDecl *D) { CG->HandleImplicitImportDecl(D); }
   virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
 #endif
@@ -533,7 +541,7 @@ public:
 static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, const char ** argbegin, const char ** argend, CompilerInstance * TheCompInst) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
-    #if defined LLVM_3_1 || defined LLVM_3_2
+    #if LLVM_VERSION <= 32
     TheCompInst->createDiagnostics(0, 0);
     #else
     TheCompInst->createDiagnostics();
@@ -542,12 +550,15 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
     //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
     //this cannot go before CreateFromArgs
-    #if defined LLVM_3_1 || defined LLVM_3_2
+    #if LLVM_VERSION <= 32
     TheCompInst->createDiagnostics(argbegin - argend, argbegin);
     TargetOptions & to = TheCompInst->getTargetOpts();
-    #else
+    #elif LLVM_VERSION <= 34
     TheCompInst->createDiagnostics();
     TargetOptions * to = &TheCompInst->getTargetOpts();
+    #else
+    TheCompInst->createDiagnostics();
+    std::shared_ptr<TargetOptions> to(new TargetOptions(TheCompInst->getTargetOpts()));
     #endif
     
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
@@ -557,11 +568,19 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
-    TheCompInst->createPreprocessor();
+    TheCompInst->createPreprocessor(
+    #if LLVM_VERSION >= 35
+    TU_Complete
+    #endif
+    );
     TheCompInst->createASTContext();
 
     // Set the main file handled by the source manager to the input file.
+#if LLVM_VERSION <= 34
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
+#else   
+    SourceMgr.setMainFileID(SourceMgr.createFileID(membuffer));
+#endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
     Preprocessor &PP = TheCompInst->getPreprocessor();
     PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
@@ -576,7 +595,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
     
-    #if defined LLVM_3_1 || defined LLVM_3_2
+    #if LLVM_VERSION <= 32
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *T->C->ctx );
     #else
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );

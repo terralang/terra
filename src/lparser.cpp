@@ -1009,7 +1009,7 @@ static void simpleexp (LexState *ls) {
       if(flags & F_ISINTEGER) {
         push_integer(ls,ls->t.seminfo.i);
         push_literal(ls,buf);
-        sprintf(buf,"%"PRIu64,ls->t.seminfo.i);
+        sprintf(buf,"%" PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
         add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
       } else {
