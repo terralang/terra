@@ -44,7 +44,7 @@ FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
-LUAJIT_VERSION=LuaJIT-2.0.2
+LUAJIT_VERSION=LuaJIT-2.0.3
 LUAJIT_URL=http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR=$(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR=build/$(LUAJIT_VERSION)
