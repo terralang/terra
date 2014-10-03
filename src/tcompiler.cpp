@@ -304,8 +304,7 @@ int terra_compilerinit(struct terra_State * T) {
     T->C->fpm = new FunctionPassManager(T->C->m);
 
     llvmutil_addtargetspecificpasses(T->C->fpm, TM);
-    OptInfo info; //TODO: make configurable from terra
-    llvmutil_addoptimizationpasses(T->C->fpm,&info);
+    llvmutil_addoptimizationpasses(T->C->fpm);
     
     
     if(!TheTarget) {

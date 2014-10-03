@@ -8,7 +8,7 @@ Array.metamethods.__for = function(syms,iter,body)
     local e = `@pe
     return {e}, quote
         var it = &iter
-        for i = 0,10 do
+        for i = 0,3 do
             var [pe] = &it.data[i]
             body
         end
@@ -22,6 +22,7 @@ terra foo()
     end
     return a.data[0] + a.data[1] + a.data[2]
 end
+
 terra foo2()
     var a = Array{ array(1,2,3) }
     var s = 0
@@ -32,4 +33,5 @@ terra foo2()
 end
 
 assert(foo() == 9)
+
 assert(foo2() == 6)
