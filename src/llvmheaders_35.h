@@ -1,4 +1,3 @@
-#error "LLVM 3.5 is still buggy, use 3.4"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"

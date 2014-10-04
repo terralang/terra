@@ -1118,6 +1118,8 @@ struct TerraCompiler {
     terra_CompilerState * C;
     IRBuilder<> * B;
     DIBuilder * DB;
+    DISubprogram SP;
+    
     Obj funcobj;
     Function * func;
     TType * func_type;
@@ -1183,7 +1185,6 @@ struct TerraCompiler {
         L = T->L;
         C = T->C;
         B = new IRBuilder<>(*C->ctx);
-        initDebug();
         
         CC.init(T, C, B);
         
@@ -1191,6 +1192,7 @@ struct TerraCompiler {
         funcobj.initFromStack(T->L, ref_table);
         
         getOrCreateFunction(&funcobj,&func,&func_type);
+        
         BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
         
         B->SetInsertPoint(entry);
@@ -1199,6 +1201,7 @@ struct TerraCompiler {
         Obj parameters;
         
         funcobj.obj("typedtree",&typedtree);
+        initDebug(typedtree.string("filename"),typedtree.number("linenumber"));
         setDebugPoint(&typedtree);
         typedtree.obj("parameters",&parameters);
         
@@ -1971,19 +1974,35 @@ if(baseT->isIntegerTy()) { \
         
     }
     
-    void initDebug() {
+    void initDebug(const char * filename, int lineno) {
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*C->m);
+            DIFile file = DB->createFile(filename, ".");
+        
+            #if LLVM_VERSION >= 34
+            DICompileUnit CU =
+            #endif
+                DB->createCompileUnit(1, filename, ".", "terra", true, "", 0);
+            SP = DB->createFunction(
+                                    #if LLVM_VERSION >= 34
+                                    CU,
+                                    #else
+                                    (DIDescriptor)DB->getCU(),
+                                    #endif
+                                    func->getName(), func->getName(), file, lineno,
+                                    DB->createSubroutineType(file, DB->getOrCreateArray(ArrayRef<Value*>())),
+                                    false, true, 0,0, true, func);
         }
     }
     void endDebug() {
         DEBUG_ONLY(T) {
+            DB->finalize();
             delete DB;
         }
     }
     void setDebugPoint(Obj * obj) {
         DEBUG_ONLY(T) {
-            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, DB->createFile(obj->string("filename"), ".")));
+            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, SP));
         }
     }
     void setInsertBlock(BasicBlock * bb) {
