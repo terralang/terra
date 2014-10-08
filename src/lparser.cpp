@@ -619,14 +619,15 @@ static void structbody(LexState * ls) {
     int line = ls->linenumber;
     int records = new_list(ls);
     checknext(ls,'{');
-    do {
-       if (ls->t.token == '}') break;
+    while(ls->t.token != '}') {
        if(testnext(ls, TK_UNION))
          RETURNS_1(structbody(ls));
        else
          RETURNS_1(structfield(ls));
        add_entry(ls,records);
-    } while(testnext(ls, ',') || testnext(ls, ';'));
+       if(ls->t.token == ',' || ls->t.token == ';')
+         luaX_next(ls);
+    }
     check_match(ls,'}','{',line);
 }
 static void structconstructor(LexState * ls) {
