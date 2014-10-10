@@ -111,7 +111,7 @@ Unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simp
     end
     
 The last line of the example invokes the Terra function from the top-level context. This is an example of the interaction between Terra and Lua.
-Terra code is JIT compiled to machine code when it is first _needed_. In this example, this occurs when `addone` is called. In general, functions are _needed_ when then are called, or when they are referred to by other functions that are being compiled.
+Terra code is JIT compiled to machine code when it is first _needed_. In this example, this occurs when `addone` is called. In general, functions are _needed_ when they are called, or when they are referred to by other functions that are being compiled.
 
 More information on the interface between Terra and Lua can be found in [Lua-Terra interaction](#lua_terra_interaction).
 
