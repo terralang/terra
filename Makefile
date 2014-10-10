@@ -172,8 +172,10 @@ endif
 endif
 
 ifeq ($(LLVM_VERSION), 35)
-CPPFLAGS = -std=c++11 
+CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
+ifeq ($(UNAME), Darwin)
 SO_FLAGS += -lz -lcurses
+endif
 endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)

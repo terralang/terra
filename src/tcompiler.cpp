@@ -2565,9 +2565,10 @@ static int terra_disassemble(lua_State * L) {
 
 #ifndef _WIN32
 static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
-    const char * tmp = "/tmp/terraXXXX.o";
+    const char * tmp = "/tmp/terraXXXXXX.o";
     strcpy(tmpnamebuf, tmp);
     int fd = mkstemps(tmpnamebuf,2);
+    assert(fd != -1);
     close(fd);
     return tmpnamebuf;
 } 
@@ -2631,8 +2632,8 @@ static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *
 #else
     int c = sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
 #endif
+    unlink(tmpnamebuf);
     if(0 != c) {
-        unlink(tmpnamebuf);
         unlink(filename);
         terra_pusherror(T,"llvm: %s (%d)\n",err.c_str(),c);
         return true;
