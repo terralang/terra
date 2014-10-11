@@ -4093,8 +4093,8 @@ end
 
 
 -- END DEBUG
-local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true }
-
+local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true }
+local mustbefile = { sharedlibrary = true, executable = true }
 function terra.saveobj(filename,filekind,env,arguments)
     if type(filekind) ~= "string" then
         --filekind is missing, shift arguments to the right
@@ -4105,10 +4105,12 @@ function terra.saveobj(filename,filekind,env,arguments)
         --infer filekind from string
         if filename:match("%.o$") then
             filekind = "object"
-        elseif filename:match("%.bc") then
+        elseif filename:match("%.bc$") then
             filekind = "bitcode"
-        elseif filename:match("%.ll") then
+        elseif filename:match("%.ll$") then
             filekind = "llvmir"
+        elseif filename:match("%.so$") or filename:match("%.dylib$") then
+            filekind = "sharedlibrary"
         else
             filekind = "executable"
         end
@@ -4117,8 +4119,8 @@ function terra.saveobj(filename,filekind,env,arguments)
     if not allowedfilekinds[filekind] then
         error("unknown output format type: " .. tostring(filekind))
     end
-    if filekind == "executable" and filename == nil then
-        error("exectuables must be written to a file")
+    if filename == nil and mustbefile[filekind] then
+        error(filekind .. " must be written to a file")
     end
     
     local cleanenv = {}

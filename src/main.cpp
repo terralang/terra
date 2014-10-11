@@ -144,7 +144,7 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
                 lua_pop(L,1);
                 break;
             case 'g':
-                options->debug = 1;
+                options->debug++;
                 break;
             case 'm':
                 options->usemcjit = 1;

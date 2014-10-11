@@ -170,8 +170,22 @@ struct CopyConnectedComponent : public ValueMaterializer {
     llvmutil_Property copyGlobal;
     void * data;
     ValueToValueMapTy & VMap;
+    DIBuilder * DI;
+    DICompileUnit NCU;
     CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
-    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_) {
+    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_), DI(NULL) {
+        if(NamedMDNode * NMD = src->getNamedMetadata("llvm.module.flags")) {
+            NamedMDNode * New = dest->getOrInsertNamedMetadata(NMD->getName());
+            for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
+                New->addOperand(MapValue(NMD->getOperand(i), VMap));
+            }
+        }
+
+        if(NamedMDNode * CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+            DI = new DIBuilder(*dest);
+            DICompileUnit CU(CUN->getOperand(0));
+            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
+        }
     }
     virtual Value * materializeValueFor(Value * V) {
         if(Function * fn = dyn_cast<Function>(V)) {
@@ -206,16 +220,41 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 }
             }
             return newGV;
+        } else if(MDNode * MD = dyn_cast<MDNode>(V)) {
+            DISubprogram SP(MD);
+            if(DI != NULL && SP.isSubprogram()) {
+                
+                if(Function * OF = SP.getFunction()) {
+                    Function * F = cast<Function>(MapValue(OF,VMap,RF_None,NULL,this));
+                    DISubprogram NSP = DI->createFunction(SP.getContext(), SP.getName(), SP.getLinkageName(),
+                                                      DI->createFile(SP.getFilename(),SP.getDirectory()),
+                                                      SP.getLineNumber(), SP.getType(),
+                                                      SP.isLocalToUnit(), SP.isDefinition(),
+                                                      SP.getScopeLineNumber(),SP.getFlags(),SP.isOptimized(),
+                                                      F);
+                    return NSP;
+                }
+                /* fallthrough */
+            }
+            /* fallthrough */
         }
         return NULL;
+    }
+    void finalize() {
+        if(DI) {
+            DI->finalize();
+            delete DI;
+        }
     }
 };
 
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap) {
     Module * Dest = new Module(DestName,Src->getContext());
+    Dest->setTargetTriple(Src->getTargetTriple());
     CopyConnectedComponent cp(Dest,Src,copyGlobal,data,VMap);
     for(size_t i = 0; i < N; i++)
         cp.materializeValueFor(gvs[i]);
+    cp.finalize();
     return Dest;
 }
 static bool AlwaysCopy(GlobalValue * G, void *) { return true; }

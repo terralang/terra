@@ -300,6 +300,7 @@ int terra_compilerinit(struct terra_State * T) {
     } else {
         T->C->m = topeemodule;
     }
+    T->C->m->setTargetTriple(Triple);
     
     T->C->fpm = new FunctionPassManager(T->C->m);
 
@@ -1982,7 +1983,7 @@ if(baseT->isIntegerTy()) { \
             #if LLVM_VERSION >= 34
             DICompileUnit CU =
             #endif
-                DB->createCompileUnit(1, filename, ".", "terra", true, "", 0);
+                DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
             SP = DB->createFunction(
                                     #if LLVM_VERSION >= 34
                                     CU,
@@ -1992,6 +1993,11 @@ if(baseT->isIntegerTy()) { \
                                     func->getName(), func->getName(), file, lineno,
                                     DB->createSubroutineType(file, DB->getOrCreateArray(ArrayRef<Value*>())),
                                     false, true, 0,0, true, func);
+            
+            if(!T->C->m->getModuleFlagsMetadata()) {
+                T->C->m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
+                T->C->m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",1);
+            }
         }
     }
     void endDebug() {
@@ -2400,20 +2406,39 @@ static int terra_optimize(lua_State * L) {
     return 0;
 }
 
+
+
 #ifdef TERRA_CAN_USE_MCJIT
+static void * GetGlobalValueAddress(terra_State * T, StringRef Name) {
+    if(T->options.debug > 1)
+        return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
+    return (void*)T->C->ee->getGlobalValueAddress(Name);
+}
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
-    ExecutionEngine * EE = (ExecutionEngine*) data;
-    if(Function * fn = dyn_cast<Function>(G)) {
-        //function has not been emitted yet, so we need to copy it
-        return 0 == EE->getFunctionAddress(fn->getName());
-    } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(G)) {
-        //global has not been emitted, copy it
-        return 0 == EE->getGlobalValueAddress(GV->getName());
-    }
+    terra_State * T = (terra_State*) data;
+    if(dyn_cast<Function>(G) != NULL || dyn_cast<GlobalVariable>(G) != NULL)
+        return 0 == GetGlobalValueAddress(T,G->getName());
     return true;
 }
-
 #endif
+
+static bool SaveSharedObject(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename);
+
+#if LLVM_VERSION >= 34
+error_code CreateTemporaryFile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) { return sys::fs::createTemporaryFile(Prefix,Suffix,ResultPath); }
+#else
+error_code CreateTemporaryFile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) {
+    llvm::sys::Path P("/tmp");
+    P.appendComponent(Prefix.str());
+    P.appendSuffix(Suffix);
+    P.makeUnique(false,NULL);
+    StringRef str = P.str();
+    ResultPath.append(str.begin(),str.end());
+    return error_code();
+}
+#endif
+
+
 
 static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     ExecutionEngine * ee = T->C->ee;
@@ -2422,12 +2447,22 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         if(gv->isDeclaration()) {
             return ee->getPointerToNamedFunction(gv->getName());
         }
-        void * ptr = (void*) ee->getGlobalValueAddress(gv->getName());
+        void * ptr =  GetGlobalValueAddress(T,gv->getName());
         if(ptr) {
             return ptr;
         }
         llvm::ValueToValueMapTy VMap;
-        Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,ee, VMap);
+        Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,T, VMap);
+        
+        if(T->options.debug > 1) {
+            llvm::SmallString<256> tmpname;
+            CreateTemporaryFile("terra","so",tmpname);
+            SaveSharedObject(T, m, NULL, tmpname.c_str());
+            sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
+            void * result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName());
+            assert(result);
+            return result;
+        }
         ee->addModule(m);
         return (void*) ee->getGlobalValueAddress(gv->getName());
 #else
@@ -2563,27 +2598,6 @@ static int terra_disassemble(lua_State * L) {
     return 0;
 }
 
-#ifndef _WIN32
-static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
-    const char * tmp = "/tmp/terraXXXXXX.o";
-    strcpy(tmpnamebuf, tmp);
-    int fd = mkstemps(tmpnamebuf,2);
-    assert(fd != -1);
-    close(fd);
-    return tmpnamebuf;
-} 
-#else
-static const char * GetTemporaryFile(char * tmpnamebuf, size_t len) {
-    char firstbuf[256];
-    DWORD tmpdirlen = GetTempPath(256, firstbuf);
-    assert(tmpdirlen < 256-14);    // Enough space in the buffer to accomodate the tmp filename
-    sprintf(&firstbuf[tmpdirlen], "terraXXXXXX");
-    _mktemp(firstbuf);
-    sprintf(tmpnamebuf, "%s.o", firstbuf);
-    return tmpnamebuf;
-}
-#endif
-
 static bool FindLinker(LLVM_PATH_TYPE * linker) {
 #ifndef _WIN32
     #if LLVM_VERSION >= 34
@@ -2599,9 +2613,10 @@ static bool FindLinker(LLVM_PATH_TYPE * linker) {
     return false;
 }
 
-static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename) {
-    char tmpnamebuf[256];
-    GetTemporaryFile(tmpnamebuf,256);
+static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> * linkargs, const char * filename) {
+    llvm::SmallString<256> tmpname;
+    CreateTemporaryFile("terra","o", tmpname);
+    const char * tmpnamebuf = tmpname.c_str();
     std::string err;
     raw_fd_ostream tmp(tmpnamebuf,err,RAW_FD_OSTREAM_BINARY);
     if(!err.empty()) {
@@ -2623,17 +2638,19 @@ static bool SaveExecutable(terra_State * T, Module * M, std::vector<const char *
     std::vector<const char *> cmd;
     cmd.push_back(linker.c_str());
     cmd.push_back(tmpnamebuf);
+    if(linkargs)
+        cmd.insert(cmd.end(),linkargs->begin(),linkargs->end());
+    
     cmd.push_back("-o");
     cmd.push_back(filename);
-    cmd.insert(cmd.end(),args->begin(),args->end());
     cmd.push_back(NULL);
 #if LLVM_VERSION >= 34
     int c = sys::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
 #else
     int c = sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
 #endif
-    unlink(tmpnamebuf);
     if(0 != c) {
+        unlink(tmpnamebuf);
         unlink(filename);
         terra_pusherror(T,"llvm: %s (%d)\n",err.c_str(),c);
         return true;
@@ -2654,6 +2671,24 @@ static bool SaveObject(terra_State * T, Module * M, const std::string & filekind
         dest << *M;
     }
     return false;
+}
+static bool SaveSharedObject(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename) {
+    std::vector<const char *> cmd;
+    cmd.push_back("-g");
+#ifdef __APPLE__
+    cmd.push_back("-dynamiclib");
+    cmd.push_back("-single_module");
+    cmd.push_back("-undefined");
+    cmd.push_back("dynamic_lookup");
+#else
+    cmd.push_back("-shared");
+    cmd.push_back("-Wl,-export-dynamic");
+    cmd.push_back("-ldl");
+#endif
+    cmd.push_back("-fPIC");
+    if(args)
+        cmd.insert(cmd.end(),args->begin(),args->end());
+    return SaveAndLink(T,M,&cmd,filename);
 }
 
 static int terra_saveobjimpl(lua_State * L) {
@@ -2709,8 +2744,10 @@ static int terra_saveobjimpl(lua_State * L) {
     int N = 0;
     
     if (filekind == "executable") {
-        result = SaveExecutable(T,M,&args,filename);
-    } else {
+        result = SaveAndLink(T,M,&args,filename);
+    } else if (filekind == "sharedlibrary") {
+        result = SaveSharedObject(T,M,&args,filename);
+    } else  {
         if(filename != NULL) {
             std::string err;
             raw_fd_ostream dest(filename, err, (filekind == "llvmir") ? RAW_FD_OSTREAM_NONE : RAW_FD_OSTREAM_BINARY);
