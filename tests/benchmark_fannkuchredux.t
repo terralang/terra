@@ -6,6 +6,7 @@
  
  ]]
 
+
 local C = {
     printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true)),
     exit = terralib.externfunction("exit", int -> {}),

@@ -265,7 +265,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
-    TargetMachine * TM = TheTarget->createTargetMachine(Triple, CPU, HostHasAVX() ? "+avx" : "", options,Reloc::Default,CodeModel::Default,OL);
+    TargetMachine * TM = TheTarget->createTargetMachine(Triple, CPU, HostHasAVX() ? "+avx" : "", options,Reloc::PIC_,CodeModel::Default,OL);
     T->C->td = TM->TARGETDATA(get)();
     
     if(T->options.usemcjit) {
