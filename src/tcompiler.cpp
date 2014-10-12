@@ -34,6 +34,7 @@ extern "C" {
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
+#include "llvm/Support/FileSystem.h"
 
 #if LLVM_VERSION >= 35
 using std::error_code;
@@ -1978,7 +1979,12 @@ if(baseT->isIntegerTy()) { \
     void initDebug(const char * filename, int lineno) {
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*C->m);
-            DIFile file = DB->createFile(filename, ".");
+            
+            SmallString<256> filepath = StringRef(filename);
+            
+            llvm::sys::fs::make_absolute(filepath);
+            
+            DIFile file = DB->createFile(llvm::sys::path::filename(filepath),llvm::sys::path::parent_path(filepath));
         
             #if LLVM_VERSION >= 34
             DICompileUnit CU =
