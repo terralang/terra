@@ -1119,8 +1119,10 @@ struct TerraCompiler {
     terra_State * T;
     terra_CompilerState * C;
     IRBuilder<> * B;
+    
     DIBuilder * DB;
     DISubprogram SP;
+    StringMap<MDNode*> filenamecache; //map from filename to lexical scope object representing file.
     
     Obj funcobj;
     Function * func;
@@ -1976,16 +1978,32 @@ if(baseT->isIntegerTy()) { \
         
     }
     
+    DIFile createDebugInfoForFile(const char * filename) {
+        //checking the existence of a file once per function can be expensive,
+        //so only do it if debug mode is set to slow compile anyway.
+        //In the future, we can cache across functions calls if needed
+        if(T->options.debug > 1 && llvm::sys::fs::exists(filename)) {
+            SmallString<256> filepath = StringRef(filename);
+            llvm::sys::fs::make_absolute(filepath);
+            return DB->createFile(llvm::sys::path::filename(filepath),llvm::sys::path::parent_path(filepath));
+        } else {
+            return DB->createFile(filename,".");
+        }
+    }
+    MDNode * debugScopeForFile(const char * filename) {
+        StringMap<MDNode*>::iterator it = filenamecache.find(filename);
+        if(it != filenamecache.end())
+            return it->second;
+        printf("creating filename for %s\n",filename);
+        MDNode * block = DB->createLexicalBlockFile(SP, createDebugInfoForFile(filename));
+        filenamecache[filename] = block;
+        return block;
+    }
     void initDebug(const char * filename, int lineno) {
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*C->m);
             
-            SmallString<256> filepath = StringRef(filename);
-            
-            llvm::sys::fs::make_absolute(filepath);
-            
-            DIFile file = DB->createFile(llvm::sys::path::filename(filepath),llvm::sys::path::parent_path(filepath));
-        
+            DIFile file = createDebugInfoForFile(filename);
             #if LLVM_VERSION >= 34
             DICompileUnit CU =
             #endif
@@ -2004,6 +2022,7 @@ if(baseT->isIntegerTy()) { \
                 T->C->m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
                 T->C->m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",1);
             }
+            filenamecache[filename] = SP;
         }
     }
     void endDebug() {
@@ -2014,7 +2033,8 @@ if(baseT->isIntegerTy()) { \
     }
     void setDebugPoint(Obj * obj) {
         DEBUG_ONLY(T) {
-            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, SP));
+            MDNode * scope = debugScopeForFile(obj->string("filename"));
+            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, scope));
         }
     }
     void setInsertBlock(BasicBlock * bb) {
