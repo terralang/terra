@@ -91,7 +91,8 @@ _(opaque, "opaque") \
 _(allocvar, "allocvar") \
 _(defer, "defer") \
 _(setter,"setter") \
-_(inlineasm,"inlineasm")
+_(inlineasm,"inlineasm") \
+_(debuginfo,"debuginfo")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

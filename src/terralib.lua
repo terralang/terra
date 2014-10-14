@@ -3187,6 +3187,8 @@ function terra.funcdefinition:typecheck()
                 return checkintrinsic(e)
             elseif e:is "inlineasm" then
                 return e:copy { arguments = checkexpressions(e.arguments) }
+            elseif e:is "debuginfo" then
+                return e:copy { type = terra.types.unit }
             else
                 diag:reporterror(e,"statement found where an expression is expected ", terra.kinds[e.kind])
                 return e:copy { type = terra.types.error }
@@ -3638,6 +3640,10 @@ _G["global"] = terra.global
 
 terra.select = terra.internalmacro(function(diag,tree,guard,a,b)
     return terra.newtree(tree, { kind = terra.kinds.operator, operator = terra.kinds.select, operands = terra.newlist{guard.tree,a.tree,b.tree}})
+end)
+terra.debuginfo = terra.internalmacro(function(diag,tree,filename,linenumber)
+    local customfilename,customlinenumber = tostring(filename:asvalue()), tonumber(linenumber:asvalue())
+    return terra.newtree(tree, { kind = terra.kinds.debuginfo, customfilename = customfilename, customlinenumber = customlinenumber })
 end)
 
 local function createattributetable(q)

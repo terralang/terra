@@ -1123,6 +1123,8 @@ struct TerraCompiler {
     DIBuilder * DB;
     DISubprogram SP;
     StringMap<MDNode*> filenamecache; //map from filename to lexical scope object representing file.
+    const char * customfilename;
+    int customlinenumber;
     
     Obj funcobj;
     Function * func;
@@ -1936,7 +1938,12 @@ if(baseT->isIntegerTy()) { \
                   bool isVolatile = attr.boolean("isvolatile");
                   store->setVolatile(isVolatile);
                 }
-                return B->CreateLoad(CC.CreateAlloca(typeOfValue(exp)->type));
+                return Constant::getNullValue(typeOfValue(exp)->type);
+            } break;
+            case T_debuginfo: {
+                customfilename = exp->string("customfilename");
+                customlinenumber = exp->number("customlinenumber");
+                return Constant::getNullValue(typeOfValue(exp)->type);
             } break;
             default: {
                 exp->dump();
@@ -1994,12 +2001,13 @@ if(baseT->isIntegerTy()) { \
         StringMap<MDNode*>::iterator it = filenamecache.find(filename);
         if(it != filenamecache.end())
             return it->second;
-        printf("creating filename for %s\n",filename);
         MDNode * block = DB->createLexicalBlockFile(SP, createDebugInfoForFile(filename));
         filenamecache[filename] = block;
         return block;
     }
     void initDebug(const char * filename, int lineno) {
+        customfilename = NULL;
+        customlinenumber = 0;
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*C->m);
             
@@ -2033,8 +2041,8 @@ if(baseT->isIntegerTy()) { \
     }
     void setDebugPoint(Obj * obj) {
         DEBUG_ONLY(T) {
-            MDNode * scope = debugScopeForFile(obj->string("filename"));
-            B->SetCurrentDebugLocation(DebugLoc::get(obj->number("linenumber"), 0, scope));
+            MDNode * scope = debugScopeForFile(customfilename ? customfilename : obj->string("filename"));
+            B->SetCurrentDebugLocation(DebugLoc::get(customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
         }
     }
     void setInsertBlock(BasicBlock * bb) {
@@ -2483,7 +2491,8 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         if(T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
             CreateTemporaryFile("terra","so",tmpname);
-            SaveSharedObject(T, m, NULL, tmpname.c_str());
+            if(SaveSharedObject(T, m, NULL, tmpname.c_str()))
+                lua_error(T->L);
             sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
             void * result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName());
             assert(result);
@@ -2670,15 +2679,20 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
     cmd.push_back("-o");
     cmd.push_back(filename);
     cmd.push_back(NULL);
+    
 #if LLVM_VERSION >= 34
-    int c = sys::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
+    bool executionFailed;
+    sys::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err,&executionFailed);
+#elif LLVM_VERSION >= 33
+    bool executionFailed;
+    sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err,&executionFailed);
 #else
-    int c = sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
+    bool executionFailed = 0 != sys::Program::ExecuteAndWait(linker, &cmd[0], 0, 0, 0, 0, &err);
 #endif
-    if(0 != c) {
+    if(executionFailed) {
         unlink(tmpnamebuf);
         unlink(filename);
-        terra_pusherror(T,"llvm: %s (%d)\n",err.c_str(),c);
+        terra_pusherror(T,"llvm: %s\n",err.c_str());
         return true;
     }
     return false;
