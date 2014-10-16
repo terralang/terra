@@ -344,7 +344,7 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
         
     #endif
     }
-    
+    src->setTargetTriple(dst->getTargetTriple()); //suppress warning that occur due to unmatched os versions
     if(optManager) {
         if(!*optManager) {
             *optManager = new PassManager();
