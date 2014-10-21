@@ -605,17 +605,20 @@ struct CCallingConv {
     
     struct Argument {
         ArgumentKind kind;
-        int nargs; //number of arguments this value will produce in parameter list
         int isi1; //primitive needs to be cast to i1 (such as a boolean)
         Type * type; //orignal type for the object
         StructType * cctype; //if type == C_AGGREGATE_REG, this struct that holds a list of the values that goes into the registers
         Argument() {}
-        Argument(ArgumentKind kind, Type * type, int nargs = 1, StructType * cctype = NULL, int isi1 = 0) {
+        Argument(ArgumentKind kind, Type * type, StructType * cctype = NULL, int isi1 = 0) {
             this->kind = kind;
             this->type = type;
-            this->nargs = nargs;
             this->cctype = cctype;
             this->isi1 = isi1;
+        }
+        int GetNumberOfTypesInParamList() {
+            if(C_AGGREGATE_REG == this->kind)
+                return this->cctype->getNumElements();
+            return 1;
         }
     };
     
@@ -724,7 +727,7 @@ struct CCallingConv {
                 ++*usedfloat;
             else
                 ++*usedint;
-            return Argument(C_PRIMITIVE,t->type,1,NULL,t->islogical && !t->type->isVectorTy());
+            return Argument(C_PRIMITIVE,t->type,NULL,t->islogical && !t->type->isVectorTy());
         }
         
         int sz = C->td->getTypeAllocSize(t->type);
@@ -753,7 +756,7 @@ struct CCallingConv {
             if(sizes[i] > 0)
                 elements.push_back(TypeForClass(sizes[i], classes[i]));
         
-        return Argument(C_AGGREGATE_REG,t->type,elements.size(),
+        return Argument(C_AGGREGATE_REG,t->type,
                         StructType::get(*C->ctx,elements));
     }
     void Classify(Obj * ftype, Obj * params, Classification * info) {
@@ -767,7 +770,7 @@ struct CCallingConv {
         //to be translated to void. So if it is unit, force the return value to be void by overriding the normal 
         //classification decision
         if(Ty->IsUnitType(&returntype)) {
-            info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,0,StructType::get(*C->ctx));
+            info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,StructType::get(*C->ctx));
         }
         #endif
         
@@ -855,7 +858,7 @@ struct CCallingConv {
             }
             if(v->isi1)
                 addZeroExtAttr(r, argidx);
-            argidx += v->nargs;
+            argidx += v->GetNumberOfTypesInParamList();
         }
     }
     
@@ -894,7 +897,8 @@ struct CCallingConv {
                     break;
                 case C_AGGREGATE_REG: {
                     Value * dest = B->CreateBitCast(v,Ptr(p->cctype));
-                    for(int j = 0; j < p->nargs; j++) {
+                    int N = p->GetNumberOfTypesInParamList();
+                    for(int j = 0; j < N; j++) {
                         B->CreateStore(ai,B->CreateConstGEP2_32(dest, 0, j));
                         ++ai;
                     }
@@ -906,7 +910,7 @@ struct CCallingConv {
         Classification * info = ClassifyFunction(ftype);
         ArgumentKind kind = info->returntype.kind;
         
-        if(C_AGGREGATE_REG == kind && info->returntype.nargs == 0) {
+        if(C_AGGREGATE_REG == kind && info->returntype.GetNumberOfTypesInParamList() == 0) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
             if(info->returntype.isi1)
@@ -919,7 +923,7 @@ struct CCallingConv {
             Value * dest = CreateAlloca(B,info->returntype.type);
             B->CreateStore(result,dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
-            if(info->returntype.nargs == 1)
+            if(info->returntype.GetNumberOfTypesInParamList() == 1)
                 result = B->CreateConstGEP2_32(result, 0, 0);
             B->CreateRet(B->CreateLoad(result));
         } else {
@@ -955,7 +959,8 @@ struct CCallingConv {
                     Value * scratch = CreateAlloca(B,a->type);
                     B->CreateStore(actual,scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
-                    for(int j = 0; j < a->nargs; j++) {
+                    int N = a->GetNumberOfTypesInParamList();
+                    for(int j = 0; j < N; j++) {
                         arguments.push_back(B->CreateLoad(B->CreateConstGEP2_32(casted,0,j)));
                     }
                 } break;
@@ -983,9 +988,9 @@ struct CCallingConv {
             } else { //C_AGGREGATE_REG
                 aggregate = CreateAlloca(B,info.returntype.type);
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
-                if(info.returntype.nargs == 1)
+                if(info.returntype.GetNumberOfTypesInParamList() == 1)
                     casted = B->CreateConstGEP2_32(casted, 0, 0);
-                if(info.returntype.nargs > 0)
+                if(info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call,casted);
             }
             return B->CreateLoad(aggregate);
@@ -996,7 +1001,7 @@ struct CCallingConv {
         
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
-            switch(info->returntype.nargs) {
+            switch(info->returntype.GetNumberOfTypesInParamList()) {
                 case 0: rt = Type::getVoidTy(*C->ctx); break;
                 case 1: rt = info->returntype.cctype->getElementType(0); break;
                 default: rt = info->returntype.cctype; break;
@@ -1021,7 +1026,8 @@ struct CCallingConv {
                     arguments.push_back(Ptr(a->type));
                     break;
                 case C_AGGREGATE_REG: {
-                    for(int j = 0; j < a->nargs; j++) {
+                    int N = a->GetNumberOfTypesInParamList();
+                    for(int j = 0; j < N; j++) {
                         arguments.push_back(a->cctype->getElementType(j));
                     }
                 } break;
