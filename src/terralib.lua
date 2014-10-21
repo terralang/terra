@@ -902,9 +902,24 @@ function terra.intrinsic(str, typ)
     else
         error("expected a name and type or a function providing a name and type but found "..tostring(str) .. ", " .. tostring(typ))
     end
-    local function intrinsiccall(diag,tree,...)
-        local args = terra.newlist({...}):map(function(e) return e.tree end)
-        return terra.newtree(tree, { kind = terra.kinds.intrinsic, typefn = typefn, arguments = args } )
+    local function intrinsiccall(diag,e,...)
+        local args = terra.newlist {...}
+        local types = args:map("gettype")
+        local name,intrinsictype = typefn(types)
+        if type(name) ~= "string" then
+            diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
+            name = "<unknownintrinsic>"
+        elseif intrinsictype == terra.types.error then
+            diag:reporterror(e,"intrinsic ",name," does not support arguments: ",unpack(types))
+            intrinsictype = terra.types.funcpointer(types,{})
+        elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
+            diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
+            intrinsictype = terra.types.funcpointer(types,{})
+        end
+        local fn = terralib.externfunction(name,intrinsictype)
+        local literal = terra.createterraexpression(diag,e,fn)
+        local rawargs = args:map("tree")
+        return terra.newtree(e, { kind = terra.kinds.apply, value = literal, arguments = rawargs })
     end
     return terra.internalmacro(intrinsiccall)
 end
@@ -2960,24 +2975,6 @@ function terra.funcdefinition:typecheck()
 
     --functions that handle the checking of expressions
     
-    local function checkintrinsic(e)
-        local params = checkexpressions(e.arguments)
-        local types = params:map("type")
-        local name,intrinsictype = e.typefn(types)
-        if type(name) ~= "string" then
-            diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
-            return e:copy { type = terra.types.error }
-        elseif intrinsictype == terra.types.error then
-            diag:reporterror(e,"intrinsic ",name," does not support arguments: ",unpack(types))
-            return e:copy { type = terra.types.error }
-        elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
-            diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
-            return e:copy { type = terra.types.error }
-        end
-        params = insertcasts(e,intrinsictype.type.parameters,params)
-        return e:copy { type = intrinsictype.type.returntype, name = name, arguments = params, intrinsictype = intrinsictype }
-    end
-
     local function checksymbol(sym)
         assert(terra.issymbol(sym) or type(sym) == "string")
         return sym
@@ -3183,8 +3180,6 @@ function terra.funcdefinition:typecheck()
                     diag:reporterror(e, "some entries in constructor are named while others are not")
                 end
                 return e:copy { type = typ:complete(e), expressions = paramlist }
-            elseif e:is "intrinsic" then
-                return checkintrinsic(e)
             elseif e:is "inlineasm" then
                 return e:copy { arguments = checkexpressions(e.arguments) }
             elseif e:is "debuginfo" then
@@ -4006,10 +4001,6 @@ local function printpretty(toptree,returntype)
             emit(", ")
             emitAttr(e.attributes)
             emit(")\n")
-        elseif e:is "intrinsic" then
-            emit("intrinsic<%s>(",e.name)
-            emitParamList(e.arguments)
-            emit(")")
         elseif e:is "luaobject" then
             if terra.types.istype(e.value) then
                 emit("[%s]",e.value)

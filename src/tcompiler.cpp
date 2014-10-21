@@ -337,15 +337,7 @@ int terra_compilerfree(struct terra_State * T) {
     return 0;
 }
 
-struct TType { //contains llvm raw type pointer and any metadata about it we need
-    Type * type;
-    bool issigned;
-    bool islogical;
-    bool incomplete; // does this aggregate type or its children include an incomplete struct
-};
-
 struct TerraCompiler;
-
 
 static void GetStructEntries(Obj * typ, Obj * entries) {
     Obj layout;
@@ -355,54 +347,127 @@ static void GetStructEntries(Obj * typ, Obj * entries) {
     layout.obj("entries",entries);
 }
 
-//functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
-struct CCallingConv {
+struct TType { //contains llvm raw type pointer and any metadata about it we need
+    Type * type;
+    bool issigned;
+    bool islogical;
+    bool incomplete; // does this aggregate type or its children include an incomplete struct
+};
+
+class Types {
     terra_State * T;
-    lua_State * L;
     terra_CompilerState * C;
-    IRBuilder<> * B;
-    
-    enum RegisterClass {
-        C_INTEGER,
-        C_NO_CLASS,
-        C_SSE,
-        C_MEMORY
-    };
-    
-    enum ArgumentKind {
-        C_PRIMITIVE, //passed without modifcation (i.e. any non-aggregate type)
-        C_AGGREGATE_REG, //aggregate passed through registers
-        C_AGGREGATE_MEM, //aggregate passed through memory
-    };
-    
-    struct Argument {
-        ArgumentKind kind;
-        int nargs; //number of arguments this value will produce in parameter list
-        int isi1; //primitive needs to be cast to i1 (such as a boolean)
-        Type * type; //orignal type for the object
-        StructType * cctype; //if type == C_AGGREGATE_REG, this struct that holds a list of the values that goes into the registers
-        Argument() {}
-        Argument(ArgumentKind kind, Type * type, int nargs = 1, StructType * cctype = NULL, int isi1 = 0) {
-            this->kind = kind;
-            this->type = type;
-            this->nargs = nargs;
-            this->cctype = cctype;
-            this->isi1 = isi1;
+    TType * GetIncomplete(Obj * typ) {
+        TType * t = NULL;
+        if(!LookupTypeCache(typ, &t)) {
+            assert(t);
+            switch(typ->kind("kind")) {
+                case T_pointer: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    TType * baset = GetIncomplete(&base);
+                    t->type = PointerType::get(baset->type,typ->number("addressspace"));
+                } break;
+                case T_array: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    TType * baset = GetIncomplete(&base);
+                    t->type = ArrayType::get(baset->type, N);
+                    t->incomplete = baset->incomplete;
+                } break;
+                case T_struct: {
+                    StructType * st = CreateStruct(typ);
+                    t->type = st;
+                    t->incomplete = st->isOpaque();
+                } break;
+                case T_functype: {
+                    t->type = Type::getInt8Ty(*C->ctx);
+                } break;
+                case T_vector: {
+                    Obj base;
+                    typ->obj("type",&base);
+                    int N = typ->number("N");
+                    TType * ttype = GetIncomplete(&base); //vectors can only contain primitives, so the type must be complete
+                    Type * baseType = ttype->type;
+                    t->issigned = ttype->issigned;
+                    t->islogical = ttype->islogical;
+                    t->type = VectorType::get(baseType, N);
+                } break;
+                case T_primitive: {
+                    CreatePrimitiveType(typ, t);
+                } break;
+                case T_niltype: {
+                    t->type = Type::getInt8PtrTy(*C->ctx);
+                } break;
+                case T_opaque: {
+                    t->type = Type::getInt8Ty(*C->ctx);
+                } break;
+                default: {
+                    printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
+                    terra_reporterror(T,"type not understood or not primitive\n");
+                } break;
+            }
         }
-    };
-    
-    struct Classification {
-        Argument returntype;
-        std::vector<Argument> paramtypes;
-    };
-    
-    void init(terra_State * T, terra_CompilerState * C, IRBuilder<> * B) {
-        this->T = T;
-        this->L = T->L;
-        this->C = C;
-        this->B = B;
+        assert(t && t->type);
+        return t;
     }
-    
+    void CreatePrimitiveType(Obj * typ, TType * t) {
+        int bytes = typ->number("bytes");
+        switch(typ->kind("type")) {
+            case T_float: {
+                if(bytes == 4) {
+                    t->type = Type::getFloatTy(*C->ctx);
+                } else {
+                    assert(bytes == 8);
+                    t->type = Type::getDoubleTy(*C->ctx);
+                }
+            } break;
+            case T_integer: {
+                t->issigned = typ->boolean("signed");
+                t->type = Type::getIntNTy(*C->ctx,bytes * 8);
+            } break;
+            case T_logical: {
+                t->type = Type::getInt8Ty(*C->ctx);
+                t->islogical = true;
+            } break;
+            default: {
+                printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
+                terra_reporterror(T,"type not understood");
+            } break;
+        }
+    }
+    Type * FunctionPointerType() {
+        return Type::getInt8PtrTy(*C->ctx);
+    }
+    bool LookupTypeCache(Obj * typ, TType ** t) {
+        *t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
+        if(*t == NULL) {
+            *t = (TType*) lua_newuserdata(T->L,sizeof(TType));
+            memset(*t,0,sizeof(TType));
+            typ->setfield("llvm_type");
+            assert(*t != NULL);
+            return false;
+        }
+        return true;
+    }
+    StructType * CreateStruct(Obj * typ) {
+        //check to see if it was initialized externally first
+        if(typ->boolean("llvm_definingfunction")) {
+            Function * df = C->m->getFunction(typ->string("llvm_definingfunction"));
+            int argpos = typ->number("llvm_argumentposition");
+            StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
+            assert(st);
+            return st;
+        }
+        std::string name = typ->asstring("name");
+        bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
+        name = (isreserved) ? std::string("$") + name : name;
+        return StructType::create(*C->ctx, name);
+    }
+    bool beginsWith(const std::string & s, const std::string & prefix) {
+        return s.substr(0,prefix.size()) == prefix;
+    }
     void LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
         GetStructEntries(typ,&layout);
@@ -420,7 +485,7 @@ struct CCallingConv {
             Obj vt;
             v.obj("type",&vt);
             
-            Type * fieldtype = GetType(&vt)->type;
+            Type * fieldtype = Get(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
                 unsigned align = C->td->getABITypeAlignment(fieldtype);
@@ -462,124 +527,11 @@ struct CCallingConv {
             printf("\nEnd Layout\n");
         }
     }
-    bool LookupTypeCache(Obj * typ, TType ** t) {
-        *t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
-        if(*t == NULL) {
-            *t = (TType*) lua_newuserdata(L,sizeof(TType));
-            memset(*t,0,sizeof(TType));
-            typ->setfield("llvm_type");
-            assert(*t != NULL);
-            return false;
-        }
-        return true;
-    }
-    void CreatePrimitiveType(Obj * typ, TType * t) {
-        int bytes = typ->number("bytes");
-        switch(typ->kind("type")) {
-            case T_float: {
-                if(bytes == 4) {
-                    t->type = Type::getFloatTy(*C->ctx);
-                } else {
-                    assert(bytes == 8);
-                    t->type = Type::getDoubleTy(*C->ctx);
-                }
-            } break;
-            case T_integer: {
-                t->issigned = typ->boolean("signed");
-                t->type = Type::getIntNTy(*C->ctx,bytes * 8);
-            } break;
-            case T_logical: {
-                t->type = Type::getInt8Ty(*C->ctx);
-                t->islogical = true;
-            } break;
-            default: {
-                printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("type")));
-                terra_reporterror(T,"type not understood");
-            } break;
-        }
-    }
-    bool beginsWith(const std::string & s, const std::string & prefix) {
-        return s.substr(0,prefix.size()) == prefix;
-    }
-    StructType * CreateStruct(Obj * typ) {
-        //check to see if it was initialized externally first
-        if(typ->boolean("llvm_definingfunction")) {
-            Function * df = C->m->getFunction(typ->string("llvm_definingfunction"));
-            int argpos = typ->number("llvm_argumentposition");
-            StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
-            assert(st);
-            return st;
-        }
-        std::string name = typ->asstring("name");
-        bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
-        name = (isreserved) ? std::string("$") + name : name;
-        return StructType::create(*C->ctx, name);
-    }
-    Type * FunctionPointerType() {
-        return Type::getInt8PtrTy(*C->ctx);
-    }
-    TType * GetTypeIncomplete(Obj * typ) {
-        TType * t = NULL;
-        if(!LookupTypeCache(typ, &t)) {
-            assert(t);
-            switch(typ->kind("kind")) {
-                case T_pointer: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    if(T_functype == base.kind("kind")) {
-                        t->type = FunctionPointerType();
-                    } else {
-                        TType * baset = GetTypeIncomplete(&base);
-                        t->type = PointerType::get(baset->type,typ->number("addressspace"));
-                    }
-                } break;
-                case T_array: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    int N = typ->number("N");
-                    TType * baset = GetTypeIncomplete(&base);
-                    t->type = ArrayType::get(baset->type, N);
-                    t->incomplete = baset->incomplete;
-                } break;
-                case T_struct: {
-                    StructType * st = CreateStruct(typ);
-                    t->type = st;
-                    t->incomplete = st->isOpaque();
-                } break;
-                case T_functype: {
-                    t->type = CreateFunctionType(typ);
-                } break;
-                case T_vector: {
-                    Obj base;
-                    typ->obj("type",&base);
-                    int N = typ->number("N");
-                    TType * ttype = GetTypeIncomplete(&base); //vectors can only contain primitives, so the type must be complete
-                    Type * baseType = ttype->type;
-                    t->issigned = ttype->issigned;
-                    t->islogical = ttype->islogical;
-                    t->type = VectorType::get(baseType, N);
-                } break;
-                case T_primitive: {
-                    CreatePrimitiveType(typ, t);
-                } break;
-                case T_niltype: {
-                    t->type = Type::getInt8PtrTy(*C->ctx);
-                } break;
-                case T_opaque: {
-                    t->type = Type::getInt8Ty(*C->ctx);
-                } break;
-                default: {
-                    printf("kind = %d, %s\n",typ->kind("kind"),tkindtostr(typ->kind("kind")));
-                    terra_reporterror(T,"type not understood or not primitive\n");
-                } break;
-            }
-        }
-        assert(t && t->type);
-        return t;
-    }
-    
-    TType * GetType(Obj * typ) {
-        TType * t = GetTypeIncomplete(typ);
+public:
+    Types(terra_State * T_) : T(T_), C(T_->C) {}
+    TType * Get(Obj * typ) {
+        assert(typ->kind("kind") != T_functype); // Get should not be called on function directly, only function pointers
+        TType * t = GetIncomplete(typ);
         if(t->incomplete) {
             assert(t->type->isAggregateType());
             switch(typ->kind("kind")) {
@@ -589,7 +541,7 @@ struct CCallingConv {
                 case T_array: {
                     Obj base;
                     typ->obj("type",&base);
-                    GetType(&base); //force base type to be completed
+                    Get(&base); //force base type to be completed
                 } break;
                 default:
                     terra_reporterror(T,"type marked incomplete is not an array or struct\n");
@@ -598,6 +550,80 @@ struct CCallingConv {
         t->incomplete = false;
         return t;
     }
+    bool IsUnitType(Obj * t) {
+        t->pushfield("isunit");
+        t->push();
+        lua_call(T->L,1,1);
+        bool result = lua_toboolean(T->L,-1);
+        lua_pop(T->L,1);
+        return result;
+    }
+    void EnsureTypeIsComplete(Obj * typ) {
+        Get(typ);
+    }
+    void EnsurePointsToCompleteType(Obj * ptrTy) {
+        if(ptrTy->kind("kind") == T_pointer) {
+            Obj objTy;
+            ptrTy->obj("type",&objTy);
+            EnsureTypeIsComplete(&objTy);
+        } //otherwise it is niltype and already complete
+    }
+};
+
+//helper function to alloca at the beginning of function
+static AllocaInst *CreateAlloca(IRBuilder<> * B, Type *Ty, Value *ArraySize = 0, const Twine &Name = "") {
+    BasicBlock * entry = &B->GetInsertBlock()->getParent()->getEntryBlock();
+    IRBuilder<> TmpB(entry,
+                     entry->begin()); //make sure alloca are at the beginning of the function
+                                      //this is needed because alloca's that do not dominate the
+                                      //function do weird things
+    return TmpB.CreateAlloca(Ty,ArraySize,Name);
+}
+
+//functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
+struct CCallingConv {
+    terra_State * T;
+    lua_State * L;
+    terra_CompilerState * C;
+    Types * Ty;
+    IRBuilder<> * B;
+    
+    CCallingConv(terra_State * T_, Types * Ty_, IRBuilder<> * B_) : T(T_), L(T_->L), C(T_->C), Ty(Ty_), B(B_) {}
+    
+    enum RegisterClass {
+        C_INTEGER,
+        C_NO_CLASS,
+        C_SSE,
+        C_MEMORY
+    };
+    
+    enum ArgumentKind {
+        C_PRIMITIVE, //passed without modifcation (i.e. any non-aggregate type)
+        C_AGGREGATE_REG, //aggregate passed through registers
+        C_AGGREGATE_MEM, //aggregate passed through memory
+    };
+    
+    struct Argument {
+        ArgumentKind kind;
+        int nargs; //number of arguments this value will produce in parameter list
+        int isi1; //primitive needs to be cast to i1 (such as a boolean)
+        Type * type; //orignal type for the object
+        StructType * cctype; //if type == C_AGGREGATE_REG, this struct that holds a list of the values that goes into the registers
+        Argument() {}
+        Argument(ArgumentKind kind, Type * type, int nargs = 1, StructType * cctype = NULL, int isi1 = 0) {
+            this->kind = kind;
+            this->type = type;
+            this->nargs = nargs;
+            this->cctype = cctype;
+            this->isi1 = isi1;
+        }
+    };
+    
+    struct Classification {
+        Argument returntype;
+        std::vector<Argument> paramtypes;
+        FunctionType * fntype;
+    };
     
     RegisterClass Meet(RegisterClass a, RegisterClass b) {
         switch(a) {
@@ -625,7 +651,7 @@ struct CCallingConv {
     }
     
     void MergeValue(RegisterClass * classes, size_t offset, Obj * type) {
-        Type * t = GetType(type)->type;
+        Type * t = Ty->Get(type)->type;
         int entry = offset / 8;
         if(t->isVectorTy()) //we don't handle structures with vectors in them yet
             classes[entry] = C_MEMORY;
@@ -634,7 +660,7 @@ struct CCallingConv {
         else if(t->isIntegerTy() || t->isPointerTy())
             classes[entry] = Meet(classes[entry],C_INTEGER);
         else if(t->isStructTy()) {
-            StructType * st = cast<StructType>(GetType(type)->type);
+            StructType * st = cast<StructType>(Ty->Get(type)->type);
             assert(!st->isOpaque());
             const StructLayout * sl = C->td->getStructLayout(st);
             Obj layout;
@@ -650,7 +676,7 @@ struct CCallingConv {
                 MergeValue(classes, offset + structoffset, &entrytype);
             }
         } else if(t->isArrayTy()) {
-            ArrayType * at = cast<ArrayType>(GetType(type)->type);
+            ArrayType * at = cast<ArrayType>(Ty->Get(type)->type);
             size_t elemsize = C->td->getTypeAllocSize(at->getElementType());
             size_t sz = at->getNumElements();
             Obj elemtype;
@@ -691,7 +717,7 @@ struct CCallingConv {
 #endif
     
     Argument ClassifyArgument(Obj * type, int * usedfloat, int * usedint) {
-        TType * t = GetType(type);
+        TType * t = Ty->Get(type);
         
         if(!t->type->isAggregateType()) {
             if(t->type->isFloatingPointTy() || t->type->isVectorTy())
@@ -730,14 +756,6 @@ struct CCallingConv {
         return Argument(C_AGGREGATE_REG,t->type,elements.size(),
                         StructType::get(*C->ctx,elements));
     }
-    bool IsUnitType(Obj * t) {
-        t->pushfield("isunit");
-        t->push();
-        lua_call(L,1,1);
-        bool result = lua_toboolean(L,-1);
-        lua_pop(L,1);
-        return result;
-    }
     void Classify(Obj * ftype, Obj * params, Classification * info) {
         Obj returntype;
         ftype->obj("returntype",&returntype);
@@ -748,7 +766,7 @@ struct CCallingConv {
         //windows classifies empty structs as pass by pointer, but we need a return value of unit (an empty tuple)
         //to be translated to void. So if it is unit, force the return value to be void by overriding the normal 
         //classification decision
-        if(IsUnitType(&returntype)) {
+        if(Ty->IsUnitType(&returntype)) {
             info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,0,StructType::get(*C->ctx));
         }
         #endif
@@ -761,6 +779,7 @@ struct CCallingConv {
             params->objAt(i,&elem);
             info->paramtypes.push_back(ClassifyArgument(&elem,&nfloat,&nint));
         }
+        info->fntype = CreateFunctionType(info,ftype->boolean("isvararg"));
     }
     
     Classification * ClassifyFunction(Obj * fntyp) {
@@ -841,9 +860,8 @@ struct CCallingConv {
     }
     
     Function * CreateFunction(Obj * ftype, const Twine & name) {
-        TType * llvmtyp = GetType(ftype);
-        Function * fn = Function::Create(cast<FunctionType>(llvmtyp->type), Function::ExternalLinkage, name, C->m);
         Classification * info = ClassifyFunction(ftype);
+        Function * fn = Function::Create(info->fntype, Function::ExternalLinkage, name, C->m);
         AttributeFnOrCall(fn,info);
         return fn;
     }
@@ -898,7 +916,7 @@ struct CCallingConv {
             B->CreateStore(result,function->arg_begin());
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
-            Value * dest = CreateAlloca(info->returntype.type);
+            Value * dest = CreateAlloca(B,info->returntype.type);
             B->CreateStore(result,dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.nargs == 1)
@@ -916,7 +934,7 @@ struct CCallingConv {
         std::vector<Value*> arguments;
         
         if(C_AGGREGATE_MEM == info.returntype.kind) {
-            arguments.push_back(CreateAlloca(info.returntype.type));
+            arguments.push_back(CreateAlloca(B,info.returntype.type));
         }
         
         for(size_t i = 0; i < info.paramtypes.size(); i++) {
@@ -929,12 +947,12 @@ struct CCallingConv {
                     arguments.push_back(actual);
                     break;
                 case C_AGGREGATE_MEM: {
-                    Value * scratch = CreateAlloca(a->type);
+                    Value * scratch = CreateAlloca(B,a->type);
                     B->CreateStore(actual,scratch);
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
-                    Value * scratch = CreateAlloca(a->type);
+                    Value * scratch = CreateAlloca(B,a->type);
                     B->CreateStore(actual,scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
                     for(int j = 0; j < a->nargs; j++) {
@@ -948,8 +966,7 @@ struct CCallingConv {
         //emit call
         //function pointers are stored as &int8 to avoid calling convension issues
         //cast it back to the real pointer type right before calling it
-        TType * llvmftype = GetType(ftype);
-        callee = B->CreateBitCast(callee,Ptr(llvmftype->type));
+        callee = B->CreateBitCast(callee,Ptr(info.fntype));
         CallInst * call = B->CreateCall(callee, arguments);
         //annotate call with byval and sret
         AttributeFnOrCall(call,&info);
@@ -964,7 +981,7 @@ struct CCallingConv {
             if(C_AGGREGATE_MEM == info.returntype.kind) {
                 aggregate = arguments[0];
             } else { //C_AGGREGATE_REG
-                aggregate = CreateAlloca(info.returntype.type);
+                aggregate = CreateAlloca(B,info.returntype.type);
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
                 if(info.returntype.nargs == 1)
                     casted = B->CreateConstGEP2_32(casted, 0, 0);
@@ -974,12 +991,8 @@ struct CCallingConv {
             return B->CreateLoad(aggregate);
         }
     }
-    Type * CreateFunctionType(Obj * typ) {
-
+    FunctionType * CreateFunctionType(Classification * info, bool isvararg) {
         std::vector<Type*> arguments;
-        bool isvararg = typ->boolean("isvararg");
-        
-        Classification * info = ClassifyFunction(typ);
         
         Type * rt = info->returntype.type;
         if(info->returntype.kind == C_AGGREGATE_REG) {
@@ -1017,27 +1030,14 @@ struct CCallingConv {
         
         return FunctionType::get(rt,arguments,isvararg);
     }
-    
-    void EnsureTypeIsComplete(Obj * typ) {
-        GetType(typ);
-    }
-    
-    AllocaInst *CreateAlloca(Type *Ty, Value *ArraySize = 0, const Twine &Name = "") {
-        BasicBlock * entry = &B->GetInsertBlock()->getParent()->getEntryBlock();
-        IRBuilder<> TmpB(entry,
-                         entry->begin()); //make sure alloca are at the beginning of the function
-                                          //this is needed because alloca's that do not dominate the
-                                          //function do weird things
-        return TmpB.CreateAlloca(Ty,ArraySize,Name);
-    }
 };
 
-static Constant * GetConstant(CCallingConv * CC, Obj * v) {
-    lua_State * L = CC->L;
-    terra_CompilerState * C = CC->C;
+static Constant * GetConstant(terra_State * T, Obj * v) {
+    lua_State * L = T->L;
+    terra_CompilerState * C = T->C;
     Obj t;
     v->obj("type", &t);
-    TType * typ = CC->GetType(&t);
+    TType * typ = Types(T).Get(&t);
     ConstantFolder B;
     if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
         Type * ptyp = PointerType::getUnqual(typ->type);
@@ -1086,27 +1086,27 @@ static Constant * GetConstant(CCallingConv * CC, Obj * v) {
 }
 
 
-static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const char * name) {
+static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const char * name) {
     GlobalVariable * gv = (GlobalVariable *) global->ud("llvm_value");
     if (gv == NULL) {
         Obj t;
         global->obj("type",&t);
-        Type * typ = CC->GetType(&t)->type;
+        Type * typ = Types(T).Get(&t)->type;
         
         Constant * llvmconstant = UndefValue::get(typ);
         Obj constant;
         if(global->obj("initializer",&constant)) {
-            llvmconstant = GetConstant(CC,&constant);
+            llvmconstant = GetConstant(T,&constant);
         }
         int as = global->number("addressspace");
-        gv = new GlobalVariable(*CC->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL, 
+        gv = new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,
                             #if LLVM_VERSION == 31
                                 false,
                             #else
                                 GlobalVariable::NotThreadLocal, 
                             #endif
                                 as);
-        lua_pushlightuserdata(CC->L, gv);
+        lua_pushlightuserdata(T->L, gv);
         global->setfield("llvm_value");
     }
     return gv;
@@ -1116,10 +1116,12 @@ static GlobalVariable * GetGlobalVariable(CCallingConv * CC, Obj * global, const
 static int terra_deletefunction(lua_State * L);
 
 struct TerraCompiler {
-    lua_State * L;
     terra_State * T;
+    lua_State * L;
     terra_CompilerState * C;
     IRBuilder<> * B;
+    Types Ty;
+    CCallingConv CC;
     
     DIBuilder * DB;
     DISubprogram SP;
@@ -1127,14 +1129,12 @@ struct TerraCompiler {
     const char * customfilename;
     int customlinenumber;
     
-    Obj funcobj;
+    Obj * funcobj;
     Function * func;
-    TType * func_type;
-    CCallingConv CC;
     std::vector<BasicBlock *> deferred;
     
     TType * getType(Obj * v) {
-        return CC.GetType(v);
+        return Ty.Get(v);
     }
     TType * typeOfValue(Obj * v) {
         Obj t;
@@ -1143,17 +1143,16 @@ struct TerraCompiler {
     }
     
     AllocaInst * allocVar(Obj * v) {
-        AllocaInst * a = CC.CreateAlloca(typeOfValue(v)->type,0,v->asstring("name"));
+        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->asstring("name"));
         lua_pushlightuserdata(L,a);
         v->setfield("value");
         return a;
     }
     
-    void getOrCreateFunction(Obj * funcobj, Function ** rfn, TType ** rtyp) {
+    void getOrCreateFunction(Obj * funcobj, Function ** rfn) {
         Function * fn = (Function *) funcobj->ud("llvm_value");
         Obj ftype;
         funcobj->obj("type",&ftype);
-        *rtyp = getType(&ftype);
         if(!fn) {
             const char * name = funcobj->string("name");
         
@@ -1186,19 +1185,10 @@ struct TerraCompiler {
         *rfn = fn;
     }
     
-    void run(terra_State * _T, int ref_table) {
+    TerraCompiler(terra_State * T_, Obj * funcobj_) : T(T_), L(T_->L), C(T_->C), B(new IRBuilder<>(*T_->C->ctx)), Ty(T_), CC(T_,&Ty,B), funcobj(funcobj_) {
         double begin = CurrentTimeInSeconds();
-        T = _T;
-        L = T->L;
-        C = T->C;
-        B = new IRBuilder<>(*C->ctx);
         
-        CC.init(T, C, B);
-        
-        lua_pushvalue(T->L,-2); //the original argument
-        funcobj.initFromStack(T->L, ref_table);
-        
-        getOrCreateFunction(&funcobj,&func,&func_type);
+        getOrCreateFunction(funcobj,&func);
         
         BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
         
@@ -1207,13 +1197,13 @@ struct TerraCompiler {
         Obj typedtree;
         Obj parameters;
         
-        funcobj.obj("typedtree",&typedtree);
+        funcobj->obj("typedtree",&typedtree);
         initDebug(typedtree.string("filename"),typedtree.number("linenumber"));
         setDebugPoint(&typedtree);
         typedtree.obj("parameters",&parameters);
         
         Obj ftype;
-        funcobj.obj("type",&ftype);
+        funcobj->obj("type",&ftype);
         
         std::vector<Value *> parametervars;
         emitExpressionList(&parameters, false, &parametervars);
@@ -1231,9 +1221,7 @@ struct TerraCompiler {
         }
         verifyFunction(*func);
         
-        RecordTime(&funcobj, "llvmgen", begin);
-        //cleanup -- ensure we left the stack the way we started
-        assert(lua_gettop(T->L) == ref_table);
+        RecordTime(funcobj, "llvmgen", begin);
         delete B;
         endDebug();
     }
@@ -1242,7 +1230,7 @@ struct TerraCompiler {
         Value * v = emitExp(exp,false);
         if(exp->boolean("lvalue"))
             return v;
-        Value * addr = CC.CreateAlloca(typeOfValue(exp)->type);
+        Value * addr = CreateAlloca(B,typeOfValue(exp)->type);
         B->CreateStore(v,addr);
         return addr;
     }
@@ -1402,13 +1390,6 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     Value * emitPointerSub(TType * t, Value * a, Value * b) {
         return B->CreatePtrDiff(a, b);
     }
-    void EnsurePointsToCompleteType(Obj * ptrTy) {
-        if(ptrTy->kind("kind") == T_pointer) {
-            Obj objTy;
-            ptrTy->obj("type",&objTy);
-            CC.EnsureTypeIsComplete(&objTy);
-        } //otherwise it is niltype and already complete
-    }
     Value * emitBinary(Obj * exp, Obj * ao, Obj * bo) {
         TType * t = typeOfValue(exp);
         T_Kind kind = exp->kind("operator");
@@ -1437,7 +1418,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         
         //check for pointer arithmetic first pointer arithmetic first
         if(at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
-            EnsurePointsToCompleteType(&aot);
+            Ty.EnsurePointsToCompleteType(&aot);
             if(bt->type->isPointerTy()) {
                 return emitPointerSub(t,a,b);
             } else {
@@ -1504,7 +1485,7 @@ if(baseT->isIntegerTy()) { \
         //type must be complete before we try to allocate space for it
         //this is enforced by the callers
         assert(!to->incomplete);
-        Value * output = CC.CreateAlloca(to->type);
+        Value * output = CreateAlloca(B,to->type);
         
         Obj entries;
         exp->obj("entries",&entries);
@@ -1596,7 +1577,7 @@ if(baseT->isIntegerTy()) { \
         assert(structPtr->getType()->isPointerTy());
         PointerType * objTy = cast<PointerType>(structPtr->getType());
         assert(objTy->getElementType()->isStructTy());
-        CC.EnsureTypeIsComplete(structType);
+        Ty.EnsureTypeIsComplete(structType);
         
         Obj layout;
         GetStructEntries(structType,&layout);
@@ -1633,7 +1614,7 @@ if(baseT->isIntegerTy()) { \
         Obj def;
         exp->obj("definition",&def);
         if(def.hasfield("isglobal")) {
-            return GetGlobalVariable(&CC,&def,exp->asstring("name"));
+            return GetGlobalVariable(T,&def,exp->asstring("name"));
         } else {
             Value * v = (Value*) def.ud("value");
             assert(v);
@@ -1645,7 +1626,7 @@ if(baseT->isIntegerTy()) { \
         if(loadlvalue && exp->boolean("lvalue")) {
             Obj type;
             exp->obj("type",&type);
-            CC.EnsureTypeIsComplete(&type);
+            Ty.EnsureTypeIsComplete(&type);
             raw = B->CreateLoad(raw);
         }
         return raw;
@@ -1734,7 +1715,7 @@ if(baseT->isIntegerTy()) { \
                     idxExp = emitIndex(typeOfValue(&idx),64,idxExp);
                     //otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value*> idxs;
-                    EnsurePointsToCompleteType(&aggTypeO);
+                    Ty.EnsurePointsToCompleteType(&aggTypeO);
                     Value * result = B->CreateGEP(valueExp, idxExp);
                     if(!exp->boolean("lvalue"))
                         result = B->CreateLoad(result);
@@ -1759,20 +1740,18 @@ if(baseT->isIntegerTy()) { \
                     if(type.kind("kind") == T_niltype) {
                         return ConstantPointerNull::get(pt);
                     }
+                    
                     Obj objType;
                     type.obj("type",&objType);
-                    Type * objT = getType(&objType)->type;
-                
-                    if(objT->isFunctionTy()) {
+                    if(objType.kind("kind") == T_functype) {
                         Obj func;
                         exp->obj("value",&func);
-                        TType * ftyp;
                         Function * fn;
-                        getOrCreateFunction(&func,&fn,&ftyp);
+                        getOrCreateFunction(&func,&fn);
                         //functions are represented with &int8 pointers to avoid
                         //calling convension issues, so cast the literal to this type now
-                        return B->CreateBitCast(fn,CC.FunctionPointerType());
-                    } else if(objT->isIntegerTy(8)) {
+                        return B->CreateBitCast(fn,t->type);
+                    } else if(t->type->getPointerElementType()->isIntegerTy(8)) {
                         exp->pushfield("value");
                         size_t len;
                         const char * rawstr = lua_tolstring(L,-1,&len);
@@ -1790,7 +1769,7 @@ if(baseT->isIntegerTy()) { \
             case T_constant: {
                 Obj value;
                 exp->obj("value",&value);
-                return GetConstant(&CC,&value);
+                return GetConstant(T,&value);
             } break;
             case T_luafunction: {
                 void * ptr = exp->ud("fptr");
@@ -1871,21 +1850,6 @@ if(baseT->isIntegerTy()) { \
                 }
                 return vec;
             } break;
-            case T_intrinsic: {
-                Obj arguments;
-                exp->obj("arguments",&arguments);
-                std::vector<Value *> values;
-                emitExpressionList(&arguments,true,&values);
-                Obj itypeObjPtr;
-                exp->obj("intrinsictype",&itypeObjPtr);
-                Obj itypeObj;
-                itypeObjPtr.obj("type",&itypeObj);
-                TType * itype = getType(&itypeObj);
-                const char * name = exp->string("name");
-                FunctionType * fntype = cast<FunctionType>(itype->type);
-                Value * fn = C->m->getOrInsertFunction(name, fntype);
-                return B->CreateCall(fn, values);
-            } break;
             case T_inlineasm: {
                 Obj arguments;
                 exp->obj("arguments",&arguments);
@@ -1893,7 +1857,7 @@ if(baseT->isIntegerTy()) { \
                 emitExpressionList(&arguments,true,&values);
                 Obj typ;
                 exp->obj("type",&typ);
-                bool isvoid = CC.IsUnitType(&typ);
+                bool isvoid = Ty.IsUnitType(&typ);
                 Type * ttype = getType(&typ)->type;
                 Type * rtype = (isvoid) ? Type::getVoidTy(*C->ctx) : ttype;
                 std::vector<Type*> ptypes;
@@ -1908,7 +1872,7 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("type",&type);
                 exp->obj("address",&addr);
                 exp->obj("attributes",&attr);
-                CC.EnsureTypeIsComplete(&type);
+                Ty.EnsureTypeIsComplete(&type);
                 LoadInst * l = B->CreateLoad(emitExp(&addr));
                 if(attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
@@ -2112,7 +2076,7 @@ if(baseT->isIntegerTy()) { \
         }
     }
     Value * emitConstructor(Obj * exp, Obj * expressions) {
-        Value * result = CC.CreateAlloca(typeOfValue(exp)->type);
+        Value * result = CreateAlloca(B,typeOfValue(exp)->type);
         std::vector<Value *> values;
         emitExpressionList(expressions,true,&values);
         for(size_t i = 0; i < values.size(); i++) {
@@ -2180,7 +2144,7 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("expression",&exp);
                 Value * result = emitExp(&exp);;
                 Obj ftype;
-                funcobj.obj("type",&ftype);
+                funcobj->obj("type",&ftype);
                 emitDeferred(deferred.size());
                 CC.EmitReturn(&ftype,func,result);
                 startDeadCode();
@@ -2355,8 +2319,15 @@ static int terra_codegen(lua_State * L) { //entry point into compiler from lua c
     int ref_table = lobj_newreftable(T->L);
     
     {
-        TerraCompiler c;
-        c.run(T,ref_table);
+        lua_pushvalue(T->L,-2); //the original argument
+        Obj funcobj;
+        funcobj.initFromStack(T->L, ref_table);
+        
+        TerraCompiler(T,&funcobj);
+        
+        //cleanup -- ensure we left the stack the way we started
+        assert(lua_gettop(T->L) == ref_table);
+        
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
     
     lobj_removereftable(T->L,ref_table);
@@ -2369,12 +2340,10 @@ static int terra_llvmsizeof(lua_State * L) {
     int ref_table = lobj_newreftable(L);
     TType * llvmtyp;
     {
-        CCallingConv CC;
-        CC.init(T,T->C,NULL);
         lua_pushvalue(T->L,-2); //original argument
         Obj typ;
         typ.initFromStack(L, ref_table);
-        llvmtyp = CC.GetType(&typ);
+        llvmtyp = Types(T).Get(&typ);
     }
     lobj_removereftable(T->L, ref_table);
     lua_pushnumber(T->L,T->C->td->getTypeAllocSize(llvmtyp->type));
@@ -2543,12 +2512,10 @@ static int terra_createglobal(lua_State * L) { //entry point into compiler from 
     int ref_table = lobj_newreftable(T->L);
     
     {
-        CCallingConv CC;
-        CC.init(T, T->C, NULL);
         Obj global;
         lua_pushvalue(T->L,-2); //original argument
         global.initFromStack(T->L, ref_table);
-        GlobalVariable * gv = GetGlobalVariable(&CC,&global,"anon");
+        GlobalVariable * gv = GetGlobalVariable(T,&global,"anon");
         void * ptr = JITGlobalValue(T, gv);
         lua_pushlightuserdata(L,ptr);
         global.setfield("llvm_ptr");
@@ -2571,8 +2538,8 @@ static int terra_registerexternfunction(lua_State * L) {
         const char * name = fn.string("name");
         llvm::Function * llvmfn = T->C->m->getFunction(name);
         if(!llvmfn) { //declared directly from Terra, so the declaration was not linked in by C
-            CCallingConv CC;
-            CC.init(T, T->C, NULL);
+            Types Ty(T);
+            CCallingConv CC(T,&Ty,NULL);
             Obj typ;
             fn.obj("type",&typ);
             llvmfn = CC.CreateFunction(&typ,name);

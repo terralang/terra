@@ -79,7 +79,6 @@ _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
 _(treelist, "treelist") \
 _(typedexpression, "typedexpression") \
-_(intrinsic, "intrinsic") \
 _(nametoken, "<name>") \
 _(numbertoken, "<number>") \
 _(stringtoken, "<string>") \
