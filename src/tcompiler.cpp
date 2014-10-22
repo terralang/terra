@@ -580,6 +580,7 @@ static AllocaInst *CreateAlloca(IRBuilder<> * B, Type *Ty, Value *ArraySize = 0,
     return TmpB.CreateAlloca(Ty,ArraySize,Name);
 }
 
+
 //functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
 struct CCallingConv {
     terra_State * T;
@@ -605,19 +606,18 @@ struct CCallingConv {
     
     struct Argument {
         ArgumentKind kind;
-        int isi1; //primitive needs to be cast to i1 (such as a boolean)
-        Type * type; //orignal type for the object
-        StructType * cctype; //if type == C_AGGREGATE_REG, this struct that holds a list of the values that goes into the registers
+        TType * type; //orignal type for the object
+        Type * cctype; //if type == C_AGGREGATE_REG, this is a struct that holds a list of the values that goes into the registers
+                       //if type == CC_PRIMITIVE, this is the struct that this type appear in the argument list and the type should be coerced to
         Argument() {}
-        Argument(ArgumentKind kind, Type * type, StructType * cctype = NULL, int isi1 = 0) {
+        Argument(ArgumentKind kind, TType * type, Type * cctype = NULL) {
             this->kind = kind;
             this->type = type;
-            this->cctype = cctype;
-            this->isi1 = isi1;
+            this->cctype = cctype ? cctype : type->type;
         }
         int GetNumberOfTypesInParamList() {
             if(C_AGGREGATE_REG == this->kind)
-                return this->cctype->getNumElements();
+                return cast<StructType>(this->cctype)->getNumElements();
             return 1;
         }
     };
@@ -727,12 +727,13 @@ struct CCallingConv {
                 ++*usedfloat;
             else
                 ++*usedint;
-            return Argument(C_PRIMITIVE,t->type,NULL,t->islogical && !t->type->isVectorTy());
+            bool usei1 = t->islogical && !t->type->isVectorTy();
+            return Argument(C_PRIMITIVE,t,usei1 ? Type::getInt1Ty(*C->ctx) : NULL);
         }
         
         int sz = C->td->getTypeAllocSize(t->type);
         if(!ValidAggregateSize(sz)) {
-            return Argument(C_AGGREGATE_MEM,t->type);
+            return Argument(C_AGGREGATE_MEM,t);
         }
         
         RegisterClass classes[] = {C_NO_CLASS, C_NO_CLASS};
@@ -740,12 +741,12 @@ struct CCallingConv {
         int sizes[] = { std::min(sz,8), std::max(0,sz - 8) };
         MergeValue(classes, 0, type);
         if(classes[0] == C_MEMORY || classes[1] == C_MEMORY) {
-            return Argument(C_AGGREGATE_MEM,t->type);
+            return Argument(C_AGGREGATE_MEM,t);
         }
         int nfloat = (classes[0] == C_SSE) + (classes[1] == C_SSE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
         if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
-            return Argument(C_AGGREGATE_MEM,t->type);
+            return Argument(C_AGGREGATE_MEM,t);
         }
         
         *usedfloat += nfloat;
@@ -756,7 +757,7 @@ struct CCallingConv {
             if(sizes[i] > 0)
                 elements.push_back(TypeForClass(sizes[i], classes[i]));
         
-        return Argument(C_AGGREGATE_REG,t->type,
+        return Argument(C_AGGREGATE_REG,t,
                         StructType::get(*C->ctx,elements));
     }
     void Classify(Obj * ftype, Obj * params, Classification * info) {
@@ -828,22 +829,23 @@ struct CCallingConv {
         #endif
     }
     template<typename FnOrCall>
-    void addZeroExtAttr(FnOrCall * r, int idx) {
+    void addExtAttrIfNeeded(TType * t, FnOrCall * r, int idx) {
+        if(!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32)
+            return;
         #if LLVM_VERSION == 32
             AttrBuilder builder;
-            builder.addAttribute(Attributes::ZExt);
+            builder.addAttribute(t->issigned ? Attributes::SExt : Attributes::ZExt);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
         #elif LLVM_VERSION == 31
-            r->addAttribute(idx,Attributes(Attribute::ZExt));
+            r->addAttribute(idx,Attributes(t->issigned ? Attribute::SExt : Attribute::ZExt));
         #else
-            r->addAttribute(idx,Attribute::ZExt);
+            r->addAttribute(idx,t->issigned ? Attribute::SExt : Attribute::ZExt);
         #endif
     }
     
     template<typename FnOrCall>
     void AttributeFnOrCall(FnOrCall * r, Classification * info) {
-        if(info->returntype.isi1)
-            addZeroExtAttr(r, 0);
+        addExtAttrIfNeeded(info->returntype.type, r, 0);
         int argidx = 1;
         if(info->returntype.kind == C_AGGREGATE_MEM) {
             addSRetAttr(r, argidx);
@@ -856,8 +858,7 @@ struct CCallingConv {
                 addByValAttr(r, argidx);
                 #endif
             }
-            if(v->isi1)
-                addZeroExtAttr(r, argidx);
+            addExtAttrIfNeeded(v->type, r, argidx);
             argidx += v->GetNumberOfTypesInParamList();
         }
     }
@@ -872,7 +873,11 @@ struct CCallingConv {
     PointerType * Ptr(Type * t) {
         return PointerType::getUnqual(t);
     }
-    
+    Value * ConvertPrimitive(Value * src, Type * dstType, bool issigned) {
+        if(!dstType->isIntegerTy())
+            return src;
+        return B->CreateIntCast(src, dstType, issigned);
+    }
     void EmitEntry(Obj * ftype, Function * func, std::vector<Value *> * variables) {
         Classification * info = ClassifyFunction(ftype);
         assert(info->paramtypes.size() == variables->size());
@@ -884,9 +889,7 @@ struct CCallingConv {
             Value * v = (*variables)[i];
             switch(p->kind) {
                 case C_PRIMITIVE: {
-                    Value * a = ai;
-                    if(p->isi1)
-                        a = B->CreateZExt(a,p->type);
+                    Value * a = ConvertPrimitive(ai,p->type->type,p->type->issigned);
                     B->CreateStore(a,v);
                     ++ai;
                 } break;
@@ -913,14 +916,12 @@ struct CCallingConv {
         if(C_AGGREGATE_REG == kind && info->returntype.GetNumberOfTypesInParamList() == 0) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
-            if(info->returntype.isi1)
-                result = B->CreateTrunc(result, Type::getInt1Ty(*C->ctx));
-            B->CreateRet(result);
+            B->CreateRet(ConvertPrimitive(result,info->returntype.cctype,info->returntype.type->issigned));
         } else if(C_AGGREGATE_MEM == kind) {
             B->CreateStore(result,function->arg_begin());
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
-            Value * dest = CreateAlloca(B,info->returntype.type);
+            Value * dest = CreateAlloca(B,info->returntype.type->type);
             B->CreateStore(result,dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.GetNumberOfTypesInParamList() == 1)
@@ -938,7 +939,7 @@ struct CCallingConv {
         std::vector<Value*> arguments;
         
         if(C_AGGREGATE_MEM == info.returntype.kind) {
-            arguments.push_back(CreateAlloca(B,info.returntype.type));
+            arguments.push_back(CreateAlloca(B,info.returntype.type->type));
         }
         
         for(size_t i = 0; i < info.paramtypes.size(); i++) {
@@ -946,17 +947,15 @@ struct CCallingConv {
             Value * actual = (*actuals)[i];
             switch(a->kind) {
                 case C_PRIMITIVE:
-                    if(a->isi1)
-                        actual = B->CreateTrunc(actual, Type::getInt1Ty(*C->ctx));
-                    arguments.push_back(actual);
+                    arguments.push_back(ConvertPrimitive(actual,a->cctype,a->type->issigned));
                     break;
                 case C_AGGREGATE_MEM: {
-                    Value * scratch = CreateAlloca(B,a->type);
+                    Value * scratch = CreateAlloca(B,a->type->type);
                     B->CreateStore(actual,scratch);
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
-                    Value * scratch = CreateAlloca(B,a->type);
+                    Value * scratch = CreateAlloca(B,a->type->type);
                     B->CreateStore(actual,scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
                     int N = a->GetNumberOfTypesInParamList();
@@ -978,15 +977,13 @@ struct CCallingConv {
         
         //unstage results
         if(C_PRIMITIVE == info.returntype.kind) {
-            if(info.returntype.isi1)
-                return B->CreateZExt(call,info.returntype.type);
-            return call;
+            return ConvertPrimitive(call,info.returntype.type->type,info.returntype.type->issigned);
         } else {
             Value * aggregate;
             if(C_AGGREGATE_MEM == info.returntype.kind) {
                 aggregate = arguments[0];
             } else { //C_AGGREGATE_REG
-                aggregate = CreateAlloca(B,info.returntype.type);
+                aggregate = CreateAlloca(B,info.returntype.type->type);
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
                 if(info.returntype.GetNumberOfTypesInParamList() == 1)
                     casted = B->CreateConstGEP2_32(casted, 0, 0);
@@ -999,36 +996,37 @@ struct CCallingConv {
     FunctionType * CreateFunctionType(Classification * info, bool isvararg) {
         std::vector<Type*> arguments;
         
-        Type * rt = info->returntype.type;
-        if(info->returntype.kind == C_AGGREGATE_REG) {
-            switch(info->returntype.GetNumberOfTypesInParamList()) {
-                case 0: rt = Type::getVoidTy(*C->ctx); break;
-                case 1: rt = info->returntype.cctype->getElementType(0); break;
-                default: rt = info->returntype.cctype; break;
-            }
-        } else if(info->returntype.kind == C_AGGREGATE_MEM) {
-            rt = Type::getVoidTy(*C->ctx);
-            arguments.push_back(Ptr(info->returntype.type));
-        } else if(info->returntype.isi1) {
-            rt = Type::getInt1Ty(*C->ctx);
+        Type * rt = NULL;
+        switch(info->returntype.kind) {
+            case C_AGGREGATE_REG: {
+                switch(info->returntype.GetNumberOfTypesInParamList()) {
+                    case 0: rt = Type::getVoidTy(*C->ctx); break;
+                    case 1: rt = cast<StructType>(info->returntype.cctype)->getElementType(0); break;
+                    default: rt = info->returntype.cctype; break;
+                }
+            } break;
+            case C_AGGREGATE_MEM: {
+                rt = Type::getVoidTy(*C->ctx);
+                arguments.push_back(Ptr(info->returntype.type->type));
+            } break;
+            case C_PRIMITIVE: {
+                rt = info->returntype.cctype;
+            } break;
         }
         
         for(size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument * a = &info->paramtypes[i];
             switch(a->kind) {
                 case C_PRIMITIVE: {
-                    Type * t = a->type;
-                    if(a->isi1)
-                        t = Type::getInt1Ty(*C->ctx);
-                    arguments.push_back(t);
+                    arguments.push_back(a->cctype);
                 } break;
                 case C_AGGREGATE_MEM:
-                    arguments.push_back(Ptr(a->type));
+                    arguments.push_back(Ptr(a->type->type));
                     break;
                 case C_AGGREGATE_REG: {
                     int N = a->GetNumberOfTypesInParamList();
                     for(int j = 0; j < N; j++) {
-                        arguments.push_back(a->cctype->getElementType(j));
+                        arguments.push_back(cast<StructType>(a->cctype)->getElementType(j));
                     }
                 } break;
             }
@@ -1529,17 +1527,7 @@ if(baseT->isIntegerTy()) { \
          
         if(fBase->isIntegerTy()) {
             if(tBase->isIntegerTy()) {
-                if(fsize > tsize) {
-                    return B->CreateTrunc(exp, to->type);
-                } else if(fsize == tsize) {
-                    return exp; //no-op in llvm since its types are not signed
-                } else {
-                    if(from->issigned) {
-                        return B->CreateSExt(exp, to->type);
-                    } else {
-                        return B->CreateZExt(exp, to->type);
-                    }
-                }
+                return B->CreateIntCast(exp, to->type, from->issigned);
             } else if(tBase->isFloatingPointTy()) {
                 if(from->issigned) {
                     return B->CreateSIToFP(exp, to->type);
