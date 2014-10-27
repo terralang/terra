@@ -677,6 +677,12 @@ end
 function terra.func:getdefinitions()
     return self.definitions
 end
+function terra.func:setname(name)
+    self.name = tostring(name)
+    for i,d in ipairs(self.definitions) do
+        d.name = self.name
+    end
+end
 
 function terra.isfunction(obj)
     return getmetatable(obj) == terra.func
