@@ -352,7 +352,13 @@ public:
         }
         return true;
     }
-    
+    bool VisitEnumConstantDecl(EnumConstantDecl * E) {
+        int64_t v = E->getInitVal().getSExtValue();
+        llvm::StringRef name = E->getName();
+        lua_pushnumber(L,(double)v); //I _think_ enums by spec must fit in an int, so they will fit in a double
+        general.setfield(name.str().c_str());
+        return true;
+    }
     bool GetFuncType(const FunctionType * f, Obj * typ) {
         Obj returntype,parameters;
         resulttable->newlist(&parameters);
