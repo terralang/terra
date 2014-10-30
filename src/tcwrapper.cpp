@@ -20,14 +20,22 @@ extern "C" {
 #include "llvmheaders.h"
 #include "tllvmutil.h"
 #include "clang/AST/Attr.h"
+#include "clang/Lex/LiteralSupport.h"
 #include "tcompilerstate.h"
 #include "clangpaths.h"
 
 using namespace clang;
 
 
-// part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
+static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
+    lua_State * L = parent->getState();
+    lua_newtable(L);
+    result->initFromStack(L,parent->getRefTable());
+    result->push();
+    parent->setfield(name);
+}
 
+// part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
 // we're interested in by overriding relevant methods.
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
@@ -48,10 +56,7 @@ public:
         livenessfunction = ss.str();
     }
     void InitTable(Obj * tbl, const char * name) {
-        lua_newtable(L);
-        tbl->initFromStack(L, ref_table);
-        tbl->push();
-        resulttable->setfield(name);
+        CreateTableWithName(resulttable, name, tbl);
     }
     
     void InitType(const char * name, Obj * tt) {
@@ -593,7 +598,54 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
                                            PP.getLangOpts());
     
 }
+#if LLVM_VERSION >= 33
+static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * II, MacroDirective * MD, Obj * table) {
 
+    if(!II->hasMacroDefinition())
+        return;
+    MacroInfo * MI = MD->getMacroInfo();
+    if(MI->isFunctionLike())
+        return;
+    bool negate = false;
+    const Token * Tok;
+    if(MI->getNumTokens() == 2 && MI->getReplacementToken(0).is(clang::tok::minus)) {
+        negate = true;
+        Tok = &MI->getReplacementToken(1);
+    } else if(MI->getNumTokens() == 1) {
+        Tok = &MI->getReplacementToken(0);
+    } else {
+        return;
+    }
+    
+    if(Tok->isNot(clang::tok::numeric_constant))
+        return;
+    
+    SmallString<64> IntegerBuffer;
+    bool NumberInvalid = false;
+    StringRef Spelling = PP.getSpelling(*Tok, IntegerBuffer, &NumberInvalid);
+    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP);
+    if(Literal.hadError)
+        return;
+    double V;
+    if(Literal.isFloatingLiteral()) {
+        llvm::APFloat Result(0.0);
+        Literal.GetFloatValue(Result);
+        V = Result.convertToDouble();
+    } else {
+        llvm::APInt Result(64,0);
+        Literal.GetIntegerValue(Result);
+        int64_t i = Result.getSExtValue();
+        if((int64_t)(double)i != i)
+            return; //right now we ignore things that are not representable in Lua's number type
+                    //eventually we should use LuaJITs ctype support to hold the larger numbers
+        V = i;
+    }
+    if(negate)
+        V = -V;
+    lua_pushnumber(T->L,V);
+    table->setfield(II->getName().str().c_str());
+}
+#endif
 static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
@@ -611,7 +663,18 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     ParseAST(TheCompInst.getPreprocessor(),
             &proxy,
             TheCompInst.getASTContext());
-
+    
+    Obj macros;
+    CreateTableWithName(result, "macros", &macros);
+    #if LLVM_VERSION >= 33
+    Preprocessor & PP = TheCompInst.getPreprocessor();
+    for(Preprocessor::macro_iterator it = PP.macro_begin(false),end = PP.macro_end(false); it != end; ++it) {
+        const IdentifierInfo * II = it->first;
+        MacroDirective * MD = it->second;
+        AddMacro(T,PP,II,MD,&macros);
+    }
+    #endif
+    
     llvm::Module * mod = codegen->ReleaseModule();
     
     if(mod) {
