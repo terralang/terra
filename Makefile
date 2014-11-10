@@ -173,9 +173,14 @@ endif
 
 ifeq ($(LLVM_VERSION), 35)
 CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
-ifeq ($(UNAME), Darwin)
-SO_FLAGS += -lz -lcurses
 endif
+
+# llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
+    SO_FLAGS += -lcurses 
+endif
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
+    SO_FLAGS += -lz
 endif
 
 # LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
