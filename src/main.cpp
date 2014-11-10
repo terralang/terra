@@ -45,7 +45,10 @@ void sigsegv(int sig, siginfo_t *info, void * uap) {
 void setupsigsegv(lua_State * L) {
     lua_getglobal(L, "terralib");
     lua_getfield(L, -1, "traceback");
-    terratraceback = *(void(**)(void*))lua_topointer(L, -1);
+    const void * tb = lua_topointer(L,-1);
+    if(!tb)
+        return; //debug not supported
+    terratraceback = *(void(**)(void*))tb;
     struct sigaction sa;
     sa.sa_flags = SA_RESETHAND | SA_SIGINFO;
     sigemptyset(&sa.sa_mask);

@@ -1,4 +1,4 @@
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(__arm__)
 #include <execinfo.h>
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE

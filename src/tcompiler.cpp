@@ -98,13 +98,15 @@ struct DisassembleFunctionListener : public JITEventListener {
             err = I->getName(name);
             object::SymbolRef::Type t;
             I->getType(t);
-            if(t == object::SymbolRef::ST_Function && !name.endswith(".eh") && name.startswith("_")) {
+            if(t == object::SymbolRef::ST_Function) {
                 uint64_t sz;
                 I->getSize(sz);
-                StringRef fname = name.substr(1);
-                Function * F = T->C->m->getFunction(fname);
+                #ifndef __arm__
+		name = name.substr(1);
+                #endif
+                Function * F = T->C->m->getFunction(name);
                 if(F) {
-                    void * addr = (void*) T->C->ee->getFunctionAddress(fname);
+                    void * addr = (void*) T->C->ee->getFunctionAddress(name);
                     assert(addr);
                     TerraFunctionInfo & fi = T->C->functioninfo[addr];
                     fi.fn = F;
@@ -192,8 +194,9 @@ bool OneTimeInit(struct terra_State * T) {
         #ifdef PRINT_LLVM_TIMING_STATS
             AddLLVMOptions(1,"-time-passes");
         #endif
-
+#ifndef __arm__
         AddLLVMOptions(1,"-x86-asm-syntax=intel");
+#endif
         InitializeNativeTarget();
         InitializeNativeTargetAsmPrinter();
         InitializeNativeTargetAsmParser();
@@ -219,9 +222,13 @@ namespace llvm {
     }
 }
 bool HostHasAVX() {
+#ifdef __arm__
+    return false;
+#else
     unsigned EAX,EBX,ECX,EDX;
     llvm::X86_MC::GetCpuIDAndInfo(1,&EAX,&EBX,&ECX,&EDX);
     return (ECX >> 28) & 1;
+#endif
 }
 
 int terra_compilerinit(struct terra_State * T) {
@@ -263,7 +270,15 @@ int terra_compilerinit(struct terra_State * T) {
     #endif
     
     std::string CPU = llvm::sys::getHostCPUName();
-    
+
+#ifdef __arm__
+    //force MCJIT since old JIT is partially broken on ARM
+    //force hard float since we currently onlly work on platforms that have it
+    options.FloatABIType = FloatABI::Hard;
+    T->options.usemcjit = true;
+#endif    
+
+
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, CPU, HostHasAVX() ? "+avx" : "", options,Reloc::PIC_,CodeModel::Default,OL);
