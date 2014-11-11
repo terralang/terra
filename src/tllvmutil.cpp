@@ -69,12 +69,10 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm) {
 }
 
 struct SimpleMemoryObject : public MemoryObject {
-  uint8_t *Bytes;
-  uint64_t Size;
   uint64_t getBase() const { return 0; }
-  uint64_t getExtent() const { return Size; }
+  uint64_t getExtent() const { return ~0ULL; }
   int readByte(uint64_t Addr, uint8_t *Byte) const {
-    *Byte = Bytes[Addr];
+    *Byte = *(uint8_t*)Addr;
     return 0;
   }
 };
@@ -116,20 +114,18 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     assert(IP && "Unable to create instruction printer!");
 
     SimpleMemoryObject SMO;
-    SMO.Bytes = (uint8_t*)data;
-    SMO.Size = numBytes;
+    uint64_t addr = (uint64_t)data;
     uint64_t Size;
     fflush(stdout);
     raw_fd_ostream Out(fileno(stdout), false);
     for(size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
-        MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO, 0, nulls(), Out);
+        MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO,addr + b, nulls(), Out);
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
             break;
         Out << (void*) ((uintptr_t)data + b) << "(+" << b << ")" << ":\t";
         IP->printInst(&Inst,Out,"");
         Out << "\n";
-        SMO.Size -= Size; SMO.Bytes += Size;
     }
     Out.flush();
     delete MAI; delete MRI; delete STI; delete MII; delete DisAsm; delete IP;
