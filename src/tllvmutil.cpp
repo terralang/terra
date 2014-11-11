@@ -80,7 +80,13 @@ struct SimpleMemoryObject : public MemoryObject {
 void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
     std::string Error;
+#if LLVM_VERSION >= 33
+    std::string TripleName = llvm::sys::getProcessTriple();
+#else
     std::string TripleName = llvm::sys::getDefaultTargetTriple();
+#endif    
+    std::string CPU = llvm::sys::getHostCPUName();
+
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
@@ -95,7 +101,6 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     assert(MRI && "Unable to create target register info!");
 
     std::string FeaturesStr;
-    std::string CPU;
     const MCSubtargetInfo *STI = TheTarget->createMCSubtargetInfo(TripleName, CPU,
                                                                   FeaturesStr);
     assert(STI && "Unable to create subtarget info!");
