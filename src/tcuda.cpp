@@ -36,6 +36,12 @@ CUresult initializeCUDAState(terra_State * T) {
     if (!T->cuda->initialized) {
         T->cuda->initialized = 1;
         CUDA_DO(cuInit(0));
+        CUDA_DO(cuCtxGetCurrent(&T->cuda->C));
+        if(T->cuda->C) {
+            //there is already a valid cuda context, so use that
+            CUDA_DO(cuCtxGetDevice(&T->cuda->D));
+            return CUDA_SUCCESS;
+        }
         CUDA_DO(cuDeviceGet(&T->cuda->D,0));
         CUDA_DO(cuCtxCreate(&T->cuda->C, 0, T->cuda->D));
     }
