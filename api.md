@@ -740,7 +740,11 @@ _Method definition_. If `mystruct.methods.mymethod` is not a Terra function, it 
 C Backwards Compatibility
 -------------------------
 
-Terra uses the [Clang](http://clang.llvm.org) frontend to allow Terra code to be backwards compatible with C. The current implementation of this functionality is somewhat limited. For instance, including a C header will only import the functions and any types that those functions refer to, but will not import global variables, enums, or types that are not used by functions. This will be improved in the future.
+Terra uses the [Clang](http://clang.llvm.org) frontend to allow Terra code to be backwards compatible with C. The current implementation of this functionality currently supports importing all functions, types, and enums from C header files. It will also import any macros whose definitions are a single number representable in a double such as:
+
+    #define FOO 1
+
+However, we currently do not support importing global variables or constants. This will be improved in the future.
 
 ---
 
