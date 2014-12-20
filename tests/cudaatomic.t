@@ -21,7 +21,7 @@ local C = terralib.includecstring [[
 
 sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
 
-local R = terralib.cudacompile({ bar = foo })
+local R = terralib.cudacompile({ bar = foo },true)
 
 terra doit(N : int)
     var data = 0

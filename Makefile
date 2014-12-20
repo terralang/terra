@@ -211,7 +211,7 @@ CUDALIBNAME = lib
 else
 CUDALIBNAME = lib64
 endif
-FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/$(CUDALIBNAME)/libcudadevrt.a\""
+FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -DTERRA_CUDANVDISASM="\"$(CUDA_HOME)/bin/nvdisasm\"" -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/$(CUDALIBNAME)/libcudadevrt.a\""
 SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME)
 endif
 

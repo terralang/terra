@@ -18,6 +18,9 @@ extern "C" {
 #include "tcompilerstate.h"
 #include "tllvmutil.h"
 #include "cudalib.h"
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 struct terra_CUDAState {
     int initialized;
@@ -180,6 +183,20 @@ int terra_cudacompile(lua_State * L) {
     }
     CUDA_DO(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL));
     CUDA_DO(cuLinkComplete(linkState,&cubin,&cubinSize));
+    
+#ifndef _WIN32
+    if(dumpmodule) {
+        llvm::SmallString<256> tmpname;
+        llvmutil_createtemporaryfile("cudamodule", "cubin", tmpname);
+        FILE * f = fopen(tmpname.c_str(),"w");
+        fwrite(cubin,cubinSize,1,f);
+        fclose(f);
+        const char * args[] = { TERRA_CUDANVDISASM, "--print-life-ranges", tmpname.c_str(), NULL };
+        llvmutil_executeandwait(TERRA_CUDANVDISASM, args, NULL);
+        unlink(tmpname.c_str());
+    }
+#endif
+    
     CUDA_DO(cuModuleLoadData(&cudaM, cubin));
     CUDA_DO(cuLinkDestroy(linkState));
 
