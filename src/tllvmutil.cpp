@@ -17,6 +17,10 @@
 #endif
 #include "llvm/Support/MemoryObject.h"
 
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
+
 using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {

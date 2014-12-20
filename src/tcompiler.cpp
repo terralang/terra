@@ -20,7 +20,6 @@ extern "C" {
 #else
 #include <unistd.h>
 #include <sys/time.h>
-#include <sys/wait.h>
 #endif
 
 #include <cmath>
