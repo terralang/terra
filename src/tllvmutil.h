@@ -22,5 +22,11 @@ llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachin
 //it will re-use the pass manager already initialized in that location
 bool llvmutil_linkmodule(llvm::Module * dst, llvm::Module * src, llvm::TargetMachine * TM, llvm::PassManager ** optManager, std::string * errmsg);
 
-
+#if LLVM_VERSION >= 35
+using std::error_code;
+#else
+using llvm::error_code;
+#endif
+error_code llvmutil_createtemporaryfile(const llvm::Twine &Prefix, llvm::StringRef Suffix, llvm::SmallVectorImpl<char> &ResultPath);
+int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::string * err);
 #endif

@@ -26,7 +26,7 @@ extern "C" {
 #include <cmath>
 #include <sstream>
 #include "llvmheaders.h"
-#include "tllvmutil.h"
+
 #include "tdebug.h"
 #include "tcompilerstate.h" //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
@@ -36,10 +36,7 @@ extern "C" {
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
-
-#if LLVM_VERSION >= 35
-using std::error_code;
-#endif
+#include "tllvmutil.h"
 
 using namespace llvm;
 
@@ -2437,22 +2434,6 @@ static bool MCJITShouldCopy(GlobalValue * G, void * data) {
 
 static bool SaveSharedObject(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename);
 
-#if LLVM_VERSION >= 34
-error_code CreateTemporaryFile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) { return sys::fs::createTemporaryFile(Prefix,Suffix,ResultPath); }
-#else
-error_code CreateTemporaryFile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) {
-    llvm::sys::Path P("/tmp");
-    P.appendComponent(Prefix.str());
-    P.appendSuffix(Suffix);
-    P.makeUnique(false,NULL);
-    StringRef str = P.str();
-    ResultPath.append(str.begin(),str.end());
-    return error_code();
-}
-#endif
-
-
-
 static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     ExecutionEngine * ee = T->C->ee;
     if (T->options.usemcjit) {
@@ -2469,7 +2450,7 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         
         if(T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
-            CreateTemporaryFile("terra","so",tmpname);
+            llvmutil_createtemporaryfile("terra","so",tmpname);
             if(SaveSharedObject(T, m, NULL, tmpname.c_str()))
                 lua_error(T->L);
             sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
@@ -2625,36 +2606,9 @@ static bool FindLinker(LLVM_PATH_TYPE * linker) {
     return false;
 }
 
-int ExecuteAndWait(LLVM_PATH_TYPE program, const char ** args, std::string * err) {
-#if LLVM_VERSION >= 34
-    bool executionFailed = false;
-    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,0,0,0,err,&executionFailed);
-    if(executionFailed)
-        return -1;
-    #ifndef _WIN32
-        //WAR for llvm bug (http://llvm.org/bugs/show_bug.cgi?id=18869)
-        pid_t pid;
-        int status;
-        do {
-            pid = waitpid(Info.Pid,&status,0);
-        } while(pid == -1 && errno == EINTR);
-        if(pid == -1) {
-            *err = strerror(errno);
-            return -1;
-        } else {
-            return WEXITSTATUS(status);
-        }
-    #else
-        return llvm::sys::Wait(Info, 0, true, err);
-    #endif
-#else
-    return sys::Program::ExecuteAndWait(program, args, 0, 0, 0, 0, err);
-#endif
-}
-
 static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> * linkargs, const char * filename) {
     llvm::SmallString<256> tmpname;
-    CreateTemporaryFile("terra","o", tmpname);
+    llvmutil_createtemporaryfile("terra","o", tmpname);
     const char * tmpnamebuf = tmpname.c_str();
     std::string err;
     raw_fd_ostream tmp(tmpnamebuf,err,RAW_FD_OSTREAM_BINARY);
@@ -2684,7 +2638,7 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
     cmd.push_back(filename);
     cmd.push_back(NULL);
     
-    if(ExecuteAndWait(linker,&cmd[0],&err)) {
+    if(llvmutil_executeandwait(linker,&cmd[0],&err)) {
         unlink(tmpnamebuf);
         unlink(filename);
         terra_pusherror(T,"llvm: %s\n",err.c_str());

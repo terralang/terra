@@ -359,3 +359,43 @@ bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassMan
     return llvm::Linker::LinkModules(dst, src, 0, errmsg);
 }
 
+#if LLVM_VERSION >= 34
+error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) { return sys::fs::createTemporaryFile(Prefix,Suffix,ResultPath); }
+#else
+error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) {
+    llvm::sys::Path P("/tmp");
+    P.appendComponent(Prefix.str());
+    P.appendSuffix(Suffix);
+    P.makeUnique(false,NULL);
+    StringRef str = P.str();
+    ResultPath.append(str.begin(),str.end());
+    return error_code();
+}
+#endif
+
+int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::string * err) {
+#if LLVM_VERSION >= 34
+    bool executionFailed = false;
+    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,0,0,0,err,&executionFailed);
+    if(executionFailed)
+        return -1;
+    #ifndef _WIN32
+        //WAR for llvm bug (http://llvm.org/bugs/show_bug.cgi?id=18869)
+        pid_t pid;
+        int status;
+        do {
+            pid = waitpid(Info.Pid,&status,0);
+        } while(pid == -1 && errno == EINTR);
+        if(pid == -1) {
+            *err = strerror(errno);
+            return -1;
+        } else {
+            return WEXITSTATUS(status);
+        }
+    #else
+        return llvm::sys::Wait(Info, 0, true, err);
+    #endif
+#else
+    return sys::Program::ExecuteAndWait(program, args, 0, 0, 0, 0, err);
+#endif
+}
