@@ -18,7 +18,7 @@
 #include "clang/Rewrite/Rewriter.h"
 #include "clang/Rewrite/Rewriters.h"
 
-#define LLVM_PATH_TYPE sys::Path
+#define LLVM_PATH_TYPE llvm::sys::Path
 #define RAW_FD_OSTREAM_NONE 0
 #define RAW_FD_OSTREAM_BINARY raw_fd_ostream::F_Binary
 #define HASFNATTR(attr) hasFnAttr(Attribute :: attr)

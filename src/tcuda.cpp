@@ -192,7 +192,7 @@ int terra_cudacompile(lua_State * L) {
         fwrite(cubin,cubinSize,1,f);
         fclose(f);
         const char * args[] = { TERRA_CUDANVDISASM, "--print-life-ranges", tmpname.c_str(), NULL };
-        llvmutil_executeandwait(TERRA_CUDANVDISASM, args, NULL);
+        llvmutil_executeandwait(LLVM_PATH_TYPE(TERRA_CUDANVDISASM), args, NULL);
         unlink(tmpname.c_str());
     }
 #endif
