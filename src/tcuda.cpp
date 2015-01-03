@@ -76,7 +76,7 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     
     
     llvm::TargetMachine * TM = 
-        TheTarget->createTargetMachine("nvptx64", "sm_20",
+        TheTarget->createTargetMachine("nvptx64", "sm_30",
                                        "", llvm::TargetOptions(),
                                        llvm::Reloc::Default,llvm::CodeModel::Default,
                                        llvm::CodeGenOpt::Aggressive);
