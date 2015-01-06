@@ -1193,7 +1193,7 @@ static const struct {
    {3, 3}, {3, 3}, {3, 3},          /* ==, <, <= */
    {3, 3}, {3, 3}, {3, 3},          /* ~=, >, >= */
    {2, 2}, {1, 1},                  /* and, or */
-   {11,10}                           /* function pointer*/
+   {3,2}                           /* function pointer*/
 };
 
 #define UNARY_PRIORITY  9  /* priority for unary operators */
