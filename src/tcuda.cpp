@@ -18,6 +18,7 @@ extern "C" {
 #include "tcompilerstate.h"
 #include "tllvmutil.h"
 #include "cudalib.h"
+#include <sstream>
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -74,9 +75,12 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     std::string err;
     const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
     
-    
+    int major,minor;
+    CUDA_DO(cuDeviceComputeCapability(&major,&minor,T->cuda->D));
+    std::stringstream device;
+    device << "sm_" << major << minor;
     llvm::TargetMachine * TM = 
-        TheTarget->createTargetMachine("nvptx64", "sm_30",
+        TheTarget->createTargetMachine("nvptx64", device.str(),
                                        "", llvm::TargetOptions(),
                                        llvm::Reloc::Default,llvm::CodeModel::Default,
                                        llvm::CodeGenOpt::Aggressive);
