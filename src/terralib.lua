@@ -4088,7 +4088,7 @@ function terra.funcdefinition:printpretty(printcompiled)
         return
     end
     if printcompiled then
-        self:compile()
+        self:emitllvm()
         return printpretty(self.typedtree,self.type.returntype)
     else
         return printpretty(self.untypedtree,self.returntype)
