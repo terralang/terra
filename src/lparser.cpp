@@ -1238,8 +1238,8 @@ static BinOpr subexpr (LexState *ls, int limit) {
   if(op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
   }
-  check_lua_operator(ls,ls->t.token);
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
+    check_lua_operator(ls,ls->t.token);
     BinOpr nextop;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
