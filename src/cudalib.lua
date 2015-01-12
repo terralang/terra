@@ -32,8 +32,10 @@ function terralib.cudacompile(module,dumpmodule)
             addkernel(k,v)
         elseif type(v) == "table" and terra.isfunction(v.kernel) then -- annotated kernel
             addkernel(k,v.kernel)
-            for i,a in pairs(v.annotations) do
-                annotations:insert({k,tostring(a[1]),tonumber(a[2])})
+            if v.annotations then
+                for i,a in pairs(v.annotations) do
+                    annotations:insert({k,tostring(a[1]),tonumber(a[2])})
+                end
             end
         else
             if cudalib.isconstant(v) then
