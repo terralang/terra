@@ -37,7 +37,8 @@ end
 
 sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
 
-local R = terralib.cudacompile({ bar = foo })
+annotations = { {"maxntidx",43}, {"minctasm",8}} -- example of annotating cuda kernel with launch bounds
+local R = terralib.cudacompile({ bar = { kernel = foo, annotations = annotations }})
 
 terra doit(N : int)
 	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }

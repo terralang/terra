@@ -51,13 +51,13 @@ CUresult initializeCUDAState(terra_State * T) {
     }
     return CUDA_SUCCESS;
 }
-static void markKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel) {
+static void annotateKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel, const char * name, int value) {
     std::vector<llvm::Value *> vals;
     llvm::NamedMDNode * annot = M->getOrInsertNamedMetadata("nvvm.annotations");
-    llvm::MDString * str = llvm::MDString::get(*T->C->ctx, "kernel");
+    llvm::MDString * str = llvm::MDString::get(*T->C->ctx, name);
     vals.push_back(kernel);
     vals.push_back(str);
-    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), 1));  
+    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value));  
     llvm::MDNode * node = llvm::MDNode::get(*T->C->ctx, vals);
     annot->addOperand(node); 
 }
@@ -121,8 +121,8 @@ static std::string sanitizeName(std::string name) {
 int terra_cudacompile(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeCUDAState(T);
-    int tbl = 1;
-    int dumpmodule = lua_toboolean(L,2);
+    int tbl = 1,annotations = 2;
+    int dumpmodule = lua_toboolean(L,3);
     
     std::vector<std::string> globalnames;
     std::vector<llvm::GlobalValue *> globals;
@@ -145,9 +145,19 @@ int terra_cudacompile(lua_State * L) {
     llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &globals,&globalnames, false);
     M->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
     
-    for(size_t i = 0; i < globalnames.size(); i++) {
-        llvm::Function * kernel = M->getFunction(globalnames[i]);
-        markKernel(T,M,kernel);
+    int N = lua_objlen(L,annotations);
+    for(size_t i = 0; i < N; i++) {
+        lua_rawgeti(L,annotations,i+1); // {kernel,annotation,value}
+        lua_rawgeti(L,-1,1); //kernel name
+        lua_rawgeti(L,-2,2); // annotation name
+        lua_rawgeti(L,-3,3); // annotation value
+        const char * kernelname = luaL_checkstring(L,-3);
+        const char * annotationname = luaL_checkstring(L,-2);
+        int annotationvalue = luaL_checkint(L,-1);
+        llvm::Function * kernel = M->getFunction(kernelname);
+        assert(kernel);
+        annotateKernel(T,M,kernel,annotationname,annotationvalue);
+        lua_pop(L,4); //annotation table and 3 values in it
     }
     
     //sanitize names

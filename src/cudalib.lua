@@ -1,42 +1,54 @@
 -- See Copyright Notice in ../LICENSE.txt
 function terralib.cudacompile(module,dumpmodule)
-    local tbl = {}
+    local llvmglobals = {} -- map name -> terra object with llvm_value that goes in the cuda kernel (function, var, constant)
+    local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
+    
+    local function addkernel(k,v)
+        v:emitllvm()
+        local definitions =  v:getdefinitions()
+        if #definitions > 1 then
+            error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
+        end
+        local fn = definitions[1]
+        local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
+                                    -- we should modify gettype to allow the return of a type for a non-jitted function
+        assert(success)
+
+        if not typ.returntype:isunit() then
+            error(k..": kernels must return no arguments.")
+        end
+
+        for _,p in ipairs(typ.parameters) do
+            if not (p:ispointer() or p:isprimitive()) then
+                error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
+            end
+        end
+        llvmglobals[k] = definitions[1]
+        annotations:insert({k,"kernel",1})
+    end
+    
     for k,v in pairs(module) do
-        if terra.isfunction(v) then        
-            v:emitllvm()
-            local definitions =  v:getdefinitions()
-            if #definitions > 1 then
-                error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
+        if terra.isfunction(v) then
+            addkernel(k,v)
+        elseif type(v) == "table" and terra.isfunction(v.kernel) then -- annotated kernel
+            addkernel(k,v.kernel)
+            for i,a in pairs(v.annotations) do
+                annotations:insert({k,tostring(a[1]),tonumber(a[2])})
             end
-            local fn = definitions[1]
-            local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
-                                        -- we should modify gettype to allow the return of a type for a non-jitted function
-            assert(success)
-
-            if not typ.returntype:isunit() then
-                error(k..": kernels must return no arguments.")
-            end
-
-            for _,p in ipairs(typ.parameters) do
-                if not (p:ispointer() or p:isprimitive()) then
-                    error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
-                end
-            end
-            tbl[k] = definitions[1]
         else
             if cudalib.isconstant(v) then
                 v = v.global
             end
             if terralib.isglobalvar(v) then
                 v:getpointer() -- ensure llvm_value exists for compiler
-                tbl[k] = v
+                llvmglobals[k] = v
             else
                 error("module must contain only terra functions, globals, or cuda constants")
             end
         end
     end
     --call into tcuda.cpp to perform compilation
-    local result = terralib.cudacompileimpl(tbl,dumpmodule)
+    local result = terralib.cudacompileimpl(llvmglobals,annotations,dumpmodule)
     for k,v in pairs(result) do
         -- wrap global addresses as cdata
         if type(v) == "userdata" then
