@@ -13,6 +13,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/InstVisitor.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"

@@ -12,7 +12,7 @@ somedata = cudalib.sharedmemory(int,N)
 terra bar(result : &int)
     var t = tid()
     somedata[t] = t
-    cudalib.ptx_bar_sync(0) -- this is __syncthreads
+    cudalib.nvvm_barrier0()
     result[t] = somedata[N - 1 - t]  
 end
 

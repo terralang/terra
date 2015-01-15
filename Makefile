@@ -211,8 +211,8 @@ CUDALIBNAME = lib
 else
 CUDALIBNAME = lib64
 endif
-FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -DTERRA_CUDANVDISASM="\"$(CUDA_HOME)/bin/nvdisasm\"" -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/$(CUDALIBNAME)/libcudadevrt.a\""
-SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -lcuda -lcudart -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME)
+FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include -DTERRA_CUDANVDISASM="\"$(CUDA_HOME)/bin/nvdisasm\"" -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/$(CUDALIBNAME)/libcudadevrt.a\""
+SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -L$(CUDA_HOME)/nvvm/$(CUDALIBNAME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME),-rpath,$(CUDA_HOME)/nvvm/$(CUDALIBNAME)
 endif
 
 ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))

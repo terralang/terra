@@ -394,7 +394,6 @@ return {
     nvvm_membar_cta =  {} -> {};
     nvvm_membar_gl =  {} -> {};
     nvvm_membar_sys =  {} -> {};
-    ptx_bar_sync =  int -> {};
     nvvm_ptr_shared_to_gen_p0i8_p3i8 = terralib.types.pointer(opaque,3) -> &opaque;
     nvvm_ptr_constant_to_gen_p0i8_p4i8 = terralib.types.pointer(opaque,4) -> &opaque;
 } ]]

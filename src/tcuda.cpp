@@ -13,6 +13,7 @@ extern "C" {
 
 #include "cuda.h"
 #include "cuda_runtime.h"
+#include "nvvm.h"
 #include "llvmheaders.h"
 #include "terrastate.h"
 #include "tcompilerstate.h"
@@ -30,7 +31,7 @@ struct terra_CUDAState {
 };
 
 #define CUDA_DO(err) do { \
-    CUresult e = err; \
+    int e = err; \
     if(e != CUDA_SUCCESS) { \
         terra_reporterror(T,"%s:%d: %s cuda reported error %d",__FILE__,__LINE__,#err,e); \
     } \
@@ -62,45 +63,55 @@ static void annotateKernel(terra_State * T, llvm::Module * M, llvm::Function * k
     annot->addOperand(node); 
 }
 
+static const char * cudadatalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64";
+class RemoveAttr : public llvm::InstVisitor<RemoveAttr> {
+public:
+    void visitCallInst(llvm::CallInst & I) {
+        I.setAttributes(llvm::AttributeSet());
+    }
+};
 
 CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
-    llvm::raw_string_ostream output(*buf);
-    llvm::formatted_raw_ostream foutput(output);
+    for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
+        it->setAttributes(llvm::AttributeSet()); //remove annotations because syntax doesn't match
+        RemoveAttr A;
+        A.visit(it); //remove annotations on CallInsts as well.
+    }
     
-    LLVMInitializeNVPTXTargetInfo();
-    LLVMInitializeNVPTXTarget();
-    LLVMInitializeNVPTXAsmPrinter();
-    LLVMInitializeNVPTXTargetMC();
-    
-    std::string err;
-    const llvm::Target *TheTarget = llvm::TargetRegistry::lookupTarget("nvptx64", err);
+    M->setTargetTriple(""); //clear these because nvvm doesn't like them
+    M->setDataLayout("");
     
     int major,minor;
     CUDA_DO(cuDeviceComputeCapability(&major,&minor,T->cuda->D));
     std::stringstream device;
-    device << "sm_" << major << minor;
-    llvm::TargetMachine * TM = 
-        TheTarget->createTargetMachine("nvptx64", device.str(),
-                                       "", llvm::TargetOptions(),
-                                       llvm::Reloc::Default,llvm::CodeModel::Default,
-                                       llvm::CodeGenOpt::Aggressive);
-    assert(TM->getMCAsmInfo());
+    device << "-arch=compute_" << major << minor;
+    std::string deviceopt = device.str();
     
-    llvm::PassManager PM;
-    
-    llvm::TARGETDATA() * TD = new llvm::TARGETDATA()(*TM->TARGETDATA(get)());
-#if LLVM_VERSION <= 34
-    PM.add(TD);
-#else
-    PM.add(new llvm::DataLayoutPass(*TD));
-#endif
-    
-    if(TM->addPassesToEmitFile(PM, foutput, llvm::TargetMachine::CGFT_AssemblyFile)) {
-       printf("addPassesToEmitFile failed\n");
-       return CUDA_ERROR_UNKNOWN;
+    std::string llvmir;
+    {
+        llvm::raw_string_ostream output(llvmir);
+        llvm::formatted_raw_ostream foutput(output);
+        foutput << "target datalayout = \"" << cudadatalayout << "\";\n";
+        foutput << *M;
     }
+    nvvmProgram prog;
+    CUDA_DO(nvvmCreateProgram(&prog));
+    CUDA_DO(nvvmAddModuleToProgram(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
+    int numOptions = 1;
+    const char * options[] = { deviceopt.c_str() };
     
-    PM.run(*M);
+    size_t size;
+    int err = nvvmCompileProgram(prog, numOptions, options);
+    if (err != CUDA_SUCCESS) {
+        CUDA_DO(nvvmGetProgramLogSize(prog,&size));
+        buf->resize(size);
+        CUDA_DO(nvvmGetProgramLog(prog, &(*buf)[0]));
+        terra_reporterror(T,"%s:%d: nvvm error reported (%d)\n %s\n",__FILE__,__LINE__,err,buf->c_str());
+        
+    }
+    CUDA_DO(nvvmGetCompiledResultSize(prog, &size));
+    buf->resize(size);
+    CUDA_DO(nvvmGetCompiledResult(prog, &(*buf)[0]));
     return CUDA_SUCCESS;
 }
 
@@ -117,6 +128,7 @@ static std::string sanitizeName(std::string name) {
     }
     return s;
 }
+
 
 int terra_cudacompile(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
@@ -143,7 +155,6 @@ int terra_cudacompile(lua_State * L) {
     }
     
     llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &globals,&globalnames, false);
-    M->setDataLayout("e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64");
     
     int N = lua_objlen(L,annotations);
     for(size_t i = 0; i < N; i++) {
