@@ -16,7 +16,7 @@ struct terra_CompilerState {
     llvm::LLVMContext * ctx;
     llvm::ExecutionEngine * ee;
     llvm::JITEventListener * jiteventlistener;
-    llvm::FunctionPassManager * fpm;
+    llvm::PassManagerBase * fpm;
     llvm::PassManager * cwrapperpm;
     llvm::TargetMachine * tm;
     const llvm :: TARGETDATA() * td;

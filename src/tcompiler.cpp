@@ -310,17 +310,16 @@ int terra_compilerinit(struct terra_State * T) {
     
     if(T->options.usemcjit) {
         T->C->m = new Module("terra",*T->C->ctx);
+        T->C->fpm = new PassManager();
     } else {
         T->C->m = topeemodule;
+        T->C->fpm = new FunctionPassManager(T->C->m);
     }
-    T->C->m->setTargetTriple(Triple);
-    
-    T->C->fpm = new FunctionPassManager(T->C->m);
 
+    T->C->m->setTargetTriple(Triple);
     llvmutil_addtargetspecificpasses(T->C->fpm, TM);
     llvmutil_addoptimizationpasses(T->C->fpm);
-    
-    
+
     if(!TheTarget) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
         return LUA_ERRRUN;
@@ -2389,23 +2388,24 @@ static int terra_optimize(lua_State * L) {
         }
         
         T->C->mi->run(&scc);
-    
-        for(int i = 0; i < N; i++) {
-            Obj funcobj;
-            funclist.objAt(i,&funcobj);
-            Function * func = (Function*) funcobj.ud("llvm_value");
-            assert(func);
-            
-            VERBOSE_ONLY(T) {
-                std::string s = func->getName();
-                printf("optimizing %s\n",s.c_str());
-            }
-            double begin = CurrentTimeInSeconds();
-            T->C->fpm->run(*func);
-            RecordTime(&funcobj,"opt",begin);
-            
-            VERBOSE_ONLY(T) {
-                func->dump();
+        if (!T->options.usemcjit) {
+            for(int i = 0; i < N; i++) {
+                Obj funcobj;
+                funclist.objAt(i,&funcobj);
+                Function * func = (Function*) funcobj.ud("llvm_value");
+                assert(func);
+                
+                VERBOSE_ONLY(T) {
+                    std::string s = func->getName();
+                    printf("optimizing %s\n",s.c_str());
+                }
+                double begin = CurrentTimeInSeconds();
+                ((FunctionPassManager*)T->C->fpm)->run(*func);
+                RecordTime(&funcobj,"opt",begin);
+                
+                VERBOSE_ONLY(T) {
+                    func->dump();
+                }
             }
         }
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
@@ -2446,6 +2446,7 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         }
         llvm::ValueToValueMapTy VMap;
         Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,T, VMap);
+        ((PassManager*)T->C->fpm)->run(*m);
         
         if(T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
