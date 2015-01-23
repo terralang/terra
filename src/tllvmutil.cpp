@@ -391,7 +391,7 @@ int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::str
             return WEXITSTATUS(status);
         }
     #else
-        return llvm::sys::Wait(Info, 0, true, err);
+        return llvm::sys::Wait(Info, 0, true, err).ReturnCode;
     #endif
 #else
     return sys::Program::ExecuteAndWait(program, args, 0, 0, 0, 0, err);

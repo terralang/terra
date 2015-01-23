@@ -11,6 +11,7 @@
 #include "lzio.h"
 #include "lutil.h"
 #include <vector>
+#include <algorithm>
 
 #define FIRST_RESERVED  257
 
