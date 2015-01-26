@@ -2621,6 +2621,7 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
         unlink(tmpnamebuf);
         return true;
     }
+	tmp.close();
     LLVM_PATH_TYPE linker;
     if(FindLinker(&linker)) {
         unlink(tmpnamebuf);
