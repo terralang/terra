@@ -1,4 +1,9 @@
 
+# Edit these three paths to your 
+# (1) LLVM install (should have bin/ include/ and lib/ directories)
+# (2) LuaJIT 2.0.3 download directory (does not need to be built)
+# (3) directory where you downloaded the Terra source
+# all paths must be ABSOLUTE
 
 LLVM_DIR=C:\Users\zdevito\LLVM
 LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.3
@@ -54,7 +59,7 @@ CLANG_EXECUTABLE=$(CLANG_EXECUTABLE:\=\\)
 
 
 CPPFLAGS = /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
-           /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc\terra\
+           /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
            /DLLVM_VERSION=35 /DCLANG_EXECUTABLE="\"$(CLANG_EXECUTABLE)\"" /DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(TERRA_CLANG_RESOURCE_DIRECTORY)\""
 
 all:	$(TERRA_DIR)\terra.exe
@@ -81,7 +86,7 @@ $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 
 $(TERRA_DIR)\terra.exe: $(BUILD)\terra.lib $(SRC)\main.cpp
 	cd $(TERRA_DIR)
-	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\terra\ext\getopt.c $(TERRA_DIR)\msvc\terra\ext\getopt_long.c  $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib $(LLVM_LIBS) /link /LIBPATH:"$(LLVM_DIR)\lib"
+	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib $(LLVM_LIBS) /link /LIBPATH:"$(LLVM_DIR)\lib"
 
 clean:
 	del ..\build\*.obj ..\build\*.h ..\build\terra.lib ..\terra.exe
