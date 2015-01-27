@@ -1,3 +1,4 @@
+require("fail")
 
 terra foo()
   if true then

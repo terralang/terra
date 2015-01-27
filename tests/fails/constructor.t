@@ -1,3 +1,4 @@
+require("fail")
 
 local b = 1
 local dd = "d"

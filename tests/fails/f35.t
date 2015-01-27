@@ -1,3 +1,4 @@
+require("fail")
 local function aa() end
 
 terra foo()

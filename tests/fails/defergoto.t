@@ -1,3 +1,4 @@
+require("fail")
 terra d(a : int)
 end
 d:setinlined(false)

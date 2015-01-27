@@ -1,3 +1,4 @@
+require("fail")
 local function foo(T)
     error("what")
 end

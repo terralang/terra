@@ -1,3 +1,4 @@
+require("fail")
 struct S {}
 terra foo()
     var a : S, b : S

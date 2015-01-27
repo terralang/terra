@@ -1,3 +1,4 @@
+require("fail")
 local c = symbol()
 local b = 
 quote

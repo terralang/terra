@@ -1,3 +1,4 @@
+require("fail")
 local a = {}
 terra foo()
   return  a + 20

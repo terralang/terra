@@ -1,3 +1,4 @@
+require("fail")
 
 terra bar() end
 

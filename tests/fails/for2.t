@@ -1,3 +1,4 @@
+require("fail")
 terra foo(a : uint64, s : uint64)
     var r = 0
     for i = "a",a,s do

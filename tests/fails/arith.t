@@ -1,3 +1,4 @@
+require("fail")
 terra test5()
 	var d = 1.f ^ 2.f
 	var e = 3.75 ^ 2.0

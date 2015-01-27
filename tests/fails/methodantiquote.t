@@ -1,3 +1,4 @@
+require("fail")
 --the zero line
 M = {}
 struct M.B {a : int, b : int}

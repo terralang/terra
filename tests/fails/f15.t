@@ -1,3 +1,4 @@
+require("fail")
 
 terra bar(a : int) return a end
 terra foo()

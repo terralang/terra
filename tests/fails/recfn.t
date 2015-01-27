@@ -1,3 +1,4 @@
+require("fail")
 local terra foo() : {}
 	bar()
 end local

@@ -1,3 +1,4 @@
+require("fail")
 
 
 local e = symbol()

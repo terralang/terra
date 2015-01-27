@@ -1,3 +1,4 @@
+require("fail")
 
 terra foo(c : int)
     var a : int8 = int8(&c)

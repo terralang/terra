@@ -1,3 +1,4 @@
+require("fail")
 struct A
 
 terra foo2(a : &A)

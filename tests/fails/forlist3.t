@@ -1,3 +1,4 @@
+require("fail")
 
 struct Range {}
 Range.metamethods.__for = function(a,b,c)

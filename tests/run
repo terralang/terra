@@ -37,18 +37,7 @@ for line in io.popen(lscmd):lines() do
     if file then
         print(file .. ":")
         local execstring = getcommand(file) .. " " .. file
-        --things in the fail directory should cause terra compiler errors
-        --we dont check for the particular error
-        --but we do check to see that the "Errors reported.." message prints
-        --which suggests that the error was reported gracefully
-        --(if the compiler bites it before it finishes typechecking then it will not print this)
-        local success
-        if file:find("fails") then
-            success = os.execute(execstring.." | grep 'Errors reported during'") == 0 
-        else
-            success = os.execute(execstring) == 0
-        end
-        if success then
+        if os.execute(execstring) == 0 then
             table.insert(passed,file)
         else
             table.insert(failed,file)

@@ -1,3 +1,4 @@
+require("fail")
 
 terra foo(a : int)
 	return terralib.select(vector(true,false), vector(3,4,5),-1)[0]

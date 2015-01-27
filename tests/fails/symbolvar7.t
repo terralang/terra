@@ -1,3 +1,4 @@
+require("fail")
 local a = symbol()
 local b = { symbol(int), symbol(int) }
 

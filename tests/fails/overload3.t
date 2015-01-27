@@ -1,3 +1,4 @@
+require("fail")
 
 struct A { a : int }
 struct B { a : int, b : int}

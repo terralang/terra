@@ -1,3 +1,4 @@
+require("fail")
 struct A {}
 function A.metamethods.__getentries(self)
 	return 0

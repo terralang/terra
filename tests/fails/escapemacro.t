@@ -1,3 +1,4 @@
+require("fail")
 
 thea = nil
 function store(a)

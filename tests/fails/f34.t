@@ -1,3 +1,4 @@
+require("fail")
 aa = 4
 aa = nil
 terra foo()

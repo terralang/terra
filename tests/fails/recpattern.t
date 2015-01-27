@@ -1,3 +1,4 @@
+require("fail")
 
 foo = global(2)
 terra a() : int
