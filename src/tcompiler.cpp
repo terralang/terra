@@ -288,6 +288,12 @@ int terra_compilerinit(struct terra_State * T) {
     
     Module * topeemodule = new Module("terra",*T->C->ctx);
     
+#ifdef _WIN32
+	std::string MCJITTriple = llvm::sys::getProcessTriple();
+	MCJITTriple.append("-elf"); //on windows we need to use an elf container because coff is not supported yet
+	topeemodule->setTargetTriple(MCJITTriple);
+#endif
+
     EngineBuilder eb(topeemodule);
     eb.setErrorStr(&err)
       .setMCPU(CPU)
@@ -295,7 +301,7 @@ int terra_compilerinit(struct terra_State * T) {
       .setAllocateGVsWithCode(false)
       .setUseMCJIT(T->options.usemcjit)
       .setTargetOptions(options)
-      .setOptLevel(CodeGenOpt::Aggressive);
+	  .setOptLevel(CodeGenOpt::Aggressive);
     
     if(!T->options.usemcjit) //make sure we don't use JMM for MCJIT, since it will not correctly invalidate icaches on archiectures that need it
         eb.setJITMemoryManager(JMM);
