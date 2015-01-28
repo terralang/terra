@@ -71,12 +71,12 @@ $(LUAJIT):	$(LUAJIT_DIR)\src\luajit.c
 
 $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT)
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
-	C:\Users\zdevito\LuaJIT-2.0.3\src\luajit.exe -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
+	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
 	$(LUAJIT) -bg $(SRC)\strict.lua $(BUILD)\strict.h
 	$(LUAJIT) -bg $(SRC)\cudalib.lua $(BUILD)\cudalib.h
 
 $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
-	cd ..
+	cd $(TERRA_DIR)
 	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang
 
 $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
