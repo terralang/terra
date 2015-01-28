@@ -86,6 +86,7 @@ $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 
 $(TERRA_DIR)\terra.exe: $(BUILD)\terra.lib $(SRC)\main.cpp
 	cd $(TERRA_DIR)
+	copy $(LUAJIT_DIR)\src\lua51.dll .
 	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib $(LLVM_LIBS) /link /LIBPATH:"$(LLVM_DIR)\lib"
 
 clean:
