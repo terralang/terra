@@ -46,7 +46,7 @@ LIBS=      LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVe
            cuda.lib cudart.lib nvvm.lib \
            $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib
 
-LIBPATHS = /link /LIBPATH:"$(LLVM_DIR)\lib" /LIBPATH:"$(CUDA_DIR)\lib\x64" /LIBPATH:"$(CUDA_DIR)\nvvm\lib\x64"
+LIBPATHS = /link /LIBPATH:"$(LLVM_DIR)\lib" /LIBPATH:"$(CUDA_DIR)\lib\x64" /LIBPATH:"$(CUDA_DIR)\nvvm\lib\x64" /INCLUDE:cudaMalloc
 
 TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\treadnumber.c
 
