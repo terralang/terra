@@ -126,6 +126,7 @@ static std::string sanitizeName(std::string name) {
         else
             out << "_$" << (int) c << "_";
     }
+	out.flush();
     return s;
 }
 
@@ -155,7 +156,7 @@ int terra_cudacompile(lua_State * L) {
     }
     
     llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &globals,&globalnames, false);
-    
+
     int N = lua_objlen(L,annotations);
     for(size_t i = 0; i < N; i++) {
         lua_rawgeti(L,annotations,i+1); // {kernel,annotation,value}
@@ -182,7 +183,7 @@ int terra_cudacompile(lua_State * L) {
     for(llvm::Module::global_iterator it = M->global_begin(), end = M->global_end(); it != end; ++it) {
         it->setName(sanitizeName(it->getName()));
     }
-    
+	
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,&ptx));
     if(dumpmodule) {
@@ -221,7 +222,7 @@ int terra_cudacompile(lua_State * L) {
         unlink(tmpname.c_str());
     }
 #endif
-    
+
     CUDA_DO(cuModuleLoadData(&cudaM, cubin));
     CUDA_DO(cuLinkDestroy(linkState));
 

@@ -707,7 +707,7 @@ int include_c(lua_State * L) {
     args.push_back("-fms-compatibility");
 #define __stringify(x) #x
 #define __indirect(x) __stringify(x)
-    //args.push_back("-fmsc-version=" __indirect(_MSC_VER));
+    args.push_back("-fms-compatibility-version=" __indirect(_MSC_VER));
 #endif
     
     for(int i = 0; i < N; i++) {

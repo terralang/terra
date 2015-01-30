@@ -8,12 +8,13 @@
 LLVM_DIR=C:\Users\zdevito\LLVM
 LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.3
 TERRA_DIR=C:\Users\zdevito\terra
+CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
 
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
 
 
-LLVM_LIBS= LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVectorize.lib \
+LIBS=      LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVectorize.lib \
            LLVMBitWriter.lib  LLVMIRReader.lib  LLVMAsmParser.lib  LLVMXCoreDisassembler.lib \
            LLVMXCoreCodeGen.lib  LLVMXCoreDesc.lib  LLVMXCoreInfo.lib  LLVMXCoreAsmPrinter.lib \
            LLVMSystemZDisassembler.lib  LLVMSystemZCodeGen.lib  LLVMSystemZAsmParser.lib  LLVMSystemZDesc.lib \
@@ -41,8 +42,11 @@ LLVM_LIBS= LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVe
            clangTooling.lib clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib \
            clangCodeGen.lib clangDriver.lib clangEdit.lib clangFrontend.lib clangFrontendTool.lib clangLex.lib \
            clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib \
-           clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib
+           clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib \
+           cuda.lib cudart.lib nvvm.lib \
+           $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib
 
+LIBPATHS = /link /LIBPATH:"$(LLVM_DIR)\lib" /LIBPATH:"$(CUDA_DIR)\lib\x64" /LIBPATH:"$(CUDA_DIR)\nvvm\lib\x64"
 
 TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\treadnumber.c
 
@@ -57,10 +61,18 @@ TERRA_CLANG_RESOURCE_DIRECTORY=$(TERRA_CLANG_RESOURCE_DIRECTORY:\=\\)
 CLANG_EXECUTABLE=$(LLVM_DIR)\bin\clang.exe
 CLANG_EXECUTABLE=$(CLANG_EXECUTABLE:\=\\)
 
+TERRA_CUDA_NVDISASM=$(CUDA_DIR)\bin\nvdisasm.exe
+TERRA_CUDA_NVDISASM=$(TERRA_CUDA_NVDISASM:\=\\)
+
+TERRA_CUDADEVRT=$(CUDA_DIR)\lib\x64\cudadevrt.lib
+TERRA_CUDADEVRT=$(TERRA_CUDADEVRT:\=\\)
+
 
 CPPFLAGS = /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
            /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
-           /DLLVM_VERSION=35 /DCLANG_EXECUTABLE="\"$(CLANG_EXECUTABLE)\"" /DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(TERRA_CLANG_RESOURCE_DIRECTORY)\""
+           /DLLVM_VERSION=35 /DCLANG_EXECUTABLE="\"$(CLANG_EXECUTABLE)\"" /DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(TERRA_CLANG_RESOURCE_DIRECTORY)\"" \
+           /DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include" /DTERRA_CUDANVDISASM="\"$(TERRA_CUDANVDISASM)\"" \
+           /DTERRA_CUDADEVRT="\"$(TERRA_CUDADEVRT)\""
 
 all:	$(TERRA_DIR)\terra.exe
 
@@ -77,7 +89,7 @@ $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(
 
 $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
 	cd $(TERRA_DIR)
-	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang
+	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang -I "$(CUDA_DIR:\=/)/include"
 
 $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
 	cd $(BUILD)
@@ -87,7 +99,8 @@ $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 $(TERRA_DIR)\terra.exe: $(BUILD)\terra.lib $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll .
-	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib $(LLVM_LIBS) /link /LIBPATH:"$(LLVM_DIR)\lib"
+	copy "$(CUDA_DIR)\nvvm\bin\nvvm64_20_0.dll" .
+	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(LIBS) $(LIBPATHS)
 
 clean:
 	del ..\build\*.obj ..\build\*.h ..\build\terra.lib ..\terra.exe
