@@ -708,6 +708,7 @@ int include_c(lua_State * L) {
 #define __stringify(x) #x
 #define __indirect(x) __stringify(x)
     args.push_back("-fms-compatibility-version=" __indirect(_MSC_VER));
+	args.push_back("-Wno-ignored-attributes");
 #endif
     
     for(int i = 0; i < N; i++) {
