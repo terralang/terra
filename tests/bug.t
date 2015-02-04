@@ -7,7 +7,7 @@ if s~="Darwin\n" then
 else
 
 
-local OC = terralib.require("lib/objc")
+local OC = require("lib/objc")
 local OCR = terralib.includec("objc/runtime.h")
 
 terra main()

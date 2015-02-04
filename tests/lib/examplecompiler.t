@@ -193,7 +193,7 @@ end
 
 
 --We will use top-down precedence parsing, see lib/parsing.t for more information
-local Parser = terralib.require("lib/parsing")
+local Parser = require("lib/parsing")
 
 --A parser in our parsing library is defined by a table of different non-terminals (e.g. lang.expression, lang.statement, etc.)
 local lang = {}

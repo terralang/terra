@@ -1,6 +1,6 @@
 
 IO = terralib.includec("stdio.h")
-local Class = terralib.require("lib/javalike")
+local Class = require("lib/javalike")
 
 HasFoo = Class.interface({ foo = int -> int })
 

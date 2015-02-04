@@ -1,5 +1,5 @@
 --import that Parser object (called P in the lib/parsing.t file)
-local Parser = terralib.require("lib/parsing")
+local Parser = require("lib/parsing")
 
 --define a table that implements our language
 local lang = {}

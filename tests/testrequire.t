@@ -6,8 +6,8 @@ if s~="Darwin\n" then
   print("Warning, not running test b/c this isn't a mac")
 else
 
-local A = terralib.require("lib.objc")
-local B = terralib.require("lib.objc")
+local A = require("lib.objc")
+local B = require("lib.objc")
 
 assert(A == B)
 

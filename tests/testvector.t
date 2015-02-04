@@ -1,5 +1,5 @@
 
-local S = terralib.require "lib.std"
+local S = require "lib.std"
 
 local floatv = S.Vector(int)
 terra foo()

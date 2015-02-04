@@ -4145,35 +4145,29 @@ function terra.saveobj(filename,filekind,env,arguments)
     return terra.saveobjimpl(filename,filekind,cleanenv,arguments or {})
 end
 
-
-package.path = (not os.getenv("LUA_PATH") and package.path .. ";./?.t") or package.path 
-function terra.require(name)
-    if package.loaded[name] == nil then
-        local fname = name:gsub("%.","/")
-        local file = nil
-        for template in package.path:gmatch("([^;]+);?") do
-            local fpath = template:gsub("%?",fname)
-            local handle = io.open(fpath,"r")
-            if handle then
-                file = fpath
-                handle:close()
-                break
-            end
+package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",";./?.t;") --default terra path
+local function terraloader(name)
+    local fname = name:gsub("%.","/")
+    local file = nil
+    local loaderr = ""
+    for template in package.terrapath:gmatch("([^;]+);?") do
+        local fpath = template:gsub("%?",fname)
+        local handle = io.open(fpath,"r")
+        if handle then
+            file = fpath
+            handle:close()
+            break
         end
-        if not file then
-            error("terra module not in path: "..name,2)
-        end
-        local fn, err = terra.loadfile(file)
-        if not fn then
-            error(err,0)
-        end
-        local result = fn()
-        if package.loaded[name] == nil then
-            package.loaded[name] = result ~= nil and result or true
-        end
+        loaderr = loaderr .. "\n\tno file '"..fpath.."'"
     end
-    return package.loaded[name]
+    if file then
+        local fn,err = terra.loadfile(file)
+        return fn or error(string.format("error loading terra module %s from file %s:\n\t%s",name,file,err))
+    end
+    return loaderr
 end
+table.insert(package.loaders,terraloader)
+
 function terra.makeenvunstrict(env)
     if getmetatable(env) == Strict then
         return function(self,idx)
@@ -4281,7 +4275,7 @@ terra.languageextension = {
 }
 
 function terra.importlanguage(languages,entrypoints,langstring)
-    local lang = terra.require(langstring)
+    local lang = require(langstring)
     if not lang or type(lang) ~= "table" then error("expected a table to define language") end
     lang.name = lang.name or "anonymous"
     local function haslist(field,typ)

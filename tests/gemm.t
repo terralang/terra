@@ -168,7 +168,7 @@ local best = { gflops = 0, b = 40, rm = 4, rn = 2, v = 4 }
 
 if dotune then
 	local tunefor = 1024
-	local harness = terralib.require("lib/matrixtestharness")
+	local harness = require("lib/matrixtestharness")
 	for _,b in ipairs(blocksizes) do
 		for _,rm in ipairs(regblocks) do
 			for _,rn in ipairs(regblocks) do

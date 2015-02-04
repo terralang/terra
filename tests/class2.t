@@ -1,4 +1,4 @@
-local Interface = terralib.require("lib/golike")
+local Interface = require("lib/golike")
 
 local I = Interface.create {
 	get = {} -> int;

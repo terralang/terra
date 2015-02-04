@@ -1,4 +1,4 @@
-J = terralib.require("lib/javalike")
+J = require("lib/javalike")
 
 struct Shape {
 	foo : int

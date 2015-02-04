@@ -1,3 +1,3 @@
-A = terralib.require("lib.golike")
-B = terralib.require("lib.golike")
+A = require("lib.golike")
+B = require("lib.golike")
 assert(A == B)

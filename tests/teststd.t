@@ -1,4 +1,4 @@
-local S = terralib.require "lib.std"
+local S = require "lib.std"
 
 c = global(int,0)
 

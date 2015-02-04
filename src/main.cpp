@@ -111,7 +111,6 @@ void usage() {
            "    -g enable debugging symbols\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
-           "    -p <path> append <path> to package.path before executing code\n"
            "    -m use LLVM's MCJIT\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
@@ -123,7 +122,6 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
         { "verbose",   0,     NULL,           'v' },
         { "debugsymbols",   0,     NULL,           'g' },
         { "interactive",     0,     NULL,     'i' },
-        { "path",      0,     NULL,           'p' },
         { "mcjit", 0, NULL, 'm' },
         { NULL,        0,     NULL,            0 }
     };
@@ -136,15 +134,6 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
                 break;
             case 'i':
                 *interactive = true;
-                break;
-            case 'p':
-                lua_getglobal(L,"package");
-                lua_getfield(L,-1,"path");
-                lua_pushstring(L,";");
-                lua_pushstring(L,optarg);
-                lua_concat(L,3);
-                lua_setfield(L,-2,"path");
-                lua_pop(L,1);
                 break;
             case 'g':
                 options->debug++;

@@ -1,4 +1,4 @@
-local Parse = terralib.require "lib.parsing"
+local Parse = require "lib.parsing"
 
 local Tree = {}
 Tree.__index = Tree

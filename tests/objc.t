@@ -6,7 +6,7 @@ if s~="Darwin\n" then
   print("Warning, not running test b/c this isn't a mac")
 else
 
-local OC = terralib.require("lib/objc")
+local OC = require("lib/objc")
 
 terra main()
 	OC.NSAutoreleasePool:new()
