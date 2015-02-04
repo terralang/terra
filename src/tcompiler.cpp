@@ -2443,7 +2443,10 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
     if (T->options.usemcjit) {
 #ifdef TERRA_CAN_USE_MCJIT
         if(gv->isDeclaration()) {
-            return ee->getPointerToNamedFunction(gv->getName());
+            StringRef name = gv->getName();
+            if(name.startswith("\01")) //remove asm renaming tag before looking for symbol
+                name = name.substr(1);
+            return ee->getPointerToNamedFunction(name);
         }
         void * ptr =  GetGlobalValueAddress(T,gv->getName());
         if(ptr) {
