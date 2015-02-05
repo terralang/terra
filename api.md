@@ -830,13 +830,13 @@ Lua equivalent of C API call `terra_loadfile`.
  
 ---
 
-    terralib.require(modulename)
+    require(modulename)
     
-Load the terra code `modulename`. `require` first checks if `modulename` has already been loaded by a previous call to `require`, returning the previously loaded results if available. Otherwise it searches `package.path` for the module. `package.path` is a semi-colon separated list of templates, e.g.:
+Load the terra code `modulename`. Terra adds an additional code loader to Lua's `package.loaders` to handle the loading of Terra code as a module. `require` first checks if `modulename` has already been loaded by a previous call to `require`, returning the previously loaded results if available. Otherwise it searches `package.terrapath` for the module. `package.terrapath` is a semi-colon separated list of templates, e.g.:
     
     "lib/?.t;./?.t"
     
-The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `terralib.require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.path` is set to the environment variable `LUA_PATH`. If `LUA_PATH` is not set then `package.path` will contain `./?.t` as a path.
+The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `terralib.require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.terrapath` is set to the environment variable `TERRA_PATH`. If `TERRA_PATH` is not set then `package.terrapath` will contain the default path (`./?.t`). The string `;;` in `TERRA_PATH` will be replaced with this default path if it exists.
 
 Saving Terra Code
 -------------------
