@@ -32,6 +32,7 @@ const char * progname = NULL;
 static void dotty (lua_State *L);
 void parse_args(lua_State * L, int argc, char ** argv, terra_Options * options, bool * interactive, int * begin_script);
 static int getargs (lua_State *L, char **argv, int n);
+static int docall (lua_State *L, int narg, int clear);
 
 
 #ifndef _WIN32
@@ -88,7 +89,7 @@ int main(int argc, char ** argv) {
       if(terra_loadfile(L,filename))
         doerror(L);
       lua_insert(L, -(narg + 1));
-      if(lua_pcall(L, narg, LUA_MULTRET, 0))
+      if(docall(L,narg,0))
         doerror(L);
     }
     
