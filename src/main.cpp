@@ -302,6 +302,7 @@ static void laction (int i) {
 
 static int docall (lua_State *L, int narg, int clear) {
   int status;
+  globalL = L;
   int base = lua_gettop(L) - narg;  /* function index */
   lua_pushcfunction(L, traceback);  /* push traceback function */
   lua_insert(L, base);  /* put it under chunk and args */
@@ -323,7 +324,6 @@ static void print_welcome() {
 }
 static void dotty (lua_State *L) {
   int status;
-  globalL = L;
   print_welcome();
   while ((status = loadline(L)) != -1) {
     if (status == 0) status = docall(L, 0, 0);
