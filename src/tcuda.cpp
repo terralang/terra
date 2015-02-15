@@ -226,10 +226,6 @@ int terra_cudacompile(lua_State * L) {
     CUDA_DO(cuModuleLoadData(&cudaM, cubin));
     CUDA_DO(cuLinkDestroy(linkState));
 
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-    lua_getfield(L,-1,"cudamakekernelwrapper");
-    int mkwrapper = lua_gettop(L);
-
     lua_newtable(L);
     int resulttbl = lua_gettop(L);
 
@@ -238,7 +234,7 @@ int terra_cudacompile(lua_State * L) {
         const char * key = luaL_checkstring(L,-2);
         lua_getfield(L,-1,"llvm_value");
         llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
-        lua_pop(L,1);
+        lua_pop(L,2); //topointer and table value
         if(llvm::dyn_cast<llvm::Function>(v)) {
             CUfunction func;
             CUDA_DO(cuModuleGetFunction(&func, cudaM, sanitizeName(key).c_str()));
@@ -247,15 +243,11 @@ int terra_cudacompile(lua_State * L) {
             //eventually we will change this to make a Terra constant of type CUfunction when we have
             //the appropriate API
             lua_pushlstring(L,(char*)&func,sizeof(CUfunction));
-            lua_pushvalue(L,mkwrapper);
-            lua_insert(L,-3); /*stack is now <mkwrapper> <variant (value from table)> <string of CUfunction> <mkwrapper> (TOP) */
-            lua_call(L,2,1);
         } else {
             assert(llvm::dyn_cast<llvm::GlobalVariable>(v));
             CUdeviceptr dptr;
             size_t bytes;
             CUDA_DO(cuModuleGetGlobal(&dptr,&bytes,cudaM,sanitizeName(key).c_str()));
-            lua_pop(L,1); //remove value
             lua_pushlightuserdata(L,(void*)dptr);
         }
 

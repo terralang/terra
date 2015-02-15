@@ -2,28 +2,32 @@
 function terralib.cudacompile(module,dumpmodule)
     local llvmglobals = {} -- map name -> terra object with llvm_value that goes in the cuda kernel (function, var, constant)
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
-    
+    local kernelindex = {}
     local function addkernel(k,v)
-        v:emitllvm()
+        kernelindex[k] = v
         local definitions =  v:getdefinitions()
         if #definitions > 1 then
             error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
         end
         local fn = definitions[1]
-        local success,typ = fn:peektype() -- calling gettype would JIT the function, which we don't want
-                                    -- we should modify gettype to allow the return of a type for a non-jitted function
-        assert(success)
-
+        if fn.state == "untyped" then 
+            fn:setinlined(true) --if we need to wrap this function, make sure it is inlined
+        end
+        
+        local typ = fn:gettype()
+        
         if not typ.returntype:isunit() then
             error(k..": kernels must return no arguments.")
         end
 
         for _,p in ipairs(typ.parameters) do
-            if not (p:ispointer() or p:isprimitive()) then
-                error(k..": kernels arguments can only be primitive types or pointers but kernel has type "..tostring(typ))
+            if p:isarray() or p:isstruct() then -- we can't pass aggregates by value through CUDA, so wrap/unwrap the kernel
+                fn = terra.cudaflattenkernel(v):getdefinitions()[1]
+                break
             end
         end
-        llvmglobals[k] = definitions[1]
+        fn:emitllvm()
+        llvmglobals[k] = fn
         annotations:insert({k,"kernel",1})
     end
     
@@ -55,6 +59,8 @@ function terralib.cudacompile(module,dumpmodule)
         -- wrap global addresses as cdata
         if type(v) == "userdata" then
             result[k] = terralib.cast(terralib.types.pointer(terralib.types.opaque),v)
+        elseif type(v) == "string" then
+            result[k] = terra.cudamakekernelwrapper(assert(kernelindex[k]),v)
         end
     end
     return result
@@ -63,6 +69,40 @@ end
 --we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
 --since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 local terracode = terra.loadstring [[
+local function unwrapexpressions(paramtypes) -- helper that gets around calling convension issues by unwrapping aggregates
+                                             -- for kernel invocations
+    local flatsymbols, expressions = terralib.newlist(),terralib.newlist()
+    local function addtype(s,t)
+        if t:isstruct() then
+            for i,e in ipairs(t:getentries()) do
+                if not e.type then 
+                    error("cuda kernels cannot pass struct "..tostring(t).." by value because it contains a union")
+                end
+                addtype(`s.[e.field],e.type)
+            end
+        elseif t:isarray() then
+            for i = 0,t.N - 1 do
+                addtype(`s[i],t.type)
+            end
+        else
+            flatsymbols:insert(terralib.newsymbol(t))
+            expressions:insert(s)
+        end
+    end
+    local symbols = paramtypes:map(terralib.newsymbol)
+    for i,s in ipairs(symbols) do
+        addtype(s,paramtypes[i])
+    end
+    return symbols,flatsymbols,expressions 
+end
+function terralib.cudaflattenkernel(v)
+    local symbols,flatsymbols,expressions = unwrapexpressions(v:gettype().parameters)
+    return terra([flatsymbols])
+        var [symbols]
+        expressions = flatsymbols
+        return v(symbols)
+    end
+end
 struct terralib.CUDAParams {
     gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
     blockDimX : uint, blockDimY : uint, blockDimZ : uint,
@@ -70,11 +110,12 @@ struct terralib.CUDAParams {
 }
 local cuLaunchKernel = terralib.externfunction("cuLaunchKernel",{&opaque,uint32,uint32,uint32,uint32,uint32,uint32,uint32,&opaque,&&opaque,&&opaque} -> uint32)
 function terralib.cudamakekernelwrapper(fn,funcdata)
-    local _,typ = fn:peektype()
-    local arguments = typ.parameters:map(symbol)
+    local typ = fn:gettype()
+    local symbols,flatsymbols,expressions = unwrapexpressions(typ.parameters)
     
-    local paramctor = arguments:map(function(s) return `&s end)
-    return terra(params : &terralib.CUDAParams, [arguments])
+    local paramctor = flatsymbols:map(function(s) return `&s end)
+    return terra(params : &terralib.CUDAParams, [symbols])
+        var [flatsymbols] = expressions
         var func : &&opaque = [&&opaque](funcdata)
         var paramlist = arrayof([&opaque],[paramctor])
         return cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
