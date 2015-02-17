@@ -35,7 +35,7 @@ foo = terra(result : &float)
     printf("a = %d, b = %f, c = %d\n",t,1.0 + t,t + 2)
 end
 
-sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
+sync = terralib.externfunction("cuStreamSynchronize", {&opaque} -> int)
 
 annotations = { {"maxntidx",43}, {"minctasm",8}} -- example of annotating cuda kernel with launch bounds
 local R = terralib.cudacompile({ bar = { kernel = foo, annotations = annotations }})
@@ -43,7 +43,7 @@ local R = terralib.cudacompile({ bar = { kernel = foo, annotations = annotations
 terra doit(N : int)
 	var launch = terralib.CUDAParams { 1,1,1, N,1,1, 0, nil }
 	R.bar(&launch,nil)
-	sync()
+	sync(nil)
 end
 
 doit(3)

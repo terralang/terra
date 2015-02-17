@@ -71,7 +71,7 @@ public:
     }
 };
 
-CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
+CUresult moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::string * buf) {
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         it->setAttributes(llvm::AttributeSet()); //remove annotations because syntax doesn't match
         RemoveAttr A;
@@ -81,8 +81,6 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, std::string * buf) {
     M->setTargetTriple(""); //clear these because nvvm doesn't like them
     M->setDataLayout("");
     
-    int major,minor;
-    CUDA_DO(cuDeviceComputeCapability(&major,&minor,T->cuda->D));
     std::stringstream device;
     device << "-arch=compute_" << major << minor;
     std::string deviceopt = device.str();
@@ -184,8 +182,11 @@ int terra_cudacompile(lua_State * L) {
         it->setName(sanitizeName(it->getName()));
     }
 	
+    int major,minor;
+    CUDA_DO(cuDeviceComputeCapability(&major,&minor,T->cuda->D));
+    
     std::string ptx;
-    CUDA_DO(moduleToPTX(T,M,&ptx));
+    CUDA_DO(moduleToPTX(T,M,major,minor,&ptx));
     if(dumpmodule) {
         fprintf(stderr,"CUDA Module:\n");
         M->dump();
@@ -197,11 +198,13 @@ int terra_cudacompile(lua_State * L) {
     CUlinkState linkState;
     char error_log[8192];
     
-    CUjit_option options[] = {CU_JIT_ERROR_LOG_BUFFER,CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES};
-    void * option_values[] = { error_log, (void*)8192 };
+    int version = (major*10+minor);
+    CUjit_option options[] = {CU_JIT_ERROR_LOG_BUFFER,CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,CU_JIT_TARGET};
+    void * option_values[] = { error_log, (void*)8192, (void*)(uint64_t)version };
     void * cubin;
     size_t cubinSize;
-    CUDA_DO(cuLinkCreate(2,options,option_values,&linkState));
+    CUDA_DO(cuLinkCreate(3,options,option_values,&linkState));
+    
     
     CUresult err = cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0);
     if(err != CUDA_SUCCESS) {
