@@ -1112,7 +1112,7 @@ static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const c
         global->obj("type",&t);
         Type * typ = Types(T).Get(&t)->type;
         
-        Constant * llvmconstant = UndefValue::get(typ);
+        Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
         Obj constant;
         if(global->obj("initializer",&constant)) {
             llvmconstant = GetConstant(T,&constant);
