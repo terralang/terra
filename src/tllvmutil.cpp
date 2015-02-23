@@ -258,7 +258,7 @@ llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, ll
     Dest->setTargetTriple(Src->getTargetTriple());
     CopyConnectedComponent cp(Dest,Src,copyGlobal,data,VMap);
     for(size_t i = 0; i < N; i++)
-        cp.materializeValueFor(gvs[i]);
+        MapValue(gvs[i],VMap,RF_None,NULL,&cp);
     cp.finalize();
     return Dest;
 }

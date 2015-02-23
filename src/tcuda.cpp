@@ -143,6 +143,7 @@ int terra_cudacompile(lua_State * L) {
         const char * key = luaL_checkstring(L,-2);
         lua_getfield(L,-1,"llvm_value");
         llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
+        assert(v);
         if(dumpmodule) {
             fprintf(stderr,"Add Global Value:\n");
             v->dump();
