@@ -836,7 +836,9 @@ Load the terra code `modulename`. Terra adds an additional code loader to Lua's 
     
     "lib/?.t;./?.t"
     
-The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `terralib.require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.terrapath` is set to the environment variable `TERRA_PATH`. If `TERRA_PATH` is not set then `package.terrapath` will contain the default path (`./?.t`). The string `;;` in `TERRA_PATH` will be replaced with this default path if it exists.
+The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.terrapath` is set to the environment variable `TERRA_PATH`. If `TERRA_PATH` is not set then `package.terrapath` will contain the default path (`./?.t`). The string `;;` in `TERRA_PATH` will be replaced with this default path if it exists.
+
+Note that normal Lua code is also imported using `require`. There are two search paths `package.path` (env `LUA_PATH`), which will load code as pure Lua, and `package.terrapth` (env: `TERRA_PATH`), which will load code as Lua-Terra code.
 
 Saving Terra Code
 -------------------
@@ -1009,7 +1011,7 @@ The language extension mechanism includes an `import` statment to load the langu
     result = sum 1,2,3 done
 
 Since `import` statements are evaluated at _parse_ time, the argument must be a string literal. 
-The parser will then call `terralib.require` on the string literal to load the language extension file.
+The parser will then call `require` on the string literal to load the language extension file.
 The file specified should _return_ the Lua table describing your language:
 
     local sumlanguage = { ... } --fill in your table
