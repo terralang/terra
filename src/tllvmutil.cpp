@@ -32,7 +32,7 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
     TLI->setUnavailable(LibFunc::memset_pattern16);
 #endif
     fpm->add(TLI);
-    TARGETDATA() * TD = new TARGETDATA()(*TM->TARGETDATA(get)());
+    DataLayout * TD = new DataLayout(*TM->getDataLayout());
 #if LLVM_VERSION <= 34
     fpm->add(TD);
 #else
@@ -161,10 +161,6 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, raw_ostream & dest, 
     dest.flush();
 
     return false;
-}
-
-static char * copyName(const StringRef & name) {
-    return strdup(name.str().c_str());
 }
 
 #if LLVM_VERSION >= 34

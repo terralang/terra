@@ -277,7 +277,7 @@ int terra_compilerinit(struct terra_State * T) {
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(Triple, err);
     TargetMachine * TM = TheTarget->createTargetMachine(Triple, CPU, HostHasAVX() ? "+avx" : "", options,Reloc::PIC_,CodeModel::Default,OL);
-    T->C->td = TM->TARGETDATA(get)();
+    T->C->td = TM->getDataLayout();
     
     if(T->options.usemcjit) {
 #ifndef TERRA_CAN_USE_MCJIT
@@ -824,8 +824,6 @@ struct CCallingConv {
             builder.addAttribute(Attributes::StructRet);
             builder.addAttribute(Attributes::NoAlias);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_VERSION == 31
-            r->addAttribute(idx,Attributes(Attribute::StructRet | Attribute::NoAlias));
         #else
             r->addAttribute(idx,Attribute::StructRet);
             r->addAttribute(idx,Attribute::NoAlias);
@@ -837,8 +835,6 @@ struct CCallingConv {
             AttrBuilder builder;
             builder.addAttribute(Attributes::ByVal);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_VERSION == 31
-            r->addAttribute(idx,Attributes(Attribute::ByVal));
         #else
             r->addAttribute(idx,Attribute::ByVal);
         #endif
@@ -851,8 +847,6 @@ struct CCallingConv {
             AttrBuilder builder;
             builder.addAttribute(t->issigned ? Attributes::SExt : Attributes::ZExt);
             r->addAttribute(idx,Attributes::get(*C->ctx,builder));
-        #elif LLVM_VERSION == 31
-            r->addAttribute(idx,Attributes(t->issigned ? Attribute::SExt : Attribute::ZExt));
         #else
             r->addAttribute(idx,t->issigned ? Attribute::SExt : Attribute::ZExt);
         #endif
@@ -1118,13 +1112,7 @@ static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const c
             llvmconstant = GetConstant(T,&constant);
         }
         int as = global->number("addressspace");
-        gv = new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,
-                            #if LLVM_VERSION == 31
-                                false,
-                            #else
-                                GlobalVariable::NotThreadLocal, 
-                            #endif
-                                as);
+        gv = new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
         lua_pushlightuserdata(T->L, gv);
         global->setfield("llvm_value");
     }

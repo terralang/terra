@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC 
+FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -70,110 +70,15 @@ SO_FLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
            -lclangAnalysis \
            -lclangEdit -lclangAST -lclangLex -lclangBasic
-           #-lclangStaticAnalyzerFrontend -lclangStaticAnalyzerCheckers \
-           #-lclangStaticAnalyzerCore \
-           #-lclangFrontendTool \
-           #-lclangARCMigrate
-           
-LLVM_FLAGS_MANUAL += \
--lLLVMAsmParser \
--lLLVMInstrumentation \
--lLLVMLinker \
--lLLVMArchive \
--lLLVMBitReader \
--lLLVMDebugInfo \
--lLLVMJIT \
--lLLVMipo \
--lLLVMVectorize \
--lLLVMBitWriter \
--lLLVMTableGen \
--lLLVMHexagonCodeGen \
--lLLVMHexagonDesc \
--lLLVMHexagonInfo \
--lLLVMHexagonAsmPrinter \
--lLLVMPTXCodeGen \
--lLLVMPTXDesc \
--lLLVMPTXInfo \
--lLLVMPTXAsmPrinter \
--lLLVMMBlazeAsmParser \
--lLLVMMBlazeDisassembler \
--lLLVMMBlazeCodeGen \
--lLLVMMBlazeDesc \
--lLLVMMBlazeAsmPrinter \
--lLLVMMBlazeInfo \
--lLLVMCppBackendCodeGen \
--lLLVMCppBackendInfo \
--lLLVMMSP430CodeGen \
--lLLVMMSP430Desc \
--lLLVMMSP430AsmPrinter \
--lLLVMMSP430Info \
--lLLVMXCoreCodeGen \
--lLLVMXCoreDesc \
--lLLVMXCoreInfo \
--lLLVMCellSPUCodeGen \
--lLLVMCellSPUDesc \
--lLLVMCellSPUInfo \
--lLLVMMipsDisassembler \
--lLLVMMipsAsmParser \
--lLLVMMipsCodeGen \
--lLLVMMipsDesc \
--lLLVMMipsInfo \
--lLLVMMipsAsmPrinter \
--lLLVMARMDisassembler \
--lLLVMARMAsmParser \
--lLLVMARMCodeGen \
--lLLVMARMDesc \
--lLLVMARMInfo \
--lLLVMARMAsmPrinter \
--lLLVMPowerPCCodeGen \
--lLLVMPowerPCDesc \
--lLLVMPowerPCInfo \
--lLLVMPowerPCAsmPrinter \
--lLLVMSparcCodeGen \
--lLLVMSparcDesc \
--lLLVMSparcInfo \
--lLLVMX86Disassembler \
--lLLVMX86AsmParser \
--lLLVMX86CodeGen \
--lLLVMSelectionDAG \
--lLLVMAsmPrinter \
--lLLVMX86Desc \
--lLLVMX86Info \
--lLLVMX86AsmPrinter \
--lLLVMX86Utils \
--lLLVMMCDisassembler \
--lLLVMMCParser \
--lLLVMInterpreter \
--lLLVMCodeGen \
--lLLVMScalarOpts \
--lLLVMInstCombine \
--lLLVMTransformUtils \
--lLLVMipa \
--lLLVMAnalysis \
--lLLVMMCJIT \
--lLLVMRuntimeDyld \
--lLLVMExecutionEngine \
--lLLVMTarget \
--lLLVMMC \
--lLLVMObject \
--lLLVMCore \
--lLLVMSupport
-
-
-ifeq ($(LLVM_VERSION), 31)
-SO_FLAGS += $(LLVM_FLAGS_MANUAL) -lclangRewrite
-else
-SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
-
 ifneq ($(LLVM_VERSION), 35)
 SO_FLAGS += -lclangRewriteCore
 endif
 
-endif
-
-ifeq ($(LLVM_VERSION), 35)
+ifneq ($(LLVM_VERSION), 32)
 CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
 endif
+
+SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
@@ -182,9 +87,6 @@ endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
     SO_FLAGS += -lz
 endif
-
-# LLVM LIBS (DYNAMIC, these are faster to link against, but are not built by default)
-# LFLAGS += -lLLVM-3.1
 
 ifeq ($(UNAME), Linux)
 LFLAGS += -ldl -pthread -Wl,-export-dynamic 

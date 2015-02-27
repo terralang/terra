@@ -13,7 +13,7 @@ ManualInliner::ManualInliner(TargetMachine * TM, Module * m) {
     //Trick the Module-at-a-time inliner into running on a single SCC
     //First we run it on the (currently empty) module to initialize
     //the inlining pass with the Analysis passes it needs.
-    TARGETDATA() * TD = new TARGETDATA()(*TM->TARGETDATA(get)());
+    DataLayout * TD = new DataLayout(*TM->getDataLayout());
     
     #if LLVM_VERSION <= 34
     PM.add(TD);

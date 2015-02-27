@@ -35,9 +35,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 
-#if LLVM_VERSION == 31
-#include "llvmheaders_31.h"
-#elif LLVM_VERSION == 32
+#if LLVM_VERSION == 32
 #include "llvmheaders_32.h"
 #elif LLVM_VERSION == 33
 #include "llvmheaders_33.h"
