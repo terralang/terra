@@ -1,7 +1,7 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
 #include "tcuda.h"
-#ifdef TERRA_ENABLE_CUDA
+#ifdef TERRA_CUDA_HOME
 
 extern "C" {
 #include "lua.h"
@@ -38,6 +38,12 @@ struct terra_CUDAState {
 } while(0)
 
 #define CUDA_DO(err) CUDA_DO2(err,"%s","")
+
+#ifdef __linux__
+#define LIB64 "lib64"
+#else
+#define LIB64 "lib"
+#endif
 
 CUresult initializeCUDAState(terra_State * T) {
     if (!T->cuda->initialized) {
@@ -210,7 +216,7 @@ int terra_cudacompile(lua_State * L) {
     
     
     CUDA_DO2(cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
-    CUDA_DO2(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL),"\n%s",error_log);
+    CUDA_DO2(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDA_HOME "/" LIB64 "/libcudadevrt.a", 0, NULL, NULL),"\n%s",error_log);
     CUDA_DO2(cuLinkComplete(linkState,&cubin,&cubinSize),"\n%s",error_log);
     
 #ifndef _WIN32
@@ -220,8 +226,9 @@ int terra_cudacompile(lua_State * L) {
         FILE * f = fopen(tmpname.c_str(),"w");
         fwrite(cubin,cubinSize,1,f);
         fclose(f);
-        const char * args[] = { TERRA_CUDANVDISASM, "--print-life-ranges", tmpname.c_str(), NULL };
-        llvmutil_executeandwait(LLVM_PATH_TYPE(TERRA_CUDANVDISASM), args, NULL);
+        const char * exe = TERRA_CUDA_HOME "/bin/nvdisasm";
+        const char * args[] = { exe, "--print-life-ranges", tmpname.c_str(), NULL };
+        llvmutil_executeandwait(LLVM_PATH_TYPE(exe), args, NULL);
         unlink(tmpname.c_str());
     }
 #endif

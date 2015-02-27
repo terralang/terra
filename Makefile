@@ -28,7 +28,7 @@ TERRA_CXX ?= $(CLANG)++
 TERRA_CC  ?= $(CLANG)
 
 CUDA_HOME ?= /usr/local/cuda
-
+ENABLE_CUDA ?= $(shell test -e /usr/local/cuda && echo 1 || echo 0)
 
 CXX := $(TERRA_CXX)
 CC := $(TERRA_CC)
@@ -113,7 +113,7 @@ CUDALIBNAME = lib
 else
 CUDALIBNAME = lib64
 endif
-FLAGS += -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include -DTERRA_CUDANVDISASM="\"$(CUDA_HOME)/bin/nvdisasm\"" -DTERRA_CUDADEVRT="\"$(CUDA_HOME)/$(CUDALIBNAME)/libcudadevrt.a\""
+FLAGS += -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include -DTERRA_CUDA_HOME="\"$(CUDA_HOME)\""
 SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -L$(CUDA_HOME)/nvvm/$(CUDALIBNAME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME),-rpath,$(CUDA_HOME)/nvvm/$(CUDALIBNAME)
 endif
 
