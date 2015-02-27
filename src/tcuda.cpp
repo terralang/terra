@@ -30,12 +30,14 @@ struct terra_CUDAState {
     CUcontext C;
 };
 
-#define CUDA_DO(err) do { \
+#define CUDA_DO2(err,str,...) do { \
     int e = err; \
     if(e != CUDA_SUCCESS) { \
-        terra_reporterror(T,"%s:%d: %s cuda reported error %d",__FILE__,__LINE__,#err,e); \
+        terra_reporterror(T,"%s:%d: %s cuda reported error %d" str,__FILE__,__LINE__,#err,e,__VA_ARGS__); \
     } \
 } while(0)
+
+#define CUDA_DO(err) CUDA_DO2(err,"%s","")
 
 CUresult initializeCUDAState(terra_State * T) {
     if (!T->cuda->initialized) {
@@ -197,7 +199,7 @@ int terra_cudacompile(lua_State * L) {
     CUmodule cudaM;
     
     CUlinkState linkState;
-    char error_log[8192];
+    char error_log[8192]; error_log[0] = '\0';
     
     int version = (major*10+minor);
     CUjit_option options[] = {CU_JIT_ERROR_LOG_BUFFER,CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,CU_JIT_TARGET};
@@ -207,12 +209,9 @@ int terra_cudacompile(lua_State * L) {
     CUDA_DO(cuLinkCreate(3,options,option_values,&linkState));
     
     
-    CUresult err = cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0);
-    if(err != CUDA_SUCCESS) {
-        terra_reporterror(T,"%s:%d: %s",__FILE__,__LINE__,error_log);
-    }
-    CUDA_DO(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL));
-    CUDA_DO(cuLinkComplete(linkState,&cubin,&cubinSize));
+    CUDA_DO2(cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
+    CUDA_DO2(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDADEVRT, 0, NULL, NULL),"\n%s",error_log);
+    CUDA_DO2(cuLinkComplete(linkState,&cubin,&cubinSize),"\n%s",error_log);
     
 #ifndef _WIN32
     if(dumpmodule) {
