@@ -1,5 +1,5 @@
 
-local S = require "lib.std"
+local S = require "std"
 
 local floatv = S.Vector(int)
 terra foo()

@@ -3547,8 +3547,14 @@ local function includetableindex(tbl,name)    --this is called when a table retu
 end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
+local clangresourcedirectory = terra.terrahome.."/include/clang_resource"
 function terra.includecstring(code,...)
-    local args = terra.newlist {"-O3","-Wno-deprecated",...}
+    local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
+    if ffi.os == "Linux" then
+        args:insert("-internal-isystem")
+        args:insert(clangresourcedirectory.."/include")
+    end
+    args:insertall {...}
     for p in terra.includepath:gmatch("([^;]+);?") do
         args:insert("-I")
         args:insert(p)
@@ -4145,7 +4151,13 @@ function terra.saveobj(filename,filekind,env,arguments)
     return terra.saveobjimpl(filename,filekind,cleanenv,arguments or {})
 end
 
-package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",";./?.t;") --default terra path
+-- path to terra install, normally this is figured out based on the location of Terra shared library or binary
+terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or "."
+
+local terradefaultpath = ";./?.t;"..terra.terrahome.."/include/?.t;"
+
+package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)
+
 local function terraloader(name)
     local fname = name:gsub("%.","/")
     local file = nil

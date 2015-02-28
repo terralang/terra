@@ -1,4 +1,4 @@
-local Parse = require "lib.parsing"
+local Parse = require "parsing"
 
 local Tree = {}
 Tree.__index = Tree

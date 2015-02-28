@@ -1,4 +1,4 @@
-local S = require "lib.std"
+local S = require "std"
 
 c = global(int,0)
 

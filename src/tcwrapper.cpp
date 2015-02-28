@@ -723,9 +723,6 @@ int include_c(lua_State * L) {
         cpaths++;
     }
     
-    args.push_back("-resource-dir");
-    args.push_back(TERRA_CLANG_RESOURCE_DIRECTORY);
-    
     lua_newtable(L); //return a table of loaded functions
     int ref_table = lobj_newreftable(L);
     {

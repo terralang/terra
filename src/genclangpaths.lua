@@ -20,18 +20,23 @@ file:write("static const char * clang_paths[] = {\n")
 
 --also parse command line arguments to this script
 theline = theline .. " " .. table.concat(arg," ",3) .. " -"
+local flagStr
 local accumStr
 for a in theline:gmatch("([^ ]+) ?") do -- Tokenize on whitespace
     -- If this is an option, stop recording args and emit what we have
     if a:find("^-") and accumStr then 
-        emitStr(accumStr:gsub("\\\\", "/")
-                        :match("^%s*(.*%S)%s*$")
-                        :match("^\"?([^\"]+)\"?$"))
+        accumStr = accumStr:gsub("\\\\", "/")
+                           :match("^%s*(.*%S)%s*$")
+                           :match("^\"?([^\"]+)\"?$")
+        if not accumStr:match("lib/clang") then -- do not include clang resource directory, which is handled at runtime
+            emitStr(flagStr)
+            emitStr(accumStr)
+        end
         accumStr = nil
     end
     -- If this is an include option, emit the option and start recording args
     if a == "-I" or a:find("isystem$") then
-        emitStr(a)
+        flagStr = a
         accumStr = ""
     -- If we are recording args, continue recording args
     elseif accumStr then 

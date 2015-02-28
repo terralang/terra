@@ -14,6 +14,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <dlfcn.h>
+#include <libgen.h>
 
 static char * vstringf(const char * fmt, va_list ap) {
     int N = 128;
@@ -155,6 +157,19 @@ static void ongc(lua_State * L, int idx, lua_CFunction gcfn) {
 }
 static int terra_free(lua_State * L);
 
+static void setterrahome(lua_State * L) {
+    Dl_info info;
+    if(dladdr((void*)terra_init,&info) != 0) {
+        if(info.dli_fname) {
+            char * full = realpath(info.dli_fname,NULL);
+            lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+            lua_pushstring(L,dirname(full)); //TODO: dirname not reentrant
+            lua_setfield(L,-2,"terrahome");
+            lua_pop(L,1);
+        }
+    }
+}
+
 int terra_init(lua_State * L) {
     terra_Options options;
     memset(&options,0, sizeof(terra_Options));
@@ -175,7 +190,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     
     lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
-
+    setterrahome(T->L); //find the location of support files such as the clang resource directory
     int err =    terra_loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
               || terra_loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
               

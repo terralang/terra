@@ -2,8 +2,8 @@
 # If the defaults for LLVM_CONFIG are not right for your installation
 # create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution
 # you may also need to reassign the TERRA_CXX and TERRA_CC compilers if they are not valid.
-# If you want to enable cuda compiler support set ENABLE_CUDA to 1 in your Makefile.inc
-# CUDA_HOME is your cuda installation
+# If you want to enable cuda compiler support is enabled if the path specified by
+# CUDA_HOME exists
 
 -include Makefile.inc
 
@@ -40,7 +40,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -Wall -g $(INCLUDE_PATH) -fPIC
+FLAGS = -Wall -g -fPIC
 LFLAGS = -g
 
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -51,11 +51,11 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
-LFLAGS += -Lbuild -lluajit
-INCLUDE_PATH += -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
+LUAJITOBJS = $(wildcard $(LUAJIT_DIR)/src/lj_*.o $(LUAJIT_DIR)/src/lib_*.o)
+ 
+FLAGS += -I build -I release/include -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
-
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
@@ -92,20 +92,17 @@ ifeq ($(UNAME), Linux)
 LFLAGS += -ldl -pthread -Wl,-export-dynamic 
 DYNFLAGS = -shared -fPIC -Wl,-export-dynamic -ldl -pthread
 else
-DYNFLAGS = -dynamiclib -single_module -undefined dynamic_lookup -fPIC
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name libterra.so
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
-
-INCLUDE_PATH += -I build
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
 LFLAGS += -pagezero_size 10000 -image_base 100000000 
 endif
 
-#so header include paths can be correctly configured on linux
-FLAGS += -DTERRA_CLANG_RESOURCE_DIRECTORY="\"$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)\""
+CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
 
 ifeq ($(ENABLE_CUDA),1)
 ifeq ($(UNAME), Darwin)
@@ -113,7 +110,8 @@ CUDALIBNAME = lib
 else
 CUDALIBNAME = lib64
 endif
-FLAGS += -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include -DTERRA_CUDA_HOME="\"$(CUDA_HOME)\""
+CUDA_INCLUDES = -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include
+FLAGS += $(CUDA_INCLUDES) -DTERRA_CUDA_HOME="\"$(CUDA_HOME)\""
 SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -L$(CUDA_HOME)/nvvm/$(CUDALIBNAME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME),-rpath,$(CUDA_HOME)/nvvm/$(CUDALIBNAME)
 endif
 
@@ -126,14 +124,16 @@ LIBLUA = terralib.lua strict.lua cudalib.lua
 
 EXEOBJS = main.o linenoise.o
 
-LUAHEADERS = $(addprefix build/,$(LIBLUA:.lua=.h))
-GENERATEDHEADERS = $(LUAHEADERS) build/clangpaths.h
+EMBEDDEDLUA = $(addprefix build/,$(LIBLUA:.lua=.h))
+GENERATEDHEADERS = $(EMBEDDEDLUA) build/clangpaths.h
+
+LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 
 OBJS = $(LIBOBJS) $(EXEOBJS)
 
-EXECUTABLE = terra
+EXECUTABLE = release/terra
 LIBRARY = build/libterra.a
-DYNLIBRARY = build/libterra.so
+DYNLIBRARY = release/libterra.so
 
 BIN2C = build/bin2c
 
@@ -162,17 +162,19 @@ endif
 $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make CC=$(CC))
-	cp $(LUAJIT_DIR)/src/libluajit.a build/libluajit.a
+	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
 	$(AR) -cq $@ $^
 
-$(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS))
+$(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS)) $(LUAJITOBJS)
 	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
 
-$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY) $(LUAJITOBJS)
+	cp -r $(CLANG_RESOURCE_DIRECTORY) release/include/clang_resource
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
+	ln -s $(EXECUTABLE) terra
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<
@@ -186,14 +188,14 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(FLAGS)
+	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) $(LIBRARY)
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY) release/include/clang_resource
 
 purge:	clean
-	rm -rf build/*
+	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
  
 package:
 	git archive --prefix=terra/ HEAD | bzip2 > terra-`git rev-parse --short HEAD`.tar.bz2
