@@ -166,6 +166,7 @@ static void setterrahome(lua_State * L) {
             lua_pushstring(L,dirname(full)); //TODO: dirname not reentrant
             lua_setfield(L,-2,"terrahome");
             lua_pop(L,1);
+            free(full);
         }
     }
 }

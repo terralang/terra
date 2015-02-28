@@ -4153,7 +4153,7 @@ end
 
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
 terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or "."
-
+terra.cudahome = os.getenv("CUDA_HOME") or "/usr/local/cuda"
 local terradefaultpath = ";./?.t;"..terra.terrahome.."/include/?.t;"
 
 package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)

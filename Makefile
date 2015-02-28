@@ -105,14 +105,8 @@ endif
 CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
 
 ifeq ($(ENABLE_CUDA),1)
-ifeq ($(UNAME), Darwin)
-CUDALIBNAME = lib
-else
-CUDALIBNAME = lib64
-endif
-CUDA_INCLUDES = -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include
-FLAGS += $(CUDA_INCLUDES) -DTERRA_CUDA_HOME="\"$(CUDA_HOME)\""
-SO_FLAGS += -L$(CUDA_HOME)/$(CUDALIBNAME) -L$(CUDA_HOME)/nvvm/$(CUDALIBNAME) -lcuda -lcudart -lnvvm -Wl,-rpath,$(CUDA_HOME)/$(CUDALIBNAME),-rpath,$(CUDA_HOME)/nvvm/$(CUDALIBNAME)
+CUDA_INCLUDES = -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include
+FLAGS += $(CUDA_INCLUDES)
 endif
 
 ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))
@@ -174,7 +168,7 @@ $(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS)) $(LUAJITOBJS)
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY) $(LUAJITOBJS)
 	cp -r $(CLANG_RESOURCE_DIRECTORY) release/include/clang_resource
 	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
-	ln -s $(EXECUTABLE) terra
+	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 $(BIN2C):	src/bin2c.c
 	$(CC) -O3 -o $@ $<

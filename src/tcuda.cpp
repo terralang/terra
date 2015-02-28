@@ -1,7 +1,7 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
 #include "tcuda.h"
-#ifdef TERRA_CUDA_HOME
+#ifdef TERRA_ENABLE_CUDA
 
 extern "C" {
 #include "lua.h"
@@ -22,10 +22,12 @@ extern "C" {
 #include <sstream>
 #ifndef _WIN32
 #include <unistd.h>
+#include <dlfcn.h>
 #endif
 
 struct terra_CUDAState {
     int initialized;
+    const char * cudahome;
     CUdevice D;
     CUcontext C;
 };
@@ -41,22 +43,61 @@ struct terra_CUDAState {
 
 #ifdef __linux__
 #define LIB64 "lib64"
+#define LIBEXT "so"
 #else
 #define LIB64 "lib"
+#define LIBEXT "dylib"
 #endif
+
+#define CUDA_SYM(_) \
+    _(cuCtxCreate) \
+    _(cuCtxGetCurrent) \
+    _(cuCtxGetDevice) \
+    _(cuDeviceComputeCapability) \
+    _(cuDeviceGet) \
+    _(cuInit) \
+    _(cuLinkAddData) \
+    _(cuLinkAddFile) \
+    _(cuLinkComplete) \
+    _(cuLinkCreate) \
+    _(cuLinkDestroy) \
+    _(cuModuleGetFunction) \
+    _(cuModuleGetGlobal) \
+    _(cuModuleLoadData) \
+    _(nvvmAddModuleToProgram) \
+    _(nvvmCompileProgram) \
+    _(nvvmCreateProgram) \
+    _(nvvmGetCompiledResult) \
+    _(nvvmGetCompiledResultSize) \
+    _(nvvmGetProgramLog) \
+    _(nvvmGetProgramLogSize)
+
+#define INIT_SYM(x) static decltype(&x) x##_v;
+CUDA_SYM(INIT_SYM)
+#undef INIT_SYM
 
 CUresult initializeCUDAState(terra_State * T) {
     if (!T->cuda->initialized) {
+    
+        //dynamically assign all of our symbols
+        #define INIT_SYM(x) \
+            x##_v = (decltype(&x)) dlsym(RTLD_DEFAULT,#x "_v2"); \
+            if(!x##_v) x##_v = (decltype(&x)) dlsym(RTLD_DEFAULT,#x); \
+            assert(x##_v);
+            CUDA_SYM(INIT_SYM)
+        #undef INIT_SYM
+
+
         T->cuda->initialized = 1;
-        CUDA_DO(cuInit(0));
-        CUDA_DO(cuCtxGetCurrent(&T->cuda->C));
+        CUDA_DO(cuInit_v(0));
+        CUDA_DO(cuCtxGetCurrent_v(&T->cuda->C));
         if(T->cuda->C) {
             //there is already a valid cuda context, so use that
-            CUDA_DO(cuCtxGetDevice(&T->cuda->D));
+            CUDA_DO(cuCtxGetDevice_v(&T->cuda->D));
             return CUDA_SUCCESS;
         }
-        CUDA_DO(cuDeviceGet(&T->cuda->D,0));
-        CUDA_DO(cuCtxCreate(&T->cuda->C, 0, T->cuda->D));
+        CUDA_DO(cuDeviceGet_v(&T->cuda->D,0));
+        CUDA_DO(cuCtxCreate_v(&T->cuda->C, 0, T->cuda->D));
     }
     return CUDA_SUCCESS;
 }
@@ -101,23 +142,23 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, st
         foutput << *M;
     }
     nvvmProgram prog;
-    CUDA_DO(nvvmCreateProgram(&prog));
-    CUDA_DO(nvvmAddModuleToProgram(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
+    CUDA_DO(nvvmCreateProgram_v(&prog));
+    CUDA_DO(nvvmAddModuleToProgram_v(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
     int numOptions = 1;
     const char * options[] = { deviceopt.c_str() };
     
     size_t size;
-    int err = nvvmCompileProgram(prog, numOptions, options);
+    int err = nvvmCompileProgram_v(prog, numOptions, options);
     if (err != CUDA_SUCCESS) {
-        CUDA_DO(nvvmGetProgramLogSize(prog,&size));
+        CUDA_DO(nvvmGetProgramLogSize_v(prog,&size));
         buf->resize(size);
-        CUDA_DO(nvvmGetProgramLog(prog, &(*buf)[0]));
+        CUDA_DO(nvvmGetProgramLog_v(prog, &(*buf)[0]));
         terra_reporterror(T,"%s:%d: nvvm error reported (%d)\n %s\n",__FILE__,__LINE__,err,buf->c_str());
         
     }
-    CUDA_DO(nvvmGetCompiledResultSize(prog, &size));
+    CUDA_DO(nvvmGetCompiledResultSize_v(prog, &size));
     buf->resize(size);
-    CUDA_DO(nvvmGetCompiledResult(prog, &(*buf)[0]));
+    CUDA_DO(nvvmGetCompiledResult_v(prog, &(*buf)[0]));
     return CUDA_SUCCESS;
 }
 
@@ -192,7 +233,7 @@ int terra_cudacompile(lua_State * L) {
     }
 	
     int major,minor;
-    CUDA_DO(cuDeviceComputeCapability(&major,&minor,T->cuda->D));
+    CUDA_DO(cuDeviceComputeCapability_v(&major,&minor,T->cuda->D));
     
     std::string ptx;
     CUDA_DO(moduleToPTX(T,M,major,minor,&ptx));
@@ -212,12 +253,14 @@ int terra_cudacompile(lua_State * L) {
     void * option_values[] = { error_log, (void*)8192, (void*)(uint64_t)version };
     void * cubin;
     size_t cubinSize;
-    CUDA_DO(cuLinkCreate(3,options,option_values,&linkState));
+    CUDA_DO(cuLinkCreate_v(3,options,option_values,&linkState));
     
     
-    CUDA_DO2(cuLinkAddData(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
-    CUDA_DO2(cuLinkAddFile(linkState,CU_JIT_INPUT_LIBRARY,TERRA_CUDA_HOME "/" LIB64 "/libcudadevrt.a", 0, NULL, NULL),"\n%s",error_log);
-    CUDA_DO2(cuLinkComplete(linkState,&cubin,&cubinSize),"\n%s",error_log);
+    CUDA_DO2(cuLinkAddData_v(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
+    llvm::SmallString<256> devrt(T->cuda->cudahome);
+    devrt.append("/" LIB64 "/libcudadevrt.a");
+    CUDA_DO2(cuLinkAddFile_v(linkState,CU_JIT_INPUT_LIBRARY,devrt.c_str(), 0, NULL, NULL),"\n%s",error_log);
+    CUDA_DO2(cuLinkComplete_v(linkState,&cubin,&cubinSize),"\n%s",error_log);
     
 #ifndef _WIN32
     if(dumpmodule) {
@@ -226,15 +269,16 @@ int terra_cudacompile(lua_State * L) {
         FILE * f = fopen(tmpname.c_str(),"w");
         fwrite(cubin,cubinSize,1,f);
         fclose(f);
-        const char * exe = TERRA_CUDA_HOME "/bin/nvdisasm";
-        const char * args[] = { exe, "--print-life-ranges", tmpname.c_str(), NULL };
-        llvmutil_executeandwait(LLVM_PATH_TYPE(exe), args, NULL);
+        llvm::SmallString<256> exe(T->cuda->cudahome);
+        exe.append("/bin/nvdisasm");
+        const char * args[] = { exe.c_str(), "--print-life-ranges", tmpname.c_str(), NULL };
+        llvmutil_executeandwait(LLVM_PATH_TYPE(exe.c_str()), args, NULL);
         unlink(tmpname.c_str());
     }
 #endif
 
-    CUDA_DO(cuModuleLoadData(&cudaM, cubin));
-    CUDA_DO(cuLinkDestroy(linkState));
+    CUDA_DO(cuModuleLoadData_v(&cudaM, cubin));
+    CUDA_DO(cuLinkDestroy_v(linkState));
 
     lua_newtable(L);
     int resulttbl = lua_gettop(L);
@@ -247,7 +291,7 @@ int terra_cudacompile(lua_State * L) {
         lua_pop(L,2); //topointer and table value
         if(llvm::dyn_cast<llvm::Function>(v)) {
             CUfunction func;
-            CUDA_DO(cuModuleGetFunction(&func, cudaM, sanitizeName(key).c_str()));
+            CUDA_DO(cuModuleGetFunction_v(&func, cudaM, sanitizeName(key).c_str()));
             //HACK: we need to get this value, as a constant, to the makewrapper function
             //currently the only constants that Terra supports programmatically are string constants
             //eventually we will change this to make a Terra constant of type CUfunction when we have
@@ -257,7 +301,7 @@ int terra_cudacompile(lua_State * L) {
             assert(llvm::dyn_cast<llvm::GlobalVariable>(v));
             CUdeviceptr dptr;
             size_t bytes;
-            CUDA_DO(cuModuleGetGlobal(&dptr,&bytes,cudaM,sanitizeName(key).c_str()));
+            CUDA_DO(cuModuleGetGlobal_v(&dptr,&bytes,cudaM,sanitizeName(key).c_str()));
             lua_pushlightuserdata(L,(void*)dptr);
         }
 
@@ -269,12 +313,34 @@ int terra_cudacompile(lua_State * L) {
     return 1;
 }
 
+
+static const char * cuda_libraries[] = { "/nvvm/" LIB64 "/libnvvm." LIBEXT, "/" LIB64 "/libcuda." LIBEXT, "/" LIB64 "/libcudart." LIBEXT, NULL};
+    
+    
 int terra_cudainit(struct terra_State * T) {
+    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getfield(T->L,-1,"cudahome");
+    const char * cudahome = lua_tostring(T->L,-1);
+    lua_pop(T->L,1);
+    
+    if(!cudahome) return 0; //any early return disables cuda
+    
+    //dynamically load cuda libraries
+    const char ** l = cuda_libraries;
+    while(*l) {
+         llvm::SmallString<256> cudalib(cudahome);
+         cudalib.append(*l++);
+         void * r = dlopen(cudalib.c_str(),RTLD_GLOBAL);
+         if(!r) return 0; //couldn't find a cuda library
+    }
+
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
     T->cuda->initialized = 0; /* actual CUDA initalization is done on first call to terra_cudacompile */
                               /* CUDA init is very expensive, so we only want to do it if the program actually uses cuda*/
                               /* this function just registers all the Lua state associated with CUDA */
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    
+    T->cuda->cudahome = cudahome;
+    
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_cudacompile,1);
     lua_setfield(T->L,-2,"cudacompileimpl");
