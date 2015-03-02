@@ -314,7 +314,13 @@ int terra_cudacompile(lua_State * L) {
 }
 
 
-static const char * cuda_libraries[] = { "/nvvm/" LIB64 "/libnvvm." LIBEXT, "/" LIB64 "/libcuda." LIBEXT, "/" LIB64 "/libcudart." LIBEXT, NULL};
+static const char * cuda_libraries[] = { "nvvm/" LIB64 "/libnvvm." LIBEXT, 
+                                         #ifdef __linux__
+                                         "/usr/lib/libcuda." LIBEXT,
+                                         #else
+                                         LIB64 "/libcuda." LIBEXT, 
+                                         #endif
+                                         LIB64 "/libcudart." LIBEXT, NULL};
     
     
 int terra_cudainit(struct terra_State * T) {
@@ -328,10 +334,14 @@ int terra_cudainit(struct terra_State * T) {
     //dynamically load cuda libraries
     const char ** l = cuda_libraries;
     while(*l) {
-         llvm::SmallString<256> cudalib(cudahome);
+         llvm::SmallString<256> cudalib;
+         if ((*l)[0] != '/') {
+             cudalib.append(cudahome);
+             cudalib.append("/");
+         }
          cudalib.append(*l++);
-         void * r = dlopen(cudalib.c_str(),RTLD_GLOBAL);
-         if(!r) return 0; //couldn't find a cuda library
+         void * r = dlopen(cudalib.c_str(),RTLD_LAZY | RTLD_GLOBAL);
+         if(!r) { return 0; } //couldn't find a cuda library
     }
 
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
