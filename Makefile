@@ -51,8 +51,6 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
-LUAJITOBJS = $(wildcard $(LUAJIT_DIR)/src/lj_*.o $(LUAJIT_DIR)/src/lib_*.o)
- 
 FLAGS += -I build -I release/include -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
@@ -61,11 +59,23 @@ LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
+ifneq ($(LLVM_VERSION), 32)
+CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
+endif
 
-# LLVM LIBS (STATIC, slow to link against but built by default)
+
+ifeq ($(UNAME), Linux)
+LFLAGS += -ldl -pthread -Wl,-export-dynamic 
+DYNFLAGS = -shared -fPIC -Wl,-export-dynamic -ldl -pthread
+SO_FLAGS += -Wl,--whole-archive $(LUAJIT_LIB) $(LIBRARY) -Wl,--no-whole-archive
+else
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra.so"
+SO_FLAGS += -Wl,-force_load,$(LUAJIT_LIB),-force_load,$(LIBRARY)
+endif
+
+
+
 SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
-
-# CLANG LIBS
 SO_FLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
            -lclangAnalysis \
@@ -73,26 +83,13 @@ SO_FLAGS  += -lclangFrontend -lclangDriver \
 ifneq ($(LLVM_VERSION), 35)
 SO_FLAGS += -lclangRewriteCore
 endif
-
-ifneq ($(LLVM_VERSION), 32)
-CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
-endif
-
 SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
-
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
     SO_FLAGS += -lcurses 
 endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
     SO_FLAGS += -lz
-endif
-
-ifeq ($(UNAME), Linux)
-LFLAGS += -ldl -pthread -Wl,-export-dynamic 
-DYNFLAGS = -shared -fPIC -Wl,-export-dynamic -ldl -pthread
-else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name libterra.so
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
@@ -155,19 +152,19 @@ endif
 
 $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make CC=$(CC))
+	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	rm -f $(LIBRARY)
 	$(AR) -cq $@ $^
 
-$(DYNLIBRARY):	$(addprefix build/, $(LIBOBJS)) $(LUAJITOBJS)
-	$(CXX) $(DYNFLAGS) $^ -o $@ $(SO_FLAGS)  
+$(DYNLIBRARY):	$(LIBRARY)
+	$(CXX) $(DYNFLAGS) -o $@ $(SO_FLAGS)  
 
-$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY) $(LUAJITOBJS)
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	cp -r $(CLANG_RESOURCE_DIRECTORY) release/include/clang_resource
-	$(CXX) $^ -o $@ $(LFLAGS) $(SO_FLAGS)
+	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(SO_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 $(BIN2C):	src/bin2c.c
