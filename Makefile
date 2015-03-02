@@ -26,6 +26,7 @@ CLANG ?= $(CLANG_PREFIX)/bin/clang
 #can be any c/c++ compiler
 TERRA_CXX ?= $(CLANG)++
 TERRA_CC  ?= $(CLANG)
+TERRA_LINK ?= $(CLANG)++
 
 CUDA_HOME ?= /usr/local/cuda
 ENABLE_CUDA ?= $(shell test -e /usr/local/cuda && echo 1 || echo 0)
@@ -65,15 +66,12 @@ endif
 
 
 ifeq ($(UNAME), Linux)
-LFLAGS += -ldl -pthread -Wl,-export-dynamic 
-DYNFLAGS = -shared -fPIC -Wl,-export-dynamic -ldl -pthread
-SO_FLAGS += -Wl,--whole-archive $(LUAJIT_LIB) $(LIBRARY) -Wl,--no-whole-archive
+DYNFLAGS = -shared -fPIC
+SO_FLAGS += -Wl,-export-dynamic -Wl,--whole-archive $(LUAJIT_LIB) $(LIBRARY) -Wl,--no-whole-archive
 else
 DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra.so"
 SO_FLAGS += -Wl,-force_load,$(LUAJIT_LIB),-force_load,$(LIBRARY)
 endif
-
-
 
 SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
 SO_FLAGS  += -lclangFrontend -lclangDriver \
@@ -90,6 +88,10 @@ ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev
 endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
     SO_FLAGS += -lz
+endif
+
+ifeq ($(UNAME), Linux)
+SO_FLAGS += -ldl -pthread
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
@@ -160,11 +162,11 @@ $(LIBRARY):	$(addprefix build/, $(LIBOBJS))
 	$(AR) -cq $@ $^
 
 $(DYNLIBRARY):	$(LIBRARY)
-	$(CXX) $(DYNFLAGS) -o $@ $(SO_FLAGS)  
+	$(TERRA_LINK) $(DYNFLAGS) -o $@ $(SO_FLAGS)  
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	cp -r $(CLANG_RESOURCE_DIRECTORY) release/include/clang_resource
-	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(SO_FLAGS)
+	$(TERRA_LINK) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(SO_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 $(BIN2C):	src/bin2c.c
