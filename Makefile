@@ -187,10 +187,13 @@ clean:
 
 purge:	clean
 	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
- 
-package:
-	git archive --prefix=terra/ HEAD | bzip2 > terra-`git rev-parse --short HEAD`.tar.bz2
-	
+
+RELEASE_NAME := terra-`uname | sed -e s/Darwin/osx/`-`git rev-parse --short HEAD`
+release:	all
+	mv release $(RELEASE_NAME)
+	tar cfj $(RELEASE_NAME).tar.bz2 $(RELEASE_NAME)
+	mv $(RELEASE_NAME) release
+    
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
