@@ -190,7 +190,7 @@ clean:
 purge:	clean
 	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
 
-RELEASE_NAME := terra-`uname | sed -e s/Darwin/osx/`-`git rev-parse --short HEAD`
+RELEASE_NAME := terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
 release:	all
 	mv release $(RELEASE_NAME)
 	tar cfj $(RELEASE_NAME).tar.bz2 $(RELEASE_NAME)
