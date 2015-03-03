@@ -30,7 +30,7 @@ terra main(argc : int, argv : &rawstring)
 end
 
 
-local flags = terralib.newlist {"-L../release","-Wl,-rpath,../release","-lterra"}
+local flags = terralib.newlist {"-L", terralib.terrahome,"-Wl,-rpath,"..terralib.terrahome,"-lterra"}
 if require("ffi").os == "OSX" then
     flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
 end

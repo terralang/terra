@@ -1,4 +1,4 @@
-#!../build/LuaJIT-2.0.3/src/luajit
+#!../terra
 local ffi = require("ffi")
 
 local lscmd
@@ -9,20 +9,13 @@ else
 end
 
 local function getcommand(file)
-    local h = io.open(file, "r")
-    local line = h:read()
-    io.close(h)
-    local prefix = "../release/terra"
-    if line and string.sub(line,1,1) == "#" then
-        prefix = line:match("^#!(.+)$")
-    end
+    local prefix = terralib and terralib.terrahome and 
+                   terralib.terrahome .."/terra" or "../terra"
     if ffi.os == "Windows" then
         prefix = "cmd /c " .. prefix:gsub("/","\\\\")
     end
     return prefix
 end
-
-
 
 local passed = {}
 local failed = {}
