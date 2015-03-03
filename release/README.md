@@ -88,6 +88,10 @@ Terra includes test suite to make sure all of its functionality is working. To r
 
     cd tests
     ../terra run
+    
+Expect it to print a lot of junk out. At the end it will summarize the results:
+
+    471 tests passed. 0 tests failed.
 
 Building Terra
 ==============
