@@ -127,14 +127,14 @@ Returns true if `l` is a table that has no keys or has a contiguous range of int
 Function
 --------
 
-Terra functions are entry-points into Terra code. Each function can contain 0 or more [Function Definitions](#function_definition). A function with 0 definitions is the equivalent of a function declaration in other statically typed languages. One definition indicates a simple function, and multiple definitions is the equivalent of an [overloaded function](http://en.wikipedia.org/wiki/Function_overloading).
+Terra functions are entry-points into Terra code. Each function can contain 0 or more [Function Definitions](#function-definition). A function with 0 definitions is the equivalent of a function declaration in other statically typed languages. One definition indicates a simple function, and multiple definitions is the equivalent of an [overloaded function](http://en.wikipedia.org/wiki/Function_overloading).
 
 ---
 
     [local] terra myfunctionname
     
 _Terra function declaration_. If `myfunctionname` is not already a Terra function, it creates a new function with 0 definitions and stores it the Lua variable `myfunctionname`. If `myfunctionname` is already a function, then it does not modify it.
-If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`). If `mystruct` is a [Struct](#exotypes_structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`.
+If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`). If `mystruct` is a [Struct](#exotypes-structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`.
 
 ---
 
@@ -144,25 +144,25 @@ If the optional `local` keyword is used, then `myfunctionname` is first defined 
             [...] 
     end 
 
-_Terra function definition_. Adds the [function definition](#function_definition) specified by the code to the Terra function `myfunctionname`. If `myfunctionname` is not a Terra function, then it first creates a new function declaration using the same rules as Terra function declarations.  
+_Terra function definition_. Adds the [function definition](#function-definition) specified by the code to the Terra function `myfunctionname`. If `myfunctionname` is not a Terra function, then it first creates a new function declaration using the same rules as Terra function declarations.  
 
 ---
 
     myfunction(arg0,...,argN)
 
-`myfunction` is a Terra function. Invokes `myfunction` from Lua. It is an error to call this on a function with 0 definitions.  This utility method calls `funcdefinition(arg0,...argN)` on each of this functions definitions until it finds one that does not produce an error. For functions with a single definition this is equivalent to calling the the function definition directly. See the documentation for calling [function definitions](#function_definition) for more details.
+`myfunction` is a Terra function. Invokes `myfunction` from Lua. It is an error to call this on a function with 0 definitions.  This utility method calls `funcdefinition(arg0,...argN)` on each of this functions definitions until it finds one that does not produce an error. For functions with a single definition this is equivalent to calling the the function definition directly. See the documentation for calling [function definitions](#function-definition) for more details.
 
 ---
 
     func:compile(async)
 
-Utility method that calls `funcdefinition:compile(async)` on each definition of this function. See the documentation for [function definitions](#function_definition) for more details about compilation. Can be called [asynchronously](#asynchronous_compilation).
+Utility method that calls `funcdefinition:compile(async)` on each definition of this function. See the documentation for [function definitions](#function-definition) for more details about compilation. Can be called [asynchronously](#asynchronous-compilation).
 
 ---
 
     func:emitllvm(async)
 
-Utility method that calls `funcdefinition:emitllvm(async)` on each definition of this function. See the documentation for [function definitions](#function_definition) for more details about compilation. Can be called [asynchronously](#asynchronous_compilation).
+Utility method that calls `funcdefinition:emitllvm(async)` on each definition of this function. See the documentation for [function definitions](#function-definition) for more details about compilation. Can be called [asynchronously](#asynchronous-compilation).
 
 ---
 
@@ -216,7 +216,7 @@ True if `obj` is a function definition.
 
     r0, ..., rn = myfuncdefinition(arg0, ... argN)
     
-Invokes `myfunctiondefinition` from Lua. Arguments are converted into the expected Terra types using the [rules](#converting_between_lua_values_and_terra_values) for converting between Terra values and Lua values. Return values are converted back into Lua values using the same rules. Causes the function to be compiled to machine code.
+Invokes `myfunctiondefinition` from Lua. Arguments are converted into the expected Terra types using the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. Return values are converted back into Lua values using the same rules. Causes the function to be compiled to machine code.
 
 ---
 
@@ -228,19 +228,19 @@ Attempt to find out the type of this definition but do _not_ compile it. If `suc
 
     funcdefinition:compile(async)
 
-Compile the function into machine code. Can be called [asynchronously](#asynchronous_compilation).
+Compile the function into machine code. Can be called [asynchronously](#asynchronous-compilation).
 
 ---
 
     funcdefinition:emitllvm(async)
 
-Compile the function into LLVM but do not JIT to machine code. Can be called [asynchronously](#asynchronous_compilation). This is used for offline compilation where the machine code is not needed.
+Compile the function into LLVM but do not JIT to machine code. Can be called [asynchronously](#asynchronous-compilation). This is used for offline compilation where the machine code is not needed.
 
 ---
 
     typ = funcdefinition:gettype(async)
 
-Return the [type](#types) of the function. This will cause the function to be emitted to LLVM. Can be called [asynchronously](#asynchronous_compilation).
+Return the [type](#types) of the function. This will cause the function to be emitted to LLVM. Can be called [asynchronously](#asynchronous-compilation).
 
 ---
 
@@ -258,7 +258,7 @@ Terra constants represent constant values used in Terra code. For instance, if y
 
     constant([type],init)
 
-Create a new constant. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If the optional [type](#types) is specified, then `init` is converted to that `type` explicitly. [Completes](#types) the type.
+Create a new constant. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If the optional [type](#types) is specified, then `init` is converted to that `type` explicitly. [Completes](#types) the type.
 
 ---
 
@@ -277,7 +277,7 @@ Global variables are Terra values that are shared among all Terra functions.
 
     global([type], [init])
 
-Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting_between_lua_values_and_terra_values). If `init` is specified, this [completes](#types) the type.
+Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If `init` is specified, this [completes](#types) the type.
 
 ---
 
@@ -295,18 +295,18 @@ Gets the value of this global as a LuaJIT `ctype` object. [Completes](#types) th
 
     globalvar:set(v)
 
-Converts `v` to a Terra values using the normal conversion [rules](#converting_between_lua_values_and_terra_values), and the global variable to this value. [Completes](#types) the type.
+Converts `v` to a Terra values using the normal conversion [rules](#converting-between-lua-values-and-terra-values), and the global variable to this value. [Completes](#types) the type.
 
 Macro
 -----
 
-Macros allow you to insert custom behavior into the compiler during type-checking. Because they run during compilation, they should be aware of [asynchronous compilation](#asynchronous_compilation) when calling back into the compiler.
+Macros allow you to insert custom behavior into the compiler during type-checking. Because they run during compilation, they should be aware of [asynchronous compilation](#asynchronous-compilation) when calling back into the compiler.
 
 ---
 
     macro(function(arg0,arg1,...,argN) [...] end)
 
-Create a new macro. The function will be invoked at compile time for each call in Terra code.  Each argument will be a Terra [quote](#quote) representing the argument. For instance, the call `mymacro(a,b,foo())`), will result in three quotes as arguments to the macro.  The macro must return a single value that will be converted to a Terra object using the compilation-time conversion [rules](#converting_between_lua_values_and_terra_values).
+Create a new macro. The function will be invoked at compile time for each call in Terra code.  Each argument will be a Terra [quote](#quote) representing the argument. For instance, the call `mymacro(a,b,foo())`), will result in three quotes as arguments to the macro.  The macro must return a single value that will be converted to a Terra object using the compilation-time conversion [rules](#converting-between-lua-values-and-terra-values).
 
 ---
 
@@ -335,7 +335,7 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
         return [luaexpr],4
     end 
 
-`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time conversion [rules](#converting_between_lua_values_and_terra_values). If the conversion results in a list of Terra values, it is truncated to a single value.
+`[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time conversion [rules](#converting-between-lua-values-and-terra-values). If the conversion results in a list of Terra values, it is truncated to a single value.
 
 ---
     terra foo()
@@ -447,7 +447,7 @@ Construct a new symbol. This symbol will be unique from any other symbol. `typ` 
 Types
 -----
 
-Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [structs](#exotypes_structs) can be declared before their members and methods are fully specified. When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
+Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [structs](#exotypes-structs) can be declared before their members and methods are fully specified. When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
 
 ---
     
@@ -485,7 +485,7 @@ Constructs a function pointer. Both  `parameters`  and `returns` can be lists of
 
     struct { field0 : type2 , ..., fieldN : typeN }
 
-Constructs a user-defined type, or exotype. Each call to `struct` creates a unique type since we use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems. See [Exotypes](#exotypes_structs) for more information.
+Constructs a user-defined type, or exotype. Each call to `struct` creates a unique type since we use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems. See [Exotypes](#exotypes-structs) for more information.
 
 ---
 
@@ -557,7 +557,7 @@ True if `type` is a function (not a function pointer). `type.parameters` is a li
 
     type:isstruct()
 
-True if `type` is a [struct](#exotypes_structs).
+True if `type` is a [struct](#exotypes-structs).
 
 ---
 
@@ -783,7 +783,7 @@ Return the Terra type of `obj`. Object must be a LuaJIT `ctype` that was previou
 
     terralib.new(terratype,[init])
 
-Wrapper around LuaJIT's `ffi.new`. Allocates a new object with the type `terratype`. `init` is an optional initializer that follows the [rules](#converting_between_lua_values_and_terra_values) for converting between Terra values and Lua values. This object will be garbage collected if it is no longer reachable from Lua.
+Wrapper around LuaJIT's `ffi.new`. Allocates a new object with the type `terratype`. `init` is an optional initializer that follows the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. This object will be garbage collected if it is no longer reachable from Lua.
 
 ---
 
@@ -802,7 +802,7 @@ Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset 
 
     terralib.cast(terratype,obj)
 
-Wrapper around `ffi.cast`. Converts `obj` to `terratype` using the [rules](#converting_between_lua_values_and_terra_values) for converting between Terra values and Lua values.
+Wrapper around `ffi.cast`. Converts `obj` to `terratype` using the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values.
 
 
 Loading Terra Code
@@ -859,7 +859,7 @@ When compiling or invoking Terra code, it is necessary to convert values between
 
 ### Converting Lua values to Terra values of known type ###
 
-When converting Lua values to Terra, we sometimes know the expected type (e.g. when the type is specified in a `terralib.cast` or `terralib.constant` call). In the case, we follow LuaJIT's [conversion semantics](http://luajit.org/ext_ffi_semantics.html#convert_fromlua), substituting the equivalent C type for each Terra type.
+When converting Lua values to Terra, we sometimes know the expected type (e.g. when the type is specified in a `terralib.cast` or `terralib.constant` call). In the case, we follow LuaJIT's [conversion semantics](http://luajit.org/ext_ffi_semantics.html#convert-fromlua), substituting the equivalent C type for each Terra type.
 
 ### Converting Lua values to Terra values with unknown type ###
 
@@ -875,7 +875,7 @@ When a Lua value is used directly from Terra code through an [escape](#escapes))
 
 When a Lua value is used as the result of an [escape](#escapes) operator in a Terra function, additional conversions are allowed:
 
-* [Global Variable](#global_variable) -- value becomes a lvalue reference to the global variable in Terra code.
+* [Global Variable](#global-variable) -- value becomes a lvalue reference to the global variable in Terra code.
 * [Symbol](#symbol) -- value becomes a lvalue reference to the variable defined using the symbol. If the variable is not in scope, this will become a compile-time error.
 * [Quote](#quote) -- the code defined in the quote will be spliced into the Terra code. If the quote contains only statements, it can only be spliced in where a statement appears.
 * [Constant](#constant) -- the constant is spliced into the Terra code.
@@ -890,12 +890,12 @@ When a Lua value is used as the result of an [escape](#escapes) operator in a Te
 
 ### Converting Terra values to Lua values ###
 
-When converting Terra values back into Lua values (e.g. from the results of a function call), we follow LuaJIT's [conversion semantics](http://luajit.org/ext_ffi_semantics.html#convert_tolua) from C types to Lua objects, substituting the equivalent C type for each Terra type.
+When converting Terra values back into Lua values (e.g. from the results of a function call), we follow LuaJIT's [conversion semantics](http://luajit.org/ext_ffi_semantics.html#convert-tolua) from C types to Lua objects, substituting the equivalent C type for each Terra type.
 
 Asynchronous Compilation
 ------------------------
 
-When the Terra compiler encounters a [macro](#macros) or [metamethod](#exotypes_structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
+When the Terra compiler encounters a [macro](#macros) or [metamethod](#exotypes-structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
 
 If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately). 
 

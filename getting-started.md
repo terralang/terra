@@ -10,33 +10,7 @@ title: Getting Started
 Installing Terra
 ================
 
-Terra currently runs Mac OS X, Linux, and 64-bit Windows. Terra uses LLVM 3.3, Clang 3.3 (the C/C++ frontend for LLVM), and LuaJIT 2.0 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM. The easiest way to do this is to the download the _Clang Binaries_ (which also include LLVM binaries) from the
-[LLVM download](http://llvm.org/releases/download.html) page. For tips on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md).
-
-To install on Mac OS X or Linux, unzip the tar-ball and then copy it into `/usr/local` (or somewhere else that is in your `$PATH`):
-
-    $ tar -xf clang+llvm-3.3-x86_64-apple-darwin11.tar.gz
-    $ cp -r clang+llvm-3.3-x86_64-apple-darwin11/* /usr/local
-
-Clang should now report being version 3.3:
-
-    $ clang --version
-	clang version 3.3 (tags/RELEASE_33/final)
-	Target: x86_64-apple-darwin12.2.1
-	Thread model: posix
-    
-Run make in the `terra` directory to download LuaJIT and build Terra:
-
-    $ make
-
-By default, the Makefile will look for the LLVM config script and Clang using these values:
-
-    LLVM_CONFIG = $(shell which llvm-config)
-    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
-    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
-    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
-
-If your installation has these files in a different place, you can override these defaults by creating a file `Makefile.inc` in the `terra` directory with the values you want to override.
+Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
 Running Terra
 =============
@@ -68,9 +42,10 @@ You can also run it on already written files:
     $ ./terra tests/hello.t
     hello, world
     
-Terra can also be used as a library from C by linking against `libterra.a`. The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra.so` (windows:  `libterra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
+    //simple.cpp
     #include <stdio.h>
     #include "terra.h"
     
@@ -82,13 +57,60 @@ A simple example initializes Terra and then runs code from the file specified in
         for(int i = 1; i < argc; i++)
         	//run the terra code in each file
             if(terra_dofile(L,argv[i]))  
-                exit(1);
+                return 1; //error
         return 0;
     }
+    
+This program can then be compiled by linking against the Terra library
+
+    # Linux
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder>
+    
+    # OSX
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder> -pagezero_size 10000 -image_base 100000000
+    
+Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
 
 In addition to these modes, Terra code can be compiled to `.o` files which can be linked into an executable, or even compiled to an executable directly.
 
 A bunch of example scripts can be found in the `tests/` directory. The `run` script in the directory will run all of these languages tests to ensure that Terra is built correctly.
+
+Building Terra
+==============
+
+If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.3 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+
+
+### Windows ###
+
+For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+
+
+### Linux/OSX ###
+
+The easiest way to get a working LLVM/Clang install is to download the download the _Clang Binaries_ (which also include LLVM binaries) from the
+[LLVM download](http://llvm.org/releases/download.html) page, and unzip this package.
+
+Now get the Terra sources:
+
+    git clone https://github.com/zdevito/terra
+    
+To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
+
+    LLVM_CONFIG = <path-to-llvm-install>/bin/llvm-config
+    
+Now run make in the `terra` directory to download LuaJIT and build Terra:
+
+    $ make
+
+If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
+
+    LLVM_CONFIG = $(shell which llvm-config)
+    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
+    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
+    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
+
+If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
 
 Hello, World
 ============
@@ -116,7 +138,7 @@ Unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simp
 The last line of the example invokes the Terra function from the top-level context. This is an example of the interaction between Terra and Lua.
 Terra code is JIT compiled to machine code when it is first _needed_. In this example, this occurs when `addone` is called. In general, functions are _needed_ when then are called, or when they are referred to by other functions that are being compiled.
 
-More information on the interface between Terra and Lua can be found in [Lua-Terra interaction](#lua_terra_interaction).
+More information on the interface between Terra and Lua can be found in [Lua-Terra interaction](#lua-terra-interaction).
 
 We can also print "hello, world" directly from Terra code like so:
 
@@ -196,7 +218,7 @@ Variables can be declared outside `terra` functions as well:
         return a
     end
     
-This makes `a` a _global_ variable that is visible to multiple Terra functions. The `global` function is part of Terra's Lua-based [API](api.html#global_variables). It initializes `a` to the _Lua_ value `3.0`.
+This makes `a` a _global_ variable that is visible to multiple Terra functions. The `global` function is part of Terra's Lua-based [API](api.html#global-variables). It initializes `a` to the _Lua_ value `3.0`.
 
 Variables in Terra are always lexically scoped. The statement `do <stmts> end` introduces a new level of scoping (for the remainder of this guide, the enclosing `terra` declaration will be omitted when it is clear we are talking about Terra code):
     
@@ -289,7 +311,7 @@ We have already seen some simple function definitions. In addition to taking mul
     end
     doit()
 
-Multiple return values are packed into a [tuples](getting-started.html#tuples_and_anonymous_functions), which can be pattern matched in assignments, splitting them apart into multiple variables.
+Multiple return values are packed into a [tuples](getting-started.html#tuples-and-anonymous-functions), which can be pattern matched in assignments, splitting them apart into multiple variables.
 
 As mentioned previously, compilation occurs when functions are first _needed_. In this example, when `doit()` is called, both `doit()` and `sort2` are compiled because `doit` refers to `sort2`. 
 
@@ -462,7 +484,7 @@ Recall how we can include C files:
     FILE
     ...
     
-Terra allows you to use many types of Lua values in Terra functions. Here we saw two examples: the use of a Lua number `N` into a Terra number, and the use of a Terra function `mymath.pow3` in body of `doit`. Many Lua values can be converted into Terra values at compile time. The behavior depends on the value, and is described in  the [compile-time conversions](api.html#compiletime_conversions) section of the API reference. 
+Terra allows you to use many types of Lua values in Terra functions. Here we saw two examples: the use of a Lua number `N` into a Terra number, and the use of a Terra function `mymath.pow3` in body of `doit`. Many Lua values can be converted into Terra values at compile time. The behavior depends on the value, and is described in  the [compile-time conversions](api.html#compiletime-conversions) section of the API reference. 
     
 ### Scoping ###
 Additionally, you may want to declare a Terra function as a _locally_ scoped Lua variable. You can use the `local` keyword:
@@ -792,7 +814,7 @@ Terra also support _metamethods_ similar to Lua's operators like `__add`, which 
 Lua-Terra Interaction
 =====================
 
-We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting_between_lua_values_and_terra_values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's foreign-function interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
+We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting-between-lua-values-and-terra-values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's foreign-function interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
 
     struct A { a : int, b : double }
 
@@ -855,7 +877,7 @@ Escapes allow you to splice the result of a Lua expression into Terra code. Here
 	> 	return 6
 	> end
 	
-When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](api.html#compiletime_conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
+When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](api.html#compiletime-conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
 
 Escapes can appear where any expression or statement normally appears. When they appear as statements or at the end of en expression list, multiple values can be spliced in place by returning a Lua array:
 
@@ -1101,3 +1123,4 @@ If you are interested in the implementation, you can also look at the source cod
 * `terra.cpp` contains the implementation of Terra API functions like `terra_init`
 
 * `main.cpp` contains the Terra REPL (based on the Lua REPL).
+
