@@ -11,29 +11,10 @@ Furthermore, you can use Lua to meta-program Terra code. The Lua meta-program ha
 
 This guide serves as an introduction for programming in Terra. A general understanding of the Lua language is very helpful, but not strictly required.
 
-
 Installing Terra
 ================
 
-Terra currently runs Mac OS X and Linux. Terra uses LLVM 3.2, Clang 3.2 (the C/C++ frontend for LLVM), and LuaJIT 2.0 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM. The easiest way to do this is to the download the _Clang Binaries_ (which also include LLVM binaries) from the
-[LLVM download](http://llvm.org/releases/download.html) page.
-
-Unzip the tar-ball and then copy it into `/usr/local` (or somewhere else that is in your `$PATH`):
-
-    $ tar -xf clang+llvm-3.2-x86_64-apple-darwin11.tar.gz
-    $ cp -r clang+llvm-3.2-x86_64-apple-darwin11/ /usr/local
-
-Clang should now report being version 3.2:
-
-    $ clang --version
-	clang version 3.2 (tags/RELEASE_32/final)
-	Target: x86_64-apple-darwin12.2.1
-	Thread model: posix
-
-    
-Run make in the `terra` directory to download LuaJIT and build Terra:
-
-    $ make
+Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
 Running Terra
 =============
@@ -65,9 +46,10 @@ You can also run it on already written files:
     $ ./terra tests/hello.t
     hello, world
     
-Terra can also be used as a library from C by linking against `libterra.a`. The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra.so` (windows:  `libterra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
+    //simple.cpp
     #include <stdio.h>
     #include "terra.h"
     
@@ -79,13 +61,70 @@ A simple example initializes Terra and then runs code from the file specified in
         for(int i = 1; i < argc; i++)
         	//run the terra code in each file
             if(terra_dofile(L,argv[i]))  
-                exit(1);
+                return 1; //error
         return 0;
     }
+    
+This program can then be compiled by linking against the Terra library
+
+    # Linux
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
+    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder>
+    
+    # OSX
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
+    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder> \
+    -pagezero_size 10000 -image_base 100000000
+    
+Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
 
 In addition to these modes, Terra code can be compiled to `.o` files which can be linked into an executable, or even compiled to an executable directly.
 
 A bunch of example scripts can be found in the `tests/` directory. The `run` script in the directory will run all of these languages tests to ensure that Terra is built correctly.
+
+## Running Terra's Test Suite ##
+
+Terra includes test suite to make sure all of its functionality is working. To run it:
+
+    cd tests
+    ../terra run
+
+Building Terra
+==============
+
+If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.3 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+
+
+### Windows ###
+
+For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+
+
+### Linux/OSX ###
+
+The easiest way to get a working LLVM/Clang install is to download the download the _Clang Binaries_ (which also include LLVM binaries) from the
+[LLVM download](http://llvm.org/releases/download.html) page, and unzip this package.
+
+Now get the Terra sources:
+
+    git clone https://github.com/zdevito/terra
+    
+To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
+
+    LLVM_CONFIG = <path-to-llvm-install>/bin/llvm-config
+    
+Now run make in the `terra` directory to download LuaJIT and build Terra:
+
+    $ make
+
+If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
+
+    LLVM_CONFIG = $(shell which llvm-config)
+    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
+    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
+    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
+
+If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
 
 Hello, World
 ============
@@ -111,9 +150,9 @@ Unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simp
     end
     
 The last line of the example invokes the Terra function from the top-level context. This is an example of the interaction between Terra and Lua.
-Terra code is JIT compiled to machine code when it is first _needed_. In this example, this occurs when `addone` is called. In general, functions are _needed_ when they are called, or when they are referred to by other functions that are being compiled.
+Terra code is JIT compiled to machine code when it is first _needed_. In this example, this occurs when `addone` is called. In general, functions are _needed_ when then are called, or when they are referred to by other functions that are being compiled.
 
-More information on the interface between Terra and Lua can be found in [Lua-Terra interaction](#lua_terra_interaction).
+More information on the interface between Terra and Lua can be found in [Lua-Terra interaction](#lua-terra-interaction).
 
 We can also print "hello, world" directly from Terra code like so:
 
@@ -193,7 +232,7 @@ Variables can be declared outside `terra` functions as well:
         return a
     end
     
-This makes `a` a _global_ variable that is visible to multiple Terra functions. The `global` function is part of Terra's Lua-based [API](api.html#global_variables). It initializes `a` to the _Lua_ value `3.0`.
+This makes `a` a _global_ variable that is visible to multiple Terra functions. The `global` function is part of Terra's Lua-based [API](api.html#global-variables). It initializes `a` to the _Lua_ value `3.0`.
 
 Variables in Terra are always lexically scoped. The statement `do <stmts> end` introduces a new level of scoping (for the remainder of this guide, the enclosing `terra` declaration will be omitted when it is clear we are talking about Terra code):
     
@@ -276,11 +315,18 @@ We have already seen some simple function definitions. In addition to taking mul
     end
     
     terra doit()
-        var a,b = sort2(4,3)
+        -- the multiple returns are returned
+        -- in a 'tuple' of type {int,int}: 
+        var ab : {int,int} = sort2(4,3)
+        -- tuples can be pattern matched, 
+        -- splitting them into seperate variables
+        var a : int, b : int = sort2(4,3)
         --now a == 3, b == 4
     end
     doit()
-   
+
+Multiple return values are packed into a [tuples](getting-started.html#tuples-and-anonymous-functions), which can be pattern matched in assignments, splitting them apart into multiple variables.
+
 As mentioned previously, compilation occurs when functions are first _needed_. In this example, when `doit()` is called, both `doit()` and `sort2` are compiled because `doit` refers to `sort2`. 
 
 ### Mutual Recursion ###
@@ -325,8 +371,8 @@ You solve this by connecting the definitions with an `and`. This causes both `is
     
 Alternatively, you can declare a function before defining it:
 
-    terra isodd
-    terra iseven(n : uint32)
+	terra isodd
+	terra iseven(n : uint32)
         ...
     end 
     terra isodd(n : uint32)
@@ -339,7 +385,7 @@ Like Lua function definitions, Terra function defintions can insert directly int
 
     local mytable = {}
     terra mytable.myfunction()
-    C.printf("myfunction in mytable\n")
+    	C.printf("myfunction in mytable\n")
     end
 
 ### Terra Functions Are Lua Objects ###
@@ -379,7 +425,7 @@ You can also force a function to be compiled:
     
     add1:compile()
 
-Or look at a textual representation of the type-check code
+Or look at a textual representation of the type-checked code
 
     > add1:printpretty()
 	add1 = terra(a : double) : {double}
@@ -387,7 +433,7 @@ Or look at a textual representation of the type-check code
 	end
 	
 \* The actual syntax sugar is slightly more complicated to support function declarations.
-See the [API reference](http://terralang.org/api.html#function) for the full behavior.
+See the [API reference](api.html#function) for the full behavior.
 
 ### Symbol Resolution ###
 
@@ -452,7 +498,7 @@ Recall how we can include C files:
     FILE
     ...
     
-Terra allows you to use many types of Lua values in Terra functions. Here we saw two examples: the use of a Lua number `N` into a Terra number, and the use of a Terra function `mymath.pow3` in body of `doit`. Many Lua values can be converted into Terra values at compile time. The behavior depends on the value, and is described in  the [compile-time conversions](api.html#compiletime_conversions) section of the API reference. 
+Terra allows you to use many types of Lua values in Terra functions. Here we saw two examples: the use of a Lua number `N` into a Terra number, and the use of a Terra function `mymath.pow3` in body of `doit`. Many Lua values can be converted into Terra values at compile time. The behavior depends on the value, and is described in  the [compile-time conversions](api.html#compiletime-conversions) section of the API reference. 
     
 ### Scoping ###
 Additionally, you may want to declare a Terra function as a _locally_ scoped Lua variable. You can use the `local` keyword:
@@ -463,7 +509,7 @@ Additionally, you may want to declare a Terra function as a _locally_ scoped Lua
 Which is just sugar for:
 
     local foo; foo = terra()
-    end()
+    end
 
 Types and Operators
 ===================
@@ -505,8 +551,8 @@ Pointers behave similarly to C, including pointer arithmetic. The syntax is slig
     
     var a : int = 1
     var pa : &int = &a
-    @a = 4
-    var b = @a
+    @pa = 4
+    var b = @pa
     
 You can read `&int` as a value holding the _address_ of an `int`, and `@a` as the value _at_ address `a`. To get a pointer to heap-allocated memory you can use stdlib's `malloc`:
 
@@ -550,7 +596,7 @@ Vectors are like arrays, but also allow you to perform vector-wide operations:
     
 They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code. The constructors `vector` and `vectorof` create vectors, and behave similarly to arrays:
 
-    var a = vector(1,2,3,4) -- a has type vector(int,3)
+    var a = vector(1,2,3,4) -- a has type vector(int,4)
     var a = vectorof(int,3,4.5,4) -- a has type vector(int,3)
                                   -- 4.5 will be cast to an int
 
@@ -587,14 +633,6 @@ Like functions, symbols in struct definitions are resolved when the struct is de
 	end
 	
 	struct C { i : int }
-	
-They may also contain unnamed members:
-
-    var a : struct { float, float }
-    
-Unnamed members will be given the names `_0`, `_1`, ... `_N`:
-
-    a._0 + a._1
 
 Terra has no explicit union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:
 
@@ -606,27 +644,28 @@ Terra has no explicit union type. Instead, you can declare that you want two or 
         } 
     }
     
-### Anonymous Structs ###
+### Tuples and Anonymous Structs ###
 
-In Terra you can also create struct types that have no name:
+In Terra you can also _tuples_, which are a special kind of struct that contain a list of elements:
 
-    var a : struct { real : float, imag : float } 
-    
-These structs are similar to the anonymous structs found in languages like C-sharp.
-    
-You can use a struct constructor syntax to quickly generate values that have an anonymous struct type:
+    var a : tuple(float,float) -- a pair of floats
+        
+You can use a constructor syntax to quickly generate tuple values:
 
-    var a = { 1,2,3,4 } --has type struct {int,int,int,int}
-    var b = { a = 3.0, b = 3 } --has type struct { a : double, b : int }
+    var a = { 1,2,3,4 } --has type tuple(int,int,int,int)
     
-Terra allows you to implicitly convert any anonymous struct to another struct that has a superset of its fields.
+Tuples can be cast to other struct types, which will initialize fields of the struct in order:
+
+    var c = Complex { 3,4 }
+    
+You can also add names to constructor syntax to create _anonymous structs_, similar to those in languages such as C-sharp:
+
+    var b = { a = 3.0, b = 3 }
+    
+Terra allows you to cast any anonymous struct to another struct that has a superset of its fields.
     
     struct Complex { real : float, imag : float}
-    var a : Complex = { real = 3, imag = 1 }
-    
-If the anonymous struct has unnamed members, then it they will be used to initialize the fields of the named struct in order:
-    
-    var b : Complex = {1, 2}
+    var c = Complex { real = 3, imag = 1 }
     
 Since constructors like `{1,2}` are first-class values, they can appear anywhere a Terra expression can appear. This is in contrast to struct initializers in C, which can only appear in a struct declaration.
 
@@ -650,6 +689,7 @@ Terra does not have a `void` type. Instead, functions may return zero arguments:
 
     terra zerorets() : {}
     end
+    
     
 Terra Types as Lua Values
 =========================
@@ -712,25 +752,23 @@ Here are some example literals:
 * `true` and `false` are `bool`
 
 
-Expression Lists
-================
+Assignments and Expression Lists
+================================
 
-In cases where multiple expressions can appear in a list, functions that return multiple will append all of their values to the list if they are the final member of the list.
-This behavior occurs in declarations, assignments, return statements, and struct initializers.
+When a function returns multiple values, it implicitly creates a tuple of those values as the return type:
 
-Here are some examples (adapted from the Lua reference manual):
+    terra returns2() return 1,2 end
+    terra example()
+        var a = returns2() -- has type tuple(int,int)
+        C.printf("%d %d\n",a._0,a._1)
+    end
+    
+To make it easier to use functions that return multiple values, we allow a tuple that is the last element of an expression list to match multiple variables on the left the left-hand size.
 
-     f()                -- adjusted to 0 results
-     g(f(), x)          -- f() is adjusted to 1 result
-     g(x, f())          -- g gets x plus all results from f()
-     a,b = f(), x       -- f() is adjusted to 1 result
-     a,b,c = x, f()     -- f() is adjusted to 2 results
-     a,b,c = f()        -- f() is adjusted to 3 results
-     return f()         -- returns all results from f()
-     return x,y,f()     -- returns x, y, and all results from f()
-     {f()}              -- creates a struct with all results from f()
-     {f(), nil}         -- f() is adjusted to 1 result
-     {(f())}            -- f adjusted to 1 result
+    terra example2()
+        var a,b,c = 1,returns2()
+        var a,b,c = returns2(),1 --Error: returns2 is not the last element
+    end
 
 Methods
 =======
@@ -771,7 +809,7 @@ where `receiver` has type `T` is syntax sugar for:
     
 The statement `a:add(b)` will normally desugar to `Complex.methods.add(a,b)`. Notice that `a` is a `Complex` but the `add` function expects a `&Complex`. If necessary, Terra will insert one implicit address-of operator on the first argument of the method call. In this case `a:add(b)` will desugar to `Complex.methods.add(&a,b)`. 
 
-Like the `.` selection operator, the `:` method operator can also be used directly on pointers. In this case, the pointer is first dereferenced, and the normal rules for methods are applied. For instance, when using the `:` operator on a value of type `&Complex` (e.g. `ptra`), it will first insert a dereference and desugar to `Complex.methods.add(@a,b)`.  Then to match the of `add`, it will apply the implicit address-of operator to get `Complex.methods.add(&@a,b)`.  This allows a single method definition to take as an argument either a type `T` or a pointer `&T`, and still work when the method is called on value of type `T` or type `&T`.
+Like the `.` selection operator, the `:` method operator can also be used directly on pointers. In this case, the pointer is first dereferenced, and the normal rules for methods are applied. For instance, when using the `:` operator on a value of type `&Complex` (e.g. `ptra`), it will first insert a dereference and desugar to `Complex.methods.add(@a,b)`.  Then to match the type of `add`, it will apply the implicit address-of operator to get `Complex.methods.add(&@a,b)`.  This allows a single method definition to take as an argument either a type `T` or a pointer `&T`, and still work when the method is called on value of type `T` or type `&T`.
 
 To make defining methods easier, we provide a syntax sugar. 
 
@@ -785,12 +823,12 @@ is equivalent to
         ...
     end
 
-Terra also support _metamethods_ similar to Lua's operators like `__add`, which will allow you to overload operators like `+` on Terra types, or specify custom type conversion rules. See the [API reference on structs](http://terralang.org/api.html#structs) for more information.
+Terra also support _metamethods_ similar to Lua's operators like `__add`, which will allow you to overload operators like `+` on Terra types, or specify custom type conversion rules. See the [API reference on structs](api.html#structs) for more information.
 
 Lua-Terra Interaction
 =====================
 
-We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting_between_lua_values_and_terra_values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's FFI interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
+We've already seen examples of Lua code calling Terra functions. In general, you can call a Terra function anywhere a normal Lua function would go. When passing arguments into a terra function from Lua they are converted into Terra types. The [current rules](api.html##converting-between-lua-values-and-terra-values) for this conversion are described in the API reference. Right now they match the behavior of [LuaJIT's foreign-function interface](http://luajit.org/ext_ffi_semantics.html). Numbers are converted into doubles, tables into structs or arrays, Lua functions into function pointers, etc. Here are some examples:
 
     struct A { a : int, b : double }
 
@@ -804,7 +842,7 @@ We've already seen examples of Lua code calling Terra functions. In general, you
 
 More examples are in `tests/luabridge*.t`.  
 
-It is also possible to call terra functions from Lua. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primtive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
+It is also possible to call Lua functions from Terra. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primitive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
 
     function add1(a)
         a.real = a.real + 1
@@ -835,7 +873,7 @@ Meta-programming
 
 In this guide we've already encountered instances of meta-programming, such as using a Lua loop to create an array of  Terra `pow` functions. In fact, Terra includes several operators that it make it possible to generate _any_ code at runtime. For instance, you can implement an entire compiler by parsing an input string and constructing the Terra functions that implement the parsed code.
 
-The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operator in detail.
+The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
 
 ### Escapes ###
 
@@ -853,7 +891,7 @@ Escapes allow you to splice the result of a Lua expression into Terra code. Here
 	> 	return 6
 	> end
 	
-When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](http://terralang.org/api.html#compiletime_conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
+When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](api.html#compiletime-conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global). 
 
 Escapes can appear where any expression or statement normally appears. When they appear as statements or at the end of en expression list, multiple values can be spliced in place by returning a Lua array:
 
@@ -946,15 +984,30 @@ If you want to create a group of statements rather than expressions, you can usi
 		printit
 	end
 
+The `quote` keyword can also include an optional `in` statement that creates an expression:
+
+    myquote = quote
+        var a = foo()
+        var b = bar()
+    in 
+        a + b
+    end
+
+When used as an expression this quote will produce that value.
+
+    terra doit()
+        var one,two = myquote
+    end
+
 When a variable is used in an escape, it is sometimes ambiguous what value it should have.
 For example, consider what value this function should return:
 
     
-    function makeexp(arg
+    function makeexp(arg)
         return quote 
             var a = 2
             return arg + a
-        end)
+        end
     end
     terra client()
         var a = 1;
@@ -978,7 +1031,7 @@ In C, the function would return `4`. But this seems wrong -- `MAKEEXP` may have 
 Instead, Terra ensures that variable references are _hygienic_. The reference to `a` in `makeexp(a)` refers uniquely to the definition of `a` in the same [lexical scope](http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_and_dynamic_scoping) (in this case, the definition of `a` in the `client` function). This relationship is maintained regardless of where the symbol eventually ends up in the code, so the `scoping` function will correctly return the value `3`. 
 
 This hygiene problem occurs in all languages that have meta-programming. 
-Wikipedia has [more discussion](http://en.wikipedia.org/wiki/Hygienic_macro). By maintaining hygiene and using lexical scoping, we guarantee that you can always inspect a string of Terra code and match variables to their definitions without know how the functions will execute.
+Wikipedia has [more discussion](http://en.wikipedia.org/wiki/Hygienic_macro). By maintaining hygiene and using lexical scoping, we guarantee that you can always inspect a string of Terra code and match variables to their definitions without knowing how the functions will execute.
 
 ### Dynamically Generated Symbols ###
 
@@ -1069,7 +1122,7 @@ You may be wondering why Terra includes both macros and escapes. They both allow
 More Information
 ================
 
-More details about the interaction of Terra and Lua can be found in the [API reference](http://terralang.org/api.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
+More details about the interaction of Terra and Lua can be found in the [API reference](api.html). The best place to look for more examples of Terra features is the `tests/` directory, which contains the set of up-to-date languages tests for the implementation. The `tests/libs` folder contains some examples of meta-programming such as class systems. 
 
 If you are interested in the implementation, you can also look at the source code.  The compiler is implemented as a mixture of Lua code and C/C++. Passing the `-v` flag to the interpreter will cause it to give verbose debugging output. 
 
@@ -1084,3 +1137,5 @@ If you are interested in the implementation, you can also look at the source cod
 * `terra.cpp` contains the implementation of Terra API functions like `terra_init`
 
 * `main.cpp` contains the Terra REPL (based on the Lua REPL).
+
+

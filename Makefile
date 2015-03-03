@@ -192,6 +192,7 @@ purge:	clean
 
 RELEASE_NAME := terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
 release:	all
+	for i in `git ls-tree HEAD -r tests --name-only`; do mkdir -p release/`dirname $$i`; cp $$i release/$$i; done;
 	mv release $(RELEASE_NAME)
 	tar cfj $(RELEASE_NAME).tar.bz2 $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release
