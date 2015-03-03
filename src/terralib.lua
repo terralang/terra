@@ -3547,8 +3547,8 @@ local function includetableindex(tbl,name)    --this is called when a table retu
 end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
-local clangresourcedirectory = terra.terrahome.."/include/clang_resource"
 function terra.includecstring(code,...)
+    local clangresourcedirectory = terra.terrahome..(ffi.os == "Windows" and "\\include\\clang_resource" or "/include/clang_resource")
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
     if ffi.os == "Linux" then
         args:insert("-internal-isystem")
@@ -4153,8 +4153,9 @@ end
 
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
 terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or "."
-terra.cudahome = os.getenv("CUDA_HOME") or "/usr/local/cuda"
-local terradefaultpath = ";./?.t;"..terra.terrahome.."/include/?.t;"
+terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
+local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
+                          or ";./?.t;"..terra.terrahome.."/include/?.t;"
 
 package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)
 

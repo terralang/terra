@@ -2587,7 +2587,7 @@ static int terra_disassemble(lua_State * L) {
     return 0;
 }
 
-static bool FindLinker(LLVM_PATH_TYPE * linker) {
+static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker) {
 #ifndef _WIN32
     #if LLVM_VERSION >= 34
         *linker = sys::FindProgramByName("gcc");
@@ -2597,9 +2597,15 @@ static bool FindLinker(LLVM_PATH_TYPE * linker) {
         return linker->isEmpty();
     #endif
 #else
-    *linker = LLVM_PATH_TYPE (CLANG_EXECUTABLE);
+	lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
+	lua_getfield(T->L, -1, "terrahome");
+	const char * path = lua_tostring(T->L, -1);
+	if (!path) return true;
+	llvm::SmallString<256> cpath(path);
+	cpath.append("\\clang.exe");
+    *linker = LLVM_PATH_TYPE (cpath.c_str());
+	return false;
 #endif
-    return false;
 }
 
 static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> * linkargs, const char * filename) {
@@ -2620,7 +2626,7 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
     }
 	tmp.close();
     LLVM_PATH_TYPE linker;
-    if(FindLinker(&linker)) {
+    if(FindLinker(T,&linker)) {
         unlink(tmpnamebuf);
         terra_pusherror(T,"llvm: failed to find linker");
         return true;

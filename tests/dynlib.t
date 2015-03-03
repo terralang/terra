@@ -1,6 +1,10 @@
+if require("ffi").os == "Windows" then
+    print("dynamic library not built on windows yet")
+    return
+end
 -- test that the dynamic library for terra was built correctly
 -- by compiling a new program that links against it and running it
-terralib.includepath = "../release/include"
+terralib.includepath = terralib.terrahome.."/include"
 C = terralib.includecstring [[
 #include <stdio.h>
 #include "terra.h"

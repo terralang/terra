@@ -12,7 +12,7 @@ local function getcommand(file)
     local h = io.open(file, "r")
     local line = h:read()
     io.close(h)
-    local prefix = "../terra"
+    local prefix = "../release/terra"
     if line and string.sub(line,1,1) == "#" then
         prefix = line:match("^#!(.+)$")
     end

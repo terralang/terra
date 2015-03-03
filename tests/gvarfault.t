@@ -1,3 +1,7 @@
+if require("ffi").os == "Windows" then
+	print("Disabled on windows (uses unistd.h)")
+	return
+end
 local C = terralib.includecstring(
 [[
 #include <stdio.h>

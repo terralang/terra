@@ -14,8 +14,14 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#ifndef _WIN32
 #include <dlfcn.h>
 #include <libgen.h>
+#else
+#define NOMINMAX
+#include <Windows.h>
+#include <Shlwapi.h>
+#endif
 
 static char * vstringf(const char * fmt, va_list ap) {
     int N = 128;
@@ -157,18 +163,40 @@ static void ongc(lua_State * L, int idx, lua_CFunction gcfn) {
 }
 static int terra_free(lua_State * L);
 
+#ifndef _WIN32
+static bool pushterrahome(lua_State * L) {
+	Dl_info info;
+	if (dladdr((void*)terra_init, &info) != 0) {
+		if (info.dli_fname) {
+			char * full = realpath(info.dli_fname, NULL);
+			lua_pushstring(L, dirname(full)); //TODO: dirname not reentrant
+			free(full);
+			return true;
+		}
+	}
+	return false;
+}
+#else
+
+
+static bool pushterrahome(lua_State * L) {
+	//based on approach that clang uses as well
+	MEMORY_BASIC_INFORMATION mbi;
+	char path[MAX_PATH];
+	VirtualQuery((void *)terra_init, &mbi, sizeof(mbi));
+	GetModuleFileNameA((HINSTANCE)mbi.AllocationBase, path, MAX_PATH);
+	PathRemoveFileSpecA(path);
+	lua_pushstring(L, path);
+	return true;
+}
+
+#endif
+
 static void setterrahome(lua_State * L) {
-    Dl_info info;
-    if(dladdr((void*)terra_init,&info) != 0) {
-        if(info.dli_fname) {
-            char * full = realpath(info.dli_fname,NULL);
-            lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-            lua_pushstring(L,dirname(full)); //TODO: dirname not reentrant
-            lua_setfield(L,-2,"terrahome");
-            lua_pop(L,1);
-            free(full);
-        }
-    }
+	lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+	if (pushterrahome(L))
+		lua_setfield(L, -2, "terrahome");
+	lua_pop(L, 1);
 }
 
 int terra_init(lua_State * L) {

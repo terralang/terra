@@ -22,7 +22,6 @@ extern "C" {
 #include <sstream>
 #ifndef _WIN32
 #include <unistd.h>
-#include <dlfcn.h>
 #endif
 
 struct terra_CUDAState {
@@ -42,11 +41,17 @@ struct terra_CUDAState {
 #define CUDA_DO(err) CUDA_DO2(err,"%s","")
 
 #ifdef __linux__
-#define LIB64 "lib64"
-#define LIBEXT "so"
+static const char * cuda_libraries[] = { "%/nvvm/lib64/libnvvm.so", "/usr/lib/libcuda.so", "%/lib64/libcudart.so", NULL };
+static const char * libcudadevrt = "/lib64/libcudadevrt.a";
+static const char * nvdisasm = "bin/nvdisasm";
+#elif _WIN32
+static const char * cuda_libraries[] = { "%\\nvvm\\bin\\nvvm64_20_0.dll", "nvcuda.dll", "%\\bin\\cudart64_65.dll", NULL};
+static const char * libcudadevrt = "\\lib\\x64\\cudadevrt.lib";
+static const char * nvdisasm = "bin\\nvdisasm.exe";
 #else
-#define LIB64 "lib"
-#define LIBEXT "dylib"
+static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libcuda.dylib", "%/lib/libcudart.dylib", NULL };
+static const char * libcudadevrt = "/lib/libcudadevrt.a";
+static const char * nvdisasm = "bin/nvdisasm";
 #endif
 
 #define CUDA_SYM(_) \
@@ -81,8 +86,8 @@ CUresult initializeCUDAState(terra_State * T) {
     
         //dynamically assign all of our symbols
         #define INIT_SYM(x) \
-            x##_v = (decltype(&x)) dlsym(RTLD_DEFAULT,#x "_v2"); \
-            if(!x##_v) x##_v = (decltype(&x)) dlsym(RTLD_DEFAULT,#x); \
+            x##_v = (decltype(&x)) llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(#x "_v2"); \
+            if(!x##_v) x##_v = (decltype(&x)) llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(#x); \
             assert(x##_v);
             CUDA_SYM(INIT_SYM)
         #undef INIT_SYM
@@ -258,7 +263,7 @@ int terra_cudacompile(lua_State * L) {
     
     CUDA_DO2(cuLinkAddData_v(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
     llvm::SmallString<256> devrt(T->cuda->cudahome);
-    devrt.append("/" LIB64 "/libcudadevrt.a");
+	devrt.append(libcudadevrt);
     CUDA_DO2(cuLinkAddFile_v(linkState,CU_JIT_INPUT_LIBRARY,devrt.c_str(), 0, NULL, NULL),"\n%s",error_log);
     CUDA_DO2(cuLinkComplete_v(linkState,&cubin,&cubinSize),"\n%s",error_log);
     
@@ -270,7 +275,7 @@ int terra_cudacompile(lua_State * L) {
         fwrite(cubin,cubinSize,1,f);
         fclose(f);
         llvm::SmallString<256> exe(T->cuda->cudahome);
-        exe.append("/bin/nvdisasm");
+        exe.append(nvdisasm);
         const char * args[] = { exe.c_str(), "--print-life-ranges", tmpname.c_str(), NULL };
         llvmutil_executeandwait(LLVM_PATH_TYPE(exe.c_str()), args, NULL);
         unlink(tmpname.c_str());
@@ -312,16 +317,6 @@ int terra_cudacompile(lua_State * L) {
 
     return 1;
 }
-
-
-static const char * cuda_libraries[] = { "nvvm/" LIB64 "/libnvvm." LIBEXT, 
-                                         #ifdef __linux__
-                                         "/usr/lib/libcuda." LIBEXT,
-                                         #else
-                                         LIB64 "/libcuda." LIBEXT, 
-                                         #endif
-                                         LIB64 "/libcudart." LIBEXT, NULL};
-    
     
 int terra_cudainit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
@@ -332,16 +327,16 @@ int terra_cudainit(struct terra_State * T) {
     if(!cudahome) return 0; //any early return disables cuda
     
     //dynamically load cuda libraries
-    const char ** l = cuda_libraries;
-    while(*l) {
+	for (const char ** l = cuda_libraries; *l; l++) {
          llvm::SmallString<256> cudalib;
-         if ((*l)[0] != '/') {
+         if ((*l)[0] == '%') {
              cudalib.append(cudahome);
-             cudalib.append("/");
-         }
-         cudalib.append(*l++);
-         void * r = dlopen(cudalib.c_str(),RTLD_LAZY | RTLD_GLOBAL);
-         if(!r) { return 0; } //couldn't find a cuda library
+             cudalib.append(&(*l)[1]);
+		 } else {
+			 cudalib.append(*l);
+		 }
+		 if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(cudalib.c_str()))
+			return 0; //couldn't find a cuda library
     }
 
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));

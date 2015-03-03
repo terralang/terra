@@ -1,4 +1,8 @@
 
+if require("ffi").os == "Windows" then
+	print("Not consistent on windows")
+	return
+end
 local C = terralib.includecstring[[
 	#include <immintrin.h>
 	void dostuff(__m128 what) {}

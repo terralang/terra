@@ -1,6 +1,7 @@
+terralib.includepath = terralib.terrahome.."/include"
 C = terralib.includecstring [[
-    #include "../build/LuaJIT-2.0.3/src/lua.h"
-    #include "../build/LuaJIT-2.0.3/src/lauxlib.h"
+    #include "lua.h"
+    #include "lauxlib.h"
 ]]
 
 local s = C.luaL_newstate()
