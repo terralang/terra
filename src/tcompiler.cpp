@@ -2643,7 +2643,7 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
     cmd.push_back("-o");
     cmd.push_back(filename);
 #else
-	cmd.push_back("-defaultlib:libcmt");
+	cmd.push_back("-defaultlib:msvcrt");
 	cmd.push_back("-nologo");
 	llvm::SmallString<256> fileout("-out:");
 	fileout.append(filename);

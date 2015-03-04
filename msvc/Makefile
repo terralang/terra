@@ -89,13 +89,14 @@ $(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 
 $(TERRA_DIR)\release\terra.dll: $(BUILD)\terra.obj
 	cd $(TERRA_DIR)\release
-	$(LINK) /MACHINE:X64 /DLL /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
+	$(LINK) /nologo /MACHINE:X64 /DLL /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
 
 REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC120.CRT
 
 $(TERRA_DIR)\release\terra.exe: $(TERRA_DIR)\release\terra.dll $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll release
+	copy $(LUAJIT_DIR)\src\lua51.lib release
 	copy "$(REDIST)\msvcp120.dll" release
 	copy "$(REDIST)\msvcr120.dll" release
 	xcopy /E /I /Q /Y $(CLANG_RESOURCE_DIRECTORY) release\include\clang_resource

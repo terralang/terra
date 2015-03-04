@@ -1,7 +1,4 @@
-if require("ffi").os == "Windows" then
-    print("dynamic library not built on windows yet")
-    return
-end
+local ffi = require 'ffi'
 -- test that the dynamic library for terra was built correctly
 -- by compiling a new program that links against it and running it
 terralib.includepath = terralib.terrahome.."/include"
@@ -29,12 +26,21 @@ terra main(argc : int, argv : &rawstring)
     return 0;
 end
 
+if ffi.os ~= "Windows" then
 
-local flags = terralib.newlist {"-L", terralib.terrahome,"-Wl,-rpath,"..terralib.terrahome,"-lterra"}
-if require("ffi").os == "OSX" then
-    flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
+    local flags = terralib.newlist {"-L", terralib.terrahome,"-Wl,-rpath,"..terralib.terrahome,"-lterra"}
+    if require("ffi").os == "OSX" then
+        flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
+    end
+
+    terralib.saveobj("dynlib",{main = main},flags)
+
+    assert(0 == os.execute("./dynlib"))
+
+else
+    local putenv = terralib.externfunction("_putenv", rawstring -> int)
+    local flags = {terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib"}
+    terralib.saveobj("dynlib.exe",{main = main},flags)
+    putenv("Path="..os.getenv("Path")..";"..terralib.terrahome) --make dll search happy
+    assert(0 == os.execute(".\\dynlib.exe"))
 end
-
-terralib.saveobj("dynlib",{main = main},flags)
-
-assert(0 == os.execute("./dynlib"))
