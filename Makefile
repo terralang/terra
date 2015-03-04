@@ -133,7 +133,7 @@ BIN2C = build/bin2c
 #put any install-specific stuff in here
 -include Makefile.inc
 
-.PHONY:	all clean purge test package
+.PHONY:	all clean purge test release
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	$(EXECUTABLE)
@@ -190,11 +190,11 @@ clean:
 purge:	clean
 	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
 
-RELEASE_NAME := terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
-release:	all
+RELEASE_NAME := terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/CYGWIN.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
+release:
 	for i in `git ls-tree HEAD -r tests --name-only`; do mkdir -p release/`dirname $$i`; cp $$i release/$$i; done;
 	mv release $(RELEASE_NAME)
-	tar cfj $(RELEASE_NAME).tar.bz2 $(RELEASE_NAME)
+	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release
     
 # dependency rules
@@ -205,6 +205,6 @@ build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
 #if we are cleaning, then don't include dependencies (which would require the header files are built)	
-ifeq ($(findstring $(MAKECMDGOALS),purge clean),)
+ifeq ($(findstring $(MAKECMDGOALS),purge clean release),)
 -include $(DEPENDENCIES)
 endif
