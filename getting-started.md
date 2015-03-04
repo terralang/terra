@@ -10,7 +10,7 @@ title: Getting Started
 Installing Terra
 ================
 
-Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
+Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish.
 
 Running Terra
 =============
@@ -19,6 +19,7 @@ Similar to the design of Lua, Terra can be used as a standalone executable/read-
 
 To run the REPL:
     
+    $ cd <path-to-terra-folder>
     $ ./terra
     
     Terra -- A low-level counterpart to Lua
@@ -42,7 +43,7 @@ You can also run it on already written files:
     $ ./terra tests/hello.t
     hello, world
     
-Terra can also be used as a library from C by linking against `libterra.so` (windows:  `libterra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra.so` (windows:  `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
     //simple.cpp
@@ -77,6 +78,17 @@ Note the extra `pagezero_size` and `image_base` arguments on OSX. These are nece
 In addition to these modes, Terra code can be compiled to `.o` files which can be linked into an executable, or even compiled to an executable directly.
 
 A bunch of example scripts can be found in the `tests/` directory. The `run` script in the directory will run all of these languages tests to ensure that Terra is built correctly.
+
+## Running Terra's Test Suite ##
+
+Terra includes test suite to make sure all of its functionality is working. To run it:
+
+    cd tests
+    ../terra run
+    
+Expect it to print a lot of junk out. At the end it will summarize the results:
+
+    471 tests passed. 0 tests failed.
 
 Building Terra
 ==============
