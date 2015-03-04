@@ -43,15 +43,16 @@ LIBS=      LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVe
            clangCodeGen.lib clangDriver.lib clangEdit.lib clangFrontend.lib clangFrontendTool.lib clangLex.lib \
            clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib \
            clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib \
-           $(BUILD)\terra.lib $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
+           $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
 
-LIBPATHS = /link /LIBPATH:"$(LLVM_DIR)\lib"
+LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
 
 CLANG_RESOURCE_DIRECTORY=$(LLVM_DIR)\lib\clang\3.5.0
 
 TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\treadnumber.c
 
 CPP=cl
+LINK=link
 
 LUAJIT = $(LUAJIT_DIR)\src\luajit.exe
 
@@ -80,20 +81,25 @@ $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
 	cd $(TERRA_DIR)
 	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang -I "$(CUDA_DIR:\=/)/include"
 
-$(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
+EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /EXPORT:terra_loadfile /EXPORT:terra_loadbuffer /EXPORT:terra_loadstring /EXPORT:terra_llvmshutdown
+
+$(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
 	cd $(BUILD)
 	$(CPP) $(CPPFLAGS) /c $(TERRALIB_SRC)
-	lib *.obj /OUT:$@
+
+$(TERRA_DIR)\release\terra.dll: $(BUILD)\terra.obj
+	cd $(TERRA_DIR)\release
+	$(LINK) /MACHINE:X64 /DLL /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
 
 REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC120.CRT
 
-$(TERRA_DIR)\release\terra.exe: $(BUILD)\terra.lib $(SRC)\main.cpp
+$(TERRA_DIR)\release\terra.exe: $(TERRA_DIR)\release\terra.dll $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll release
 	copy "$(REDIST)\msvcp120.dll" release
 	copy "$(REDIST)\msvcr120.dll" release
 	xcopy /E /I /Q /Y $(CLANG_RESOURCE_DIRECTORY) release\include\clang_resource
-	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(LIBS) $(LIBPATHS)
+	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c $(TERRA_DIR)\release\terra.lib $(LUAJIT_DIR)\src\lua51.lib
 
 clean:
 	del ..\build\*.obj ..\build\*.h ..\build\terra.lib ..\release\terra.exe ..\release\clang.exe
