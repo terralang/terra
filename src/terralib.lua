@@ -4122,7 +4122,7 @@ function terra.saveobj(filename,filekind,env,arguments)
             filekind = "bitcode"
         elseif filename:match("%.ll$") then
             filekind = "llvmir"
-        elseif filename:match("%.so$") or filename:match("%.dylib$") then
+        elseif filename:match("%.so$") or filename:match("%.dylib$") or filename:match("%.dll$") then
             filekind = "sharedlibrary"
         else
             filekind = "executable"
@@ -4151,9 +4151,36 @@ function terra.saveobj(filename,filekind,env,arguments)
     return terra.saveobjimpl(filename,filekind,cleanenv,arguments or {})
 end
 
+-- configure path variables
+terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
+
+if ffi.os == "Windows" then
+    -- this is the reason we can't have nice things
+    terra.vchome = os.getenv("VCINSTALLDIR")
+    if not terra.vchome then --vsvarsall.bat has not been run guess defaults
+        local ct = os.getenv("VS120COMNTOOLS")
+        if ct then
+            terra.vchome = ct..[[..\..\VC\]]
+        else
+            terra.vchome = [[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]]
+        end
+    else
+        --assume vsvarsall.bat was run and get lib/path
+        terra.vcpath = os.getenv("Path")
+        terra.vclib = os.getenv("LIB")
+    end
+    function terra.getvclinker() --get the linker, and guess the needed environment variables for Windows if they are not set ...
+        local linker = terra.vchome..[[BIN\x86_amd64\link.exe]]
+        local vclib = terra.vclib or string.gsub([[%LIB\amd64;%ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vchome)
+        local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vchome..[[BIN;]]
+        vclib,vcpath = "LIB="..vclib,"Path="..vcpath
+        return linker,vclib,vcpath
+    end
+end
+
+
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
 terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or "."
-terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
 local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
                           or ";./?.t;"..terra.terrahome.."/include/?.t;"
 

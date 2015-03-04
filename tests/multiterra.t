@@ -1,10 +1,9 @@
 local ffi = require("ffi")
-if ffi.os == "Windows" then
-  return
-end
 
 C = terralib.includecstring [[
+#ifndef _WIN32
 #include <pthread.h>
+#endif
 #include <stdio.h>
 typedef struct lua_State lua_State;
 lua_State * luaL_newstate();
@@ -17,6 +16,16 @@ int lua_pushnumber(lua_State * L, double);
 int terra_loadstring(lua_State *L, const char *s);
 double luaL_checknumber(lua_State * L,int);
 ]]
+
+if ffi.os == "Windows" then
+  -- fake it on windows
+  C.pthread_t = int
+  C.pthread_create = terra(t : &int, stuff : &opaque,fn : &opaque -> &opaque, data : &opaque)
+    return fn(data)
+  end
+  C.pthread_join = terra(t : int, stuff : &opaque)
+  end 
+end
 
 
 N = 4

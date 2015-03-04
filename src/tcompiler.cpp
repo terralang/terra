@@ -2598,12 +2598,14 @@ static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker) {
     #endif
 #else
 	lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
-	lua_getfield(T->L, -1, "terrahome");
-	const char * path = lua_tostring(T->L, -1);
-	if (!path) return true;
-	llvm::SmallString<256> cpath(path);
-	cpath.append("\\clang.exe");
-    *linker = LLVM_PATH_TYPE (cpath.c_str());
+	lua_getfield(T->L, -1, "getvclinker");
+	lua_call(T->L, 0, 3);
+	*linker = LLVM_PATH_TYPE(lua_tostring(T->L,-3));
+	const char * vclib = lua_tostring(T->L,-2);
+	const char * vcpath = lua_tostring(T->L,-1);
+	_putenv(vclib);
+	_putenv(vcpath);
+	lua_pop(T->L,4);
 	return false;
 #endif
 }
@@ -2637,9 +2639,18 @@ static bool SaveAndLink(terra_State * T, Module * M, std::vector<const char *> *
     if(linkargs)
         cmd.insert(cmd.end(),linkargs->begin(),linkargs->end());
     
+#ifndef _WIN32
     cmd.push_back("-o");
     cmd.push_back(filename);
-    cmd.push_back(NULL);
+#else
+	cmd.push_back("-defaultlib:libcmt");
+	cmd.push_back("-nologo");
+	llvm::SmallString<256> fileout("-out:");
+	fileout.append(filename);
+	cmd.push_back(fileout.c_str());
+#endif
+    
+	cmd.push_back(NULL);
     
     if(llvmutil_executeandwait(linker,&cmd[0],&err)) {
         unlink(tmpnamebuf);
@@ -2666,18 +2677,23 @@ static bool SaveObject(terra_State * T, Module * M, const std::string & filekind
 }
 static bool SaveSharedObject(terra_State * T, Module * M, std::vector<const char *> * args, const char * filename) {
     std::vector<const char *> cmd;
-    cmd.push_back("-g");
 #ifdef __APPLE__
+	cmd.push_back("-g");
     cmd.push_back("-dynamiclib");
     cmd.push_back("-single_module");
     cmd.push_back("-undefined");
     cmd.push_back("dynamic_lookup");
+	cmd.push_back("-fPIC");
+#elif _WIN32
+	cmd.push_back("-dll");
 #else
+	cmd.push_back("-g");
     cmd.push_back("-shared");
     cmd.push_back("-Wl,-export-dynamic");
     cmd.push_back("-ldl");
+	cmd.push_back("-fPIC");
 #endif
-    cmd.push_back("-fPIC");
+
     if(args)
         cmd.insert(cmd.end(),args->begin(),args->end());
     return SaveAndLink(T,M,&cmd,filename);

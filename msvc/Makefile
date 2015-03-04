@@ -85,10 +85,13 @@ $(BUILD)\terra.lib: $(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 	$(CPP) $(CPPFLAGS) /c $(TERRALIB_SRC)
 	lib *.obj /OUT:$@
 
+REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC120.CRT
+
 $(TERRA_DIR)\release\terra.exe: $(BUILD)\terra.lib $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll release
-	copy $(LLVM_DIR)\bin\clang.exe release
+	copy "$(REDIST)\msvcp120.dll" release
+	copy "$(REDIST)\msvcr120.dll" release
 	xcopy /E /I /Q /Y $(CLANG_RESOURCE_DIRECTORY) release\include\clang_resource
 	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c  $(LIBS) $(LIBPATHS)
 
