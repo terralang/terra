@@ -64,10 +64,13 @@ A simple example initializes Terra and then runs code from the file specified in
 This program can then be compiled by linking against the Terra library
 
     # Linux
-    c++ simple.cpp -o simple -I<path-to-terra-folder>/include -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder>
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
+    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder>
     
     # OSX
-    c++ simple.cpp -o simple -I<path-to-terra-folder>/include -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder> -pagezero_size 10000 -image_base 100000000
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
+    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder> \
+    -pagezero_size 10000 -image_base 100000000
     
 Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
 
