@@ -24,12 +24,6 @@ extern "C" {
 #include <unistd.h>
 #endif
 
-struct terra_CUDAState {
-    int initialized;
-    const char * cudahome;
-    CUdevice D;
-    CUcontext C;
-};
 
 #define CUDA_DO2(err,str,...) do { \
     int e = err; \
@@ -42,33 +36,13 @@ struct terra_CUDAState {
 
 #ifdef __linux__
 static const char * cuda_libraries[] = { "%/nvvm/lib64/libnvvm.so", "/usr/lib/libcuda.so", "%/lib64/libcudart.so", NULL };
-static const char * libcudadevrt = "/lib64/libcudadevrt.a";
-static const char * nvdisasm = "bin/nvdisasm";
 #elif _WIN32
 static const char * cuda_libraries[] = { "%\\nvvm\\bin\\nvvm64_20_0.dll", "nvcuda.dll", "%\\bin\\cudart64_65.dll", NULL};
-static const char * libcudadevrt = "\\lib\\x64\\cudadevrt.lib";
-static const char * nvdisasm = "bin\\nvdisasm.exe";
 #else
 static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libcuda.dylib", "%/lib/libcudart.dylib", NULL };
-static const char * libcudadevrt = "/lib/libcudadevrt.a";
-static const char * nvdisasm = "bin/nvdisasm";
 #endif
 
 #define CUDA_SYM(_) \
-    _(cuCtxCreate) \
-    _(cuCtxGetCurrent) \
-    _(cuCtxGetDevice) \
-    _(cuDeviceComputeCapability) \
-    _(cuDeviceGet) \
-    _(cuInit) \
-    _(cuLinkAddData) \
-    _(cuLinkAddFile) \
-    _(cuLinkComplete) \
-    _(cuLinkCreate) \
-    _(cuLinkDestroy) \
-    _(cuModuleGetFunction) \
-    _(cuModuleGetGlobal) \
-    _(cuModuleLoadData) \
     _(nvvmAddModuleToProgram) \
     _(nvvmCompileProgram) \
     _(nvvmCreateProgram) \
@@ -77,35 +51,25 @@ static const char * nvdisasm = "bin/nvdisasm";
     _(nvvmGetProgramLog) \
     _(nvvmGetProgramLogSize)
 
-#define INIT_SYM(x) static decltype(&x) x##_v;
-CUDA_SYM(INIT_SYM)
-#undef INIT_SYM
+struct terra_CUDAState {
+    int initialized;
+    #define INIT_SYM(x) decltype(&x) x;
+    CUDA_SYM(INIT_SYM)
+    #undef INIT_SYM    
+};
 
-CUresult initializeCUDAState(terra_State * T) {
+void initializeNVVMState(terra_State * T) {
     if (!T->cuda->initialized) {
-    
         //dynamically assign all of our symbols
         #define INIT_SYM(x) \
-            x##_v = (decltype(&x)) llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(#x "_v2"); \
-            if(!x##_v) x##_v = (decltype(&x)) llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(#x); \
-            assert(x##_v);
+            T->cuda->x = (decltype(&x)) llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(#x); \
+            assert(T->cuda->x);
             CUDA_SYM(INIT_SYM)
         #undef INIT_SYM
-
-
         T->cuda->initialized = 1;
-        CUDA_DO(cuInit_v(0));
-        CUDA_DO(cuCtxGetCurrent_v(&T->cuda->C));
-        if(T->cuda->C) {
-            //there is already a valid cuda context, so use that
-            CUDA_DO(cuCtxGetDevice_v(&T->cuda->D));
-            return CUDA_SUCCESS;
-        }
-        CUDA_DO(cuDeviceGet_v(&T->cuda->D,0));
-        CUDA_DO(cuCtxCreate_v(&T->cuda->C, 0, T->cuda->D));
     }
-    return CUDA_SUCCESS;
 }
+
 static void annotateKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel, const char * name, int value) {
     std::vector<llvm::Value *> vals;
     llvm::NamedMDNode * annot = M->getOrInsertNamedMetadata("nvvm.annotations");
@@ -125,7 +89,7 @@ public:
     }
 };
 
-CUresult moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::string * buf) {
+void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::string * buf) {
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         it->setAttributes(llvm::AttributeSet()); //remove annotations because syntax doesn't match
         RemoveAttr A;
@@ -147,24 +111,23 @@ CUresult moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, st
         foutput << *M;
     }
     nvvmProgram prog;
-    CUDA_DO(nvvmCreateProgram_v(&prog));
-    CUDA_DO(nvvmAddModuleToProgram_v(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
+    CUDA_DO(T->cuda->nvvmCreateProgram(&prog));
+    CUDA_DO(T->cuda->nvvmAddModuleToProgram(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
     int numOptions = 1;
     const char * options[] = { deviceopt.c_str() };
     
     size_t size;
-    int err = nvvmCompileProgram_v(prog, numOptions, options);
+    int err = T->cuda->nvvmCompileProgram(prog, numOptions, options);
     if (err != CUDA_SUCCESS) {
-        CUDA_DO(nvvmGetProgramLogSize_v(prog,&size));
+        CUDA_DO(T->cuda->nvvmGetProgramLogSize(prog,&size));
         buf->resize(size);
-        CUDA_DO(nvvmGetProgramLog_v(prog, &(*buf)[0]));
+        CUDA_DO(T->cuda->nvvmGetProgramLog(prog, &(*buf)[0]));
         terra_reporterror(T,"%s:%d: nvvm error reported (%d)\n %s\n",__FILE__,__LINE__,err,buf->c_str());
         
     }
-    CUDA_DO(nvvmGetCompiledResultSize_v(prog, &size));
+    CUDA_DO(T->cuda->nvvmGetCompiledResultSize(prog, &size));
     buf->resize(size);
-    CUDA_DO(nvvmGetCompiledResult_v(prog, &(*buf)[0]));
-    return CUDA_SUCCESS;
+    CUDA_DO(T->cuda->nvvmGetCompiledResult(prog, &(*buf)[0]));
 }
 
 //cuda doesn't like llvm generic names, so we replace non-identifier symbols here
@@ -183,11 +146,14 @@ static std::string sanitizeName(std::string name) {
 }
 
 
-int terra_cudacompile(lua_State * L) {
+int terra_toptx(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    initializeCUDAState(T);
+    initializeNVVMState(T);
     int tbl = 1,annotations = 2;
     int dumpmodule = lua_toboolean(L,3);
+    int version = lua_tonumber(L,4);
+    int major = version / 10;
+    int minor = version % 10;
     
     std::vector<std::string> globalnames;
     std::vector<llvm::GlobalValue *> globals;
@@ -237,87 +203,18 @@ int terra_cudacompile(lua_State * L) {
         it->setName(sanitizeName(it->getName()));
     }
 	
-    int major,minor;
-    CUDA_DO(cuDeviceComputeCapability_v(&major,&minor,T->cuda->D));
-    
     std::string ptx;
-    CUDA_DO(moduleToPTX(T,M,major,minor,&ptx));
+    moduleToPTX(T,M,major,minor,&ptx);
     if(dumpmodule) {
         fprintf(stderr,"CUDA Module:\n");
         M->dump();
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
     delete M;
-    CUmodule cudaM;
-    
-    CUlinkState linkState;
-    char error_log[8192]; error_log[0] = '\0';
-    
-    int version = (major*10+minor);
-    CUjit_option options[] = {CU_JIT_ERROR_LOG_BUFFER,CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES,CU_JIT_TARGET};
-    void * option_values[] = { error_log, (void*)8192, (void*)(uint64_t)version };
-    void * cubin;
-    size_t cubinSize;
-    CUDA_DO(cuLinkCreate_v(3,options,option_values,&linkState));
-    
-    
-    CUDA_DO2(cuLinkAddData_v(linkState,CU_JIT_INPUT_PTX,(void*)ptx.c_str(),ptx.length()+1,0,0,0,0),"\n%s",error_log);
-    llvm::SmallString<256> devrt(T->cuda->cudahome);
-	devrt.append(libcudadevrt);
-    CUDA_DO2(cuLinkAddFile_v(linkState,CU_JIT_INPUT_LIBRARY,devrt.c_str(), 0, NULL, NULL),"\n%s",error_log);
-    CUDA_DO2(cuLinkComplete_v(linkState,&cubin,&cubinSize),"\n%s",error_log);
-    
-#ifndef _WIN32
-    if(dumpmodule) {
-        llvm::SmallString<256> tmpname;
-        llvmutil_createtemporaryfile("cudamodule", "cubin", tmpname);
-        FILE * f = fopen(tmpname.c_str(),"w");
-        fwrite(cubin,cubinSize,1,f);
-        fclose(f);
-        llvm::SmallString<256> exe(T->cuda->cudahome);
-        exe.append(nvdisasm);
-        const char * args[] = { exe.c_str(), "--print-life-ranges", tmpname.c_str(), NULL };
-        llvmutil_executeandwait(LLVM_PATH_TYPE(exe.c_str()), args, NULL);
-        unlink(tmpname.c_str());
-    }
-#endif
-
-    CUDA_DO(cuModuleLoadData_v(&cudaM, cubin));
-    CUDA_DO(cuLinkDestroy_v(linkState));
-
-    lua_newtable(L);
-    int resulttbl = lua_gettop(L);
-
-    lua_pushnil(L);
-    for(size_t i = 0; lua_next(L,tbl) != 0; i++) {
-        const char * key = luaL_checkstring(L,-2);
-        lua_getfield(L,-1,"llvm_value");
-        llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
-        lua_pop(L,2); //topointer and table value
-        if(llvm::dyn_cast<llvm::Function>(v)) {
-            CUfunction func;
-            CUDA_DO(cuModuleGetFunction_v(&func, cudaM, sanitizeName(key).c_str()));
-            //HACK: we need to get this value, as a constant, to the makewrapper function
-            //currently the only constants that Terra supports programmatically are string constants
-            //eventually we will change this to make a Terra constant of type CUfunction when we have
-            //the appropriate API
-            lua_pushlstring(L,(char*)&func,sizeof(CUfunction));
-        } else {
-            assert(llvm::dyn_cast<llvm::GlobalVariable>(v));
-            CUdeviceptr dptr;
-            size_t bytes;
-            CUDA_DO(cuModuleGetGlobal_v(&dptr,&bytes,cudaM,sanitizeName(key).c_str()));
-            lua_pushlightuserdata(L,(void*)dptr);
-        }
-
-        lua_setfield(L,resulttbl,key);
-        /* stack is now the key */
-    }
-    /* stack is now the table holding the terra functions */
-
+    lua_pushstring(L,ptx.c_str());
     return 1;
 }
-    
+
 int terra_cudainit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     lua_getfield(T->L,-1,"cudahome");
@@ -341,14 +238,11 @@ int terra_cudainit(struct terra_State * T) {
 
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
     T->cuda->initialized = 0; /* actual CUDA initalization is done on first call to terra_cudacompile */
-                              /* CUDA init is very expensive, so we only want to do it if the program actually uses cuda*/
                               /* this function just registers all the Lua state associated with CUDA */
     
-    T->cuda->cudahome = cudahome;
-    
     lua_pushlightuserdata(T->L,(void*)T);
-    lua_pushcclosure(T->L,terra_cudacompile,1);
-    lua_setfield(T->L,-2,"cudacompileimpl");
+    lua_pushcclosure(T->L,terra_toptx,1);
+    lua_setfield(T->L,-2,"toptximpl");
 
     int err = terra_loadandrunbytecodes(T->L, luaJIT_BC_cudalib,luaJIT_BC_cudalib_SIZE, "cudalib.lua");
     if(err) {
@@ -365,6 +259,6 @@ int terra_cudainit(struct terra_State * T) {
 #endif
 
 int terra_cudafree(struct terra_State * T) {
-    //TODO: clean up after cuda
+    //currently nothing to clean up
     return 0;
 }

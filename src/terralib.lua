@@ -4282,7 +4282,9 @@ function terra.constant(a0,a1)
     else
         --try to infer the type, and if successful build the constant
         local init,typ = a0,nil
-        if type(init) == "cdata" then
+        if terra.isconstant(init) then
+            return init --already a constant
+        elseif type(init) == "cdata" then
             typ = terra.typeof(init)
         elseif type(init) == "number" then
             typ = (terra.isintegral(init) and terra.types.int) or terra.types.double

@@ -1,5 +1,10 @@
 Language Implementation:
 
+Represent aggregate constants as aggregates rather than current method of casting
+switch construct, computed goto
+vector shuffle?
+cmpxchg, atomicrmw, fence
+
 Design Problems:
 -- how to save results for later (both Lua state and Terra JIT state)
 

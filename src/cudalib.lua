@@ -1,8 +1,28 @@
 -- See Copyright Notice in ../LICENSE.txt
-function terralib.cudacompile(module,dumpmodule)
+
+cudalib = {}
+
+function terralib.cudacompile(...)
+    return cudalib.compile(...)
+end
+
+terralib.CUDAParams = terralib.types.newstruct("CUDAParams")
+terralib.CUDAParams.entries = { { "gridDimX", uint },
+                                { "gridDimY", uint },
+                                { "gridDimZ", uint },
+                                { "blockDimX", uint },
+                                { "blockDimY", uint },
+                                { "blockDimZ", uint },
+                                { "sharedMemBytes", uint },
+                                {"hStream" , terra.types.pointer(opaque) } }
+                                
+function cudalib.toptx(module,dumpmodule,version)
+    dumpmodule,version = not not dumpmodule,assert(tonumber(version))
+
     local llvmglobals = {} -- map name -> terra object with llvm_value that goes in the cuda kernel (function, var, constant)
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
     local kernelindex = {}
+
     local function addkernel(k,v)
         kernelindex[k] = v
         local definitions =  v:getdefinitions()
@@ -22,7 +42,7 @@ function terralib.cudacompile(module,dumpmodule)
 
         for _,p in ipairs(typ.parameters) do
             if p:isarray() or p:isstruct() then -- we can't pass aggregates by value through CUDA, so wrap/unwrap the kernel
-                fn = terra.cudaflattenkernel(v):getdefinitions()[1]
+                fn = cudalib.flattenkernel(v):getdefinitions()[1]
                 break
             end
         end
@@ -32,6 +52,10 @@ function terralib.cudacompile(module,dumpmodule)
     end
     
     for k,v in pairs(module) do
+        k = tostring(k)
+        if not k:match("[%w_]+") then
+            error("cuda symbol names must be valid identifiers, but found: "..k)
+        end
         if terra.isfunction(v) then
             addkernel(k,v)
         elseif type(v) == "table" and terra.isfunction(v.kernel) then -- annotated kernel
@@ -54,21 +78,52 @@ function terralib.cudacompile(module,dumpmodule)
         end
     end
     --call into tcuda.cpp to perform compilation
-    local result = terralib.cudacompileimpl(llvmglobals,annotations,dumpmodule)
-    for k,v in pairs(result) do
-        -- wrap global addresses as cdata
-        if type(v) == "userdata" then
-            result[k] = terralib.cast(terralib.types.pointer(terralib.types.opaque),v)
-        elseif type(v) == "string" then
-            result[k] = terra.cudamakekernelwrapper(assert(kernelindex[k]),v)
-        end
-    end
-    return result
+    return terralib.toptximpl(llvmglobals,annotations,dumpmodule,version)
 end
 
---we need to use terra to write the function that JITs the right wrapper functions for CUDA kernels
---since this file is loaded as Lua, we use terra.loadstring to inject some terra code
-local terracode = terra.loadstring [[
+-- we need to use terra to write the function that JITs the right wrapper functions forCUDA kernels
+-- since this file is loaded as Lua, we use terra.loadstring to inject some terra code
+-- this this is only needed for cuda compilation, we load this library lazily below
+local terracode = [[
+local ef = terralib.externfunction
+local struct CUctx_st
+local struct CUfunc_st
+local struct CUlinkState_st
+local struct CUmod_st
+-- import all CUDA state that we need, we avoid includec because it is slow
+local C = {
+    CU_JIT_ERROR_LOG_BUFFER = 5;
+    CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES = 6;
+    CU_JIT_INPUT_PTX = 1;
+    CU_JIT_TARGET = 9;
+    CUcontext = &CUctx_st;
+    CUdevice = int32;
+    CUdeviceptr = uint64;
+    CUfunction = &CUfunc_st;
+    CUjit_option = uint32;
+    
+    cuCtxCreate_v2 = ef("cuCtxCreate_v2",{&&CUctx_st,uint32,int32} -> uint32);
+    cuCtxGetCurrent = ef("cuCtxGetCurrent",{&&CUctx_st} -> uint32);
+    cuCtxGetDevice = ef("cuCtxGetDevice",{&int32} -> uint32);
+    cuDeviceComputeCapability = ef("cuDeviceComputeCapability",{&int32,&int32,int32} -> uint32);
+    cuDeviceGet = ef("cuDeviceGet",{&int32,int32} -> uint32);
+    cuInit = ef("cuInit",{uint32} -> uint32);
+    cuLaunchKernel = ef("cuLaunchKernel",{&CUfunc_st,uint32,uint32,uint32,uint32,uint32,uint32,uint32,&opaque,&&opaque,&&opaque} -> uint32);
+    cuLinkAddData_v2 = ef("cuLinkAddData_v2",{&CUlinkState_st,uint32,&opaque,uint64,&int8,uint32,&uint32,&&opaque} -> uint32);
+    cuLinkComplete = ef("cuLinkComplete",{&CUlinkState_st,&&opaque,&uint64} -> uint32);
+    cuLinkCreate_v2 = ef("cuLinkCreate_v2",{uint32,&uint32,&&opaque,&&CUlinkState_st} -> uint32);
+    cuLinkDestroy = ef("cuLinkDestroy",{&CUlinkState_st} -> uint32);
+    CUlinkState = &CUlinkState_st;
+    CUmodule = &CUmod_st;
+    cuModuleGetFunction = ef("cuModuleGetFunction",{&&CUfunc_st,&CUmod_st,&int8} -> uint32);
+    cuModuleGetGlobal_v2 = ef("cuModuleGetGlobal_v2",{&uint64,&uint64,&CUmod_st,&int8} -> uint32);
+    cuModuleLoadData = ef("cuModuleLoadData",{&&CUmod_st,&opaque} -> uint32);
+    exit = ef("exit",{int32} -> {});
+    printf = ef("printf",terralib.types.funcpointer(&int8,int32,true));
+    snprintf = ef("snprintf",terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
+    strlen = ef("strlen",{&int8} -> uint64);
+}
+
 local function unwrapexpressions(paramtypes) -- helper that gets around calling convension issues by unwrapping aggregates
                                              -- for kernel invocations
     local flatsymbols, expressions = terralib.newlist(),terralib.newlist()
@@ -95,7 +150,7 @@ local function unwrapexpressions(paramtypes) -- helper that gets around calling 
     end
     return symbols,flatsymbols,expressions 
 end
-function terralib.cudaflattenkernel(v)
+function cudalib.flattenkernel(v)
     local symbols,flatsymbols,expressions = unwrapexpressions(v:gettype().parameters)
     return terra([flatsymbols])
         var [symbols]
@@ -103,26 +158,185 @@ function terralib.cudaflattenkernel(v)
         return v(symbols)
     end
 end
-struct terralib.CUDAParams {
-    gridDimX : uint,  gridDimY : uint,  gridDimZ : uint,
-    blockDimX : uint, blockDimY : uint, blockDimZ : uint,
-    sharedMemBytes : uint, hStream :  &opaque
-}
-local cuLaunchKernel = terralib.externfunction("cuLaunchKernel",{&opaque,uint32,uint32,uint32,uint32,uint32,uint32,uint32,&opaque,&&opaque,&&opaque} -> uint32)
-function terralib.cudamakekernelwrapper(fn,funcdata)
-    local typ = fn:gettype()
+
+local function makekernelwrapper(typ,name,fnhandle)
     local symbols,flatsymbols,expressions = unwrapexpressions(typ.parameters)
-    
     local paramctor = flatsymbols:map(function(s) return `&s end)
     return terra(params : &terralib.CUDAParams, [symbols])
+        if fnhandle == nil then
+            C.printf("cuda kernel %s compiled from terra was not initialized.\n",name);
+            C.exit(1);
+        end
         var [flatsymbols] = expressions
-        var func : &&opaque = [&&opaque](funcdata)
         var paramlist = arrayof([&opaque],[paramctor])
-        return cuLaunchKernel(@func,params.gridDimX,params.gridDimY,params.gridDimZ,
-                                     params.blockDimX,params.blockDimY,params.blockDimZ,
-                                     params.sharedMemBytes, params.hStream,paramlist,nil)
+        return C.cuLaunchKernel(fnhandle,params.gridDimX,params.gridDimY,params.gridDimZ,
+                                      params.blockDimX,params.blockDimY,params.blockDimZ,
+                                      params.sharedMemBytes, params.hStream,paramlist,nil)
     end
-end 
+end
+
+local cudaContext = terralib.new(C.CUcontext[1])
+local cudaDevice = terralib.new(C.CUdevice[1])
+local cudaVersion
+
+local error_str = symbol(rawstring)
+local error_sz = symbol(uint64)
+local cd = macro(function(nm,...)
+    local args = {...}
+    nm = nm:asvalue()
+    local fn = assert(C[nm])
+    return quote
+        var r = fn(args)
+        if r ~= 0 then
+            if error_str ~= nil then
+                var start = C.strlen(error_str)
+                if error_sz - start > 0 then
+                    C.snprintf(error_str+start,error_sz - start,"%s: cuda reported error %d",nm,r)
+                end
+            end
+            return r
+        end
+    end
+end)
+local terra initcuda(CX : &C.CUcontext, D : &C.CUdevice, version : &uint64, 
+                    [error_str], [error_sz])
+    if error_sz > 0 then error_str[0] = 0 end
+    cd("cuInit",0)
+    cd("cuCtxGetCurrent",CX)
+    if @CX ~= nil then
+        -- there is already a valid cuda context, so use that
+        cd("cuCtxGetDevice",D)
+    else
+        cd("cuDeviceGet",D,0)
+        cd("cuCtxCreate_v2",CX,0,@D)
+    end
+    var major : int, minor : int
+    cd("cuDeviceComputeCapability",&major,&minor,@D)
+    @version = major * 10 + minor
+    return 0
+end
+
+local ffi = require('ffi')
+
+local error_buf_sz = 2048
+local error_buf = terralib.new(int8[error_buf_sz])
+
+local function initjitcuda()
+    if cudaContext[0] ~= nil then return end
+    local vp = terralib.new(uint64[1])
+    if initcuda(cudaContext,cudaDevice,vp,error_buf,error_buf_sz) ~= 0 then
+        error(ffi.string(error_buf),2)
+    end
+    cudaVersion = vp[0]
+end
+
+function cudalib.localversion()
+    initjitcuda()
+    return cudaVersion
+end
+
+local return1 = macro(function(x)
+    return quote
+        var r = x;
+        if x ~= 0 then return x end
+    end
+end)
+
+local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
+                       linker : {C.CUlinkState,rawstring,uint64} -> int,
+                       module : {&opaque,uint64} -> {},
+                       [error_str],[error_sz])
+    if error_sz > 0 then error_str[0] = 0 end
+    var D : C.CUdevice
+    var CX : C.CUcontext
+    var version : uint64
+    
+    return1(initcuda(&CX,&D,&version,error_str,error_sz))
+    
+    var linkState : C.CUlinkState
+    var cubin : &opaque
+    var cubinSize : uint64
+
+    var options = arrayof(C.CUjit_option,C.CU_JIT_TARGET, C.CU_JIT_ERROR_LOG_BUFFER,C.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
+    var option_values = arrayof([&opaque], [&opaque](version), error_str, [&opaque](error_sz));
+
+
+    cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
+    cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
+
+    if linker ~= nil then
+        return1(linker(linkState,error_str,error_sz))
+    end
+
+    cd("cuLinkComplete",linkState,&cubin,&cubinSize)
+
+    if module ~= nil then
+        module(cubin,cubinSize)
+    end
+    cd("cuModuleLoadData",cudaM, cubin)
+    cd("cuLinkDestroy",linkState)
+end
+
+function cudalib.wrapptx(module,ptx)
+    local ptxc = terralib.constant(ptx)
+    local m = {}
+    local terra loader(linker : {C.CUlinkState,rawstring,uint64} -> int,
+                       module_fn : {&opaque,uint64} -> {},
+                       [error_str],[error_sz])
+        if error_sz > 0 then error_str[0] = 0 end
+        var cudaM : C.CUmodule
+        return1(loadmodule(&cudaM,ptxc,[ptx:len() + 1],linker,module_fn,error_str,error_sz))
+        escape
+            for k,v in pairs(module) do
+                
+                if type(v) == "table" and terralib.isfunction(v.kernel) then
+                    v = v.kernel
+                end
+                if terralib.isfunction(v) then
+                    local gbl = global(terralib.constant(C.CUfunction,nil))
+                    m[k] = makekernelwrapper(v:gettype(),k,gbl)
+                    emit quote
+                        cd("cuModuleGetFunction",[&C.CUfunction](&gbl),cudaM,k)
+                    end
+                elseif cudalib.isconstant(v) or terralib.isglobalvar(v) then
+                    local gbl = global(terralib.constant(&opaque,nil))
+                    m[k] = gbl
+                    emit quote
+                        var bytes : uint64
+                        cd("cuModuleGetGlobal_v2",[&C.CUdeviceptr](&gbl),&bytes,cudaM,k)
+                    end
+                else
+                    error("unexpected entry in table of type: "..type(v),3)
+                end
+            end
+        end
+    end
+    return m,loader
+end
+
+local function dumpsass(data,sz)
+    local data = ffi.string(data,sz)
+    local f = io.open("dump.sass","w")
+    f:write(data)
+    f:close()
+    local nvdisasm = terralib.cudahome..(ffi.os == "Windows" and "\\bin\\nvdisasm.exe" or "/bin/nvdisasm")
+    os.execute(string.format("%q --print-life-ranges dump.sass",nvdisasm))
+end
+dumpsass = terralib.cast({&opaque,uint64} -> {},dumpsass)
+
+function cudalib.compile(module,dumpmodule,version,jitload)
+    version = version or cudalib.localversion()
+    if jitload == nil then jitload = true end
+    local ptx = cudalib.toptx(module,dumpmodule,version)
+    local m,loader = cudalib.wrapptx(module,ptx,dumpmodule)
+    if jitload then
+        if 0 ~= loader(nil,dumpmodule and dumpsass or nil,error_buf,error_buf_sz) then
+            error(ffi.string(error_buf),2)
+        end
+    end
+    return m,loader
+end
+
 function cudalib.sharedmemory(typ,N)
     local gv = terralib.global(typ[N],nil,N == 0,3)
     return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
@@ -141,25 +355,7 @@ function cudalib.constantmemory(typ,N)
 end
 ]]
 
-local builtintablestring = nil --at the end of the file
-local builtintable
-cudalib = setmetatable({}, { __index = function(self,builtin)
-    if not builtintable then
-        builtintable = terra.loadstring(builtintablestring)()
-    end
-    local typ = builtintable[builtin]
-    if not typ then
-        error("unknown builtin: "..builtin,2)
-    end
-    local rename = "llvm."..builtin:gsub("_",".")
-    local result = terra.intrinsic(rename,typ)
-    self[builtin] = result
-    return result
-end })
-
-terracode()
-
-builtintablestring = [[
+local builtintablestring = [[
 return {
     nvvm_ceil_d =  double -> double;
     nvvm_ex2_approx_d =  double -> double;
@@ -441,3 +637,23 @@ return {
     nvvm_ptr_constant_to_gen_p0i8_p4i8 = terralib.types.pointer(opaque,4) -> &opaque;
 } ]]
 
+-- handle loading most of the cuda infrastructure lazily to speed initialization time for non-cuda use
+local builtintable
+setmetatable(cudalib, { __index = function(self,builtin)
+    if not rawget(self,"compile") then
+        -- load the terra-based libraries
+        assert(terralib.loadstring(terracode))()
+        return self[builtin]
+    end
+    if not builtintable then
+        builtintable = terra.loadstring(builtintablestring)()
+    end
+    local typ = builtintable[builtin]
+    if not typ then
+        error("unknown builtin: "..builtin,2)
+    end
+    local rename = "llvm."..builtin:gsub("_",".")
+    local result = terra.intrinsic(rename,typ)
+    self[builtin] = result
+    return result
+end })
