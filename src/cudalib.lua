@@ -85,11 +85,13 @@ end
 -- since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 -- this this is only needed for cuda compilation, we load this library lazily below
 local terracode = [[
+local ffi = require('ffi')
 local ef = terralib.externfunction
 local struct CUctx_st
 local struct CUfunc_st
 local struct CUlinkState_st
 local struct CUmod_st
+local snprintf = ffi.os == "Windows" and "_snprintf" or "snprintf"
 -- import all CUDA state that we need, we avoid includec because it is slow
 local C = {
     CU_JIT_ERROR_LOG_BUFFER = 5;
@@ -120,7 +122,7 @@ local C = {
     cuModuleLoadData = ef("cuModuleLoadData",{&&CUmod_st,&opaque} -> uint32);
     exit = ef("exit",{int32} -> {});
     printf = ef("printf",terralib.types.funcpointer(&int8,int32,true));
-    snprintf = ef("snprintf",terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
+    snprintf = ef(snprintf,terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
     strlen = ef("strlen",{&int8} -> uint64);
 }
 
@@ -215,8 +217,6 @@ local terra initcuda(CX : &C.CUcontext, D : &C.CUdevice, version : &uint64,
     @version = major * 10 + minor
     return 0
 end
-
-local ffi = require('ffi')
 
 local error_buf_sz = 2048
 local error_buf = terralib.new(int8[error_buf_sz])
@@ -316,7 +316,7 @@ end
 
 local function dumpsass(data,sz)
     local data = ffi.string(data,sz)
-    local f = io.open("dump.sass","w")
+    local f = io.open("dump.sass","wb")
     f:write(data)
     f:close()
     local nvdisasm = terralib.cudahome..(ffi.os == "Windows" and "\\bin\\nvdisasm.exe" or "/bin/nvdisasm")
