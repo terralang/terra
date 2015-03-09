@@ -4317,7 +4317,8 @@ terra.languageextension = {
 }
 
 function terra.importlanguage(languages,entrypoints,langstring)
-    local lang = require(langstring)
+    local success,lang = xpcall(function() return require(langstring) end,function(err) return debug.traceback(err,2) end)
+    if not success then error(lang,0) end
     if not lang or type(lang) ~= "table" then error("expected a table to define language") end
     lang.name = lang.name or "anonymous"
     local function haslist(field,typ)
