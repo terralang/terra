@@ -232,7 +232,7 @@ end
 
 function cudalib.localversion()
     initjitcuda()
-    return cudaVersion
+    return tonumber(cudaVersion)
 end
 
 local return1 = macro(function(x)
