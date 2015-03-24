@@ -8,11 +8,19 @@ Goal: switch from one emission of llvm to architecture-specific version of llvm.
 
 -- consider refactoring the SCC detection into it own object, or labelling each function with an identifier for the SCC it is in
 
+-- switch back to SCC-first order optimization for MCJIT
+
 --  simplify the state for functions: untyped, in progress, typed, re-examine peektype, etc.
 --  see if extern functions do not need "initialization" anymore
 
 -- emitting llvm is now given a compilationunit, a root function to add to it, and archiecture
 -- include C creates a separate compilationunit, examine linking rules for including it.
+
+Goal: Make it really easy to emit C header files for Terra functions
+
+-- API to get list of parameter names of a function, rather than just the type
+-- edit the implementation of cstring so that it can be used externally as well as internally
+
 
 Language Implementation:
 

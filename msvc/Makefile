@@ -63,7 +63,7 @@ CPPFLAGS = /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERR
 
 all:	$(TERRA_DIR)\release\terra.exe
 
-$(LUAJIT):	$(LUAJIT_DIR)\src\luajit.c
+$(LUAJIT) $(TERRA_DIR)\release\include\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	cd $(LUAJIT_DIR)\src
 	msvcbuild.bat
 	copy lua.h $(TERRA_DIR)\release\include
