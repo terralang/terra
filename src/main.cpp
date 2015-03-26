@@ -7,20 +7,17 @@
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
-#include "ext/getopt.h"
-#else
-#include <getopt.h>
-#endif
-#include "terra.h"
-#ifdef _WIN32
 #include <io.h>
+#include "ext/getopt.h"
+#define isatty(x) _isatty(x)
+#define NOMINMAX
+#include <Windows.h>
 #else
+#include <signal.h>
+#include <getopt.h>
 #include <unistd.h>
 #endif
-
-#ifdef _WIN32
-#define isatty(x) _isatty(x)
-#endif
+#include "terra.h"
 
 static void doerror(lua_State * L) {
     printf("%s\n",luaL_checkstring(L,-1));
@@ -34,33 +31,42 @@ void parse_args(lua_State * L, int argc, char ** argv, terra_Options * options, 
 static int getargs (lua_State *L, char **argv, int n);
 static int docall (lua_State *L, int narg, int clear);
 
+static void (*terratraceback)(void*);
 
 #ifndef _WIN32
-#include <signal.h>
-static void (*terratraceback)(void*);
 void sigsegv(int sig, siginfo_t *info, void * uap) {
     signal(sig,SIG_DFL); //reset signal to default, just in case traceback itself crashes
     terratraceback(uap);  //call terra's pretty traceback
     raise(sig);   //rethrow the signal to the default handler
 }
-void setupsigsegv(lua_State * L) {
+void registerhandler() {
+	struct sigaction sa;
+	sa.sa_flags = SA_RESETHAND | SA_SIGINFO;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_sigaction = sigsegv;
+	sigaction(SIGSEGV, &sa, NULL);
+	sigaction(SIGILL, &sa, NULL);
+}
+#else
+LONG WINAPI windowsexceptionhandler(EXCEPTION_POINTERS * ExceptionInfo) {
+	terratraceback(ExceptionInfo->ContextRecord);
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+void registerhandler() {
+	SetUnhandledExceptionFilter(windowsexceptionhandler);
+}
+#endif
+
+void setupcrashsignal(lua_State * L) {
     lua_getglobal(L, "terralib");
     lua_getfield(L, -1, "traceback");
     const void * tb = lua_topointer(L,-1);
     if(!tb)
         return; //debug not supported
     terratraceback = *(void(**)(void*))tb;
-    struct sigaction sa;
-    sa.sa_flags = SA_RESETHAND | SA_SIGINFO;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_sigaction = sigsegv;
-    sigaction(SIGSEGV, &sa, NULL);
-    sigaction(SIGILL, &sa, NULL);
+	registerhandler();
     lua_pop(L,2);
 }
-#else
-void setupsigsegv(lua_State * L) {}
-#endif
 
 int main(int argc, char ** argv) {
     progname = argv[0];
@@ -78,7 +84,7 @@ int main(int argc, char ** argv) {
     if(terra_initwithoptions(L, &options))
         doerror(L);
     
-    setupsigsegv(L);
+    setupcrashsignal(L);
     
     if(scriptidx < argc) {
       int narg = getargs(L, argv, scriptidx);  
