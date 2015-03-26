@@ -261,6 +261,9 @@ function terra.context:finish(anchor)
                 end
             end
         end
+        --[[for i,o in ipairs(scc) do
+            o:printpretty(true,"%s = ",o.name)
+        end]]
     end
     self.diagnostics:finish()
 end
@@ -3687,43 +3690,47 @@ end)
 
 -- DEBUG
 
-function terra.printf(s,...)
-    local function toformat(x)
-        if type(x) ~= "number" and type(x) ~= "string" then
-            return tostring(x) 
-        else
-            return x
-        end
-    end
-    local strs = terra.newlist({...}):map(toformat)
-    --print(debug.traceback())
-    return io.write(tostring(s):format(unpack(strs)))
-end
-
 function terra.func:__tostring()
     return "<terra function>"
 end
 
 local function printpretty(toptree,returntype,start,...)
+
+    local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
-    local indent = 0
+    local indentstack = terralib.newlist{ 24 } -- the depth of each indent level
+    
+    local currentlinelength = 0
     local function enterblock()
-        indent = indent + 1
+        indentstack:insert(indentstack[#indentstack] + 4)
+    end
+    local function enterindenttocurrentline()
+        indentstack:insert(currentlinelength)
     end
     local function leaveblock()
-        indent = indent - 1
+        indentstack:remove()
     end
-    local function emit(...) terra.printf(...) end
+    local function emit(fmt,...)
+        local function toformat(x)
+            if type(x) ~= "number" and type(x) ~= "string" then
+                return tostring(x) 
+            else
+                return x
+            end
+        end
+        local strs = terra.newlist({...}):map(toformat)
+        local r = fmt:format(unpack(strs))
+        currentlinelength = currentlinelength + #r
+        buffer:insert(r)
+    end
     local function pad(str,len)
         if #str > len then return str:sub(1,len)
         else return str..(" "):rep(len - #str) end
     end
     local function begin(anchor,...)
+        currentlinelength = 0
         local fname = anchor.filename..":"..anchor.linenumber..": "
-        io.write(pad(fname,24))
-        for i = 1,indent do
-            io.write("    ")
-        end
+        emit("%s",pad(fname,indentstack[#indentstack]))
         emit(...)
     end
 
@@ -3739,7 +3746,7 @@ local function printpretty(toptree,returntype,start,...)
     end
 
     local function emitType(t)
-        emit(t)
+        emit("%s",t)
     end
     local function emitIdent(name,sym)
         sym = terra.isglobalvar(sym) and sym.symbol or sym
@@ -3792,9 +3799,6 @@ local function printpretty(toptree,returntype,start,...)
             end
             if s.expressions then
                 emitStmtList(s.expressions)
-            end
-            if s.next then
-                emitStmt(s.next)
             end
         elseif s:is "apply" then
             begin(s,"r%s = ",tostring(s):match("(0x.*)$"))
@@ -3978,7 +3982,7 @@ local function printpretty(toptree,returntype,start,...)
         elseif e:is "select" then
             doparens(e,e.value)
             emit(".")
-            emit(e.field)
+            emit("%s",e.field)
         elseif e:is "vectorconstructor" then
             emit("vector(")
             emitParamList(e.expressions)
@@ -3990,7 +3994,7 @@ local function printpretty(toptree,returntype,start,...)
         elseif e:is "constructor" then
             emit("{")
             if e.type then
-                local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return e.key end) end)
+                local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return tostring(e.key) end) end)
                 if not success then emit("<layouttypeerror> = ") 
                 else emitList(keys,"",", "," = ",emit) end
                 emitParamList(e.expressions,keys)
@@ -4006,7 +4010,7 @@ local function printpretty(toptree,returntype,start,...)
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
-                emit(tonumber(e.value.object))
+                emit("%d",tonumber(e.value.object))
             else
                 emit("<constant:"..tostring(e.type)..">")
             end
@@ -4053,6 +4057,7 @@ local function printpretty(toptree,returntype,start,...)
     end
     function emitTreeList(pl)
         if pl.statements then
+            enterindenttocurrentline()
             emit("let\n")
             enterblock()
             emitStmtList(pl.statements)
@@ -4069,6 +4074,7 @@ local function printpretty(toptree,returntype,start,...)
             leaveblock()
             emit("\n")
             begin(pl,"end")
+            leaveblock()
         end
     end
     
@@ -4087,26 +4093,27 @@ local function printpretty(toptree,returntype,start,...)
         emitExp(toptree)
         emit("\n")
     end
+    io.write(buffer:concat())
 end
 
 function terra.func:printpretty(printcompiled)
     printcompiled = (printcompiled == nil) or printcompiled
     for i,v in ipairs(self.definitions) do
-        v:printpretty(printcompiled,"%s = ",v.name)
+        v:printpretty(printcompiled)
     end
 end
 
-function terra.funcdefinition:printpretty(printcompiled,...)
+function terra.funcdefinition:printpretty(printcompiled)
     printcompiled = (printcompiled == nil) or printcompiled
     if not self.untypedtree then
-        terra.printf("<extern : %s>\n",self.type)
+        io.write(("%s = <extern : %s>\n"):format(self.name,self.type))
         return
     end
     if printcompiled then
         if self.state ~= "error" then self:emitllvm() end
-        return printpretty(self.typedtree,self.type.returntype,...)
+        return printpretty(self.typedtree,self.type.returntype,"%s = ",self.name)
     else
-        return printpretty(self.untypedtree,self.returntype,...)
+        return printpretty(self.untypedtree,self.returntype,"%s = ",self.name)
     end
 end
 function terra.quote:printpretty()
