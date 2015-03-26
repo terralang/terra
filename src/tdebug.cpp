@@ -1,16 +1,23 @@
-#if !defined(_WIN32) && !defined(__arm__)
+#include "llvmheaders.h"
+#include "tllvmutil.h"
+#include "terrastate.h"
+#include "tcompilerstate.h"
+
+#if !defined(__arm__)
+
+#ifndef _WIN32
 #include <execinfo.h>
 #ifndef _XOPEN_SOURCE
 #define _XOPEN_SOURCE
 #endif
 #include <ucontext.h>
-#include "llvmheaders.h"
-#include "tllvmutil.h"
-#include "terrastate.h"
-#include "tcompilerstate.h"
-#if defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
+#else
+#define NOMINMAX
+#include <Windows.h>
+#include <imagehlp.h>
 #endif
+
 
 using namespace llvm;
 
@@ -52,23 +59,37 @@ struct Frame {
     Frame * next;
     void * addr;
 };
+#ifndef _WIN32
 __attribute__((noinline))
+#else
+__declspec(noinline)
+#endif
 static int terra_backtrace(void ** frames, int maxN, void * rip, void * rbp) {
     if(maxN > 0)
         frames[0] = rip;
     Frame * frame = (Frame*) rbp;
     if(!frame) return 1;
     int i;
+#ifndef _WIN32
     int fds[2];
     pipe(fds);
+#endif
     //successful write to a pipe checks that we can read
     //Frame's memory. Otherwise we might segfault if rbp holds junk.
-    for(i = 1; i < maxN && write(fds[1],frame,sizeof(Frame)) != -1 && frame->addr && frame->next; i++) {
+    for(i = 1; i < maxN && 
+#ifndef _WIN32
+		write(fds[1],frame,sizeof(Frame)) != -1 && 
+#else
+		!IsBadReadPtr(frame, sizeof(Frame)) &&
+#endif
+		frame->addr && frame->next; i++) {
         frames[i] = frame->addr;
         frame = frame->next;
     }
+#ifndef _WIN32
     close(fds[0]);
     close(fds[1]);
+#endif
     return i;
 }
 
@@ -114,8 +135,10 @@ static void printstacktrace(void * uap, void * data) {
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
-    void * rip;
+	void * rip;
     void * rbp;
+
+#ifndef _WIN32
     if(uap == NULL) {
         rip = __builtin_return_address(0);
         rbp = __builtin_frame_address(1);
@@ -129,52 +152,90 @@ static void printstacktrace(void * uap, void * data) {
         rbp = (void*)uc->uc_mcontext->__ss.__rbp;
 #endif
     }
+#else
+	if (uap == NULL) {
+		CONTEXT cur_context;
+		RtlCaptureContext(&cur_context);
+		rbp = (void*)cur_context.Rbp;
+		rip = _ReturnAddress();
+	}
+	else {
+		CONTEXT * context = (CONTEXT*)uap;
+		rip = (void*)context->Rip;
+		rbp = (void*)context->Rbp;
+	}
+#endif
     int N = terra_backtrace(frames, maxN,rip,rbp);
+
+#ifndef _WIN32
     char ** symbols = backtrace_symbols(frames, N);
-    
+#else
+	HANDLE process = GetCurrentProcess();
+	SymInitialize(process, NULL, true);
+#endif
+
     for(int i = 0 ; i < N; i++) {
         bool isNextInst = i > 0 || uap == NULL; //unless this is the first entry in suspended context then the address is really a pointer to the _next_ instruction
         uintptr_t ip = (uintptr_t) frames[i];
         if(!printfunctioninfo(C, ip, isNextInst,i)) {
+#ifndef _WIN32
             printf("%s\n",symbols[i]);
+#else
+			char buf[256 + sizeof(SYMBOL_INFO)];
+			SYMBOL_INFO * symbol = (SYMBOL_INFO*)buf;
+			symbol->MaxNameLen = 255;
+			symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+			if (SymFromAddr(process, ip, 0, symbol))
+				printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d\n", i, "C", ip, symbol->Name, (int)(ip - (uintptr_t)symbol->Address));
+			else
+				printf("%-3d %-35s 0x%016" PRIxPTR "\n", i, "unknown", ip);
+#endif
         }
     }
+#ifndef _WIN32
     free(symbols);
+#endif
 }
 
-static bool terra_lookupsymbol(void * ip, void ** fnaddr, size_t * fnsize, const char ** name, size_t * N, terra_CompilerState * C) {
+struct SymbolInfo {
+	const void * addr;
+	size_t size;
+	const char * name;
+	size_t namelength;
+};
+
+static bool terra_lookupsymbol(void * ip, SymbolInfo * r, terra_CompilerState * C) {
     const TerraFunctionInfo * fi;
     if(!stacktrace_findsymbol(C, (uintptr_t)ip, &fi))
         return false;
-    
-    if(fnaddr)
-        *fnaddr = fi->addr;
-    if(fnsize)
-        *fnsize = fi->size;
-    StringRef sr = fi->fn->getName();
-    if(name)
-        *name = sr.data();
-    if(N)
-        *N = sr.size();
-    return true;
+    r->addr = fi->addr;
+	r->size = fi->size;
+	StringRef sr = fi->fn->getName();
+	r->name = sr.data();
+	r->namelength = sr.size();
+	return true;
 }
-static bool terra_lookupline(void * fnaddr, void * ip, const char ** fname, size_t * N, size_t * linenum, terra_CompilerState * C) {
+
+
+struct LineInfo {
+	const char * name;
+	size_t namelength;
+	size_t linenum;
+};
+static bool terra_lookupline(void * fnaddr, void * ip, LineInfo * r ,terra_CompilerState * C) {
     if(C->functioninfo.count(fnaddr) == 0)
         return false;
     const TerraFunctionInfo & fi = C->functioninfo[fnaddr];
     StringRef sr;
-    if(!stacktrace_findline(C, &fi, (uintptr_t)ip, false, &sr, linenum))
+    if(!stacktrace_findline(C, &fi, (uintptr_t)ip, false, &sr, &r->linenum))
         return false;
-    if(fname)
-        *fname = sr.data();
-    if(N)
-        *N = sr.size();
+	r->name = sr.data();
+	r->namelength = sr.size();
     return true;
 }
 
-
 static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void ** env, int nenv) {
-    assert(nargs <= 6);
+    assert(nargs <= 4);
     assert(*env);
     size_t fnsize = 2 + 10*(nenv + 1);
     uint8_t * buf = JMM->allocateSpace(fnsize, 16);
@@ -186,7 +247,11 @@ static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void *
     memcpy(code,&data, 8);        \
     code += 8;                    \
 } while(0);
-    const uint8_t regnums[] = {7,6,2,1,8,9};
+#ifndef _WIN32
+    const uint8_t regnums[] = {7,6,2,1 /*,8,9*/};
+#else
+	const uint8_t regnums[] = {1,2,8,9};
+#endif
     ENCODE_MOV(0,fn); /* mov rax, fn */
     for(int i = nargs - nenv; i < nargs; i++)
         ENCODE_MOV(regnums[i],*env++);
@@ -196,12 +261,13 @@ static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void *
 #undef ENCODE_MOV
 }
 
-void terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
+int terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
     void * stacktracefn = createclosure(JMM,(void*)printstacktrace,2,(void**)&T->C,1);
-    void * lookupsymbol = createclosure(JMM,(void*)terra_lookupsymbol,6,(void**)&T->C,1);
-    void * lookupline =   createclosure(JMM,(void*)terra_lookupline,6,(void**)&T->C,1);
+    void * lookupsymbol = createclosure(JMM,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
+    void * lookupline =   createclosure(JMM,(void*)terra_lookupline,4,(void**)&T->C,1);
     lua_getfield(T->L, -1, "initdebugfns");
+
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
     lua_pushlightuserdata(T->L, (void*)terra_backtrace);
     lua_pushlightuserdata(T->L, (void*)lookupsymbol);
@@ -209,22 +275,12 @@ void terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
     lua_pushlightuserdata(T->L, (void*)llvmutil_disassemblefunction);
     lua_call(T->L, 5, 0);
     lua_pop(T->L,1); /* terra table */
+	return 0;
 }
 
-#else /* it is WIN32 */
+#else /* it arm code just don't include debug interface for now */
 
-#ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE
-#endif
-#include "llvmheaders.h"
-#include "tllvmutil.h"
-#include "terrastate.h"
-#include "tcompilerstate.h"
-
-using namespace llvm;
-
-int terra_debuginit(struct terra_State * T, JITMemoryManager * JMM)
-{
+int terra_debuginit(struct terra_State * T, llvm::JITMemoryManager * JMM) {
     return 0;
 }
 

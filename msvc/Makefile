@@ -56,7 +56,7 @@ LINK=link
 
 LUAJIT = $(LUAJIT_DIR)\src\luajit.exe
 
-CPPFLAGS = /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
+CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
            /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(TERRA_DIR)\release\include /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
            /DLLVM_VERSION=35 \
            /DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
@@ -89,7 +89,7 @@ $(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\terralib.h $(BUILD)\strict.h 
 
 $(TERRA_DIR)\release\terra.dll: $(BUILD)\terra.obj
 	cd $(TERRA_DIR)\release
-	$(LINK) /nologo /MACHINE:X64 /DLL /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
+	$(LINK) /nologo /MACHINE:X64 /DLL /DEBUG /PDB:terralib.pdb /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
 
 REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC120.CRT
 

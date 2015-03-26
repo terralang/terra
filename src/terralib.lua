@@ -4569,12 +4569,16 @@ function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
     local P,FP = terra.types.pointer, terra.types.funcpointer
     local po = P(terra.types.opaque)
     local ppo = P(po)
-    local p64 = P(terra.types.uint64)
-    local ps = P(terra.types.rawstring) 
+
+    terra.SymbolInfo = terra.types.newstruct("SymbolInfo")
+    terra.SymbolInfo.entries = { {"addr", ppo}, {"size", terra.types.uint64}, {"name",terra.types.rawstring}, {"namelength",terra.types.uint64} };
+    terra.LineInfo = terra.types.newstruct("LineInfo")
+    terra.LineInfo.entries = { {"name",terra.types.rawstring}, {"namelength",terra.types.uint64},{"linenum", terra.types.uint64}};
+
     terra.traceback = terra.cast(FP({po},{}),traceback)
     terra.backtrace = terra.cast(FP({ppo,terra.types.int,po,po},{terra.types.int}),backtrace)
-    terra.lookupsymbol = terra.cast(FP({po,ppo,p64,ps,p64},{terra.types.bool}),lookupsymbol)
-    terra.lookupline   = terra.cast(FP({po,po,ps,p64,p64},{terra.types.bool}),lookupline)
+    terra.lookupsymbol = terra.cast(FP({po,P(terra.SymbolInfo)},{terra.types.bool}),lookupsymbol)
+    terra.lookupline   = terra.cast(FP({po,po,P(terra.LineInfo)},{terra.types.bool}),lookupline)
     terra.disas = terra.cast(FP({po,terra.types.uint64,terra.types.uint64},{}),disas)
 end
 

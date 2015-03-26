@@ -14,34 +14,45 @@ end
 local ptr = terralib.cast(rawstring,foo:getdefinitions()[1]:getpointer())
 
 terra findptr(a : &opaque)
-  var addr : &opaque
-  var sz : uint64
-  var nm : rawstring, nmL : uint64
-  terralib.lookupsymbol(a,&addr,&sz,&nm,&nmL)
-  C.printf("p = %p, addr = %p, sz = %d, nm = %.*s\n",a,addr,[int](sz), nmL,nm)
-  terralib.lookupline(addr,a, &nm, &nmL, &sz)
-  C.printf("line = %.*s:%d\n",nmL,nm,[int](sz))
-  return sz 
+  var si : terralib.SymbolInfo
+  var li : terralib.LineInfo
+  terralib.lookupsymbol(a,&si)
+  C.printf("p = %p, addr = %p, sz = %d, nm = %.*s\n",a,si.addr,[int](si.size), si.namelength,si.name)
+  terralib.lookupline(si.addr,a, &li)
+  C.printf("line = %.*s:%d\n",li.namelength,li.name,[int](li.linenum))
+  return li.linenum
 end
 --foo:disas()
 assert(11 == findptr(ptr+6))
 assert(10 == findptr(ptr+4))
 local ra = terralib.intrinsic("llvm.returnaddress", int32 -> &opaque )
 local fa = terralib.intrinsic("llvm.frameaddress", int32 -> &opaque )
-terra testbt()
+terra testbt3()
   var frames : (&opaque)[128]
+  terralib.traceback(nil)
   var N = terralib.backtrace(frames,128,ra(0),fa(1))
   for i = 0,N do
-    C.printf("%p\n",frames[i])
+    C.printf("%p ",frames[i])
     var nm : rawstring
     var nmL : uint64 
-    if terralib.lookupsymbol(frames[i],nil,nil,&nm,&nmL) then
-      C.printf("%.*s\n", nmL, nm)
+    var si : terralib.SymbolInfo
+    if terralib.lookupsymbol(frames[i],&si) then
+      C.printf("frame %.*s\n", si.namelength, si.name)
+    else
+      C.printf("\n")
     end
   end
 end
+testbt3:setinlined(false)
 terra fn2()
-  testbt()
+  testbt3()
+  C.printf("fn2\n")
   return 1
 end
-fn2()
+terra what()
+  fn2()
+  C.printf("what\n")
+end
+fn2:setinlined(false)
+what()
+terralib.disas(terralib.traceback,5,5)
