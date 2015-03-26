@@ -229,6 +229,12 @@ function terra.context:begin(obj) --obj is currently only a funcdefinition
     table.insert(self.tobecompiled,obj)
 end
 
+local typeerrordebugcallback
+function terra.settypeerrordebugcallback(fn)
+    assert(type(fn) == "function")
+    typeerrordebugcallback = fn
+end
+
 function terra.context:finish(anchor)
     local obj = table.remove(self.stack)
     if obj.lowlink == obj.compileindex then
@@ -244,6 +250,11 @@ function terra.context:finish(anchor)
         if self.diagnostics:haserrors() then
             for i,o in ipairs(scc) do
                 o.state = "error"
+            end
+            if typeerrordebugcallback then
+                for i,o in ipairs(scc) do
+                    typeerrordebugcallback(o)
+                end
             end
         else
             for i,o in ipairs(scc) do
@@ -261,9 +272,6 @@ function terra.context:finish(anchor)
                 end
             end
         end
-        --[[for i,o in ipairs(scc) do
-            o:printpretty(true,"%s = ",o.name)
-        end]]
     end
     self.diagnostics:finish()
 end
@@ -3694,8 +3702,8 @@ function terra.func:__tostring()
     return "<terra function>"
 end
 
-local function printpretty(toptree,returntype,start,...)
-
+local function printpretty(breaklines,toptree,returntype,start,...)
+    breaklines = breaklines == nil or breaklines
     local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
     local indentstack = terralib.newlist{ 24 } -- the depth of each indent level
@@ -3727,11 +3735,17 @@ local function printpretty(toptree,returntype,start,...)
         if #str > len then return str:sub(1,len)
         else return str..(" "):rep(len - #str) end
     end
+    local function differentlocation(a,b)
+        return (a.linenumber ~= b.linenumber or a.filename ~= b.filename)
+    end 
+    local lastanchor = { linenumber = "", filename = "" }
     local function begin(anchor,...)
         currentlinelength = 0
-        local fname = anchor.filename..":"..anchor.linenumber..": "
+        local fname = differentlocation(lastanchor,anchor) and (anchor.filename..":"..anchor.linenumber..": ")
+                                                           or ""
         emit("%s",pad(fname,indentstack[#indentstack]))
         emit(...)
+        lastanchor = anchor
     end
 
     local function emitList(lst,begin,sep,finish,fn)
@@ -3924,6 +3938,13 @@ local function printpretty(toptree,returntype,start,...)
     end
 
     function emitExp(e)
+        if breaklines and differentlocation(lastanchor,e)then
+            local ll = currentlinelength
+            emit("\n")
+            begin(e,"")
+            emit((" "):rep(ll - currentlinelength))
+            lastanchor = e
+        end
         if e:is "var" then
             emitIdent(e.name,e.value)
         elseif e:is "allocvar" then
@@ -4096,14 +4117,14 @@ local function printpretty(toptree,returntype,start,...)
     io.write(buffer:concat())
 end
 
-function terra.func:printpretty(printcompiled)
+function terra.func:printpretty(printcompiled,breaklines)
     printcompiled = (printcompiled == nil) or printcompiled
     for i,v in ipairs(self.definitions) do
-        v:printpretty(printcompiled)
+        v:printpretty(printcompiled,breaklines)
     end
 end
 
-function terra.funcdefinition:printpretty(printcompiled)
+function terra.funcdefinition:printpretty(printcompiled,breaklines)
     printcompiled = (printcompiled == nil) or printcompiled
     if not self.untypedtree then
         io.write(("%s = <extern : %s>\n"):format(self.name,self.type))
@@ -4111,13 +4132,13 @@ function terra.funcdefinition:printpretty(printcompiled)
     end
     if printcompiled then
         if self.state ~= "error" then self:emitllvm() end
-        return printpretty(self.typedtree,self.type.returntype,"%s = ",self.name)
+        return printpretty(breaklines,self.typedtree,self.type.returntype,"%s = ",self.name)
     else
-        return printpretty(self.untypedtree,self.returntype,"%s = ",self.name)
+        return printpretty(breaklines,self.untypedtree,self.returntype,"%s = ",self.name)
     end
 end
-function terra.quote:printpretty()
-    printpretty(self.tree,nil,"")
+function terra.quote:printpretty(breaklines)
+    printpretty(breaklines,self.tree,nil,"")
 end
 
 
