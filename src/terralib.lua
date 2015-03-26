@@ -715,7 +715,7 @@ function terra.global(a0, a1, isextern, as)
         c = terra.constant(a0)
         typ = c.type
     end
-    local gbl =  setmetatable({type = typ, isglobal = true, initializer = c, isextern = isextern or false, addressspace = tonumber(as) or 0},terra.globalvar)
+    local gbl =  setmetatable({type = typ, isglobal = true, symbol = terra.newsymbol("<global>"), initializer = c, isextern = isextern or false, addressspace = tonumber(as) or 0},terra.globalvar)
     
     if c then --if we have an initializer we know that the type is not opaque and we can create the variable
               --we need to call this now because it is possible for the initializer's underlying cdata object to change value
@@ -2228,7 +2228,7 @@ function terra.funcdefinition:typecheck()
     end
     
     local function insertvar(anchor, typ, name, definition)
-        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(anchor), name = name, definition = definition, value = definition.value, lvalue = true }) 
+        return terra.newtree(anchor, { kind = terra.kinds["var"], type = typ:complete(anchor), name = name, definition = definition, value = definition.symbol, lvalue = true }) 
     end
 
     local function insertselect(v, field)
@@ -2264,7 +2264,7 @@ function terra.funcdefinition:typecheck()
     
     --create a new variable allocation and a var node that refers to it, used to create temporary variables
     local function allocvar(anchor,typ,name)
-        local av = terra.newtree(anchor, { kind = terra.kinds.allocvar, name = name , type = typ:complete(anchor), value = terra.newsymbol(name), lvalue = true })
+        local av = terra.newtree(anchor, { kind = terra.kinds.allocvar, name = name , type = typ:complete(anchor), symbol = terra.newsymbol(name), lvalue = true })
         local v = insertvar(anchor,typ,name,av)
         return av,v
     end
@@ -3145,12 +3145,12 @@ function terra.funcdefinition:typecheck()
                 end
                 return e:copy { type = addr.type.type, address = addr }
             elseif e:is "attrstore" then
-                local addr = checkexp(e.operands[1])
+                local addr = checkexp(e.address)
                 if not addr.type:ispointer() then
                     diag:reporterror(e,"address must be a pointer but found ",addr.type)
                     return e:copy { type = terra.types.error }
                 end
-                local value = insertcast(checkexp(e.operands[2]),addr.type.type)
+                local value = insertcast(checkexp(e.value),addr.type.type)
                 return e:copy { address = addr, value = value, type = terra.types.unit }
             elseif e:is "apply" then
                 return checkapply(e,location)
@@ -3679,7 +3679,7 @@ terra.attrstore = terra.internalmacro( function(diag,tree,addr,value,attr)
     if not addr or not value or not attr then
         error("attrstore requires three arguments")
     end
-    return terra.newtree(tree, { kind = terra.kinds.attrstore, operands = terra.newlist { addr.tree, value.tree }, attributes = createattributetable(attr) })
+    return terra.newtree(tree, { kind = terra.kinds.attrstore, address = addr.tree, value = value.tree, attributes = createattributetable(attr) })
 end)
 
 
@@ -3704,7 +3704,7 @@ function terra.func:__tostring()
     return "<terra function>"
 end
 
-local function printpretty(toptree,returntype)
+local function printpretty(toptree,returntype,start,...)
     local env = terra.newenvironment({})
     local indent = 0
     local function enterblock()
@@ -3714,7 +3714,13 @@ local function printpretty(toptree,returntype)
         indent = indent - 1
     end
     local function emit(...) terra.printf(...) end
-    local function begin(...)
+    local function pad(str,len)
+        if #str > len then return str:sub(1,len)
+        else return str..(" "):rep(len - #str) end
+    end
+    local function begin(anchor,...)
+        local fname = anchor.filename..":"..anchor.linenumber..": "
+        io.write(pad(fname,24))
         for i = 1,indent do
             io.write("    ")
         end
@@ -3736,6 +3742,8 @@ local function printpretty(toptree,returntype)
         emit(t)
     end
     local function emitIdent(name,sym)
+        sym = terra.isglobalvar(sym) and sym.symbol or sym
+        assert(sym) assert(name) assert(terra.issymbol(sym))
         local lenv = env:localenv()
         local assignedname = lenv[sym]
         --if we haven't seen this symbol in this scope yet, assign a name for this symbol, favoring the non-mangled name
@@ -3757,9 +3765,9 @@ local function printpretty(toptree,returntype)
     local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
         for i,ss in ipairs(lst) do
             if ss:is "block" then
-                begin("do\n")
+                begin(ss,"do\n")
                 emitStmt(ss)
-                begin("end\n")
+                begin(ss,"end\n")
             else
                 emitStmt(ss)
             end
@@ -3789,69 +3797,69 @@ local function printpretty(toptree,returntype)
                 emitStmt(s.next)
             end
         elseif s:is "apply" then
-            begin("r%s = ",tostring(s):match("(0x.*)$"))
+            begin(s,"r%s = ",tostring(s):match("(0x.*)$"))
             emitExp(s)
             emit("\n")
         elseif s:is "return" then
-            begin("return ")
+            begin(s,"return ")
             if s.expression then emitExp(s.expression)
             else emitParamList(s.expressions) end
             emit("\n")
         elseif s:is "label" then
-            begin("::%s::\n",s.labelname or s.value)
+            begin(s,"::%s::\n",s.labelname or s.value)
         elseif s:is "goto" then
-            begin("goto %s (%s)\n",s.definition and s.definition.labelname or s.label,s.deferred or "")
+            begin(s,"goto %s (%s)\n",s.definition and s.definition.labelname or s.label,s.deferred or "")
         elseif s:is "break" then
-            begin("break (%s)\n",s.deferred or "")
+            begin(s,"break (%s)\n",s.deferred or "")
         elseif s:is "while" then
-            begin("while ")
+            begin(s,"while ")
             emitExp(s.condition)
             emit(" do\n")
             emitStmt(s.body)
-            begin("end\n")
+            begin(s,"end\n")
         elseif s:is "fornum" then
-            begin("for ")
+            begin(s,"for ")
             emitParam(s.variable)
             emit(" = ")
             emitExp(s.initial) emit(",") emitExp(s.limit) 
             if s.step then emit(",") emitExp(s.step) end
             emit(" do\n")
             emitStmt(s.body)
-            begin("end\n")
+            begin(s,"end\n")
         elseif s:is "forlist" then
-            begin("for ")
+            begin(s,"for ")
             emitList(s.variables,"",", ","",emitParam)
             emit(" in ")
             emitExp(s.iterator)
             emit(" do\n")
             emitStmt(s.body)
-            begin("end\n")
+            begin(s,"end\n")
         elseif s:is "if" then
             for i,b in ipairs(s.branches) do
                 if i == 1 then
-                    begin("if ")
+                    begin(b,"if ")
                 else
-                    begin("elseif ")
+                    begin(b,"elseif ")
                 end
                 emitExp(b.condition)
                 emit(" then\n")
                 emitStmt(b.body)
             end
             if s.orelse then
-                begin("else\n")
+                begin(s.orelse,"else\n")
                 emitStmt(s.orelse)
             end
-            begin("end\n")
+            begin(s,"end\n")
         elseif s:is "repeat" then
-            begin("repeat\n")
+            begin(s,"repeat\n")
             enterblock()
             emitStmt(s.body)
             leaveblock()
-            begin("until ")
+            begin(s.condition,"until ")
             emitExp(s.condition)
             emit("\n")
         elseif s:is "defvar" then
-            begin("var ")
+            begin(s,"var ")
             emitList(s.variables,"",", ","",emitParam)
             if s.initializers then
                 emit(" = ")
@@ -3859,17 +3867,17 @@ local function printpretty(toptree,returntype)
             end
             emit("\n")
         elseif s:is "assignment" then
-            begin("")
+            begin(s,"")
             emitParamList(s.lhs)
             emit(" = ")
             emitParamList(s.rhs)
             emit("\n")
         elseif s:is "defer" then
-            begin("defer ")
+            begin(s,"defer ")
             emitExp(s.expression)
             emit("\n")
         else
-            begin("")
+            begin(s,"")
             emitExp(s)
             emit("\n")
         end
@@ -3982,8 +3990,9 @@ local function printpretty(toptree,returntype)
         elseif e:is "constructor" then
             emit("{")
             if e.type then
-                local keys = e.type:getlayout().entries:map(function(e) return e.key end)
-                emitList(keys,"",", "," = ",emit)
+                local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return e.key end) end)
+                if not success then emit("<layouttypeerror> = ") 
+                else emitList(keys,"",", "," = ",emit) end
                 emitParamList(e.expressions,keys)
             else
                 local function emitRec(r)
@@ -4010,13 +4019,13 @@ local function printpretty(toptree,returntype)
             emitAttr(e.attributes)
             emit(")")
         elseif e:is "attrstore" then
-            begin("attrstore(")
+            emit("attrstore(")
             emitExp(e.address)
             emit(", ")
             emitExp(e.value)
             emit(", ")
             emitAttr(e.attributes)
-            emit(")\n")
+            emit(")")
         elseif e:is "luaobject" then
             if terra.types.istype(e.value) then
                 emit("[%s]",e.value)
@@ -4048,9 +4057,9 @@ local function printpretty(toptree,returntype)
             enterblock()
             emitStmtList(pl.statements)
             leaveblock()
-            begin("in\n")
+            begin(pl,"in\n")
             enterblock()
-            begin("")
+            begin(pl,"")
         end
         local exps = pl.expressions or pl.trees
         if exps then
@@ -4059,10 +4068,11 @@ local function printpretty(toptree,returntype)
         if pl.statements then
             leaveblock()
             emit("\n")
-            begin("end")
+            begin(pl,"end")
         end
     end
-
+    
+    begin(toptree,start,...)
     if toptree:is "function" then
         emit("terra")
         emitList(toptree.parameters,"(",",",") ",emitParam)
@@ -4072,7 +4082,7 @@ local function printpretty(toptree,returntype)
         end
         emit("\n")
         emitStmt(toptree.body)
-        emit("end\n")
+        begin(toptree,"end\n")
     else
         emitExp(toptree)
         emit("\n")
@@ -4082,26 +4092,25 @@ end
 function terra.func:printpretty(printcompiled)
     printcompiled = (printcompiled == nil) or printcompiled
     for i,v in ipairs(self.definitions) do
-        terra.printf("%s = ",v.name)
-        v:printpretty(printcompiled)
+        v:printpretty(printcompiled,"%s = ",v.name)
     end
 end
 
-function terra.funcdefinition:printpretty(printcompiled)
+function terra.funcdefinition:printpretty(printcompiled,...)
     printcompiled = (printcompiled == nil) or printcompiled
     if not self.untypedtree then
         terra.printf("<extern : %s>\n",self.type)
         return
     end
     if printcompiled then
-        self:emitllvm()
-        return printpretty(self.typedtree,self.type.returntype)
+        if self.state ~= "error" then self:emitllvm() end
+        return printpretty(self.typedtree,self.type.returntype,...)
     else
-        return printpretty(self.untypedtree,self.returntype)
+        return printpretty(self.untypedtree,self.returntype,...)
     end
 end
 function terra.quote:printpretty()
-    printpretty(self.tree)
+    printpretty(self.tree,nil,"")
 end
 
 
