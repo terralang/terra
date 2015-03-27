@@ -2,7 +2,7 @@
 
 local ffi = require("ffi")
 
--- LINE COVERAGE INFORMATION
+-- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
     local converageloader = loadfile("coverageinfo.lua")
     local linetable = converageloader and converageloader() or {}
@@ -924,13 +924,13 @@ function terra.intrinsic(str, typ)
         local types = args:map("gettype")
         local name,intrinsictype = typefn(types)
         if type(name) ~= "string" then
-            diag:reporterror(e,"expected an intrinsic name but found ",tostring(name))
+            diag:reporterror(e,"expected an intrinsic name but found ",terra.type(name))
             name = "<unknownintrinsic>"
         elseif intrinsictype == terra.types.error then
             diag:reporterror(e,"intrinsic ",name," does not support arguments: ",unpack(types))
             intrinsictype = terra.types.funcpointer(types,{})
         elseif not terra.types.istype(intrinsictype) or not intrinsictype:ispointertofunction() then
-            diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",tostring(intrinsictype))
+            diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",terra.type(intrinsictype))
             intrinsictype = terra.types.funcpointer(types,{})
         end
         local fn = terralib.externfunction(name,intrinsictype)
@@ -994,7 +994,7 @@ do  --constructor functions for terra functions and variables
             local success,resolvedtype = terra.evalluaexpression(diag,env,v.type)
             if not success then return end
             if not terra.types.istype(resolvedtype) then
-                diag:reporterror(v,"lua expression is not a terra type but ", type(resolvedtype))
+                diag:reporterror(v,"lua expression is not a terra type but ", terra.type(resolvedtype))
                 return terra.types.error
             end
             return { field = v.key, type = resolvedtype }
@@ -1850,7 +1850,7 @@ function terra.createterraexpression(diag,anchor,v)
             return terra.createterraexpression(diag,anchor,mt.__toterraexpression(v))
         else
             if not (terra.isfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "function" or type(v) == "table") then
-                diag:reporterror(anchor,"lua object of type ", type(v), " not understood by terra code.")
+                diag:reporterror(anchor,"lua object of type ", terra.type(v), " not understood by terra code.")
             end
             return terra.newtree(anchor, { kind = terra.kinds.luaobject, value = v })
         end
@@ -1877,14 +1877,14 @@ function terra.specialize(origtree, luaenv, depth)
         if success and terra.israwlist(v) then
             for i,t in ipairs(v) do
                 if not terra.types.istype(t) then
-                    diag:reporterror(anchor,"expected a type but found ",type(v))
+                    diag:reporterror(anchor,"expected a type but found ",terra.type(v))
                     return terra.types.error
                 end
             end
             return #v == 1 and v[1] or terra.types.tuple(unpack(v))
         end
         if success then
-            diag:reporterror(anchor,"expected a type but found ",type(v))
+            diag:reporterror(anchor,"expected a type but found ",terra.type(v))
         end
         return terra.types.error
     end
@@ -1904,7 +1904,7 @@ function terra.specialize(origtree, luaenv, depth)
             --note: luaobject only appear due to tree translation, so we can safely mutate ee
             local value,field = ee.value.value, ee.field
             if type(value) ~= "table" then
-                diag:reporterror(e,"expected a table but found ", type(value))
+                diag:reporterror(e,"expected a table but found ", terra.type(value))
                 return ee
             end
 
@@ -1939,7 +1939,7 @@ function terra.specialize(origtree, luaenv, depth)
                 if not success then 
                     v = terra.newsymbol(nil,"error")
                 elseif type(r) ~= "string" and not terra.issymbol(r) then
-                    diag:reporterror(e,"expected a string or symbol but found ",type(r))
+                    diag:reporterror(e,"expected a string or symbol but found ",terra.type(r))
                     v = terra.newsymbol(nil,"error")
                 else
                     v = r
@@ -2050,7 +2050,7 @@ function terra.specialize(origtree, luaenv, depth)
                         if terra.issymbol(entry) then
                             result:insert(p:copy { symbol = entry, name = tostring(entry) })
                         else
-                            diag:reporterror(p,"expected a symbol but found ",type(entry))
+                            diag:reporterror(p,"expected a symbol but found ",terra.type(entry))
                         end
                     end
                 end
@@ -2685,7 +2685,7 @@ function terra.funcdefinition:typecheck()
             if terra.types.istype(e.value) then
                 diag:reporterror(e, "expected a terra expression but found terra type ", tostring(e.value), ". If this is a cast, you may have omitted the required parentheses: [T](exp)")
             else  
-                diag:reporterror(e, "expected a terra expression but found ",type(e.value))
+                diag:reporterror(e, "expected a terra expression but found ",terra.type(e.value))
             end
             return e:copy { type = terra.types.error }
         end
@@ -2917,7 +2917,7 @@ function terra.funcdefinition:typecheck()
                         end
                     end
                 else
-                    diag:reporterror(anchor,"expected a function or macro but found lua value of type ",type(fn.value))
+                    diag:reporterror(anchor,"expected a function or macro but found lua value of type ",terra.type(fn.value))
                 end
             elseif fn.type:ispointer() and fn.type.type:isfunction() then
                 terrafunctions:insert(fn)
@@ -3136,7 +3136,7 @@ function terra.funcdefinition:typecheck()
                 local aggtype
                 if e:is "vectorconstructor" then
                     if not typ:isprimitive() and typ ~= terra.types.error then
-                        diag:reporterror(e,"vectors must be composed of primitive types (for now...) but found type ",type(typ))
+                        diag:reporterror(e,"vectors must be composed of primitive types (for now...) but found type ",terra.type(typ))
                         return e:copy { type = terra.types.error }
                     end
                     aggtype = terra.types.vector(typ,N)
@@ -4337,11 +4337,27 @@ function terra.constant(a0,a1)
 end
 _G["constant"] = terra.constant
 
+-- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
 function terra.typeof(obj)
     if type(obj) ~= "cdata" then
         error("cannot get the type of a non cdata object")
     end
     return terra.types.ctypetoterra[tonumber(ffi.typeof(obj))]
+end
+
+--equivalent to Lua's type function, but knows about concepts in Terra to improve error reporting
+function terra.type(t)
+    if terra.isfunction(t) then return "terrafunction"
+    elseif terra.types.istype(t) then return "terratype"
+    elseif terra.ismacro(t) then return "terramacro"
+    elseif terra.isglobalvar(t) then return "terraglobalvariable"
+    elseif terra.isquote(t) then return "terraquote"
+    elseif terra.istree(t) then return "terratree"
+    elseif terra.islist(t) then return "list"
+    elseif terra.issymbol(t) then return "terrasymbol"
+    elseif terra.isfunctiondefinition(t) then return "terrafunctiondefinition"
+    elseif terra.isconstant(t) then return "terraconstant"
+    else return type(t) end
 end
 
 function terra.linklibrary(filename)

@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 
 foo = global(2)
 terra a() : int

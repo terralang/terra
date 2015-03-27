@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 local sqrt = terralib.intrinsic("llvm.sqrt.f32",float -> float)
 local sqrt2 = terralib.intrinsic("llvm.sqrt.v4f32",vector(float,4) -> vector(float,4))
 

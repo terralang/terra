@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 
 terra foo()
 	var a = 2* vector(1,"what",3)

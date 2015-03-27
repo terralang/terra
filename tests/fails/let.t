@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 local c = symbol()
 local b = 
 quote

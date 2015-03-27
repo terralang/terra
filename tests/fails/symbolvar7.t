@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 local a = symbol()
 local b = { symbol(int), symbol(int) }
 

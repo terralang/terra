@@ -8,7 +8,8 @@ function failit(fn)
 	elseif not string.match(msg,"Errors reported during") then
 		error("failed wrong: "..msg,2)
 	end
+	print(msg)
 end
 local srcfile = debug.getinfo(3).source:sub(2)
 failit(assert(terralib.loadfile(srcfile)))
-os.exit(0)
+return false

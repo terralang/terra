@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 --the zero line
 M = {}
 struct M.B {a : int, b : int}

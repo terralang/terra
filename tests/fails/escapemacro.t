@@ -1,4 +1,4 @@
-require("fail")
+if not require("fail") then return end
 
 thea = nil
 function store(a)
