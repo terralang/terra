@@ -3706,7 +3706,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
     breaklines = breaklines == nil or breaklines
     local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
-    local indentstack = terralib.newlist{ 24 } -- the depth of each indent level
+    local indentstack = terralib.newlist{ 0 } -- the depth of each indent level
     
     local currentlinelength = 0
     local function enterblock()
@@ -3732,7 +3732,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         buffer:insert(r)
     end
     local function pad(str,len)
-        if #str > len then return str:sub(1,len)
+        if #str > len then return str:sub(-len)
         else return str..(" "):rep(len - #str) end
     end
     local function differentlocation(a,b)
@@ -3740,10 +3740,11 @@ local function printpretty(breaklines,toptree,returntype,start,...)
     end 
     local lastanchor = { linenumber = "", filename = "" }
     local function begin(anchor,...)
-        currentlinelength = 0
         local fname = differentlocation(lastanchor,anchor) and (anchor.filename..":"..anchor.linenumber..": ")
                                                            or ""
-        emit("%s",pad(fname,indentstack[#indentstack]))
+        emit("%s",pad(fname,24))
+        currentlinelength = 0
+        emit((" "):rep(indentstack[#indentstack]))
         emit(...)
         lastanchor = anchor
     end
