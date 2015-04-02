@@ -83,13 +83,22 @@ public:
         //that is, we insert the type, and link it to its llvm type, so it can be used in terra code
         //but none of its fields are exposed (since we don't understand the layout)
         bool opaque = false;
+        int anonname = 0;
         for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
-            if(it->isBitField() || it->isAnonymousStructOrUnion() || !it->getDeclName()) {
+            DeclarationName declname = it->getDeclName();
+            
+            if(it->isBitField() || (!it->isAnonymousStructOrUnion() && !declname)) {
                 opaque = true;
                 continue;
             }
-            DeclarationName declname = it->getDeclName();
-            std::string declstr = declname.getAsString();
+            std::string declstr;
+            if(it->isAnonymousStructOrUnion()) {
+                char buf[32];
+                sprintf(buf,"_%d",anonname++);
+                declstr = buf;
+            } else {
+                declstr = declname.getAsString();
+            }
             QualType FT = it->getType();
             Obj fobj;
             if(!GetType(FT,&fobj)) {
