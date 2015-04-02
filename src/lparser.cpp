@@ -925,7 +925,7 @@ static void primaryexp (LexState *ls) {
 
 //TODO: eventually we should record the set of possibly used symbols, and only quote the ones appearing in it
 static void print_captured_locals(LexState * ls, TerraCnt * tc) {
-    OutputBuffer_printf(&ls->output_buffer,"function() return setmetatable({ ");
+    OutputBuffer_printf(&ls->output_buffer,"function() return terra.makeenv({ ");
     for(StringSet::iterator i = tc->capturedlocals.begin(), end = tc->capturedlocals.end();
         i != end;
         ++i) {
@@ -937,7 +937,7 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
         OutputBuffer_puts(&ls->output_buffer, 2, "; ");*/
         OutputBuffer_printf(&ls->output_buffer,"%s = %s;",str,str);
     }
-    OutputBuffer_printf(&ls->output_buffer," }, { __index = terra.makeenvunstrict(getfenv()) }) end");
+    OutputBuffer_printf(&ls->output_buffer," },getfenv()) end");
 }
 
 static void doquote(LexState * ls) {

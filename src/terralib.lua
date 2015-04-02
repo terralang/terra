@@ -4246,12 +4246,14 @@ local function terraloader(name)
 end
 table.insert(package.loaders,terraloader)
 
-function terra.makeenvunstrict(env)
-    if getmetatable(env) == Strict then
-        return function(self,idx)
-            return rawget(env,idx)
-        end
-    else return env end
+function terra.makeenv(env,g)
+    local mt = {}
+    if getmetatable(g) == Strict then
+        mt.__index = function(self,idx) return rawget(g,idx) end
+    else
+        mt.__index = g
+    end
+    return setmetatable(env,mt)
 end
 
 function terra.new(terratype,...)
