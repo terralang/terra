@@ -1027,26 +1027,6 @@ do  --constructor functions for terra functions and variables
         diag:finishandabortiferrors("Errors reported during struct definition.",3)
     end
 
-    local function declareobjects(N,declfn,...)
-        local idx,args,results = 1,{...},{}
-        for i = 1,N do
-            local origv,name = args[idx], args[idx+1]
-            results[i] = declfn(origv,name)
-            idx = idx + 2
-        end
-        return unpack(results)
-    end
-    function terra.declarestructs(N,...)
-        return declareobjects(N,function(origv,name)
-            if terra.types.istype(origv) and origv:isstruct() then
-                return origv
-            else
-                local st = terra.types.newstruct(name,3)
-                st.undefined = true
-                return st
-            end 
-        end,...)
-    end
     function terra.declarefunctions(N,...)
         return declareobjects(N,function(origv,name)
             return (terra.isfunction(origv) and origv) or mkfunction(name)
@@ -1054,26 +1034,56 @@ do  --constructor functions for terra functions and variables
     end
 
     function terra.defineobjects(fmt,envfn,...)
-        local args = {...}
-        local idx = 1
-        local results = {}
+        local nargs = 2
+        local env = setmetatable({},{__index = envfn()})
+        local decls = terralib.newlist()
+        local r = terralib.newlist()
+        local function enclosing(name)
+            local t = env
+            for m in name:gmatch("([^.]*)%.") do
+                t = t[m] --TODO, guard the failure here
+            end
+            return t,name:match("[^.]*$")
+        end
         for i = 1, #fmt do
             local c = fmt:sub(i,i)
-            local obj, tree = args[idx], args[idx+1]
-            idx = idx + 2
+            local name,tree = select(nargs*(i-1) + 1,...)
+            local tbl,lastname = enclosing(name)
+            if "m" == c then
+                assert(terra.types.istype(tbl) and tbl:isstruct()) --todo: good error
+                tbl = tbl.methods
+            end
+            local v = tbl[lastname] -- TODO: guard read
             if "s" == c then
-                layoutstruct(obj,tree,envfn())
-            elseif "f" == c or "m" == c then
-                local reciever = nil
-                if "m" == c then
-                    reciever = args[idx]
-                    idx = idx + 1
+                if not terra.types.istype(v) or not v:isstruct() then
+                    v = terra.types.newstruct(name,1)
+                    v.undefined = true
                 end
-                obj:adddefinition(newfunctiondefinition(tree,envfn(),reciever))
-            else
-                error("unknown object format: "..c)
+            else assert("m" == c or "f" == c)
+                v = terra.isfunction(v) and v or mkfunction(name)
+            end
+            tbl[lastname] = v -- guard 
+            decls:insert(v)
+            if lastname == name then
+                r:insert(v)
             end
         end
+        -- now handle definitions
+        for i,d in ipairs(decls) do
+            local c = fmt:sub(i,i)
+            local name,tree = select(nargs*(i-1) + 1,...)
+            if tree then
+                if "s" == c then
+                    layoutstruct(d,tree,env)
+                elseif "m" == c then
+                    local reciever = enclosing(name)
+                    d:adddefinition(newfunctiondefinition(tree,env,reciever))
+                else assert("f" == c)
+                    d:adddefinition(newfunctiondefinition(tree,env))
+                end
+            end
+        end
+        return unpack(r)
     end
 
     function terra.anonstruct(tree,envfn)
@@ -4246,13 +4256,11 @@ local function terraloader(name)
 end
 table.insert(package.loaders,terraloader)
 
-function terra.makeenv(env,g)
-    local mt = {}
-    if getmetatable(g) == Strict then
-        mt.__index = function(self,idx) return rawget(g,idx) end
-    else
-        mt.__index = g
-    end
+function terra.makeenv(env,defined,g)
+    local mt = { __index = function(self,idx)
+        if defined[idx] then return nil -- local variable was defined and was nil, the search ends here
+        elseif getmetatable(g) == Strict then return rawget(g,idx) else return g[idx] end
+    end }
     return setmetatable(env,mt)
 end
 
