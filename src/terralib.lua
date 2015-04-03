@@ -1034,10 +1034,14 @@ do  --constructor functions for terra functions and variables
     end
 
     function terra.defineobjects(fmt,envfn,...)
+        local cmds = terralib.newlist()
         local nargs = 2
+        for i = 1, #fmt do --collect declaration/definition commands
+            local c = fmt:sub(i,i)
+            local name,tree = select(nargs*(i-1) + 1,...)
+            cmds:insert { c = c, name = name, tree = tree }
+        end
         local env = setmetatable({},{__index = envfn()})
-        local decls = terralib.newlist()
-        local r = terralib.newlist()
         local function enclosing(name)
             local t = env
             for m in name:gmatch("([^.]*)%.") do
@@ -1045,41 +1049,45 @@ do  --constructor functions for terra functions and variables
             end
             return t,name:match("[^.]*$")
         end
-        for i = 1, #fmt do
-            local c = fmt:sub(i,i)
-            local name,tree = select(nargs*(i-1) + 1,...)
-            local tbl,lastname = enclosing(name)
-            if "m" == c then
-                assert(terra.types.istype(tbl) and tbl:isstruct()) --todo: good error
-                tbl = tbl.methods
-            end
-            local v = tbl[lastname] -- TODO: guard read
-            if "s" == c then
+        local decls = terralib.newlist()
+        for i,c in ipairs(cmds) do --pass 1 declare all structs
+            if "s" == c.c then
+                local tbl,lastname = enclosing(c.name)
+                local v = tbl[lastname]
                 if not terra.types.istype(v) or not v:isstruct() then
-                    v = terra.types.newstruct(name,1)
+                    v = terra.types.newstruct(c.name,1)
                     v.undefined = true
                 end
-            else assert("m" == c or "f" == c)
-                v = terra.isfunction(v) and v or mkfunction(name)
-            end
-            tbl[lastname] = v -- guard 
-            decls:insert(v)
-            if lastname == name then
-                r:insert(v)
+                decls[i] = v
+                tbl[lastname] = v
             end
         end
-        -- now handle definitions
-        for i,d in ipairs(decls) do
-            local c = fmt:sub(i,i)
-            local name,tree = select(nargs*(i-1) + 1,...)
-            if tree then
-                if "s" == c then
-                    layoutstruct(d,tree,env)
-                elseif "m" == c then
-                    local reciever = enclosing(name)
-                    d:adddefinition(newfunctiondefinition(tree,env,reciever))
-                else assert("f" == c)
-                    d:adddefinition(newfunctiondefinition(tree,env))
+        local r = terralib.newlist()
+        for i,c in ipairs(cmds) do -- pass 2 declare all functions, create return list
+            local tbl,lastname = enclosing(c.name)
+            if "s" ~= c.c then
+                if "m" == c.c then
+                    assert(terra.types.istype(tbl) and tbl:isstruct()) --todo: good error
+                    tbl = tbl.methods
+                end
+                local v = tbl[lastname]
+                v = terra.isfunction(v) and v or mkfunction(c.name)
+                decls[i] = v
+                tbl[lastname] = v
+            end
+            if lastname == c.name then
+                r:insert(decls[i])
+            end
+        end    
+        for i,c in ipairs(cmds) do -- pass 3 define functions
+            if c.tree then
+                if "s" == c.c then
+                    layoutstruct(decls[i],c.tree,env)
+                elseif "m" == c.c then
+                    local reciever = enclosing(c.name)
+                    decls[i]:adddefinition(newfunctiondefinition(c.tree,env,reciever))
+                else assert("f" == c.c)
+                    decls[i]:adddefinition(newfunctiondefinition(c.tree,env))
                 end
             end
         end

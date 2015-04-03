@@ -1703,7 +1703,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
     enterterra(ls, &tc);
     
     bool islocal = emittedlocal;
-    for(int idx = 0,nstructs = 0; true; idx++) {
+    for(int idx = 0; true; idx++) {
         int token = ls->t.token;
         luaX_next(ls); /* consume starting token */
         names.push_back(Name());
@@ -1731,11 +1731,6 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             } break;
         }
         defs.push_back(tdefn);
-        if(tdefn.kind == 's') { //make sure struct declarations are first
-            std::swap(defs[nstructs],defs.back());
-            std::swap(names[nstructs],names.back());
-            nstructs++;
-        }
         if(!testnext(ls,TK_AND))
             break;
         islocal = testnext(ls, TK_LOCAL);
