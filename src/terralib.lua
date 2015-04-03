@@ -1042,24 +1042,35 @@ do  --constructor functions for terra functions and variables
             cmds:insert { c = c, name = name, tree = tree }
         end
         local env = setmetatable({},{__index = envfn()})
+        local function paccess(name,d,t,k,v)
+            local s,r = pcall(function()
+                if v then t[k] = v
+                else return t[k] end
+            end)
+            if not s then
+                error("failed attempting to index field '"..k.."' in name '"..name.."' (expected a table but found "..terra.type(t)..")" ,d)
+            end
+            return r
+        end
         local function enclosing(name)
             local t = env
             for m in name:gmatch("([^.]*)%.") do
-                t = t[m] --TODO, guard the failure here
+                t = paccess(name,4,t,m) --TODO, guard the failure here
             end
             return t,name:match("[^.]*$")
         end
+        
         local decls = terralib.newlist()
         for i,c in ipairs(cmds) do --pass 1 declare all structs
             if "s" == c.c then
                 local tbl,lastname = enclosing(c.name)
-                local v = tbl[lastname]
+                local v = paccess(c.name,3,tbl,lastname)
                 if not terra.types.istype(v) or not v:isstruct() then
                     v = terra.types.newstruct(c.name,1)
                     v.undefined = true
                 end
                 decls[i] = v
-                tbl[lastname] = v
+                paccess(c.name,3,tbl,lastname,v)
             end
         end
         local r = terralib.newlist()
@@ -1067,13 +1078,15 @@ do  --constructor functions for terra functions and variables
             local tbl,lastname = enclosing(c.name)
             if "s" ~= c.c then
                 if "m" == c.c then
-                    assert(terra.types.istype(tbl) and tbl:isstruct()) --todo: good error
+                    if not terra.types.istype(tbl) or not tbl:isstruct() then
+                        error("expected a struct but found "..terra.type(tbl).. " when attempting to add method "..c.name,2)
+                    end
                     tbl = tbl.methods
                 end
-                local v = tbl[lastname]
+                local v = paccess(c.name,3,tbl,lastname)
                 v = terra.isfunction(v) and v or mkfunction(c.name)
                 decls[i] = v
-                tbl[lastname] = v
+                paccess(c.name,3,tbl,lastname,v)
             end
             if lastname == c.name then
                 r:insert(decls[i])

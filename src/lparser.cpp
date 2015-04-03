@@ -1712,7 +1712,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
         if(islocal)
             nlocals++;
         else
-            refvariable(ls,name->data[0]);
+            refvariable(ls,name->data[0]); //non-local names are references because we look up old value
         TDefn tdefn = { .treeid = -1, .islocal = islocal };
         switch(token) {
             case TK_TERRA: {
@@ -1741,7 +1741,6 @@ static void terrastats(LexState * ls, bool emittedlocal) {
     luaX_patchbegin(ls,&begin);
     
     //print the new local names (if any) and define them in the local context
-    //register the references to non-local names
     if(!emittedlocal && nlocals > 0)
         OutputBuffer_printf(&ls->output_buffer, "local ");
     for(size_t i = 0,emitted = 0; i < names.size(); i++) {
@@ -1750,7 +1749,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
         if(defs[i].islocal) {
             Name_print(name, ls);
             definevariable(ls, firstname);
-            tc.capturedlocals.insert(firstname);
+            tc.capturedlocals.insert(firstname); //capture these locals so that the constructor doesn't see old values
             if(++emitted < nlocals)
                 OutputBuffer_putc(&ls->output_buffer, ',');
         }
