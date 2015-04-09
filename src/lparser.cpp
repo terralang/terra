@@ -1713,7 +1713,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             nlocals++;
         else
             refvariable(ls,name->data[0]); //non-local names are references because we look up old value
-        TDefn tdefn = { .treeid = -1, .islocal = islocal };
+        TDefn tdefn; tdefn.treeid = -1; tdefn.islocal = islocal;
         switch(token) {
             case TK_TERRA: {
                 tdefn.kind = ismethod ? 'm' : 'f';
