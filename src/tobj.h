@@ -141,6 +141,21 @@ struct Obj {
         lua_rawseti(L, -2, s+1);
         pop(2);
     }
+    void setud(Obj * k,void * ud) {
+        push();
+        k->push();
+        lua_pushlightuserdata(L,ud);
+        lua_settable(L,-3);
+        pop(1);
+    }
+    void * getud(Obj * k) {
+        push();
+        k->push();
+        lua_gettable(L,-2);
+        void * r = lua_touserdata(L,-1);
+        pop(2);
+        return r;
+    }
     void dump() {
         printf("object is:\n");
         

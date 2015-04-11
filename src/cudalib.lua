@@ -18,8 +18,7 @@ terralib.CUDAParams.entries = { { "gridDimX", uint },
                                 
 function cudalib.toptx(module,dumpmodule,version)
     dumpmodule,version = not not dumpmodule,assert(tonumber(version))
-
-    local llvmglobals = {} -- map name -> terra object with llvm_value that goes in the cuda kernel (function, var, constant)
+    local cu = terralib.newcompilationunit(false)
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
     local kernelindex = {}
 
@@ -46,8 +45,7 @@ function cudalib.toptx(module,dumpmodule,version)
                 break
             end
         end
-        fn:emitllvm()
-        llvmglobals[k] = fn
+        cu:addvalue(k,fn)
         annotations:insert({k,"kernel",1})
     end
     
@@ -70,15 +68,14 @@ function cudalib.toptx(module,dumpmodule,version)
                 v = v.global
             end
             if terralib.isglobalvar(v) then
-                v:getpointer() -- ensure llvm_value exists for compiler
-                llvmglobals[k] = v
+                cu:addvalue(k,v)
             else
                 error("module must contain only terra functions, globals, or cuda constants")
             end
         end
     end
     --call into tcuda.cpp to perform compilation
-    return terralib.toptximpl(llvmglobals,annotations,dumpmodule,version)
+    return terralib.toptximpl(cu,annotations,dumpmodule,version)
 end
 
 -- we need to use terra to write the function that JITs the right wrapper functions forCUDA kernels

@@ -38,7 +38,7 @@ local function hasbeenfrozen(self)
 	local md = metadata[self]
 	local vtbl = md.vtable:get()
 	for methodname,impl in pairs(md.methodimpl) do
-		impl:compile(function()
+		impl:gettype(function()
 			vtbl[methodname] = impl:getpointer()  
 		end)
 	end

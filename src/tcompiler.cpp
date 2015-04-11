@@ -40,12 +40,8 @@ using namespace llvm;
 
 
 #define TERRALIB_FUNCTIONS(_) \
-    _(codegen,1) /*entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist*/\
-    _(optimize,1) /*entry point from lua into compiler to perform optimizations at the function level, passed an entire strongly connected component of functions\
-                    all callee's of these functions that are not in this scc have already been optimized*/\
+    _(compilationunitaddvalue,1) /*entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist*/\
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
-    _(createglobal,1) \
-    _(registerexternfunction,1) \
     _(llvmsizeof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
@@ -71,7 +67,7 @@ struct DisassembleFunctionListener : public JITEventListener {
     : T(T_) {}
     virtual void NotifyFunctionEmitted (const Function & f, void * data, size_t sz, const EmittedFunctionDetails & EFD) {
         TerraFunctionInfo & fi = T->C->functioninfo[data];
-        fi.fn = &f;
+        fi.name = f.getName();
         fi.addr = data;
         fi.size = sz;
         DEBUG_ONLY(T) {
@@ -97,14 +93,13 @@ struct DisassembleFunctionListener : public JITEventListener {
                 uint64_t sz;
                 I->getSize(sz);
                 #ifndef __arm__
-		name = name.substr(1);
+                    name = name.substr(1);
                 #endif
-                Function * F = T->C->m->getFunction(name);
-                if(F) {
-                    void * addr = (void*) T->C->ee->getFunctionAddress(name);
+                void * addr = (void*) T->C->ee->getFunctionAddress(name);
+                if(addr) {
                     assert(addr);
                     TerraFunctionInfo & fi = T->C->functioninfo[addr];
-                    fi.fn = F;
+                    fi.name = name;
                     fi.addr = addr;
                     fi.size = sz;
                 }
@@ -134,16 +129,6 @@ static double CurrentTimeInSeconds() {
 static int terra_currenttimeinseconds(lua_State * L) {
     lua_pushnumber(L, CurrentTimeInSeconds());
     return 1;
-}
-
-static void RecordTime(Obj * obj, const char * name, double begin) {
-    lua_State * L = obj->getState();
-    Obj stats;
-    if(obj->obj("stats",&stats)) {
-        double end = CurrentTimeInSeconds();
-        lua_pushnumber(L, end - begin);
-        stats.setfield(name);
-    }
 }
 
 static void AddLLVMOptions(int N,...) {
@@ -314,16 +299,17 @@ int terra_compilerinit(struct terra_State * T) {
     }
     
     if(T->options.usemcjit) {
-        T->C->m = new Module("terra",*T->C->ctx);
-        T->C->fpm = new PassManager();
+        T->C->jitmodule = new Module("terra",*T->C->ctx);
+        //T->C->fpm = new PassManager();
     } else {
-        T->C->m = topeemodule;
-        T->C->fpm = new FunctionPassManager(T->C->m);
+        T->C->jitmodule = topeemodule;
+        //T->C->fpm = new FunctionPassManager(T->C->m);
+        printf("TODO: allocate FPM\n");
     }
 
-    T->C->m->setTargetTriple(Triple);
-    llvmutil_addtargetspecificpasses(T->C->fpm, TM);
-    llvmutil_addoptimizationpasses(T->C->fpm);
+    T->C->jitmodule->setTargetTriple(Triple);
+    //llvmutil_addtargetspecificpasses(T->C->fpm, TM);
+    //llvmutil_addoptimizationpasses(T->C->fpm);
 
     if(!TheTarget) {
         terra_pusherror(T,"llvm: %s\n",err.c_str());
@@ -331,7 +317,7 @@ int terra_compilerinit(struct terra_State * T) {
     }
     
     T->C->tm = TM;
-    T->C->mi = new ManualInliner(T->C->tm,T->C->m);
+    //T->C->mi = new ManualInliner(T->C->tm,T->C->m);
     T->C->jiteventlistener = new DisassembleFunctionListener(T);
     T->C->ee->RegisterJITEventListener(T->C->jiteventlistener);
     
@@ -341,18 +327,16 @@ int terra_compilerinit(struct terra_State * T) {
 int terra_compilerfree(struct terra_State * T) {
     T->C->ee->UnregisterJITEventListener(T->C->jiteventlistener);
     delete T->C->jiteventlistener;
-    delete T->C->mi;
-    delete T->C->fpm;
+    //delete T->C->mi;
+    //delete T->C->fpm;
     delete T->C->ee;
     delete T->C->tm;
     delete T->C->ctx;
-    if(T->C->cwrapperpm)
-        delete T->C->cwrapperpm;
+    //if(T->C->cwrapperpm)
+    //    delete T->C->cwrapperpm;
     delete T->C;
     return 0;
 }
-
-struct TerraCompiler;
 
 static void GetStructEntries(Obj * typ, Obj * entries) {
     Obj layout;
@@ -372,6 +356,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 class Types {
     terra_State * T;
     terra_CompilerState * C;
+    Obj * globals;
     TType * GetIncomplete(Obj * typ) {
         TType * t = NULL;
         if(!LookupTypeCache(typ, &t)) {
@@ -380,8 +365,8 @@ class Types {
                 case T_pointer: {
                     Obj base;
                     typ->obj("type",&base);
-                    TType * baset = GetIncomplete(&base);
-                    t->type = PointerType::get(baset->type,typ->number("addressspace"));
+                    Type * baset = (base.kind("kind") == T_functype) ? Type::getInt8Ty(*C->ctx) : GetIncomplete(&base)->type;
+                    t->type = PointerType::get(baset,typ->number("addressspace"));
                 } break;
                 case T_array: {
                     Obj base;
@@ -395,9 +380,6 @@ class Types {
                     StructType * st = CreateStruct(typ);
                     t->type = st;
                     t->incomplete = st->isOpaque();
-                } break;
-                case T_functype: {
-                    t->type = Type::getInt8Ty(*C->ctx);
                 } break;
                 case T_vector: {
                     Obj base;
@@ -456,11 +438,14 @@ class Types {
         return Type::getInt8PtrTy(*C->ctx);
     }
     bool LookupTypeCache(Obj * typ, TType ** t) {
-        *t = (TType*) typ->ud("llvm_type"); //try to look up the cached type
+        *t = (TType*) globals->getud(typ); //try to look up the cached type
         if(*t == NULL) {
+            globals->push();
+            typ->push();
             *t = (TType*) lua_newuserdata(T->L,sizeof(TType));
+            lua_settable(T->L,-3);
+            lua_pop(T->L,1);
             memset(*t,0,sizeof(TType));
-            typ->setfield("llvm_type");
             assert(*t != NULL);
             return false;
         }
@@ -468,8 +453,8 @@ class Types {
     }
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
-        if(typ->boolean("llvm_definingfunction")) {
-            Function * df = C->m->getFunction(typ->string("llvm_definingfunction"));
+        if(ImportedCModule * CI = (ImportedCModule*)typ->ud("llvm_definingmodule")) {
+            Function * df = CI->M->getFunction(CI->livenessfunction);
             int argpos = typ->number("llvm_argumentposition");
             StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
             assert(st);
@@ -543,7 +528,7 @@ class Types {
         }
     }
 public:
-    Types(terra_State * T_) : T(T_), C(T_->C) {}
+    Types(terra_State * T_, Obj * globals_) : T(T_), C(T_->C), globals(globals_) {}
     TType * Get(Obj * typ) {
         assert(typ->kind("kind") != T_functype); // Get should not be called on function directly, only function pointers
         TType * t = GetIncomplete(typ);
@@ -602,9 +587,9 @@ struct CCallingConv {
     lua_State * L;
     terra_CompilerState * C;
     Types * Ty;
-    IRBuilder<> * B;
+    Obj * globals;
     
-    CCallingConv(terra_State * T_, Types * Ty_, IRBuilder<> * B_) : T(T_), L(T_->L), C(T_->C), Ty(Ty_), B(B_) {}
+    CCallingConv(terra_State * T_, Types * Ty_, Obj * globals_) : T(T_), L(T_->L), C(T_->C), Ty(Ty_), globals(globals_) {}
     
     enum RegisterClass {
         C_INTEGER,
@@ -802,17 +787,13 @@ struct CCallingConv {
     }
     
     Classification * ClassifyFunction(Obj * fntyp) {
-        Classification * info  = (Classification*) fntyp->ud("llvm_ccinfo");
+        Classification * info = (Classification*)globals->getud(fntyp);
         if(!info) {
-            info = new Classification();
-            lua_pushlightuserdata(L,info);
-            
+            info = new Classification(); //TODO: fix leak
             Obj params;
             fntyp->obj("parameters",&params);
             Classify(fntyp, &params, info);
-            Classification * oldinfo = (Classification*) fntyp->ud("llvm_ccinfo");
-            assert(!oldinfo);
-            fntyp->setfield("llvm_ccinfo");
+            globals->setud(fntyp, info);
         }
         return info;
     }
@@ -872,9 +853,9 @@ struct CCallingConv {
         }
     }
     
-    Function * CreateFunction(Obj * ftype, const Twine & name) {
+    Function * CreateFunction(Module * M, Obj * ftype, const Twine & name) {
         Classification * info = ClassifyFunction(ftype);
-        Function * fn = Function::Create(info->fntype, Function::ExternalLinkage, name, C->m);
+        Function * fn = Function::Create(info->fntype, Function::ExternalLinkage, name, M);
         AttributeFnOrCall(fn,info);
         return fn;
     }
@@ -882,12 +863,12 @@ struct CCallingConv {
     PointerType * Ptr(Type * t) {
         return PointerType::getUnqual(t);
     }
-    Value * ConvertPrimitive(Value * src, Type * dstType, bool issigned) {
+    Value * ConvertPrimitive(IRBuilder<> * B, Value * src, Type * dstType, bool issigned) {
         if(!dstType->isIntegerTy())
             return src;
         return B->CreateIntCast(src, dstType, issigned);
     }
-    void EmitEntry(Obj * ftype, Function * func, std::vector<Value *> * variables) {
+    void EmitEntry(IRBuilder<> * B, Obj * ftype, Function * func, std::vector<Value *> * variables) {
         Classification * info = ClassifyFunction(ftype);
         assert(info->paramtypes.size() == variables->size());
         Function::arg_iterator ai = func->arg_begin();
@@ -898,7 +879,7 @@ struct CCallingConv {
             Value * v = (*variables)[i];
             switch(p->kind) {
                 case C_PRIMITIVE: {
-                    Value * a = ConvertPrimitive(ai,p->type->type,p->type->issigned);
+                    Value * a = ConvertPrimitive(B,ai,p->type->type,p->type->issigned);
                     B->CreateStore(a,v);
                     ++ai;
                 } break;
@@ -918,14 +899,14 @@ struct CCallingConv {
             }
         }
     }
-    void EmitReturn(Obj * ftype, Function * function, Value * result) {
+    void EmitReturn(IRBuilder<> * B, Obj * ftype, Function * function, Value * result) {
         Classification * info = ClassifyFunction(ftype);
         ArgumentKind kind = info->returntype.kind;
         
         if(C_AGGREGATE_REG == kind && info->returntype.GetNumberOfTypesInParamList() == 0) {
             B->CreateRetVoid();
         } else if(C_PRIMITIVE == kind) {
-            B->CreateRet(ConvertPrimitive(result,info->returntype.cctype,info->returntype.type->issigned));
+            B->CreateRet(ConvertPrimitive(B,result,info->returntype.cctype,info->returntype.type->issigned));
         } else if(C_AGGREGATE_MEM == kind) {
             B->CreateStore(result,function->arg_begin());
             B->CreateRetVoid();
@@ -941,7 +922,7 @@ struct CCallingConv {
         }
     }
     
-    Value * EmitCall(Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals) {
+    Value * EmitCall(IRBuilder<> * B, Obj * ftype, Obj * paramtypes, Value * callee, std::vector<Value*> * actuals) {
         Classification info;
         Classify(ftype,paramtypes,&info);
         
@@ -956,7 +937,7 @@ struct CCallingConv {
             Value * actual = (*actuals)[i];
             switch(a->kind) {
                 case C_PRIMITIVE:
-                    arguments.push_back(ConvertPrimitive(actual,a->cctype,a->type->issigned));
+                    arguments.push_back(ConvertPrimitive(B,actual,a->cctype,a->type->issigned));
                     break;
                 case C_AGGREGATE_MEM: {
                     Value * scratch = CreateAlloca(B,a->type->type);
@@ -986,7 +967,7 @@ struct CCallingConv {
         
         //unstage results
         if(C_PRIMITIVE == info.returntype.kind) {
-            return ConvertPrimitive(call,info.returntype.type->type,info.returntype.type->issigned);
+            return ConvertPrimitive(B,call,info.returntype.type->type,info.returntype.type->issigned);
         } else {
             Value * aggregate;
             if(C_AGGREGATE_MEM == info.returntype.kind) {
@@ -1045,16 +1026,24 @@ struct CCallingConv {
     }
 };
 
-static Constant * GetConstant(terra_State * T, Obj * v) {
+
+struct CompilationUnit {
+    Types * Ty;
+    CCallingConv * CC;
+    Module * M;
+    Obj * symbols;
+};
+
+static Constant * EmitConstant(terra_State * T, CompilationUnit * CU, Obj * v) {
     lua_State * L = T->L;
     terra_CompilerState * C = T->C;
     Obj t;
     v->obj("type", &t);
-    TType * typ = Types(T).Get(&t);
+    TType * typ = CU->Ty->Get(&t);
     ConstantFolder B;
     if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
         Type * ptyp = PointerType::getUnqual(typ->type);
-        GlobalVariable * gv = (GlobalVariable*) v->ud("llvm_value");
+        GlobalVariable * gv = (GlobalVariable*) CU->symbols->getud(v);
         if(gv == NULL) {
             v->pushfield("object");
             const void * data = lua_topointer(L,-1);
@@ -1063,13 +1052,12 @@ static Constant * GetConstant(terra_State * T, Obj * v) {
             size_t size = C->td->getTypeAllocSize(typ->type);
             size_t align = C->td->getPrefTypeAlignment(typ->type);
             Constant * arr = ConstantDataArray::get(*C->ctx,ArrayRef<uint8_t>((const uint8_t*)data,size));
-            gv = new GlobalVariable(*C->m, arr->getType(),
+            gv = new GlobalVariable(*CU->M, arr->getType(),
                                     true, GlobalValue::ExternalLinkage,
                                     arr, "const");
             gv->setAlignment(align);
             gv->setUnnamedAddr(true);
-            lua_pushlightuserdata(L,gv);
-            v->setfield("llvm_value");
+            CU->symbols->setud(v,gv);
         }
         return B.CreateBitCast(gv, ptyp);
     } else {
@@ -1098,23 +1086,21 @@ static Constant * GetConstant(terra_State * T, Obj * v) {
     }
 }
 
-
-static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const char * name) {
-    GlobalVariable * gv = (GlobalVariable *) global->ud("llvm_value");
+static GlobalVariable * EmitGlobalVariable(terra_State * T, CompilationUnit * CU, Obj * global, const char * name) {
+    GlobalVariable * gv = (GlobalVariable*) CU->symbols->getud(global);
     if (gv == NULL) {
         Obj t;
         global->obj("type",&t);
-        Type * typ = Types(T).Get(&t)->type;
+        Type * typ = CU->Ty->Get(&t)->type;
         
         Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
         Obj constant;
         if(global->obj("initializer",&constant)) {
-            llvmconstant = GetConstant(T,&constant);
+            llvmconstant = EmitConstant(T,CU,&constant);
         }
         int as = global->number("addressspace");
-        gv = new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
-        lua_pushlightuserdata(T->L, gv);
-        global->setfield("llvm_value");
+        gv = new GlobalVariable(*CU->M, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+        CU->symbols->setud(global, gv);
     }
     return gv;
 }
@@ -1122,13 +1108,19 @@ static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const c
 
 static int terra_deletefunction(lua_State * L);
 
-struct TerraCompiler {
+Function * EmitFunction(terra_State * T_, CompilationUnit * CU, Obj * funcobj);
+
+struct FunctionEmitter {
     terra_State * T;
+    CompilationUnit * CU;
     lua_State * L;
     terra_CompilerState * C;
+    Types * Ty;
+    CCallingConv * CC;
+    Module * M;
+    Obj * locals;
+    
     IRBuilder<> * B;
-    Types Ty;
-    CCallingConv CC;
     
     DIBuilder * DB;
     DISubprogram SP;
@@ -1140,63 +1132,69 @@ struct TerraCompiler {
     Function * func;
     std::vector<BasicBlock *> deferred;
     
-    TType * getType(Obj * v) {
-        return Ty.Get(v);
-    }
-    TType * typeOfValue(Obj * v) {
-        Obj t;
-        v->obj("type",&t);
-        return getType(&t);
-    }
-    
-    AllocaInst * allocVar(Obj * v) {
-        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->asstring("name"));
-        lua_pushlightuserdata(L,a);
-        v->setfield("value");
-        return a;
-    }
-    
-    void getOrCreateFunction(Obj * funcobj, Function ** rfn) {
-        Function * fn = (Function *) funcobj->ud("llvm_value");
-        Obj ftype;
-        funcobj->obj("type",&ftype);
-        if(!fn) {
+    FunctionEmitter(terra_State * T_, CompilationUnit * CU_, Obj * funcobj_) : T(T_), CU(CU_), L(T_->L), C(T_->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), funcobj(funcobj_)  {}
+    Function * run() {
+        func = lookupSymbol<Function>(CU->symbols,funcobj);
+        if(!func) {
             const char * name = funcobj->string("name");
-        
+            bool isextern = funcobj->boolean("isextern");
+            if (isextern) { //try to resolve function as imported C code
+                func = M->getFunction(name);
+                if(ImportedCModule * CI = (ImportedCModule*)funcobj->ud("llvm_definingmodule")) {
+                    if(!func) {
+                        std::string err;
+                        if(llvmutil_linkmodule(M, CI->M, T->C->tm,NULL/*&T->C->cwrapperpm*/, &err)) //TODO: optimize
+                            terra_reporterror(T, "linker reported error: %s",err.c_str());
+                        func = M->getFunction(name); assert(func);
+                    }
+                }
+                if(func) {
+                    mapSymbol(CU->symbols,funcobj,func);
+                    return func;
+                }
+            }
+            
+            Obj ftype;
+            funcobj->obj("type",&ftype);
             //function name is $+name so that it can't conflict with any symbols imported from the C namespace
-            fn = CC.CreateFunction(&ftype, Twine(StringRef("$"),name));
+            func = CC->CreateFunction(M,&ftype, Twine(StringRef((isextern) ? "" : "$"),name));
             
             if(funcobj->hasfield("alwaysinline")) {
                 if(funcobj->boolean("alwaysinline")) {
-                    fn->ADDFNATTR(AlwaysInline);
+                    func->ADDFNATTR(AlwaysInline);
                 } else {
-                    fn->ADDFNATTR(NoInline);
+                    func->ADDFNATTR(NoInline);
                 }
             }
-            lua_pushlightuserdata(L,fn);
-            funcobj->setfield("llvm_value");
-
-            //attach a userdata object to the function that will call terra_deletefunction 
-            //when the function variant is GC'd in lua
-            Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
-            *gchandle = fn;
-            if(luaL_newmetatable(L,"terra_gcfuncdefinition")) {
-                lua_pushlightuserdata(L,(void*)T);
-                lua_pushcclosure(L,terra_deletefunction,1);
-                lua_setfield(L,-2,"__gc");
-            }
-            lua_setmetatable(L,-2);
-            funcobj->setfield("llvm_gchandle");
-            T->numlivefunctions++;
+            
+            if(false) {
+                //attach a userdata object to the function that will call terra_deletefunction
+                //when the function variant is GC'd in lua
+                Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
+                *gchandle = func;
+                if(luaL_newmetatable(L,"terra_gcfuncdefinition")) {
+                    lua_pushlightuserdata(L,(void*)T);
+                    lua_pushcclosure(L,terra_deletefunction,1);
+                    lua_setfield(L,-2,"__gc");
+                }
+                lua_setmetatable(L,-2);
+                funcobj->setfield("llvm_gchandle"); //TODO: fix deletion stuff
+                T->numlivefunctions++;
+            } else { printf("TODO: ignoring delete\n"); }
+            
+            mapSymbol(CU->symbols,funcobj,func); //map the declaration first so that recursive uses do not re-emit
+            if(!isextern)
+                emitBody();
         }
-        *rfn = fn;
+        return func;
     }
-    
-    TerraCompiler(terra_State * T_, Obj * funcobj_) : T(T_), L(T_->L), C(T_->C), B(new IRBuilder<>(*T_->C->ctx)), Ty(T_), CC(T_,&Ty,B), funcobj(funcobj_) {
-        double begin = CurrentTimeInSeconds();
-        
-        getOrCreateFunction(funcobj,&func);
-        
+    void emitBody() {
+        B = new IRBuilder<>(*T->C->ctx);
+        Obj localtbl;
+        lua_newtable(L);
+        funcobj->fromStack(&localtbl);
+        locals = &localtbl; //local symbol table that maps things like variables or labels to values or basicblocks
+
         BasicBlock * entry = BasicBlock::Create(*C->ctx,"entry",func);
         
         B->SetInsertPoint(entry);
@@ -1214,7 +1212,7 @@ struct TerraCompiler {
         
         std::vector<Value *> parametervars;
         emitExpressionList(&parameters, false, &parametervars);
-        CC.EmitEntry(&ftype, func, &parametervars);
+        CC->EmitEntry(B,&ftype, func, &parametervars);
          
         Obj body;
         typedtree.obj("body",&body);
@@ -1228,9 +1226,29 @@ struct TerraCompiler {
         }
         verifyFunction(*func);
         
-        RecordTime(funcobj, "llvmgen", begin);
         delete B;
         endDebug();
+    }
+    template<typename R>
+    R* lookupSymbol(Obj * tbl, Obj * k) {
+        return (R*) tbl->getud(k);
+    }
+    void mapSymbol(Obj * tbl, Obj * k, void * v) {
+        tbl->setud(k,v);
+    }
+    TType * getType(Obj * v) {
+        return Ty->Get(v);
+    }
+    TType * typeOfValue(Obj * v) {
+        Obj t;
+        v->obj("type",&t);
+        return getType(&t);
+    }
+    
+    AllocaInst * allocVar(Obj * v) {
+        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->asstring("name"));
+        mapSymbol(locals,v,a);
+        return a;
     }
     
     Value * emitAddressOf(Obj * exp) {
@@ -1425,7 +1443,7 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         
         //check for pointer arithmetic first pointer arithmetic first
         if(at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
-            Ty.EnsurePointsToCompleteType(&aot);
+            Ty->EnsurePointsToCompleteType(&aot);
             if(bt->type->isPointerTy()) {
                 return emitPointerSub(t,a,b);
             } else {
@@ -1574,7 +1592,7 @@ if(baseT->isIntegerTy()) { \
         assert(structPtr->getType()->isPointerTy());
         PointerType * objTy = cast<PointerType>(structPtr->getType());
         assert(objTy->getElementType()->isStructTy());
-        Ty.EnsureTypeIsComplete(structType);
+        Ty->EnsureTypeIsComplete(structType);
         
         Obj layout;
         GetStructEntries(structType,&layout);
@@ -1611,9 +1629,9 @@ if(baseT->isIntegerTy()) { \
         Obj def;
         exp->obj("definition",&def);
         if(def.hasfield("isglobal")) {
-            return GetGlobalVariable(T,&def,exp->asstring("name"));
+            return EmitGlobalVariable(T,CU,&def,exp->asstring("name"));
         } else {
-            Value * v = (Value*) def.ud("value");
+            Value * v = lookupSymbol<Value>(locals,&def);
             assert(v);
             return v;
         }
@@ -1623,7 +1641,7 @@ if(baseT->isIntegerTy()) { \
         if(loadlvalue && exp->boolean("lvalue")) {
             Obj type;
             exp->obj("type",&type);
-            Ty.EnsureTypeIsComplete(&type);
+            Ty->EnsureTypeIsComplete(&type);
             raw = B->CreateLoad(raw);
         }
         return raw;
@@ -1712,7 +1730,7 @@ if(baseT->isIntegerTy()) { \
                     idxExp = emitIndex(typeOfValue(&idx),64,idxExp);
                     //otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value*> idxs;
-                    Ty.EnsurePointsToCompleteType(&aggTypeO);
+                    Ty->EnsurePointsToCompleteType(&aggTypeO);
                     Value * result = B->CreateGEP(valueExp, idxExp);
                     if(!exp->boolean("lvalue"))
                         result = B->CreateLoad(result);
@@ -1743,8 +1761,7 @@ if(baseT->isIntegerTy()) { \
                     if(objType.kind("kind") == T_functype) {
                         Obj func;
                         exp->obj("value",&func);
-                        Function * fn;
-                        getOrCreateFunction(&func,&fn);
+                        Function * fn = EmitFunction(T,CU,&func);
                         //functions are represented with &int8 pointers to avoid
                         //calling convension issues, so cast the literal to this type now
                         return B->CreateBitCast(fn,t->type);
@@ -1766,7 +1783,7 @@ if(baseT->isIntegerTy()) { \
             case T_constant: {
                 Obj value;
                 exp->obj("value",&value);
-                return GetConstant(T,&value);
+                return EmitConstant(T,CU, &value);
             } break;
             case T_luafunction: {
                 void * ptr = exp->ud("fptr");
@@ -1854,7 +1871,7 @@ if(baseT->isIntegerTy()) { \
                 emitExpressionList(&arguments,true,&values);
                 Obj typ;
                 exp->obj("type",&typ);
-                bool isvoid = Ty.IsUnitType(&typ);
+                bool isvoid = Ty->IsUnitType(&typ);
                 Type * ttype = getType(&typ)->type;
                 Type * rtype = (isvoid) ? Type::getVoidTy(*C->ctx) : ttype;
                 std::vector<Type*> ptypes;
@@ -1869,7 +1886,7 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("type",&type);
                 exp->obj("address",&addr);
                 exp->obj("attributes",&attr);
-                Ty.EnsureTypeIsComplete(&type);
+                Ty->EnsureTypeIsComplete(&type);
                 LoadInst * l = B->CreateLoad(emitExp(&addr));
                 if(attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
@@ -1971,7 +1988,7 @@ if(baseT->isIntegerTy()) { \
         customfilename = NULL;
         customlinenumber = 0;
         DEBUG_ONLY(T) {
-            DB = new DIBuilder(*C->m);
+            DB = new DIBuilder(*M);
             
             DIFile file = createDebugInfoForFile(filename);
             #if LLVM_VERSION >= 34
@@ -1988,9 +2005,9 @@ if(baseT->isIntegerTy()) { \
                                     DB->createSubroutineType(file, DB->getOrCreateArray(ArrayRef<Value*>())),
                                     false, true, 0,0, true, func);
             
-            if(!T->C->m->getModuleFlagsMetadata()) {
-                T->C->m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
-                T->C->m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",1);
+            if(!M->getModuleFlagsMetadata()) {
+                M->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
+                M->addModuleFlag(llvm::Module::Warning, "Debug Info Version",1);
             }
             filenamecache[filename] = SP;
         }
@@ -2014,16 +2031,13 @@ if(baseT->isIntegerTy()) { \
         //set the break table for this loop to point to the loop exit
         Obj breaktable;
         loop->obj("breaktable",&breaktable);
-        
-        lua_pushlightuserdata(L, exit);
-        breaktable.setfield("value");
+        mapSymbol(locals,&breaktable,exit);
     }
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
-        BasicBlock * bb = (BasicBlock *) lbl->ud("basicblock");
+        BasicBlock * bb = lookupSymbol<BasicBlock>(locals, lbl);
         if(!bb) {
             bb = createAndInsertBB(lbl->string("labelname"));
-            lua_pushlightuserdata(L,bb);
-            lbl->setfield("basicblock");
+            mapSymbol(locals, lbl, bb);
         }
         return bb;
     }
@@ -2051,7 +2065,7 @@ if(baseT->isIntegerTy()) { \
             setInsertBlock(bb);
             deferred.push_back(bb);
         }
-        Value * r = CC.EmitCall(&fntyp,&paramtypes, fn, &actuals);
+        Value * r = CC->EmitCall(B,&fntyp,&paramtypes, fn, &actuals);
         setInsertBlock(cur); //defer may have changed it
         return r;
     }
@@ -2143,7 +2157,7 @@ if(baseT->isIntegerTy()) { \
                 Obj ftype;
                 funcobj->obj("type",&ftype);
                 emitDeferred(deferred.size());
-                CC.EmitReturn(&ftype,func,result);
+                CC->EmitReturn(B,&ftype,func,result);
                 startDeadCode();
             } break;
             case T_label: {
@@ -2163,7 +2177,7 @@ if(baseT->isIntegerTy()) { \
             case T_break: {
                 Obj def;
                 stmt->obj("breaktable",&def);
-                BasicBlock * breakpoint = (BasicBlock *) def.ud("value");
+                BasicBlock * breakpoint = lookupSymbol<BasicBlock>(locals, &def);
                 assert(breakpoint);
                 emitDeferred(stmt->number("deferred"));
                 B->CreateBr(breakpoint);
@@ -2309,27 +2323,55 @@ if(baseT->isIntegerTy()) { \
     }
 };
 
-static int terra_codegen(lua_State * L) { //entry point into compiler from lua code
+
+Function * EmitFunction(terra_State * T, CompilationUnit * CU, Obj * funcobj) {
+    FunctionEmitter fe(T,CU,funcobj);
+    return fe.run();
+}
+
+static int terra_compilationunitaddvalue(lua_State * L) { //entry point into compiler from lua code
     terra_State * T = terra_getstate(L, 1);
-    
+    GlobalValue * gv;
     //create lua table to hold object references anchored on stack
     int ref_table = lobj_newreftable(T->L);
-    
     {
-        lua_pushvalue(T->L,-2); //the original argument
-        Obj funcobj;
-        funcobj.initFromStack(T->L, ref_table);
-        
-        TerraCompiler(T,&funcobj);
-        
+        Obj cu,globals,value;
+        lua_pushvalue(L,1); //the compilation unit
+        cu.initFromStack(L,ref_table);
+        cu.obj("symbols", &globals);
+        const char * modulename = (lua_isnil(L,2)) ? NULL : lua_tostring(L,2);
+        lua_pushvalue(L,3); //the function definition
+        cu.fromStack(&value);
+        bool optimize = lua_toboolean(L,4); //is optimization enabled (and for now, is this the jit?)
+        Module * M = (Module*) cu.ud("llvm_module");
+        if(!M) {
+            if(optimize)
+                M = T->C->jitmodule;
+            else
+                M = new Module("terracompilationunit",*T->C->ctx);
+            lua_pushlightuserdata(L,M);
+            cu.setfield("llvm_module");
+        }
+        Types Ty(T,&globals);
+        CCallingConv CC(T,&Ty,&globals);
+        CompilationUnit CU = {&Ty,&CC,M,&globals};
+        if(value.hasfield("isglobal")) {
+            gv = EmitGlobalVariable(T,&CU,&value,"anon");
+        } else {
+            gv = EmitFunction(T,&CU,&value);
+        }
+        if(modulename) {
+            if(GlobalValue * gv2 = M->getNamedValue(modulename))
+                gv2->setName(Twine(StringRef(modulename),"_renamed")); //rename anything else that has this name
+            gv->setName(modulename); //and set our function to this name
+            assert(gv->getName() == modulename); //make sure it worked
+        }
         //cleanup -- ensure we left the stack the way we started
         assert(lua_gettop(T->L) == ref_table);
-        
     } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
     lobj_removereftable(T->L,ref_table);
-    
-    return 0;
+    lua_pushlightuserdata(L,gv);
+    return 1;
 }
 
 static int terra_llvmsizeof(lua_State * L) {
@@ -2337,10 +2379,13 @@ static int terra_llvmsizeof(lua_State * L) {
     int ref_table = lobj_newreftable(L);
     TType * llvmtyp;
     {
-        lua_pushvalue(T->L,-2); //original argument
-        Obj typ;
-        typ.initFromStack(L, ref_table);
-        llvmtyp = Types(T).Get(&typ);
+        Obj cu,typ,globals;
+        lua_pushvalue(L,1);
+        cu.initFromStack(L,ref_table);
+        lua_pushvalue(L,2);
+        typ.initFromStack(L,ref_table);
+        cu.obj("symbols",&globals);
+        llvmtyp = Types(T,&globals).Get(&typ);
     }
     lobj_removereftable(T->L, ref_table);
     lua_pushnumber(T->L,T->C->td->getTypeAllocSize(llvmtyp->type));
@@ -2357,9 +2402,7 @@ static int terra_optimize(lua_State * L) {
         lua_pushvalue(L,-2); //original argument
         jitobj.initFromStack(L, ref_table);
         Obj funclist;
-        Obj flags;
         jitobj.obj("functions", &funclist);
-        jitobj.obj("flags",&flags);
         std::vector<Function *> scc;
         int N = funclist.size();
         VERBOSE_ONLY(T) {
@@ -2380,7 +2423,7 @@ static int terra_optimize(lua_State * L) {
             printf("\n");
         }
         
-        T->C->mi->run(&scc);
+        //T->C->mi->run(&scc);
         if (!T->options.usemcjit) {
             for(int i = 0; i < N; i++) {
                 Obj funcobj;
@@ -2392,10 +2435,7 @@ static int terra_optimize(lua_State * L) {
                     std::string s = func->getName();
                     printf("optimizing %s\n",s.c_str());
                 }
-                double begin = CurrentTimeInSeconds();
-                ((FunctionPassManager*)T->C->fpm)->run(*func);
-                RecordTime(&funcobj,"opt",begin);
-                
+                //((FunctionPassManager*)T->C->fpm)->run(*func);
                 VERBOSE_ONLY(T) {
                     func->dump();
                 }
@@ -2442,7 +2482,7 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
         }
         llvm::ValueToValueMapTy VMap;
         Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,T, VMap);
-        ((PassManager*)T->C->fpm)->run(*m);
+        //((PassManager*)T->C->fpm)->run(*m);
         
         if(T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
@@ -2466,76 +2506,13 @@ static void * JITGlobalValue(terra_State * T, GlobalValue * gv) {
 
 static int terra_jit(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
-    int ref_table = lobj_newreftable(T->L);
-    
-    {
-        Obj jitobj, funcobj, flags;
-        lua_pushvalue(L,-2); //original argument
-        jitobj.initFromStack(L, ref_table);
-        jitobj.obj("func", &funcobj);
-        jitobj.obj("flags",&flags);
-        Function * func = (Function*) funcobj.ud("llvm_value");
-        assert(func);
-        
-        double begin = CurrentTimeInSeconds();
-        void * ptr = JITGlobalValue(T,func);
-        RecordTime(&funcobj,"gen",begin);
-        
-        lua_pushlightuserdata(L, ptr);
-        funcobj.setfield("llvm_ptr");
-    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
-    lobj_removereftable(T->L,ref_table);
-    
-    return 0;
-}
-
-static int terra_createglobal(lua_State * L) { //entry point into compiler from lua code
-    terra_State * T = terra_getstate(L, 1);
-    
-    //create lua table to hold object references anchored on stack
-    int ref_table = lobj_newreftable(T->L);
-    
-    {
-        Obj global;
-        lua_pushvalue(T->L,-2); //original argument
-        global.initFromStack(T->L, ref_table);
-        GlobalVariable * gv = GetGlobalVariable(T,&global,"anon");
-        void * ptr = JITGlobalValue(T, gv);
-        lua_pushlightuserdata(L,ptr);
-        global.setfield("llvm_ptr");
-        lua_pushstring(L,gv->getName().data());
-        global.setfield("llvm_name");
-    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
-    lobj_removereftable(T->L,ref_table);
-    
-    return 0;
-}
-
-static int terra_registerexternfunction(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    int ref_table = lobj_newreftable(L);
-    {
-        Obj fn;
-        lua_pushvalue(L, -2);
-        fn.initFromStack(L,ref_table);
-        const char * name = fn.string("name");
-        llvm::Function * llvmfn = T->C->m->getFunction(name);
-        if(!llvmfn) { //declared directly from Terra, so the declaration was not linked in by C
-            Types Ty(T);
-            CCallingConv CC(T,&Ty,NULL);
-            Obj typ;
-            fn.obj("type",&typ);
-            llvmfn = CC.CreateFunction(&typ,name);
-        }
-        assert(llvmfn);
-        lua_pushlightuserdata(L, llvmfn);
-        fn.setfield("llvm_value");
-    }
-    lobj_removereftable(L, ref_table);
-    return 0;
+    GlobalValue * gv = (GlobalValue*) lua_touserdata(L,1);
+    double begin = CurrentTimeInSeconds();
+    void * ptr = JITGlobalValue(T,gv);
+    double t = CurrentTimeInSeconds() - begin;
+    lua_pushlightuserdata(L,ptr);
+    lua_pushnumber(L,t);
+    return 2;
 }
 
 static int terra_deletefunction(lua_State * L) {
@@ -2560,7 +2537,7 @@ static int terra_deletefunction(lua_State * L) {
         }
         func->deleteBody();
     } else {
-        T->C->mi->eraseFunction(func);
+        //T->C->mi->eraseFunction(func);
     }
     VERBOSE_ONLY(T) {
         printf("... finish delete.\n");
@@ -2571,14 +2548,9 @@ static int terra_deletefunction(lua_State * L) {
 }
 static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
-    
-    lua_getfield(L,-1,"llvm_value");
-    Function * fn = (Function*) lua_touserdata(L,-1);
-    lua_pop(L,1); //llvm_value
+    Function * fn = (Function*) lua_touserdata(L,1); assert(fn);
+    void * addr = lua_touserdata(L,2); assert(fn);
     fn->dump();
-    
-    lua_getfield(L,-1,"llvm_ptr");
-    void * addr = lua_touserdata(L, -1);
     if(T->C->functioninfo.count(addr)) {
         TerraFunctionInfo & fi = T->C->functioninfo[addr];
         printf("assembly for function at address %p\n",addr);
@@ -2703,50 +2675,18 @@ static int terra_saveobjimpl(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     
     const char * filename = lua_tostring(L, 1); //NULL means write to memory
-    std::string filekind = lua_tostring(L,2); 
-    int tbl = 3;
+    std::string filekind = lua_tostring(L,2);
     int argument_index = 4;
     
-    std::vector<GlobalValue *> livefns;
-    std::vector<std::string> names;
-    Module * M;
+    lua_getfield(L,3,"llvm_module");
+    Module * M = (Module*) lua_touserdata(L,-1); assert(M);
     std::vector<const char *> args;
-    
-    int ref_table = lobj_newreftable(T->L);
-    {
-        //iterate over the key value pairs in the table
-        lua_pushnil(L);
-        while (lua_next(L, tbl) != 0) {
-            const char * key = luaL_checkstring(L, -2);
-            Obj obj;
-            obj.initFromStack(L, ref_table);
-            Function * fnold = (Function*) obj.ud("llvm_value");
-            assert(fnold);
-            names.push_back(key);
-            livefns.push_back(fnold);
-        }
-        
-        M = llvmutil_extractmodule(T->C->m, T->C->tm, &livefns, &names, true);
-        
-        VERBOSE_ONLY(T) {
-            printf("extracted module is:\n");
-            M->dump();
-        }
-        
-        lua_pushvalue(L,argument_index);
-        Obj arguments;
-        arguments.initFromStack(L,ref_table);
-        
-        int N = arguments.size();
-        for(int i = 0; i < N; i++) {
-            Obj arg;
-            arguments.objAt(i,&arg);
-            arg.push();
-            args.push_back(luaL_checkstring(L,-1));
-            lua_pop(L,1);
-        }
+    int nargs = lua_objlen(L,argument_index);
+    for(int i = 1; i <= nargs; i++) {
+        lua_rawgeti(L,argument_index,i);
+        args.push_back(luaL_checkstring(L,-1));
+        lua_pop(L,1);
     }
-    lobj_removereftable(T->L, ref_table);
     
     bool result = false;
     int N = 0;
@@ -2773,8 +2713,7 @@ static int terra_saveobjimpl(lua_State * L) {
             lua_pushlstring(L,&mem[0],mem.size());
         }
     }
-    
-    delete M;
+    printf("clean up module\n");
     if(result)
         lua_error(T->L);
     
@@ -2815,7 +2754,7 @@ static int terra_linklibraryimpl(lua_State * L) {
         if(ec)
             terra_reporterror(T, "llvm: %s\n", ec.message().c_str());
         Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
-        m->setTargetTriple(T->C->m->getTargetTriple());
+        m->setTargetTriple(T->C->external->getTargetTriple());
         if(!m)
             terra_reporterror(T, "llvm: %s\n", Err.c_str());
     #else
@@ -2827,11 +2766,12 @@ static int terra_linklibraryimpl(lua_State * L) {
             terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
         Module * m = mm.get();
     #endif
-        m->setTargetTriple(T->C->m->getTargetTriple());
-        bool failed = llvmutil_linkmodule(T->C->m, m, T->C->tm, NULL, &Err);
+        assert(!"linking llvm is broken");
+        //m->setTargetTriple(T->C->external->getTargetTriple());
+        //bool failed = llvmutil_linkmodule(T->C->external, m, T->C->tm, NULL, &Err);
         delete m;
-        if(failed)
-            terra_reporterror(T, "llvm: %s\n", Err.c_str());
+        //if(failed)
+        //    terra_reporterror(T, "llvm: %s\n", Err.c_str());
     } else {
         std::string Err;
         if(sys::DynamicLibrary::LoadLibraryPermanently(filename,&Err)) {
@@ -2842,8 +2782,10 @@ static int terra_linklibraryimpl(lua_State * L) {
 }
 
 static int terra_dumpmodule(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    T->C->m->dump();
+    terra_State * T = terra_getstate(L, 1); (void)T;
+    Module * M = (Module*) lua_touserdata(L,1);
+    if(M)
+        M->dump();
     return 0;
 }
 

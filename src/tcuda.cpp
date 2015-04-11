@@ -149,32 +149,13 @@ static std::string sanitizeName(std::string name) {
 int terra_toptx(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeNVVMState(T);
-    int tbl = 1,annotations = 2;
+    lua_getfield(L,1,"llvm_module");
+    llvm::Module * M = (llvm::Module*) lua_touserdata(L,-1);
+    int annotations = 2;
     int dumpmodule = lua_toboolean(L,3);
     int version = lua_tonumber(L,4);
     int major = version / 10;
     int minor = version % 10;
-    
-    std::vector<std::string> globalnames;
-    std::vector<llvm::GlobalValue *> globals;
-    
-    lua_pushnil(L);
-    while (lua_next(L, tbl) != 0) {
-        const char * key = luaL_checkstring(L,-2);
-        lua_getfield(L,-1,"llvm_value");
-        llvm::GlobalValue * v = (llvm::GlobalValue*) lua_topointer(L,-1);
-        assert(v);
-        if(dumpmodule) {
-            fprintf(stderr,"Add Global Value:\n");
-            v->dump();
-        }
-        assert(v);
-        globalnames.push_back(key);
-        globals.push_back(v);
-        lua_pop(L,2);  /* variant, value pointer */
-    }
-    
-    llvm::Module * M = llvmutil_extractmodule(T->C->m, T->C->tm, &globals,&globalnames, false);
 
     int N = lua_objlen(L,annotations);
     for(size_t i = 0; i < N; i++) {
@@ -210,7 +191,7 @@ int terra_toptx(lua_State * L) {
         M->dump();
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
-    delete M;
+    printf("TODO: clean up compile module\n");
     lua_pushstring(L,ptx.c_str());
     return 1;
 }

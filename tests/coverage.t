@@ -16,7 +16,7 @@ end
 failit(erd,function()
 f1:compile()
 end)
-failit("attempting to compile a function which already has an error",function()
+failit("referencing a function which failed to compile",function()
 f1:compile()
 end)
 failit(erd,function()

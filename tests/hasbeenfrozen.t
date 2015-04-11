@@ -24,7 +24,7 @@ function B.metamethods.__staticinitialize(self)
 	print("B")
 	assert(B:iscomplete())
 	a:get().b = 3
-	foo:compile(function()
+	foo:gettype(function()
 		assert(foo() == 7)
 		a:get().a = a:get().a + 1
 	end)

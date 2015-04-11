@@ -229,6 +229,11 @@ function terra.context:begin(obj) --obj is currently only a funcdefinition
     table.insert(self.tobecompiled,obj)
 end
 
+function terra.context:min(n)
+    local curobj = self.stack[#self.stack]
+    curobj.lowlink = math.min(curobj.lowlink,n)
+end
+
 local typeerrordebugcallback
 function terra.settypeerrordebugcallback(fn)
     assert(type(fn) == "function")
@@ -258,11 +263,9 @@ function terra.context:finish(anchor)
             end
         else
             for i,o in ipairs(scc) do
-                terra.codegen(o)
-                o.state = "emittedllvm"
+                o.state = "typechecked"
             end
-            terra.optimize({ functions = functions, flags = self.compileflags })
-            --dispatch callbacks that should occur once the llvm is emitted
+            --dispatch callbacks that should occur once the function is typechecked
             for i,o in ipairs(scc) do
                 if o.oncompletion then
                     for i,fn in ipairs(o.oncompletion) do
@@ -281,47 +284,9 @@ function terra.context:oncompletion(obj,callback)
     obj.oncompletion:insert(callback)
 end
 
-function terra.context:referencefunction(anchor, func)
-    local curobj = self.stack[#self.stack]
-    if func.state == "untyped" then
-        func:typecheck()
-        assert(terra.types.istype(func.type))
-        curobj.lowlink = math.min(curobj.lowlink,func.lowlink)
-        return func.type
-    elseif func.state == "typechecking" then
-        curobj.lowlink = math.min(curobj.lowlink,func.compileindex)
-        local success, typ = func:peektype()
-        if not success then
-            self.diagnostics:reporterror(anchor,"recursively called function needs an explicit return type.")
-            if func.untypedtree then
-                self.diagnostics:reporterror(anchor,"definition of recursively called function is here.")
-            end
-        end
-        return typ
-    elseif func.state == "compiled" or func.state == "emittedllvm" then
-        assert(terra.types.istype(func.type))
-        return func.type
-    elseif func.state == "uninitializedc" then
-        func:initializecfunction(anchor)
-        assert(terra.types.istype(func.type))
-        return func.type
-    elseif func.state == "error" then
-        assert(terra.types.istype(func.type))
-        if not self.diagnostics:haserrors() then --the error that caused this function to not compile may have been reported in a previous compile
-                                                 --if we don't have any errors preventing the current compile from succeeding, then
-                                                 --we need to emit one here
-            self.diagnostics:reporterror(anchor,"expression references a function which failed to compile.")
-            if func.untypedtree then
-                self.diagnostics:reporterror(func.untypedtree,"definition of function which failed to compile.")
-            end
-        end
-        return terra.types.error
-    end
-end
-
 function terra.getcompilecontext()
     if not terra.globalcompilecontext then
-        terra.globalcompilecontext = setmetatable({diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0, compileflags = {}},terra.context)
+        terra.globalcompilecontext = setmetatable({diagnostics = terra.newdiagnostics() , stack = {}, tobecompiled = {}, nextindex = 0},terra.context)
     end
     return terra.globalcompilecontext
 end
@@ -513,86 +478,83 @@ function terra.funcdefinition:peektype() --look at the type but don't compile th
     return true, self.type
 end
 
-function terra.funcdefinition:gettype(cont)
-    self:emitllvm(cont)
-    assert(cont or self.type ~= nil) --either this was asynchronous and type can be nil, or it wasn't so type needs to be set
-    return self.type
-end
-
-function terra.funcdefinition:jit()
-    if self.state == "emittedllvm" then
-        terra.jit({ func = self, flags = {} })
-        self.state = "compiled"
-    end
-end
-
-function terra.funcdefinition:compile(cont)
-    if self.state == "compiled" then
-        if cont and type(cont) == "function" then
-            cont(self)
-        end
-        return
-    end
+function terra.funcdefinition:gettype(cont,anchorduringcompilation)
+    local ctx = terra.getcompilecontext()
+    local apicall = not anchorduringcompilation -- this was called by the user, not the compiler
+    local anchor = anchorduringcompilation or assert(self.untypedtree)
+    local diag = ctx.diagnostics
     
-    if cont then 
-        self:emitllvm(function()
-            self:jit()
-            if type(cont) == "function" then
-                cont(self)
+    if apicall then diag:begin() end
+    if "untyped" == self.state then
+        ctx:begin(self)
+        self:typecheckbody()
+        ctx:finish(self.untypedtree or anchor)
+        if not apicall then ctx:min(self.lowlink) end
+    elseif "typechecking" == self.state then
+        if not apicall then
+            ctx:min(self.compileindex)
+            local success, typ = self:peektype()
+            if not success then
+                diag:reporterror(anchor,"recursively called function needs an explicit return type.")
+                diag:reporterror(self.untypedtree,"definition of recursively called function is here.")
             end
-        end)
-    else
-        self:emitllvm()
-        self:jit()
-    end
-end
-
-function terra.funcdefinition:initializecfunction(anchor)
-    assert(self.state == "uninitializedc")
-    --make sure all types for function are registered
-    self.type:completefunction(anchor)
-    terra.registerexternfunction(self)
-    self.state = "emittedllvm"
-end
-
-function terra.funcdefinition:emitllvm(cont)
-    if self.state == "untyped" then
-        local ctx = terra.getcompilecontext()
-        ctx.diagnostics:begin()
-        self:typecheck()
-        ctx.diagnostics:finishandabortiferrors("Errors reported during compilation.",2)
-    end
-
-    if self.state == "compiled" or self.state == "emittedllvm" then
-        --pass
-    elseif self.state == "uninitializedc" then --this is a stub generated by the c wrapper, connect it with the right llvm_value object and set llvm_ptr
-        self:initializecfunction(nil)
-    elseif self.state == "typechecking" then
-        if cont then
-            if type(cont) == "function" then
-                terra.getcompilecontext():oncompletion(self,cont)
-            end
-            return
-        else
-            error("attempting to compile a function that is already being compiled",2)
+        elseif not cont then
+            diag:reporterror(anchor,"attempting to compile a function that is already being compiled.")
         end
-    elseif self.state == "error" then
-        error("attempting to compile a function which already has an error",2)
+        if type(cont) == "function" then
+            terra.getcompilecontext():oncompletion(self,cont) --register callback to fire when typechecking is done
+            cont = nil
+        end
+    elseif "error" == self.state then
+        if not diag:haserrors() then
+            diag:reporterror(anchor,"referencing a function which failed to compile.")
+            if not apicall then
+                diag:reporterror(self.untypedtree,"definition of function which failed to compile.")
+            end
+        end
     end
-
-    if cont and type(cont) == "function" then
+    if apicall then diag:finishandabortiferrors("Errors reported during compilation.",2) end
+    
+    if type(cont) == "function" then
         cont(self)
     end
+    
+    return self.type or terra.types.error
 end
+
+local compilationunit = {}
+compilationunit.__index = compilationunit
+
+function terra.newcompilationunit(opt)
+    return setmetatable({ symbols = {}, opt = opt },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+end
+function compilationunit:addvalue(k,v)
+    if type(k) ~= "string" then k,v = nil,k end
+    local t = v:gettype()
+    if terra.isglobalvar(v) then t:complete() end
+    return terra.compilationunitaddvalue(self,k,v,self.opt)
+end
+
+terra.jitcompilationunit = terra.newcompilationunit() -- compilation unit used for JIT compilation, will eventually specify the native architecture
+
+function terra.funcdefinition:jit(checknocont)
+    assert(checknocont == nil, "compile no longer supports deferred action, use :gettype instead")
+    if not self.rawjitptr then
+        local gv = terra.jitcompilationunit:addvalue(self)
+        self.rawjitptr,self.stats.jit = terra.jit(gv)
+    end
+    return self.rawjitptr
+end
+terra.funcdefinition.compile = terra.funcdefinition.jit
 
 function terra.funcdefinition:__call(...)
     local ffiwrapper = self:getpointer()
     return ffiwrapper(...)
 end
 function terra.funcdefinition:getpointer()
-    self:compile()
     if not self.ffiwrapper then
-        self.ffiwrapper = ffi.cast(terra.types.pointer(self.type):cstring(),self.llvm_ptr)
+        local rawptr = self:jit()
+        self.ffiwrapper = ffi.cast(terra.types.pointer(self.type):cstring(),rawptr)
     end
     return self.ffiwrapper
 end
@@ -605,13 +567,11 @@ function terra.funcdefinition:setinlined(v)
 end
 
 function terra.funcdefinition:disas()
-    self:compile()
-    print("definition ", self.type)
-    terra.disassemble(self)
+    print("definition ", self:gettype())
+    terra.disassemble(terra.jitcompilationunit:addvalue(self),self:jit())
 end
 function terra.funcdefinition:printstats()
-    self:compile()
-    print("definition ", self.type)
+    print("definition ", self:gettype())
     for k,v in pairs(self.stats) do
         print("",k,v)
     end
@@ -738,13 +698,10 @@ function terra.global(a0, a1, isextern, as)
 end
 
 function terra.globalvar:getpointer()
-    if not self.llvm_ptr then
-        self.type:complete()
-        terra.createglobal(self)
-    end
-
     if not self.cdata_ptr then
-        self.cdata_ptr = terra.cast(terra.types.pointer(self.type),self.llvm_ptr)
+        local gv = terra.jitcompilationunit:addvalue(self)
+        local rawptr = terra.jit(gv)
+        self.cdata_ptr = terra.cast(terra.types.pointer(self.type),rawptr)
     end
     return self.cdata_ptr
 end
@@ -933,7 +890,7 @@ function terra.intrinsic(str, typ)
             diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",terra.type(intrinsictype))
             intrinsictype = terra.types.funcpointer(types,{})
         end
-        local fn = terralib.externfunction(name,intrinsictype)
+        local fn = terralib.externfunction(name,intrinsictype,nil,e)
         local literal = terra.createterraexpression(diag,e,fn)
         local rawargs = args:map("tree")
         return terra.newtree(e, { kind = terra.kinds.apply, value = literal, arguments = rawargs })
@@ -1119,9 +1076,10 @@ do  --constructor functions for terra functions and variables
         return fn
     end
 
-    function terra.externfunction(name,typ)
+    function terra.externfunction(name,typ,module,anchor)
+        anchor = anchor or terra.newanchor(1)
         typ = typ:ispointertofunction() and typ.type or typ
-        local obj = { type = typ, state = "uninitializedc" }
+        local obj = { type = typ, state = "untyped", isextern = true, untypedtree = anchor, llvm_definingmodule = module, stats = {} }
         setmetatable(obj,terra.funcdefinition)
         
         local fn = mkfunction(name)
@@ -1190,7 +1148,7 @@ do
     
     local types = {}
     
-    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_type = false, llvm_ccinfo = false, llvm_definingfunction = false} --all types have this as their metatable
+    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_definingmodule = false} --all types have this as their metatable
     types.type.__index = function(self,key)
         local N = tonumber(key)
         if N then
@@ -2172,7 +2130,8 @@ end
 
 --all calls to user-defined functions from the compiler go through this wrapper
 function terra.invokeuserfunction(anchor, speculate, userfn,  ...)
-    local results = { pcall(userfn, ...) }
+    local args = {...}
+    local results = { xpcall(function() return userfn(unpack(args)) end,debug.traceback) }
     if not speculate and not results[1] then
         local diag = terra.getcompilecontext().diagnostics
         diag:reporterror(anchor,"error while invoking macro or metamethod: ",results[2])
@@ -2187,12 +2146,14 @@ function terra.unsafetypeofsymbol(sym)
     return def.type
 end
 
-function terra.funcdefinition:typecheck()
-
+function terra.funcdefinition:typecheckbody()
     assert(self.state == "untyped")
-    local ctx = terra.getcompilecontext()
-    ctx:begin(self)
     self.state = "typechecking"
+    if self.isextern then
+        self.type:completefunction(self.untypedtree)
+        return self.type
+    end
+    local ctx = terra.getcompilecontext()
     local starttime = terra.currenttimeinseconds()
     
     --initialization
@@ -2249,7 +2210,7 @@ function terra.funcdefinition:typecheck()
         return terra.newtree(exp, { kind = terra.kinds.typedexpression, expression = exp, key = validkeystack[#validkeystack] })
     end
     local function createfunctionliteral(anchor,e)
-        local fntyp = ctx:referencefunction(anchor,e)
+        local fntyp = e:gettype(nil,assert(anchor))
         local typ = terra.types.pointer(fntyp)
         return terra.newtree(anchor, { kind = terra.kinds.literal, value = e, type = typ })
     end
@@ -3569,8 +3530,8 @@ function terra.funcdefinition:typecheck()
     dbprint(2,"TypedTree")
     dbprintraw(2,self.typedtree)
 
-    ctx:finish(ftree)
     unsafesymbolenv = oldsymbolenv
+    return fntype
 end
 --cache for lua functions called by terra, to prevent making multiple callback functions
 terra.__wrappedluafunctions = {}
@@ -3629,7 +3590,7 @@ function(diag,tree,typ)
 end,
 function (terratype,...)
     terratype:complete()
-    return terra.llvmsizeof(terratype)
+    return terra.llvmsizeof(terra.jitcompilationunit,terratype)
 end
 )
 _G["sizeof"] = terra.sizeof
@@ -4158,12 +4119,12 @@ end
 
 function terra.funcdefinition:printpretty(printcompiled,breaklines)
     printcompiled = (printcompiled == nil) or printcompiled
-    if not self.untypedtree then
+    if self.isextern then
         io.write(("%s = <extern : %s>\n"):format(self.name,self.type))
         return
     end
     if printcompiled then
-        if self.state ~= "error" then self:emitllvm() end
+        if self.state ~= "error" then self:gettype() end
         return printpretty(breaklines,self.typedtree,self.type.returntype,"%s = ",self.name)
     else
         return printpretty(breaklines,self.untypedtree,self.returntype,"%s = ",self.name)
@@ -4177,12 +4138,11 @@ end
 -- END DEBUG
 local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true }
 local mustbefile = { sharedlibrary = true, executable = true }
-function terra.saveobj(filename,filekind,env,arguments)
-    if type(filekind) ~= "string" then
+function compilationunit:saveobj(filename,filekind,arguments)
+    if filekind ~= nil and type(filekind) ~= "string" then
         --filekind is missing, shift arguments to the right
-        filekind,env,arguments = nil,filekind,env
+        filekind,arguments = nil,filekind
     end
-    
     if filekind == nil and filename ~= nil then
         --infer filekind from string
         if filename:match("%.o$") then
@@ -4197,27 +4157,31 @@ function terra.saveobj(filename,filekind,env,arguments)
             filekind = "executable"
         end
     end
-    
     if not allowedfilekinds[filekind] then
         error("unknown output format type: " .. tostring(filekind))
     end
     if filename == nil and mustbefile[filekind] then
         error(filekind .. " must be written to a file")
     end
-    
-    local cleanenv = {}
+    return terra.saveobjimpl(filename,filekind,self,arguments or {})
+end
+
+function terra.saveobj(filename,filekind,env,arguments)
+    if type(filekind) ~= "string" then
+        filekind,env,arguments = nil,filekind,env
+    end
+    local cu = terra.newcompilationunit(false)
     for k,v in pairs(env) do
         if terra.isfunction(v) then
-            v:emitllvm()
             local definitions = v:getdefinitions()
-            if #definitions > 1 then
+            if #definitions ~= 1 then
                 error("cannot create a C function from an overloaded terra function, "..k)
             end
-            cleanenv[k] = definitions[1]
-        end
+            v = definitions[1]
+        elseif not terra.isglobalvar(v) then error("expected terra globals or functions but found "..terra.type(v)) end
+        cu:addvalue(k,v)
     end
-    
-    return terra.saveobjimpl(filename,filekind,cleanenv,arguments or {})
+    return cu:saveobj(filename,filekind,arguments)
 end
 
 -- configure path variables

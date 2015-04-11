@@ -6,21 +6,25 @@
 
 
 struct TerraFunctionInfo {
-    const llvm::Function * fn;
+    std::string name;
     void * addr;
     size_t size;
     llvm::JITEvent_EmittedFunctionDetails efd;
 };
+struct ImportedCModule {
+    std::string livenessfunction;
+    llvm::Module * M;
+};
 struct terra_CompilerState {
-    llvm::Module * m;
+    llvm::Module * jitmodule;
     llvm::LLVMContext * ctx;
     llvm::ExecutionEngine * ee;
     llvm::JITEventListener * jiteventlistener;
-    llvm::PassManagerBase * fpm;
-    llvm::PassManager * cwrapperpm;
+    //llvm::PassManagerBase * fpm;
+    //llvm::PassManager * cwrapperpm;
     llvm::TargetMachine * tm;
     const llvm::DataLayout * td;
-    ManualInliner * mi;
+    //ManualInliner * mi;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
     size_t next_unused_id; //for creating names for dummy functions
 };

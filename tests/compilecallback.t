@@ -1,7 +1,7 @@
 
 local a = 0
 local foo = macro(function(arg)
-	bar:compile(function()
+	bar:gettype(function()
 		a = bar()
 	end)
 	a = 1

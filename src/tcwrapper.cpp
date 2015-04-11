@@ -41,19 +41,16 @@ static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Obj * res, size_t id)
+    IncludeCVisitor(Obj * res, ImportedCModule * CI_)
         : resulttable(res),
           L(res->getState()),
-          ref_table(res->getRefTable()) {
+          ref_table(res->getRefTable()),
+          CI(CI_) {
         
         //create tables for errors messages, general namespace, and the tagged namespace
         InitTable(&error_table,"errors");
         InitTable(&general,"general");
         InitTable(&tagged,"tagged");
-        std::stringstream ss;
-        ss << "__makeeverythinginclanglive_";
-        ss << id;
-        livenessfunction = ss.str();
     }
     void InitTable(Obj * tbl, const char * name) {
         CreateTableWithName(resulttable, name, tbl);
@@ -115,11 +112,10 @@ public:
         return !opaque;
 
     }
-    void RegisterRecordType(QualType T, std::string * definingfunction, size_t * argpos) {
-        *definingfunction = livenessfunction;
-        *argpos = outputtypes.size();
+    size_t RegisterRecordType(QualType T) {
         outputtypes.push_back(Context->getPointerType(T));
         assert(outputtypes.size() < 65536 && "fixme: clang limits number of arguments to 65536");
+        return outputtypes.size() - 1;
     }
     bool GetRecordTypeFromDecl(RecordDecl * rd, Obj * tt) {
         if(rd->isStruct() || rd->isUnion()) {
@@ -139,12 +135,10 @@ public:
                 lua_pushboolean(L, thenamespace == &tagged);
                 lua_call(L,2,1);
                 tt->initFromStack(L,ref_table);
-                if(!tt->boolean("llvm_definingfunction")) {
-                    std::string definingfunction;
-                    size_t argpos;
-                    RegisterRecordType(Context->getRecordType(rd), &definingfunction, &argpos);
-                    lua_pushstring(L,definingfunction.c_str());
-                    tt->setfield("llvm_definingfunction");
+                if(!tt->boolean("llvm_definingmodule")) {
+                    size_t argpos = RegisterRecordType(Context->getRecordType(rd));
+                    lua_pushlightuserdata(L,CI);
+                    tt->setfield("llvm_definingmodule");
                     lua_pushinteger(L,argpos);
                     tt->setfield("llvm_argumentposition");
                 }
@@ -466,7 +460,8 @@ public:
             lua_remove(L,-2); //terra table
             lua_pushstring(L, internalname.c_str());
             typ->push();
-            lua_call(L, 2, 1);
+            lua_pushlightuserdata(L, CI);
+            lua_call(L, 3, 1);
             general.setfield(name.c_str());
         }
     }
@@ -474,7 +469,7 @@ public:
         Context = ctx;
     }
     FunctionDecl * GetLivenessFunction() {
-        IdentifierInfo & II = Context->Idents.get(livenessfunction);
+        IdentifierInfo & II = Context->Idents.get(CI->livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
         #if LLVM_VERSION >= 33
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
@@ -511,13 +506,13 @@ public:
     Obj general; //name -> function or type in the general namespace
     Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
     std::string error_message;
-    std::string livenessfunction;
+    ImportedCModule * CI;
 };
 
 class CodeGenProxy : public ASTConsumer {
 public:
-  CodeGenProxy(CodeGenerator * CG_, Obj * result, size_t importid)
-  : CG(CG_), Visitor(result,importid) {}
+  CodeGenProxy(CodeGenerator * CG_, Obj * result, ImportedCModule * CI)
+  : CG(CG_), Visitor(result,CI) {}
   CodeGenerator * CG;
   IncludeCVisitor Visitor;
   virtual ~CodeGenProxy() {}
@@ -667,8 +662,14 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     #else
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
     #endif
+    ImportedCModule * CI = new ImportedCModule(); //TODO: cleanup
     
-    CodeGenProxy proxy(codegen,result,T->C->next_unused_id++);
+    std::stringstream ss;
+    ss << "__makeeverythinginclanglive_";
+    ss << T->C->next_unused_id++;
+    CI->livenessfunction = ss.str();
+
+    CodeGenProxy proxy(codegen,result,CI);
     ParseAST(TheCompInst.getPreprocessor(),
             &proxy,
             TheCompInst.getASTContext());
@@ -684,23 +685,11 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     }
     #endif
     
-    llvm::Module * mod = codegen->ReleaseModule();
-    
-    if(mod) {
-        std::string err;
-        VERBOSE_ONLY(T) {
-            mod->dump();
-        }
-        if(llvmutil_linkmodule(T->C->m, mod, T->C->tm,&T->C->cwrapperpm, &err)) {
-            delete codegen;
-            terra_reporterror(T,"llvm: %s\n",err.c_str());
-        }
-    } else {
-        delete codegen;
+    CI->M = codegen->ReleaseModule();
+    delete codegen;
+    if(!CI->M) {
         terra_reporterror(T,"compilation of included c code failed\n");
     }
-    
-    delete codegen;
     
     return 0;
 }

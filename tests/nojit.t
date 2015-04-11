@@ -7,7 +7,7 @@ terra foo()
 end
 
 
-foo:emitllvm()
+foo:gettype()
 --we currently don't track what initializers need to be run after a nojit compile
 --hopefully we can just remove the need to have nojit entirely
 --otherwise we need to seperate the calling of variable initializers from the compilation process

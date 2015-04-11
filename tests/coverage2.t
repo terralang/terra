@@ -31,7 +31,7 @@ local terra foo()
 end
 foo:compile()
 local a = 0
-foo:compile(function()
+foo:gettype(function()
 	a = a + 1
 end)
 assert(a == 1)
@@ -43,7 +43,7 @@ failit(erd,function()
 	end
 	errored:compile()
 end)
-failit("attempting to compile a function which already has an error",function()
+failit("referencing a function which failed to compile",function()
 	errored()
 end)
 

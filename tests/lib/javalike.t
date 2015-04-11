@@ -106,7 +106,7 @@ local function staticinitialize(self)
 	local md = metadata[self]
 	local vtbl = md.vtableglobal:get()
 	for methodname,impl in pairs(md.methodimpl) do
-		impl:compile(function()
+		impl:gettype(function()
 			vtbl[methodname] = impl:getpointer()  
 		end)
 	end
@@ -115,7 +115,7 @@ local function staticinitialize(self)
 		local imd = interfacemetadata[iface]
 		for methodname,_ in pairs(iface.methods) do
 			local impl = md.methodimpl[methodname]
-			impl:compile(function()
+			impl:gettype(function()
 				ifacevtable[methodname] = terralib.cast(&uint8,impl:getpointer())
 			end)
 		end

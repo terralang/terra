@@ -115,9 +115,8 @@ static void stacktrace_printsourceline(const char * filename, size_t lineno) {
 static bool printfunctioninfo(terra_CompilerState * C, uintptr_t ip, bool isNextInst, int i) {
     const TerraFunctionInfo * fi;
     if(stacktrace_findsymbol(C,ip,&fi)) {
-        std::string str = fi->fn->getName();
         uintptr_t fstart = (uintptr_t) fi->addr;
-        printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d ",i,"terra (JIT)",ip,str.c_str(),(int)(ip - fstart));
+        printf("%-3d %-35s 0x%016" PRIxPTR " %s + %d ",i,"terra (JIT)",ip,fi->name.c_str(),(int)(ip - fstart));
         StringRef filename;
         size_t lineno;
          if(stacktrace_findline(C, fi, ip,isNextInst, &filename, &lineno)) {
@@ -210,9 +209,8 @@ static bool terra_lookupsymbol(void * ip, SymbolInfo * r, terra_CompilerState * 
         return false;
     r->addr = fi->addr;
 	r->size = fi->size;
-	StringRef sr = fi->fn->getName();
-	r->name = sr.data();
-	r->namelength = sr.size();
+	r->name = fi->name.c_str();
+	r->namelength = fi->name.length();
 	return true;
 }
 

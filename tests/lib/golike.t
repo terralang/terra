@@ -67,7 +67,7 @@ function Interface.interface:createcast(from,exp)
 		for _,m in ipairs(self.methods) do
 			local fn = from.methods[m.name]
 			assert(fn and terralib.isfunction(fn))
-			fn:compile(function(fndef)
+			fn:gettype(function(fndef)
 				vtableentry[m.name] = terralib.cast(&uint8,fndef:getpointer())
 			end)
 		end
