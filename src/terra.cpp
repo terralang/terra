@@ -10,6 +10,7 @@
 #include "tkind.h"
 #include "tcwrapper.h"
 #include "tcuda.h"
+#include "tdebug.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -220,8 +221,13 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
     setterrahome(T->L); //find the location of support files such as the clang resource directory
-    int err =    terra_loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
-              || terra_loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
+    
+    int err = terra_compilerinit(T);
+    if(err) {
+        return err;
+    }
+    err =    terra_loadandrunbytecodes(T->L,luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
+          || terra_loadandrunbytecodes(T->L,luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
               
     if(err) {
         return err;
@@ -249,12 +255,8 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     lua_pop(T->L,1); //'terra' global
     
     luaX_init(T);
+    terra_debuginit(T);
     
-    err = terra_compilerinit(T);
-    if(err) {
-        return err;
-    }
-
     err = terra_cudainit(T); /* if cuda is not enabled, this does nothing */
     if(err) {
         return err;

@@ -149,8 +149,9 @@ static std::string sanitizeName(std::string name) {
 int terra_toptx(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeNVVMState(T);
-    lua_getfield(L,1,"llvm_module");
-    llvm::Module * M = (llvm::Module*) lua_touserdata(L,-1);
+    lua_getfield(L,1,"llvm_cu");
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,-1);
+    llvm::Module * M = CU->M;
     int annotations = 2;
     int dumpmodule = lua_toboolean(L,3);
     int version = lua_tonumber(L,4);

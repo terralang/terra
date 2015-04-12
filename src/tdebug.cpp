@@ -259,11 +259,11 @@ static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void *
 #undef ENCODE_MOV
 }
 
-int terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
+int terra_debuginit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    void * stacktracefn = createclosure(JMM,(void*)printstacktrace,2,(void**)&T->C,1);
-    void * lookupsymbol = createclosure(JMM,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
-    void * lookupline =   createclosure(JMM,(void*)terra_lookupline,4,(void**)&T->C,1);
+    void * stacktracefn = createclosure(T->C->JMM,(void*)printstacktrace,2,(void**)&T->C,1);
+    void * lookupsymbol = createclosure(T->C->JMM,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
+    void * lookupline =   createclosure(T->C->JMM,(void*)terra_lookupline,4,(void**)&T->C,1);
     lua_getfield(T->L, -1, "initdebugfns");
 
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
@@ -278,7 +278,7 @@ int terra_debuginit(struct terra_State * T, JITMemoryManager * JMM) {
 
 #else /* it arm code just don't include debug interface for now */
 
-int terra_debuginit(struct terra_State * T, llvm::JITMemoryManager * JMM) {
+int terra_debuginit(struct terra_State * T) {
     return 0;
 }
 

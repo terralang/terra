@@ -41,7 +41,7 @@ static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Obj * res, ImportedCModule * CI_)
+    IncludeCVisitor(Obj * res, TerraCompilationUnit * CI_)
         : resulttable(res),
           L(res->getState()),
           ref_table(res->getRefTable()),
@@ -506,12 +506,12 @@ public:
     Obj general; //name -> function or type in the general namespace
     Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
     std::string error_message;
-    ImportedCModule * CI;
+    TerraCompilationUnit * CI;
 };
 
 class CodeGenProxy : public ASTConsumer {
 public:
-  CodeGenProxy(CodeGenerator * CG_, Obj * result, ImportedCModule * CI)
+  CodeGenProxy(CodeGenerator * CG_, Obj * result, TerraCompilationUnit * CI)
   : CG(CG_), Visitor(result,CI) {}
   CodeGenerator * CG;
   IncludeCVisitor Visitor;
@@ -662,7 +662,7 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     #else
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
     #endif
-    ImportedCModule * CI = new ImportedCModule(); //TODO: cleanup
+    TerraCompilationUnit * CI = new TerraCompilationUnit();
     
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";

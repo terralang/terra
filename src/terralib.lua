@@ -526,13 +526,17 @@ local compilationunit = {}
 compilationunit.__index = compilationunit
 
 function terra.newcompilationunit(opt)
-    return setmetatable({ symbols = {}, opt = opt },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+    return setmetatable({ symbols = {}, llvm_cu = terra.initcompilationunit(opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
     local t = v:gettype()
     if terra.isglobalvar(v) then t:complete() end
-    return terra.compilationunitaddvalue(self,k,v,self.opt)
+    return terra.compilationunitaddvalue(self,k,v)
+end
+function compilationunit:jitvalue(v)
+    local gv = self:addvalue(v)
+    return terra.jit(self.llvm_cu,gv)
 end
 
 terra.jitcompilationunit = terra.newcompilationunit() -- compilation unit used for JIT compilation, will eventually specify the native architecture
@@ -540,8 +544,7 @@ terra.jitcompilationunit = terra.newcompilationunit() -- compilation unit used f
 function terra.funcdefinition:jit(checknocont)
     assert(checknocont == nil, "compile no longer supports deferred action, use :gettype instead")
     if not self.rawjitptr then
-        local gv = terra.jitcompilationunit:addvalue(self)
-        self.rawjitptr,self.stats.jit = terra.jit(gv)
+        self.rawjitptr,self.stats.jit = terra.jitcompilationunit:jitvalue(self)
     end
     return self.rawjitptr
 end
@@ -699,8 +702,7 @@ end
 
 function terra.globalvar:getpointer()
     if not self.cdata_ptr then
-        local gv = terra.jitcompilationunit:addvalue(self)
-        local rawptr = terra.jit(gv)
+        local rawptr = terra.jitcompilationunit:jitvalue(self)
         self.cdata_ptr = terra.cast(terra.types.pointer(self.type),rawptr)
     end
     return self.cdata_ptr
