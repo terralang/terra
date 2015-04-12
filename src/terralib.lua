@@ -263,7 +263,7 @@ function terra.context:finish(anchor)
             end
         else
             for i,o in ipairs(scc) do
-                o.state = "typechecked"
+                o.state,o.scc = "typechecked",obj.compileindex
             end
             --dispatch callbacks that should occur once the function is typechecked
             for i,o in ipairs(scc) do
@@ -539,7 +539,7 @@ function compilationunit:jitvalue(v)
     return terra.jit(self.llvm_cu,gv)
 end
 
-terra.jitcompilationunit = terra.newcompilationunit() -- compilation unit used for JIT compilation, will eventually specify the native architecture
+terra.jitcompilationunit = terra.newcompilationunit(true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 function terra.funcdefinition:jit(checknocont)
     assert(checknocont == nil, "compile no longer supports deferred action, use :gettype instead")

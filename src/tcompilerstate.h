@@ -13,12 +13,12 @@ struct TerraFunctionInfo {
 };
 class Types; struct CCallingConv; struct Obj;
 struct TerraCompilationUnit {
-    TerraCompilationUnit() : T(NULL), M(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    TerraCompilationUnit() : T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
     terra_State * T;
     std::string Triple,CPU;
     llvm::Module * M;
-    //ManualInliner * mi;
-    //llvm::PassManagerBase * pm;
+    ManualInliner * mi;
+    llvm::FunctionPassManager * fpm;
     llvm::TargetMachine * tm;
     const llvm::DataLayout * td;
     std::string livenessfunction; //used in imported C code to find the LLVM types that correspond to the C types imported
@@ -28,6 +28,7 @@ struct TerraCompilationUnit {
     Types * Ty;
     CCallingConv * CC;
     Obj * symbols;
+    std::vector<llvm::Function *>* tooptimize;
 };
 
 struct terra_CompilerState {

@@ -45,12 +45,12 @@ void ManualInliner::eraseFunction(Function * F) {
     CG->removeFunctionFromModule(n);
     delete F;
 }
-void ManualInliner::run(std::vector<Function *> * fns) {
+void ManualInliner::run(std::vector<Function *>::iterator fbegin, std::vector<Function *>::iterator fend) {
     std::vector<CallGraphNode*> nodes;
     //the inliner requires an up to date callgraph, so we add the functions in the SCC
     //to the callgraph. If needed, we can do this during function creation to make it faster
-    for(size_t i = 0; i < fns->size(); i++){
-        Function * F = (*fns)[i];
+    for(std::vector<Function *>::iterator fp = fbegin; fp != fend; ++fp){
+        Function * F = *fp;
         CallGraphNode * n = CG->getOrInsertFunction(F);
         for (Function::iterator BB = F->begin(), BBE = F->end(); BB != BBE; ++BB)
           for (BasicBlock::iterator II = BB->begin(), IE = BB->end(); II != IE; ++II) {
@@ -71,9 +71,8 @@ void ManualInliner::run(std::vector<Function *> * fns) {
     SI->runOnSCC(SCC);
     //We optimize the function now, which will invalidate the call graph,
     //removing called functions makes sure that further inlining passes don't attempt to add invalid callsites as inlining candidates
-    for(size_t i = 0; i < fns->size(); i++){
-        Function * F = (*fns)[i];
-        CG->getOrInsertFunction(F)->removeAllCalledFunctions();
+    for(std::vector<Function *>::iterator fp = fbegin; fp != fend; ++fp){
+        CG->getOrInsertFunction(*fp)->removeAllCalledFunctions();
     }
 
 }

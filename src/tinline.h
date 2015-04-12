@@ -9,7 +9,7 @@ class ManualInliner {
     llvm::PassManager PM;
 public:
     ManualInliner(llvm::TargetMachine * tm, llvm::Module * m);
-    void run(std::vector<llvm::Function *> * fns);
+    void run(std::vector<llvm::Function *>::iterator fbegin, std::vector<llvm::Function *>::iterator fend);
     void eraseFunction(llvm::Function * f);
 };
 

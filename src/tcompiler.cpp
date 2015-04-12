@@ -249,9 +249,10 @@ int terra_initcompilationunit(lua_State * L) {
     CU->M->setTargetTriple(CU->Triple);
     
     if(optimize) {
-        //llvmutil_addtargetspecificpasses(T->C->fpm, TM);
-        //llvmutil_addoptimizationpasses(T->C->fpm);
-        //T->C->mi = new ManualInliner(T->C->tm,T->C->m);
+        CU->mi = new ManualInliner(CU->tm,CU->M);
+        CU->fpm = new FunctionPassManager(CU->M);
+        llvmutil_addtargetspecificpasses(CU->fpm, CU->tm);
+        llvmutil_addoptimizationpasses(CU->fpm);
     }
     return 1;
 }
@@ -1090,7 +1091,7 @@ static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * glob
 
 static int terra_deletefunction(lua_State * L);
 
-Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj);
+Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc);
 
 struct FunctionEmitter {
     TerraCompilationUnit * CU;
@@ -1111,15 +1112,17 @@ struct FunctionEmitter {
     int customlinenumber;
     
     Obj * funcobj;
+    int scc;
     Function * func;
     std::vector<BasicBlock *> deferred;
     
     FunctionEmitter(TerraCompilationUnit * CU_, Obj * funcobj_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), funcobj(funcobj_)  {}
-    Function * run() {
+    Function * run(int prevscc) {
         func = lookupSymbol<Function>(CU->symbols,funcobj);
         if(!func) {
             const char * name = funcobj->string("name");
             bool isextern = funcobj->boolean("isextern");
+            scc = funcobj->number("scc");
             if (isextern) { //try to resolve function as imported C code
                 func = M->getFunction(name);
                 if(TerraCompilationUnit * CI = (TerraCompilationUnit*)funcobj->ud("llvm_definingmodule")) {
@@ -1165,8 +1168,38 @@ struct FunctionEmitter {
             } else { printf("TODO: ignoring delete\n"); }
             
             mapSymbol(CU->symbols,funcobj,func); //map the declaration first so that recursive uses do not re-emit
-            if(!isextern)
+            if(!isextern) {
+                if(CU->mi)
+                    CU->tooptimize->push_back(func);
                 emitBody();
+                if(CU->mi && prevscc != scc) { //this is the end of a strongly connect component run optimizations on it
+                    VERBOSE_ONLY(T) {
+                        printf("optimizing scc containing: ");
+                    }
+                    size_t i = CU->tooptimize->size();
+                    Function * f;
+                    do {
+                        f = (*CU->tooptimize)[--i];
+                        VERBOSE_ONLY(T) {
+                            std::string s = f->getName();
+                            printf("%s%s",s.c_str(), (func == f) ? "\n" : " ");
+                        }
+                    } while(func != f);
+                    CU->mi->run(CU->tooptimize->begin() + i, CU->tooptimize->end());
+                    do {
+                        f = CU->tooptimize->back();
+                        VERBOSE_ONLY(T) {
+                            std::string s = f->getName();
+                            printf("optimizing %s\n",s.c_str());
+                        }
+                        CU->fpm->run(*f);
+                        VERBOSE_ONLY(T) {
+                            f->dump();
+                        }
+                        CU->tooptimize->pop_back();
+                    } while(func != f);
+                }
+            }
         }
         return func;
     }
@@ -1743,7 +1776,7 @@ if(baseT->isIntegerTy()) { \
                     if(objType.kind("kind") == T_functype) {
                         Obj func;
                         exp->obj("value",&func);
-                        Function * fn = EmitFunction(CU,&func);
+                        Function * fn = EmitFunction(CU,&func,scc);
                         //functions are represented with &int8 pointers to avoid
                         //calling convension issues, so cast the literal to this type now
                         return B->CreateBitCast(fn,t->type);
@@ -2306,9 +2339,9 @@ if(baseT->isIntegerTy()) { \
 };
 
 
-Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj) {
+Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc) {
     FunctionEmitter fe(CU,funcobj);
-    return fe.run();
+    return fe.run(prevscc);
 }
 
 static int terra_compilationunitaddvalue(lua_State * L) { //entry point into compiler from lua code
@@ -2328,13 +2361,14 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
         
         Types Ty(CU);
         CCallingConv CC(CU,&Ty);
-        CU->Ty = &Ty; CU->CC = &CC; CU->symbols = &globals;
+        std::vector<Function *> tooptimize;
+        CU->Ty = &Ty; CU->CC = &CC; CU->symbols = &globals; CU->tooptimize = &tooptimize;
         if(value.hasfield("isglobal")) {
             gv = EmitGlobalVariable(CU,&value,"anon");
         } else {
-            gv = EmitFunction(CU,&value);
+            gv = EmitFunction(CU,&value,-1);
         }
-        CU->Ty = NULL; CU->CC = NULL; CU->symbols = NULL;
+        CU->Ty = NULL; CU->CC = NULL; CU->symbols = NULL; CU->tooptimize = NULL;
         if(modulename) {
             if(GlobalValue * gv2 = CU->M->getNamedValue(modulename))
                 gv2->setName(Twine(StringRef(modulename),"_renamed")); //rename anything else that has this name
@@ -2370,64 +2404,6 @@ static int terra_llvmsizeof(lua_State * L) {
     return 1;
 }
 
-static int terra_optimize(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    
-    int ref_table = lobj_newreftable(T->L);
-    
-    {
-        Obj jitobj;
-        lua_pushvalue(L,-2); //original argument
-        jitobj.initFromStack(L, ref_table);
-        Obj funclist;
-        jitobj.obj("functions", &funclist);
-        std::vector<Function *> scc;
-        int N = funclist.size();
-        VERBOSE_ONLY(T) {
-            printf("optimizing scc containing: ");
-        }
-        for(int i = 0; i < N; i++) {
-            Obj funcobj;
-            funclist.objAt(i,&funcobj);
-            Function * func = (Function*) funcobj.ud("llvm_value");
-            assert(func);
-            scc.push_back(func);
-            VERBOSE_ONLY(T) {
-                std::string s = func->getName();
-                printf("%s ",s.c_str());
-            }
-        }
-        VERBOSE_ONLY(T) {
-            printf("\n");
-        }
-        
-        //T->C->mi->run(&scc);
-        if (!T->options.usemcjit) {
-            for(int i = 0; i < N; i++) {
-                Obj funcobj;
-                funclist.objAt(i,&funcobj);
-                Function * func = (Function*) funcobj.ud("llvm_value");
-                assert(func);
-                
-                VERBOSE_ONLY(T) {
-                    std::string s = func->getName();
-                    printf("optimizing %s\n",s.c_str());
-                }
-                //((FunctionPassManager*)T->C->fpm)->run(*func);
-                VERBOSE_ONLY(T) {
-                    func->dump();
-                }
-            }
-        }
-    } //scope to ensure that all Obj held in the compiler are destroyed before we pop the reference table off the stack
-    
-    lobj_removereftable(T->L,ref_table);
-    
-    return 0;
-}
-
-
-
 #ifdef TERRA_CAN_USE_MCJIT
 static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
     if(CU->T->options.debug > 1)
@@ -2461,7 +2437,6 @@ static void * JITGlobalValue(TerraCompilationUnit * CU, GlobalValue * gv) {
         }
         llvm::ValueToValueMapTy VMap;
         Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,CU, VMap);
-        //((PassManager*)T->C->fpm)->run(*m);
         
         if(CU->T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
