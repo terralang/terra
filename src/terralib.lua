@@ -538,6 +538,10 @@ function compilationunit:jitvalue(v)
     local gv = self:addvalue(v)
     return terra.jit(self.llvm_cu,gv)
 end
+function compilationunit:free()
+    assert(not self.livefunctions, "cannot explicitly release a compilation unit with auto-delete functions")
+    terra.freecompilationunit(self.llvm_cu)
+end
 
 terra.jitcompilationunit = terra.newcompilationunit(true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
@@ -4183,7 +4187,9 @@ function terra.saveobj(filename,filekind,env,arguments)
         elseif not terra.isglobalvar(v) then error("expected terra globals or functions but found "..terra.type(v)) end
         cu:addvalue(k,v)
     end
-    return cu:saveobj(filename,filekind,arguments)
+    local r = cu:saveobj(filename,filekind,arguments)
+    cu:free()
+    return r
 end
 
 -- configure path variables

@@ -32,6 +32,7 @@ struct TerraCompilationUnit {
 };
 
 struct terra_CompilerState {
+    int nreferences;
     llvm::LLVMContext * ctx;
     llvm::JITMemoryManager * JMM;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;

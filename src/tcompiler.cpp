@@ -41,6 +41,7 @@ using namespace llvm;
 #define TERRALIB_FUNCTIONS(_) \
     _(initcompilationunit,1) \
     _(compilationunitaddvalue,1) /*entry point from lua into compiler to generate LLVM for a function, other functions it calls may not yet exist*/\
+    _(freecompilationunit,0) \
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
     _(llvmsizeof,1) \
     _(disassemble,1) \
@@ -218,6 +219,7 @@ int terra_initcompilationunit(lua_State * L) {
     TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_newuserdata(L,sizeof(TerraCompilationUnit));
     new (CU) TerraCompilationUnit();
     CU->T = T;
+    CU->T->C->nreferences++;
     TargetOptions options;
     DEBUG_ONLY(T) {
         options.NoFramePointerElim = true;
@@ -254,6 +256,7 @@ int terra_initcompilationunit(lua_State * L) {
         llvmutil_addtargetspecificpasses(CU->fpm, CU->tm);
         llvmutil_addoptimizationpasses(CU->fpm);
     }
+    terra_ongc(L,-1,terra_freecompilationunit);
     return 1;
 }
 
@@ -302,6 +305,7 @@ int terra_compilerinit(struct terra_State * T) {
     
     T->C = new terra_CompilerState();
     memset(T->C, 0, sizeof(terra_CompilerState));
+    T->C->nreferences = 1;
     T->C->JMM = JITMemoryManager::CreateDefaultMemManager();
     T->C->next_unused_id = 0;
     T->C->ctx = new LLVMContext();
@@ -315,17 +319,35 @@ int terra_compilerinit(struct terra_State * T) {
     return 0;
 }
 
+int terra_freecompilationunit(lua_State * L) {
+    TerraCompilationUnit * CU = (TerraCompilationUnit *) lua_touserdata(L,1);
+    if(CU->T) {
+        if(CU->ee) {
+            CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
+            delete CU->jiteventlistener;
+            delete CU->ee;
+        }
+        if(CU->mi) {
+            delete CU->mi;
+            delete CU->fpm;
+        }
+        delete CU->tm;
+        if(CU->T->options.usemcjit || !CU->ee) //we own the module so we delete it
+            delete CU->M;
+        terra_compilerfree(CU->T); //decrement reference count to compiler
+        new (CU) TerraCompilationUnit(); //reset to original state
+        
+    }
+    return 0;
+}
+
 int terra_compilerfree(struct terra_State * T) {
-    //T->C->ee->UnregisterJITEventListener(T->C->jiteventlistener);
-    //delete T->C->jiteventlistener;
-    //delete T->C->mi;
-    //delete T->C->fpm;
-    //delete T->C->ee;
-    //delete T->C->tm;
-    //delete T->C->ctx;
-    //if(T->C->cwrapperpm)
-    //    delete T->C->cwrapperpm;
-    //delete T->C;
+    if(0 == --T->C->nreferences) {
+        //?? delete T->C->JMM;
+        T->C->functioninfo.clear();
+        delete T->C->ctx;
+        delete T->C; T->C = NULL;
+    }
     return 0;
 }
 

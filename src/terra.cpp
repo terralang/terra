@@ -155,7 +155,7 @@ int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size
 #define abs_index(L, i) \
   ((i) > 0 || (i) <= LUA_REGISTRYINDEX ? (i) : lua_gettop(L) + (i) + 1)
   
-static void ongc(lua_State * L, int idx, lua_CFunction gcfn) {
+void terra_ongc(lua_State * L, int idx, lua_CFunction gcfn) {
     idx = abs_index(L,idx);
     lua_newtable(L);
     lua_pushcfunction(L, gcfn);
@@ -207,7 +207,7 @@ int terra_init(lua_State * L) {
 }
 int terra_initwithoptions(lua_State * L, terra_Options * options) {
     terra_State * T = (terra_State*) lua_newuserdata(L, sizeof(terra_State));
-    ongc(L, -1, terra_free);
+    terra_ongc(L, -1, terra_free);
     assert(T);
     memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
     T->options = *options;
@@ -268,31 +268,9 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
 static int terra_free(lua_State * L) {
     terra_State * T = (terra_State *) lua_touserdata(L, -1);
     assert(T);
-    terra_decrementlivefunctions(T);
+    terra_cudafree(T);
+    terra_compilerfree(T);
     return 0;
-}
-
-//determines when to free terra_State
-//it is safe to free terra_State when both:
-//1. all live functions in the system have been deleted
-//2. terra_free has been called
-// due to the way lua calls finalizers, terra_free can be called
-// before the destructors for live functions. numlivefunctions
-// keeps an accurate count of the live functions + 1 if terra free
-// has not been called. when this count reaches 0 both conditions
-// 1 and 2 are met, so we can delete the state.
-// terra_decrementlivefunctions will be called by both terra_free
-// and terra_deletefunction to check for this condition
-void terra_decrementlivefunctions(terra_State * T) {
-    assert(T->numlivefunctions > 0);
-    T->numlivefunctions--;
-    if(T->numlivefunctions == 0) {
-        VERBOSE_ONLY(T) {
-            printf("freeing terra_State\n");
-        }
-        terra_cudafree(T);
-        terra_compilerfree(T);
-    }
 }
 
 struct FileInfo {

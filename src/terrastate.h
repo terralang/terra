@@ -33,7 +33,7 @@ void terra_pusherror(terra_State * T, const char * fmt, ...);
 void terra_vpusherror(terra_State * T, const char * fmt, va_list ap);
 int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name);
 terra_State * terra_getstate(lua_State * L, int closureindex);
-void terra_decrementlivefunctions(terra_State * T);
+void terra_ongc(lua_State * L, int idx, lua_CFunction gcfn);
 #define VERBOSE_ONLY(T) if((T)->options.verbose != 0)
 #define DEBUG_ONLY(T) if((T)->options.debug != 0)
 

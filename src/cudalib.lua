@@ -75,7 +75,9 @@ function cudalib.toptx(module,dumpmodule,version)
         end
     end
     --call into tcuda.cpp to perform compilation
-    return terralib.toptximpl(cu,annotations,dumpmodule,version)
+    local r = terralib.toptximpl(cu,annotations,dumpmodule,version)
+    cu:free()
+    return r
 end
 
 -- we need to use terra to write the function that JITs the right wrapper functions forCUDA kernels

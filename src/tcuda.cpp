@@ -192,7 +192,6 @@ int terra_toptx(lua_State * L) {
         M->dump();
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
-    printf("TODO: clean up compile module\n");
     lua_pushstring(L,ptx.c_str());
     return 1;
 }
