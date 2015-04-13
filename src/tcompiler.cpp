@@ -218,6 +218,7 @@ int terra_initcompilationunit(lua_State * L) {
     bool optimize = lua_toboolean(L,1);
     TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_newuserdata(L,sizeof(TerraCompilationUnit));
     new (CU) TerraCompilationUnit();
+    CU->nreferences = 1;
     CU->T = T;
     CU->T->C->nreferences++;
     TargetOptions options;
@@ -318,10 +319,9 @@ int terra_compilerinit(struct terra_State * T) {
     }
     return 0;
 }
-
-int terra_freecompilationunit(lua_State * L) {
-    TerraCompilationUnit * CU = (TerraCompilationUnit *) lua_touserdata(L,1);
-    if(CU->T) {
+static void freecompilationunit(TerraCompilationUnit * CU) {
+    if(CU->T && 0 == --CU->nreferences) {
+        VERBOSE_ONLY(CU->T) { printf("Freeing Compilation Unit %p\n",CU); }
         if(CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
             delete CU->jiteventlistener;
@@ -336,8 +336,10 @@ int terra_freecompilationunit(lua_State * L) {
             delete CU->M;
         terra_compilerfree(CU->T); //decrement reference count to compiler
         new (CU) TerraCompilationUnit(); //reset to original state
-        
     }
+}
+int terra_freecompilationunit(lua_State * L) {
+    freecompilationunit((TerraCompilationUnit *) lua_touserdata(L,1));
     return 0;
 }
 
@@ -1110,7 +1112,7 @@ static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * glob
     return gv;
 }
 
-
+const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State * L);
 
 Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc);
@@ -1174,21 +1176,6 @@ struct FunctionEmitter {
                 }
             }
             
-            if(false) {
-                //attach a userdata object to the function that will call terra_deletefunction
-                //when the function variant is GC'd in lua
-                Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
-                *gchandle = func;
-                if(luaL_newmetatable(L,"terra_gcfuncdefinition")) {
-                    lua_pushlightuserdata(L,(void*)T);
-                    lua_pushcclosure(L,terra_deletefunction,1);
-                    lua_setfield(L,-2,"__gc");
-                }
-                lua_setmetatable(L,-2);
-                funcobj->setfield("llvm_gchandle"); //TODO: fix deletion stuff
-                T->numlivefunctions++;
-            } else { printf("TODO: ignoring delete\n"); }
-            
             mapSymbol(CU->symbols,funcobj,func); //map the declaration first so that recursive uses do not re-emit
             if(!isextern) {
                 if(CU->mi)
@@ -1222,6 +1209,22 @@ struct FunctionEmitter {
                     } while(func != f);
                 }
             }
+            lua_getfield(L,COMPILATION_UNIT_POS,"livefunctions");
+            if(!lua_isnil(L,-1)) {
+                //attach a userdata object to the function that will call terra_deletefunction
+                //when the function variant is GC'd in lua
+                CU->nreferences++;
+                funcobj->push();
+                Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
+                *gchandle = func;
+                lua_newtable(L);
+                lua_getfield(L,COMPILATION_UNIT_POS,"llvm_cu");
+                lua_pushcclosure(L,terra_deletefunction,1);
+                lua_setfield(L,-2,"__gc");
+                lua_setmetatable(L,-2);
+                lua_settable(L,-3);
+            }
+            lua_pop(L,1);
         }
         return func;
     }
@@ -2373,7 +2376,7 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
     int ref_table = lobj_newreftable(T->L);
     {
         Obj cu,globals,value;
-        lua_pushvalue(L,1); //the compilation unit
+        lua_pushvalue(L,COMPILATION_UNIT_POS); //the compilation unit
         cu.initFromStack(L,ref_table);
         cu.obj("symbols", &globals);
         const char * modulename = (lua_isnil(L,2)) ? NULL : lua_tostring(L,2);
@@ -2493,36 +2496,34 @@ static int terra_jit(lua_State * L) {
 }
 
 static int terra_deletefunction(lua_State * L) {
-#if 0
-    terra_State * T = terra_getstate(L, 1);
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,lua_upvalueindex(1));
     Function ** fp = (Function**) lua_touserdata(L,-1);
     assert(fp);
     Function * func = (Function*) *fp;
     assert(func);
-    VERBOSE_ONLY(T) {
+    VERBOSE_ONLY(CU->T) {
         printf("deleting function: %s\n",func->getName().str().c_str());
     }
     //MCJIT can't free individual functions, so we need to leak the generated code
     if(!CU->T->options.usemcjit && CU->ee->getPointerToGlobalIfAvailable(func)) {
-        VERBOSE_ONLY(T) {
+        VERBOSE_ONLY(CU->T) {
             printf("... and deleting generated code\n");
         }
         CU->ee->freeMachineCodeForFunction(func);
     }
-    if(!func->use_empty() || T->options.usemcjit) { //for MCJIT, we need to keep the declaration so another function doesn't get the same name
-        VERBOSE_ONLY(T) {
+    if(!func->use_empty() || CU->T->options.usemcjit) { //for MCJIT, we need to keep the declaration so another function doesn't get the same name
+        VERBOSE_ONLY(CU->T) {
             printf("... uses not empty, removing body but keeping declaration.\n");
         }
         func->deleteBody();
     } else {
-        //T->C->mi->eraseFunction(func);
+        CU->mi->eraseFunction(func);
     }
-    VERBOSE_ONLY(T) {
+    VERBOSE_ONLY(CU->T) {
         printf("... finish delete.\n");
     }
     *fp = NULL;
-    terra_decrementlivefunctions(T);
-#endif
+    freecompilationunit(CU);
     return 0;
 }
 static int terra_disassemble(lua_State * L) {

@@ -522,11 +522,15 @@ function terra.funcdefinition:gettype(cont,anchorduringcompilation)
     return self.type or terra.types.error
 end
 
+local weakkeys = { __mode = "k" }
+local function newweakkeytable()
+    return setmetatable({},weakkeys)
+end
+
 local compilationunit = {}
 compilationunit.__index = compilationunit
-
 function terra.newcompilationunit(opt)
-    return setmetatable({ symbols = {}, llvm_cu = terra.initcompilationunit(opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+    return setmetatable({ symbols = newweakkeytable(), livefunctions = opt and newweakkeytable() or nil, llvm_cu = terra.initcompilationunit(opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end

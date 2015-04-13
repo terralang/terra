@@ -13,3 +13,6 @@ bar:compile()
 foo = nil
 
 collectgarbage()
+collectgarbage()
+
+print("HERE")

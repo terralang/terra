@@ -13,7 +13,8 @@ struct TerraFunctionInfo {
 };
 class Types; struct CCallingConv; struct Obj;
 struct TerraCompilationUnit {
-    TerraCompilationUnit() : T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    TerraCompilationUnit() : nreferences(0), T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    int nreferences;
     terra_State * T;
     std::string Triple,CPU;
     llvm::Module * M;
