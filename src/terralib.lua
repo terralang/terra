@@ -4369,7 +4369,15 @@ function terra.type(t)
 end
 
 function terra.linklibrary(filename)
-    terra.linklibraryimpl(filename,filename:match(".bc$"))
+    assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
+    terra.linklibraryimpl(filename)
+end
+function terra.linkllvm(filename)
+    local llvm_cu = terra.initcompilationunit()
+    terra.linkllvmimpl(llvm_cu,filename)
+    return { llvm_cu = llvm_cu, extern = function(self,name,typ)
+        return terra.externfunction(name,typ,assert(self.llvm_cu))
+    end }
 end
 
 terra.languageextension = {

@@ -49,6 +49,7 @@ using namespace llvm;
     _(gcdebug,0) \
     _(saveobjimpl,1) \
     _(linklibraryimpl,1) \
+    _(linkllvmimpl,1) \
     _(currenttimeinseconds,0) \
     _(isintegral,0) \
     _(dumpmodule,1)
@@ -1152,7 +1153,7 @@ struct FunctionEmitter {
                 if(TerraCompilationUnit * CI = (TerraCompilationUnit*)funcobj->ud("llvm_definingmodule")) {
                     if(!func) {
                         std::string err;
-                        if(llvm::Linker::LinkModules(M, CI->M, 0, &err))
+                        if(llvm::Linker::LinkModules(M, CI->M, llvm::Linker::PreserveSource, &err))
                             terra_reporterror(T, "linker reported error: %s",err.c_str());
                         func = M->getFunction(name); assert(func);
                     }
@@ -2695,7 +2696,6 @@ static int terra_saveobjimpl(lua_State * L) {
             lua_pushlstring(L,&mem[0],mem.size());
         }
     }
-    printf("clean up module\n");
     if(result)
         lua_error(CU->T->L);
     
@@ -2722,44 +2722,39 @@ static int terra_isintegral(lua_State * L) {
     lua_pushboolean(L,integral);
     return 1;
 }
-
 static int terra_linklibraryimpl(lua_State * L) {
-    std::string Err;
     terra_State * T = terra_getstate(L, 1);
-    
-    const char * filename = luaL_checkstring(L, -2);
-    bool isbitcode = lua_toboolean(L,-1);
-    if(isbitcode) {
-    #if LLVM_VERSION <= 34
-        OwningPtr<MemoryBuffer> mb;
-        error_code ec = MemoryBuffer::getFile(filename,mb);
-        if(ec)
-            terra_reporterror(T, "llvm: %s\n", ec.message().c_str());
-        Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
-        m->setTargetTriple(T->C->external->getTargetTriple());
-        if(!m)
-            terra_reporterror(T, "llvm: %s\n", Err.c_str());
-    #else
-        ErrorOr<std::unique_ptr<MemoryBuffer> > mb = MemoryBuffer::getFile(filename);
-        if(!mb)
-            terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
-        ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*T->C->ctx);
-        if(!mm)
-            terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
-        Module * m = mm.get();
-    #endif
-        assert(!"linking llvm is broken");
-        //m->setTargetTriple(T->C->external->getTargetTriple());
-        //bool failed = llvmutil_linkmodule(T->C->external, m, T->C->tm, NULL, &Err);
-        delete m;
-        //if(failed)
-        //    terra_reporterror(T, "llvm: %s\n", Err.c_str());
-    } else {
-        std::string Err;
-        if(sys::DynamicLibrary::LoadLibraryPermanently(filename,&Err)) {
-            terra_reporterror(T, "llvm: %s\n", Err.c_str());
-        }
+    std::string Err;
+    if(sys::DynamicLibrary::LoadLibraryPermanently(luaL_checkstring(L, 1),&Err)) {
+        terra_reporterror(T, "llvm: %s\n", Err.c_str());
     }
+    return 0;
+}
+static int terra_linkllvmimpl(lua_State * L) {
+    terra_State * T = terra_getstate(L, 1); (void)T;
+    std::string Err;
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,1);
+    const char * filename = luaL_checkstring(L,2);
+#if LLVM_VERSION <= 34
+    OwningPtr<MemoryBuffer> mb;
+    error_code ec = MemoryBuffer::getFile(filename,mb);
+    if(ec)
+        terra_reporterror(CU->T, "llvm: %s\n", ec.message().c_str());
+    Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
+    if(!m)
+        terra_reporterror(CU->T, "llvm: %s\n", Err.c_str());
+#else
+    ErrorOr<std::unique_ptr<MemoryBuffer> > mb = MemoryBuffer::getFile(filename);
+    if(!mb)
+        terra_reporterror(CU->T, "llvm: %s\n", mb.getError().message().c_str());
+    ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*CU->T->C->ctx);
+    if(!mm)
+        terra_reporterror(CU->T, "llvm: %s\n", mm.getError().message().c_str());
+    Module * m = mm.get();
+#endif
+    delete CU->M;
+    m->setTargetTriple(CU->Triple);
+    CU->M = m;
     return 0;
 }
 
