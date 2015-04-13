@@ -1128,7 +1128,7 @@ struct FunctionEmitter {
                 if(TerraCompilationUnit * CI = (TerraCompilationUnit*)funcobj->ud("llvm_definingmodule")) {
                     if(!func) {
                         std::string err;
-                        if(llvmutil_linkmodule(M, CI->M, CU->tm,NULL/*&T->C->cwrapperpm*/, &err)) //TODO: optimize
+                        if(llvm::Linker::LinkModules(M, CI->M, 0, &err))
                             terra_reporterror(T, "linker reported error: %s",err.c_str());
                         func = M->getFunction(name); assert(func);
                     }

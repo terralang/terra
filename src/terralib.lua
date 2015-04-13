@@ -3564,7 +3564,7 @@ function terra.includecstring(code,...)
         args:insert("-I")
         args:insert(p)
     end
-    local result = terra.registercfile(code,args)
+    local result = terra.registercfile(terra.initcompilationunit(false),code,args)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros
     local mt = { __index = includetableindex, errors = result.errors }
     local function addtogeneral(tbl)

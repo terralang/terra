@@ -318,41 +318,6 @@ Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vecto
         return M;
 }
 
-bool llvmutil_linkmodule(Module * dst, Module * src, TargetMachine * TM, PassManager ** optManager, std::string * errmsg) {
-    //cleanup after clang.
-    //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
-    //the linker will then delete it because it is not used.
-    //switching it to WeakODR means that the linker will keep it even if it is not used
-    for(llvm::Module::iterator it = src->begin(), end = src->end();
-        it != end;
-        ++it) {
-        llvm::Function * fn = it;
-        if(fn->hasAvailableExternallyLinkage()) {
-            fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
-        }
-    #if LLVM_VERSION >= 35
-        if(fn->hasDLLImportStorageClass()) //clear dll import linkage because it messes up the jit on window
-            fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
-    #else
-        if(fn->hasDLLImportLinkage()) //clear dll import linkage because it messes up the jit on window
-            fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-        
-    #endif
-    }
-    src->setTargetTriple(dst->getTargetTriple()); //suppress warning that occur due to unmatched os versions
-    if(optManager) {
-        if(!*optManager) {
-            *optManager = new PassManager();
-            llvmutil_addtargetspecificpasses(*optManager, TM);
-            (*optManager)->add(createFunctionInliningPass());
-            llvmutil_addoptimizationpasses(*optManager);
-        }
-        (*optManager)->run(*src);
-    }
-    
-    return llvm::Linker::LinkModules(dst, src, 0, errmsg);
-}
-
 #if LLVM_VERSION >= 34
 error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix, SmallVectorImpl<char> &ResultPath) { return sys::fs::createTemporaryFile(Prefix,Suffix,ResultPath); }
 #else

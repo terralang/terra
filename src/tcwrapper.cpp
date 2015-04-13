@@ -35,6 +35,8 @@ static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
     parent->setfield(name);
 }
 
+const int COMPILATION_UNIT_POS = 1;
+
 // part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
 // we're interested in by overriding relevant methods.
@@ -137,7 +139,7 @@ public:
                 tt->initFromStack(L,ref_table);
                 if(!tt->boolean("llvm_definingmodule")) {
                     size_t argpos = RegisterRecordType(Context->getRecordType(rd));
-                    lua_pushlightuserdata(L,CI);
+                    lua_pushvalue(L,COMPILATION_UNIT_POS);
                     tt->setfield("llvm_definingmodule");
                     lua_pushinteger(L,argpos);
                     tt->setfield("llvm_argumentposition");
@@ -460,7 +462,7 @@ public:
             lua_remove(L,-2); //terra table
             lua_pushstring(L, internalname.c_str());
             typ->push();
-            lua_pushlightuserdata(L, CI);
+            lua_pushvalue(L, COMPILATION_UNIT_POS);
             lua_call(L, 3, 1);
             general.setfield(name.c_str());
         }
@@ -650,26 +652,54 @@ static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * 
     table->setfield(II->getName().str().c_str());
 }
 #endif
-static int dofile(terra_State * T, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
+
+static void optimizemodule(TerraCompilationUnit * CU) {
+    //cleanup after clang.
+    //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
+    //the linker will then delete it because it is not used.
+    //switching it to WeakODR means that the linker will keep it even if it is not used
+    for(llvm::Module::iterator it = CU->M->begin(), end = CU->M->end();
+        it != end;
+        ++it) {
+        llvm::Function * fn = it;
+        if(fn->hasAvailableExternallyLinkage()) {
+            fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+        }
+    #if LLVM_VERSION >= 35
+        if(fn->hasDLLImportStorageClass()) //clear dll import linkage because it messes up the jit on window
+            fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
+    #else
+        if(fn->hasDLLImportLinkage()) //clear dll import linkage because it messes up the jit on window
+            fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
+        
+    #endif
+    }
+    CU->M->setTargetTriple(CU->Triple); //suppress warning that occur due to unmatched os versions
+    llvm::PassManager opt;
+    llvmutil_addtargetspecificpasses(&opt, CU->tm);
+    opt.add(llvm::createFunctionInliningPass());
+    llvmutil_addoptimizationpasses(&opt);
+    opt.run(*CU->M);
+}
+static int dofile(TerraCompilationUnit * CU, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
-    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
+    initializeclang(CU->T, membuffer, argbegin, argend, &TheCompInst);
     
     #if LLVM_VERSION <= 32
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *T->C->ctx );
     #else
-    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *T->C->ctx );
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *CU->T->C->ctx );
     #endif
-    TerraCompilationUnit * CI = new TerraCompilationUnit();
     
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";
-    ss << T->C->next_unused_id++;
-    CI->livenessfunction = ss.str();
+    ss << CU->T->C->next_unused_id++;
+    CU->livenessfunction = ss.str();
 
-    CodeGenProxy proxy(codegen,result,CI);
+    CodeGenProxy proxy(codegen,result,CU);
     ParseAST(TheCompInst.getPreprocessor(),
             &proxy,
             TheCompInst.getASTContext());
@@ -681,23 +711,25 @@ static int dofile(terra_State * T, const char * code, const char ** argbegin, co
     for(Preprocessor::macro_iterator it = PP.macro_begin(false),end = PP.macro_end(false); it != end; ++it) {
         const IdentifierInfo * II = it->first;
         MacroDirective * MD = it->second;
-        AddMacro(T,PP,II,MD,&macros);
+        AddMacro(CU->T,PP,II,MD,&macros);
     }
     #endif
     
-    CI->M = codegen->ReleaseModule();
+    delete CU->M; //get rid of the empty original module
+    CU->M = codegen->ReleaseModule();
     delete codegen;
-    if(!CI->M) {
-        terra_reporterror(T,"compilation of included c code failed\n");
+    if(!CU->M) {
+        terra_reporterror(CU->T,"compilation of included c code failed\n");
     }
-    
+    optimizemodule(CU);
     return 0;
 }
 
 int include_c(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    const char * code = luaL_checkstring(L, -2);
-    int N = lua_objlen(L, -1);
+    terra_State * T = terra_getstate(L, 1); (void) T;
+    TerraCompilationUnit * CU = (TerraCompilationUnit*)lua_touserdata(L,COMPILATION_UNIT_POS);
+    const char * code = luaL_checkstring(L, 2);
+    int N = lua_objlen(L, 3);
     std::vector<const char *> args;
 
 #ifdef _WIN32
@@ -728,7 +760,7 @@ int include_c(lua_State * L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
         
-        dofile(T,code,&args[0],&args[args.size()],&result);
+        dofile(CU,code,&args[0],&args[args.size()],&result);
     }
     
     lobj_removereftable(L, ref_table);
