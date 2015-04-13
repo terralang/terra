@@ -12,9 +12,7 @@ bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, llvm::ra
 typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap);
 #endif
-
-llvm::Module * llvmutil_extractmodule(llvm::Module * OrigMod, llvm::TargetMachine * TM, std::vector<llvm::GlobalValue*> * livevalues, std::vector<std::string> * symbolnames, bool internalizeandoptimize);
-
+void llvmutil_optimizemodule(llvm::Module * M, llvm::TargetMachine * TM);
 #if LLVM_VERSION >= 35
 using std::error_code;
 #else

@@ -258,64 +258,30 @@ llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, ll
     cp.finalize();
     return Dest;
 }
-static bool AlwaysCopy(GlobalValue * G, void *) { return true; }
 #endif
 
 
 
-Module * llvmutil_extractmodule(Module * OrigMod, TargetMachine * TM, std::vector<llvm::GlobalValue*> * livevalues, std::vector<std::string> * symbolnames, bool internalizeandoptimize) {
-        assert(symbolnames == NULL || livevalues->size() == symbolnames->size());
-        ValueToValueMapTy VMap;
-        #if LLVM_VERSION >= 34
-        Module * M = llvmutil_extractmodulewithproperties(OrigMod->getModuleIdentifier(), OrigMod, (llvm::GlobalValue **)&(*livevalues)[0], livevalues->size(), AlwaysCopy, NULL, VMap);
-        #else
-        Module * M = CloneModule(OrigMod, VMap);
-        internalizeandoptimize = true; //we need to do this regardless of the input because it is the only way we can extract just the needed functions from the module
-        #endif
+void llvmutil_optimizemodule(Module * M, TargetMachine * TM) {
+    PassManager MPM;
+    llvmutil_addtargetspecificpasses(&MPM, TM);
 
-        //rename values to symbolsnames
-        std::vector<const char *> names;
-        for(size_t i = 0; i < livevalues->size(); i++) {
-            GlobalValue * fn = cast<GlobalValue>(VMap[(*livevalues)[i]]);
-            const std::string & name = (*symbolnames)[i];
-            GlobalValue * gv = M->getNamedValue(name);
-            if(gv) { //if there is already a symbol with this name, rename it
-                gv->setName(Twine((*symbolnames)[i],"_renamed"));
-            }
-            fn->setName(name); //and set our function to this name
-            assert(fn->getName() == name);
-            names.push_back(name.c_str()); //internalize pass has weird interface, so we need to copy the names here
-        }
-        
-        if (!internalizeandoptimize)
-            return M;
+    MPM.add(createVerifierPass()); //make sure we haven't messed stuff up yet
+    MPM.add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
+                                     //this will remove dead functions
     
-        //at this point we run optimizations on the module
-        //first internalize all functions not mentioned in "names" using an internalize pass and then perform 
-        //standard optimizations
-        PassManager MPM;
-        llvmutil_addtargetspecificpasses(&MPM, TM);
-    
-        MPM.add(createVerifierPass()); //make sure we haven't messed stuff up yet
-        MPM.add(createInternalizePass(names));
-        MPM.add(createGlobalDCEPass()); //run this early since anything not in the table of exported functions is still in this module
-                                         //this will remove dead functions
-        
-        PassManagerBuilder PMB;
-        PMB.OptLevel = 3;
-        PMB.SizeLevel = 0;
-    
+    PassManagerBuilder PMB;
+    PMB.OptLevel = 3;
+    PMB.SizeLevel = 0;
+
 #if LLVM_VERSION >= 35
-        PMB.LoopVectorize = true;
-        PMB.SLPVectorize = true;
+    PMB.LoopVectorize = true;
+    PMB.SLPVectorize = true;
 #endif
 
-        PMB.populateModulePassManager(MPM);
-    
-        MPM.run(*M);
-    
+    PMB.populateModulePassManager(MPM);
 
-        return M;
+    MPM.run(*M);
 }
 
 #if LLVM_VERSION >= 34

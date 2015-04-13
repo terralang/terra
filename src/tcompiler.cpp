@@ -2637,6 +2637,8 @@ static int terra_saveobjimpl(lua_State * L) {
     
     lua_getfield(L,3,"llvm_cu");
     TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,-1); assert(CU);
+    llvmutil_optimizemodule(CU->M,CU->tm);
+    //TODO: interialize the non-exported functions?
     std::vector<const char *> args;
     int nargs = lua_objlen(L,argument_index);
     for(int i = 1; i <= nargs; i++) {
