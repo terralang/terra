@@ -136,7 +136,9 @@ To generate statements rather than expressions you can use the `quote` operator:
         [printtwice]
         [printtwice]
     end
-<br/>
+
+---
+
 ### Compiling a Language ###
 
 With these two operators, you can use Lua to generate _arbitrary_ Terra code at compile-time. This makes the combination of Lua/Terra well suited for writing compilers for high-performance domain-specific languages. For instance, we can implement a _compiler_ for [BF](http://en.wikipedia.org/wiki/Brainfuck), a minimal language that emulates a Turing machine. The Lua function `compile` will take a string of BF code, and a maximum tape size `N`. It then generates a Terra function that implements the BF code. Here is a skeleton that sets up the BF program:
@@ -320,7 +322,8 @@ the operating system, and then using an `if` statement to instantiate a differen
     --conditionally compiled to 
     --the right version for this os
     reportos()
-<br/>
+
+---
 
 ### Namespaces ###
 
@@ -363,7 +366,8 @@ The function `includec` just returns a Lua table (`C`) that contains the C funct
     > size_t  uint64
     > ...
 
-<br/>
+---
+
 ### Templating ###
 
 Since Terra types and functions are first class values, you can get functionality similar to a C++ template by simply creating a Terra type and defining a Terra function _inside_ of a Lua function. Here is an example where we define the Lua function `MakeArray(T)` which takes a Terra type `T` and generates an `Array` object that can hold multiple `T` objects (i.e. a simple version of C++'s `std::vector`).
@@ -420,6 +424,8 @@ The object `ArrayT.methods` is a Lua table that holds the methods for type `Arra
 
 Similarly an invocation such as `ia:get(0)` is equivalent to `T.methods.get(&ia,0)`.
 
+---
+
 ### Specialization ###
     
 By nesting a Terra function inside a Lua function, you can compile different versions of a function. Here we generate different versions
@@ -444,7 +450,8 @@ of the power function (e.g. pow2, or pow3):
     end
     print(mymath.pow3(2)) -- 8
 
-<br/>
+---
+
 ### Class Systems ###
 
 As shown in the templating example, Terra allows you to define methods on `struct` types but does not provide any built-in mechanism for inheritance or polymorphism. Instead, normal class systems can be written as libraries.  For instance, a user might write:
