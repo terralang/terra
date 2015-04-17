@@ -688,11 +688,13 @@ end
 function terra.func:getdefinitions()
     return self.definitions
 end
+function terra.func:getname() return self.name end
 function terra.func:setname(name)
     self.name = tostring(name)
     for i,d in ipairs(self.definitions) do
         d.name = self.name
     end
+    return self
 end
 
 function terra.isfunction(obj)
