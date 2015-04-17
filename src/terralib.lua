@@ -1682,6 +1682,17 @@ do
             return result
         end
     end
+    function types.type:getfield(fieldname)
+        if not self:isstruct() then return nil, "not a struct" end
+        local l = self:getlayout()
+        local i = l.keytoindex[fieldname]
+        if not i then return nil, ("field name '%s' is not a raw field of type %s"):format(tostring(self),tostring(fieldname)) end
+        return l.entries[i+1]
+    end
+    function types.type:getfields()
+        if not self:isstruct() then return nil, "not a struct" end
+        return self:getlayout().entries
+    end
         
     function types.istype(t)
         return getmetatable(t) == types.type
