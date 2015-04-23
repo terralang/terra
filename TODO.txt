@@ -1,20 +1,13 @@
 Cross-compilation:
 
-Goal: switch from one emission of llvm to architecture-specific version of llvm.
 
--- Add a compiler intermediate compilationunit, which maps function definition, global, constant, and everything that has a llvm_value field right now to the llvm value. 
+-- store target, method to allocate a target machine (used for our own target machine and for EngineBuilder::create)
+-- use target machine to make JIT rather than separate config path
+-- allow createcompilationunit to take arguments: triple, cpu, arch, featurestr specified optionally, "native" will mean to use LLVM to discover the native values
+-- each function that uses createccompilationunit will take the arch optionally
+-- make sure X86_64 assumptions are not in other places
+-- stringify and pass correct arguments to clang for cross compilation as well
 
--- Remove emitllvm, typechecking now only handles generating types and invoking user callbacks, never emitting/optimizing llvm
-
--- consider refactoring the SCC detection into it own object, or labelling each function with an identifier for the SCC it is in
-
--- switch back to SCC-first order optimization for MCJIT
-
---  simplify the state for functions: untyped, in progress, typed, re-examine peektype, etc.
---  see if extern functions do not need "initialization" anymore
-
--- emitting llvm is now given a compilationunit, a root function to add to it, and archiecture
--- include C creates a separate compilationunit, examine linking rules for including it.
 
 Goal: Make it really easy to emit C header files for Terra functions
 
@@ -40,6 +33,7 @@ Low-priority Implementation:
 
 
 DONE:
+
 --function pointers
 --anonymous structural type cast to other structural types
 --methods on types (declaration syntax )
@@ -136,3 +130,18 @@ Things to write tests/audit for:
 -- truncation behavior (since it was changed from a field to a node)
 
 -- pretty print is being weird on dgemmpaper.t, add support for typedexpressionlist
+Goal: switch from one emission of llvm to architecture-specific version of llvm.
+
+-- Add a compiler intermediate compilationunit, which maps function definition, global, constant, and everything that has a llvm_value field right now to the llvm value. 
+
+-- Remove emitllvm, typechecking now only handles generating types and invoking user callbacks, never emitting/optimizing llvm
+
+-- consider refactoring the SCC detection into it own object, or labelling each function with an identifier for the SCC it is in
+
+-- switch back to SCC-first order optimization for MCJIT
+
+--  simplify the state for functions: untyped, in progress, typed, re-examine peektype, etc.
+--  see if extern functions do not need "initialization" anymore
+
+-- emitting llvm is now given a compilationunit, a root function to add to it, and archiecture
+-- include C creates a separate compilationunit, examine linking rules for including it.

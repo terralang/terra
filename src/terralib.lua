@@ -659,11 +659,13 @@ end
 function terra.func:getdefinitions()
     return self.definitions
 end
+function terra.func:getname() return self.name end
 function terra.func:setname(name)
     self.name = tostring(name)
     for i,d in ipairs(self.definitions) do
         d.name = self.name
     end
+    return self
 end
 
 function terra.isfunction(obj)
@@ -1647,6 +1649,17 @@ do
         else
             return result
         end
+    end
+    function types.type:getfield(fieldname)
+        if not self:isstruct() then return nil, "not a struct" end
+        local l = self:getlayout()
+        local i = l.keytoindex[fieldname]
+        if not i then return nil, ("field name '%s' is not a raw field of type %s"):format(tostring(self),tostring(fieldname)) end
+        return l.entries[i+1]
+    end
+    function types.type:getfields()
+        if not self:isstruct() then return nil, "not a struct" end
+        return self:getlayout().entries
     end
         
     function types.istype(t)
@@ -3629,36 +3642,49 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
     local exps = terra.newlist({...}):map(function(x) return x.tree end)
     return terra.newtree(tree, { kind = terra.kinds.arrayconstructor, oftype = typ:astype(), expressions = exps })
 end)
-terra.unpackstruct = terra.internalmacro(function(diag,tree,obj)
-    local typ = obj:gettype()
-    if not obj or not typ:isstruct() or typ.convertible ~= "tuple" then
-        return obj
-    end
-    if not obj:islvalue() then diag:reporterror("expected an lvalue") end
-    local result = terralib.newlist()
-    for i,e in ipairs(typ:getentries()) do 
-        if e.field then
-            result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = e.field, value = obj.tree }))
+
+local function createunpacks(tupleonly)
+    local function unpackterra(diag,tree,obj,from,to)
+        local typ = obj:gettype()
+        if not obj or not typ:isstruct() or (tupleonly and typ.convertible ~= "tuple") then
+            return obj
         end
-    end
-    return result
-end,
-function(cdata)
-    local t = type(cdata) == "cdata" and terra.typeof(cdata)
-    if not t or not t:isstruct() or t.convertible ~= "tuple" then 
-      return cdata
-    end
-    local results = terralib.newlist()
-    for i,e in ipairs(t:getentries()) do
-        if e.field then
-            local nm = terra.issymbol(e.field) and e.field:tocname() or e.field
-            results:insert(cdata[nm])
+        if not obj:islvalue() then diag:reporterror("expected an lvalue") end
+        local result = terralib.newlist()
+        local entries = typ:getentries()
+        from = from and tonumber(from:asvalue()) or 1
+        to = to and tonumber(to:asvalue()) or #entries
+        for i = from,to do 
+            local e= entries[i]
+            if e.field then
+                result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = e.field, value = obj.tree }))
+            end
         end
+        return result
     end
-    return unpack(results)
-end)
+    local function unpacklua(cdata,from,to)
+        local t = type(cdata) == "cdata" and terra.typeof(cdata)
+        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then 
+          return cdata
+        end
+        local results = terralib.newlist()
+        local entries = t:getentries()
+        for i = tonumber(from) or 1,tonumber(to) or #entries do
+            local e = entries[i]
+            if e.field then
+                local nm = terra.issymbol(e.field) and e.field:tocname() or e.field
+                results:insert(cdata[nm])
+            end
+        end
+        return unpack(results)
+    end
+    return unpackterra,unpacklua
+end
+terra.unpackstruct = terra.internalmacro(createunpacks(false))
+terra.unpacktuple = terra.internalmacro(createunpacks(true))
+
 _G["unpackstruct"] = terra.unpackstruct
-_G["unpacktuple"] = terra.unpackstruct
+_G["unpacktuple"] = terra.unpacktuple
 _G["tuple"] = terra.types.tuple
 _G["global"] = terra.global
 

@@ -16,31 +16,10 @@ local C = terralib.includecstring [[
 
 C.float2:printpretty()
 
-local function nameindex(T) -- create a map from field names to their types
-    assert(T:isstruct())
-    local idx = {}
-    local function visit(e)
-        if e.field then 
-            idx[e.field] = e.type -- single entry, add to map
-        else -- a union, represented by a list of entries, add each member of union
-            for i,e2 in ipairs(e) do 
-                visit(e2) 
-            end
-        end
-    end
-    for i,e in ipairs(T:getentries()) do
-        visit(e)
-    end
-    return idx
-end
 local anonstructgetter = macro(function(name,self)
-    local fields = nameindex(self:gettype())
-    for k,v in pairs(fields) do
-        if k:match("_%d+") and v:isstruct() then
-            local vfields = nameindex(v)
-            if vfields[name] then
-                return `self.[k].[name]
-            end
+    for i,e in pairs(self:gettype():getfields()) do
+        if e.key:match("_%d+") and e.type:getfield(name) then
+            return `self.[e.key].[name]
         end
     end 
     error("no field "..name.." in struct of type "..tostring(T))
