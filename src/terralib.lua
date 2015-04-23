@@ -3673,27 +3673,33 @@ _G["arrayof"] = terra.internalmacro(function(diag,tree,typ,...)
 end)
 
 local function createunpacks(tupleonly)
-    local function unpackterra(diag,tree,obj)
+    local function unpackterra(diag,tree,obj,from,to)
         local typ = obj:gettype()
         if not obj or not typ:isstruct() or (tupleonly and typ.convertible ~= "tuple") then
             return obj
         end
         if not obj:islvalue() then diag:reporterror("expected an lvalue") end
         local result = terralib.newlist()
-        for i,e in ipairs(typ:getentries()) do 
+        local entries = typ:getentries()
+        from = from and tonumber(from:asvalue()) or 1
+        to = to and tonumber(to:asvalue()) or #entries
+        for i = from,to do 
+            local e= entries[i]
             if e.field then
                 result:insert(terra.newtree(tree, {kind = terra.kinds.select, field = e.field, value = obj.tree }))
             end
         end
         return result
     end
-    local function unpacklua(cdata)
+    local function unpacklua(cdata,from,to)
         local t = type(cdata) == "cdata" and terra.typeof(cdata)
         if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then 
           return cdata
         end
         local results = terralib.newlist()
-        for i,e in ipairs(t:getentries()) do
+        local entries = t:getentries()
+        for i = tonumber(from) or 1,tonumber(to) or #entries do
+            local e = entries[i]
             if e.field then
                 local nm = terra.issymbol(e.field) and e.field:tocname() or e.field
                 results:insert(cdata[nm])
