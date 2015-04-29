@@ -4089,7 +4089,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
-                emit("%d",tonumber(e.value.object))
+                emit("%s",tostring(tonumber(e.value.object)))
             else
                 emit("<constant:"..tostring(e.type)..">")
             end
