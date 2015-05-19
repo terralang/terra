@@ -166,53 +166,52 @@ static int terra_free(lua_State * L);
 
 #ifndef _WIN32
 static bool pushterrahome(lua_State * L) {
-	Dl_info info;
-        if (dladdr((void*)terra_init, &info) != 0) {
+    Dl_info info;
+    if (dladdr((void*)terra_init, &info) != 0) {
 #ifdef __linux__
-		Dl_info infomain;
-                void * lmain = dlsym(NULL,"main");
-	        if (dladdr(lmain,&infomain) != 0) {
-			if (infomain.dli_fbase == info.dli_fbase) {
-				//statically compiled on linux, we need to find the executable directly.
-				char exe_path[PATH_MAX];
-  				ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path));
-				if(len > 0) {
-					lua_pushstring(L, dirname(exe_path));
-					return true;
-				}
-			}
-                }
+        Dl_info infomain;
+        void * lmain = dlsym(NULL,"main");
+        if (dladdr(lmain,&infomain) != 0) {
+        if (infomain.dli_fbase == info.dli_fbase) {
+            //statically compiled on linux, we need to find the executable directly.
+            char exe_path[PATH_MAX];
+              ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path));
+            if(len > 0) {
+                lua_pushstring(L, dirname(exe_path));
+                return true;
+            }
+        }
+    }
 #endif
-		if (info.dli_fname) {
-			char * full = realpath(info.dli_fname, NULL);
-			lua_pushstring(L, dirname(full)); //TODO: dirname not reentrant
-			free(full);
-			return true;
-		}
-	}
-	return false;
+    if (info.dli_fname) {
+            char * full = realpath(info.dli_fname, NULL);
+            lua_pushstring(L, dirname(full)); //TODO: dirname not reentrant
+            free(full);
+            return true;
+        }
+    }
+    return false;
 }
 #else
 
-
 static bool pushterrahome(lua_State * L) {
-	//based on approach that clang uses as well
-	MEMORY_BASIC_INFORMATION mbi;
-	char path[MAX_PATH];
-	VirtualQuery((void *)terra_init, &mbi, sizeof(mbi));
-	GetModuleFileNameA((HINSTANCE)mbi.AllocationBase, path, MAX_PATH);
-	PathRemoveFileSpecA(path);
-	lua_pushstring(L, path);
-	return true;
+    //based on approach that clang uses as well
+    MEMORY_BASIC_INFORMATION mbi;
+    char path[MAX_PATH];
+    VirtualQuery((void *)terra_init, &mbi, sizeof(mbi));
+    GetModuleFileNameA((HINSTANCE)mbi.AllocationBase, path, MAX_PATH);
+    PathRemoveFileSpecA(path);
+    lua_pushstring(L, path);
+    return true;
 }
 
 #endif
 
 static void setterrahome(lua_State * L) {
-	lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-	if (pushterrahome(L))
-		lua_setfield(L, -2, "terrahome");
-	lua_pop(L, 1);
+    lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+    if (pushterrahome(L))
+        lua_setfield(L, -2, "terrahome");
+    lua_pop(L, 1);
 }
 
 int terra_init(lua_State * L) {
