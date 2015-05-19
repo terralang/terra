@@ -39,7 +39,7 @@ static const char * cuda_libraries[] = { "%/nvvm/lib64/libnvvm.so", "/usr/lib/li
 #elif _WIN32
 static const char * cuda_libraries[] = { "%\\nvvm\\bin\\nvvm64_20_0.dll", "nvcuda.dll", "%\\bin\\cudart64_65.dll", NULL};
 #else
-static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libcuda.dylib", "%/lib/libcudart.dylib", NULL };
+static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "/usr/local/cuda/lib/libcuda.dylib", "%/lib/libcudart.dylib", NULL };
 #endif
 
 #define CUDA_SYM(_) \
@@ -49,7 +49,8 @@ static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libc
     _(nvvmGetCompiledResult) \
     _(nvvmGetCompiledResultSize) \
     _(nvvmGetProgramLog) \
-    _(nvvmGetProgramLogSize)
+    _(nvvmGetProgramLogSize) \
+    _(nvvmVersion)
 
 struct terra_CUDAState {
     int initialized;
@@ -95,9 +96,13 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
         RemoveAttr A;
         A.visit(it); //remove annotations on CallInsts as well.
     }
-    
-    M->setTargetTriple(""); //clear these because nvvm doesn't like them
-    M->setDataLayout("");
+    int nmajor,nminor;
+    CUDA_DO(T->cuda->nvvmVersion(&nmajor,&nminor));
+    int nversion = nmajor*10 + nminor;
+    if(nversion >= 12)
+        M->setTargetTriple("nvptx64-unknown-cuda");
+    else
+        M->setTargetTriple(""); //clear these because nvvm doesn't like them
     
     std::stringstream device;
     device << "-arch=compute_" << major << minor;

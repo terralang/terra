@@ -176,10 +176,6 @@ local function makekernelwrapper(typ,name,fnhandle)
     end
 end
 
-local cudaContext = terralib.new(C.CUcontext[1])
-local cudaDevice = terralib.new(C.CUdevice[1])
-local cudaVersion
-
 local error_str = symbol(rawstring)
 local error_sz = symbol(uint64)
 local cd = macro(function(nm,...)
@@ -219,19 +215,12 @@ end
 
 local error_buf_sz = 2048
 local error_buf = terralib.new(int8[error_buf_sz])
-
-local function initjitcuda()
-    if cudaContext[0] ~= nil then return end
-    local vp = terralib.new(uint64[1])
-    if initcuda(cudaContext,cudaDevice,vp,error_buf,error_buf_sz) ~= 0 then
-        error(ffi.string(error_buf),2)
-    end
-    cudaVersion = vp[0]
-end
-
 function cudalib.localversion()
-    initjitcuda()
-    return tonumber(cudaVersion)
+    local S = terralib.new(tuple(C.CUcontext[1],C.CUdevice[1],uint64[1]))
+    if initcuda(S._0,S._1,S._2,error_buf,error_buf_sz) ~= 0 then
+        error(ffi.string(error_buf))
+    end
+    return tonumber(S._2[0])
 end
 
 local return1 = macro(function(x)

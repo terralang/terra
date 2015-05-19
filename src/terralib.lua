@@ -2953,8 +2953,11 @@ function terra.funcdefinition:typecheckbody()
             local varargslist = paramlist:map(function(p) return "vararg" end)
             paramlist = tryinsertcasts(anchor, terra.newlist{varargslist},castbehavior, false, false, paramlist)
             local castedtype = terra.types.funcpointer(paramlist:map("type"),{})
-            local cb = terra.cast(castedtype,fn)
-            local fptr = terra.pointertolightuserdata(cb)
+            local success, cb = pcall(function() return terra.cast(castedtype,fn) end)
+            if not success then
+                diag:reporterror(anchor, "unsupported callback function type: ", castedtype)
+            end
+            local fptr = cb and terra.pointertolightuserdata(cb)
             return terra.newtree(anchor, { kind = terra.kinds.luafunction, callback = cb, fptr = fptr, type = castedtype }),paramlist
         end
         
@@ -4060,7 +4063,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
-                emit("%d",tonumber(e.value.object))
+                emit("%s",tostring(tonumber(e.value.object)))
             else
                 emit("<constant:"..tostring(e.type)..">")
             end
