@@ -1,4 +1,3 @@
-
 local Vec = terralib.memoize(function(typ,N)
     N = assert(tonumber(N),"expected a number")
     local ops = { "__sub","__add","__mul","__div" }

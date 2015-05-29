@@ -242,28 +242,31 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     
     return1(initcuda(&CX,&D,&version,error_str,error_sz))
     
-    var linkState : C.CUlinkState
-    var cubin : &opaque
-    var cubinSize : uint64
-
-    var options = arrayof(C.CUjit_option,C.CU_JIT_TARGET, C.CU_JIT_ERROR_LOG_BUFFER,C.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
-    var option_values = arrayof([&opaque], [&opaque](version), error_str, [&opaque](error_sz));
-
-
-    cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
-    cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
-
     if linker ~= nil then
+        var linkState : C.CUlinkState
+        var cubin : &opaque
+        var cubinSize : uint64
+
+        var options = arrayof(C.CUjit_option,C.CU_JIT_TARGET, C.CU_JIT_ERROR_LOG_BUFFER,C.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
+        var option_values = arrayof([&opaque], [&opaque](version), error_str, [&opaque](error_sz));
+
+
+        cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
+        cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
+
+    
         return1(linker(linkState,error_str,error_sz))
-    end
 
-    cd("cuLinkComplete",linkState,&cubin,&cubinSize)
+        cd("cuLinkComplete",linkState,&cubin,&cubinSize)
 
-    if module ~= nil then
-        module(cubin,cubinSize)
+        if module ~= nil then
+            module(cubin,cubinSize)
+        end
+        cd("cuModuleLoadData",cudaM, cubin)
+        cd("cuLinkDestroy",linkState)
+    else
+        cd("cuModuleLoadData",cudaM, ptx)
     end
-    cd("cuModuleLoadData",cudaM, cubin)
-    cd("cuLinkDestroy",linkState)
 end
 
 function cudalib.wrapptx(module,ptx)
