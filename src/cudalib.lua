@@ -302,6 +302,7 @@ function cudalib.wrapptx(module,ptx)
                 end
             end
         end
+        return 0
     end
     return m,loader
 end
