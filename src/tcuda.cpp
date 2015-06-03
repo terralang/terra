@@ -35,11 +35,11 @@ extern "C" {
 #define CUDA_DO(err) CUDA_DO2(err,"%s","")
 
 #ifdef __linux__
-static const char * cuda_libraries[] = { "%/nvvm/lib64/libnvvm.so", "/usr/lib/libcuda.so", "%/lib64/libcudart.so", NULL };
+static const char * libnvvm = "/nvvm/lib64/libnvvm.so";
 #elif _WIN32
-static const char * cuda_libraries[] = { "%\\nvvm\\bin\\nvvm64_20_0.dll", "nvcuda.dll", "%\\bin\\cudart64_65.dll", NULL};
+static const char * libnvvm= "\\nvvm\\bin\\nvvm64_20_0.dll";
 #else
-static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libcuda.dylib", "%/lib/libcudart.dylib", NULL };
+static const char * libnvvm = "/nvvm/lib/libnvvm.dylib";
 #endif
 
 #define CUDA_SYM(_) \
@@ -49,7 +49,8 @@ static const char * cuda_libraries[] = { "%/nvvm/lib/libnvvm.dylib", "%/lib/libc
     _(nvvmGetCompiledResult) \
     _(nvvmGetCompiledResultSize) \
     _(nvvmGetProgramLog) \
-    _(nvvmGetProgramLogSize)
+    _(nvvmGetProgramLogSize) \
+    _(nvvmVersion)
 
 struct terra_CUDAState {
     int initialized;
@@ -95,9 +96,13 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
         RemoveAttr A;
         A.visit(it); //remove annotations on CallInsts as well.
     }
-    
-    M->setTargetTriple(""); //clear these because nvvm doesn't like them
-    M->setDataLayout("");
+    int nmajor,nminor;
+    CUDA_DO(T->cuda->nvvmVersion(&nmajor,&nminor));
+    int nversion = nmajor*10 + nminor;
+    if(nversion >= 12)
+        M->setTargetTriple("nvptx64-unknown-cuda");
+    else
+        M->setTargetTriple(""); //clear these because nvvm doesn't like them
     
     std::stringstream device;
     device << "-arch=compute_" << major << minor;
@@ -204,18 +209,12 @@ int terra_cudainit(struct terra_State * T) {
     
     if(!cudahome) return 0; //any early return disables cuda
     
-    //dynamically load cuda libraries
-	for (const char ** l = cuda_libraries; *l; l++) {
-         llvm::SmallString<256> cudalib;
-         if ((*l)[0] == '%') {
-             cudalib.append(cudahome);
-             cudalib.append(&(*l)[1]);
-		 } else {
-			 cudalib.append(*l);
-		 }
-		 if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(cudalib.c_str()))
-			return 0; //couldn't find a cuda library
-    }
+    //dynamically load libnvvm libraries, the other libraries are loaded from the cudalib library only when needed
+	llvm::SmallString<256> libnvvmpath;
+	libnvvmpath.append(cudahome);
+	libnvvmpath.append(libnvvm);
+	if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(libnvvmpath.c_str()))
+		return 0; //couldn't find the libnvvm library, do not load cudalib.lua
 
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
     T->cuda->initialized = 0; /* actual CUDA initalization is done on first call to terra_cudacompile */
