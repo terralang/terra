@@ -1,3 +1,20 @@
+Debugging:
+  terralib.traceback() -- make a version of debug.traceback() that is aware of Terra compilation state. Rather than printing the raw stack frames for specialization/compilation, it should report the line
+  of Terra code that it is doing the operation:
+  
+    foo.t:42: assertion failed!
+    foo.t:39 specializing
+            var a = [b + c]
+                    ^
+    ...
+terralib.totype() -- rather than use istype, have a totype that returns nil on failure. Replace istype checks with totype. Allow {int,int} convert, and we can consider a toterratype check in an objects meta table as well.
+
+remove initialization of cuda runtime. Add cudalib.linkcuda() to load the cuda runtime (this will speed startup time for things that do not use cuda).
+
+Should exotypes be objects rather than modifying a table? Or should we have toterratype? Both (seems like a bad idea to have both). If exotypes are objects, they should be able
+to do almost everything except the things that the original type has to do.
+  
+
 Cross-compilation:
 
 

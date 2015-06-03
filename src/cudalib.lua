@@ -6,6 +6,23 @@ function terralib.cudacompile(...)
     return cudalib.compile(...)
 end
 
+local ffi = require('ffi')
+
+local cudapaths = { OSX = {"/usr/local/cuda/lib/libcuda.dylib", "$CUDA_HOME/lib/libcudart.dylib"}; 
+                    Linux =  {"libcuda.so", "$CUDA_HOME/lib64/libcudart.so"}; 
+                    Windows = {"nvcuda.dll", "$CUDA_HOME\\bin\\cudart64_65.dll"}; }
+local cudaruntimelinked = false
+function cudalib.linkruntime(cudahome)
+    if cudaruntimelinked then return end
+    cudahome = cudahome or terralib.cudahome
+    local paths = assert(cudapaths[ffi.os],"unknown OS?")
+    for i,p in ipairs(paths) do
+        local pr = p:gsub("%$CUDA_HOME",cudahome)
+        terralib.linklibrary(pr)
+    end
+    cudaruntimelinked = true
+end
+
 terralib.CUDAParams = terralib.types.newstruct("CUDAParams")
 terralib.CUDAParams.entries = { { "gridDimX", uint },
                                 { "gridDimY", uint },
@@ -120,6 +137,7 @@ local C = {
     cuModuleGetFunction = ef("cuModuleGetFunction",{&&CUfunc_st,&CUmod_st,&int8} -> uint32);
     cuModuleGetGlobal_v2 = ef("cuModuleGetGlobal_v2",{&uint64,&uint64,&CUmod_st,&int8} -> uint32);
     cuModuleLoadData = ef("cuModuleLoadData",{&&CUmod_st,&opaque} -> uint32);
+    cuFuncGetAttribute = ef("cuFuncGetAttribute", {&int,int,&CUfunc_st} -> uint32);
     exit = ef("exit",{int32} -> {});
     printf = ef("printf",terralib.types.funcpointer(&int8,int32,true));
     snprintf = ef(snprintf,terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
@@ -217,6 +235,7 @@ end
 local error_buf_sz = 2048
 local error_buf = terralib.new(int8[error_buf_sz])
 function cudalib.localversion()
+    cudalib.linkruntime()
     local S = terralib.new(tuple(C.CUcontext[1],C.CUdevice[1],uint64[1]))
     if initcuda(S._0,S._1,S._2,error_buf,error_buf_sz) ~= 0 then
         error(ffi.string(error_buf))
@@ -323,6 +342,7 @@ function cudalib.compile(module,dumpmodule,version,jitload)
     local ptx = cudalib.toptx(module,dumpmodule,version)
     local m,loader = cudalib.wrapptx(module,ptx,dumpmodule)
     if jitload then
+        cudalib.linkruntime()
         if 0 ~= loader(nil,dumpmodule and dumpsass or nil,error_buf,error_buf_sz) then
             error(ffi.string(error_buf),2)
         end
