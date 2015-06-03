@@ -4,6 +4,7 @@ if not terralib.cudacompile then
 end
 C = terralib.includec("cuda_runtime.h")
 
+cudalib.linkruntime()
 
 terra foo()
     var stuff : &opaque

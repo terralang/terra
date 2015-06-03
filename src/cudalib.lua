@@ -6,6 +6,23 @@ function terralib.cudacompile(...)
     return cudalib.compile(...)
 end
 
+local ffi = require('ffi')
+
+local cudapaths = { OSX = {"/usr/local/cuda/lib/libcuda.dylib", "$CUDA_HOME/lib/libcudart.dylib"}; 
+                    Linux =  {"libcuda.so", "$CUDA_HOME/lib64/libcudart.so"}; 
+                    Windows = {"nvcuda.dll", "$CUDA_HOME\\bin\\cudart64_65.dll"}; }
+local cudaruntimelinked = false
+function cudalib.linkruntime(cudahome)
+    if cudaruntimelinked then return end
+    cudahome = cudahome or terralib.cudahome
+    local paths = assert(cudapaths[ffi.os],"unknown OS?")
+    for i,p in ipairs(paths) do
+        local pr = p:gsub("%$CUDA_HOME",cudahome)
+        terralib.linklibrary(pr)
+    end
+    cudaruntimelinked = true
+end
+
 terralib.CUDAParams = terralib.types.newstruct("CUDAParams")
 terralib.CUDAParams.entries = { { "gridDimX", uint },
                                 { "gridDimY", uint },
@@ -119,6 +136,7 @@ local C = {
     cuModuleGetFunction = ef("cuModuleGetFunction",{&&CUfunc_st,&CUmod_st,&int8} -> uint32);
     cuModuleGetGlobal_v2 = ef("cuModuleGetGlobal_v2",{&uint64,&uint64,&CUmod_st,&int8} -> uint32);
     cuModuleLoadData = ef("cuModuleLoadData",{&&CUmod_st,&opaque} -> uint32);
+    cuFuncGetAttribute = ef("cuFuncGetAttribute", {&int,int,&CUfunc_st} -> uint32);
     exit = ef("exit",{int32} -> {});
     printf = ef("printf",terralib.types.funcpointer(&int8,int32,true));
     snprintf = ef(snprintf,terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
@@ -216,6 +234,7 @@ end
 local error_buf_sz = 2048
 local error_buf = terralib.new(int8[error_buf_sz])
 function cudalib.localversion()
+    cudalib.linkruntime()
     local S = terralib.new(tuple(C.CUcontext[1],C.CUdevice[1],uint64[1]))
     if initcuda(S._0,S._1,S._2,error_buf,error_buf_sz) ~= 0 then
         error(ffi.string(error_buf))
@@ -241,28 +260,31 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     
     return1(initcuda(&CX,&D,&version,error_str,error_sz))
     
-    var linkState : C.CUlinkState
-    var cubin : &opaque
-    var cubinSize : uint64
-
-    var options = arrayof(C.CUjit_option,C.CU_JIT_TARGET, C.CU_JIT_ERROR_LOG_BUFFER,C.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
-    var option_values = arrayof([&opaque], [&opaque](version), error_str, [&opaque](error_sz));
-
-
-    cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
-    cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
-
     if linker ~= nil then
+        var linkState : C.CUlinkState
+        var cubin : &opaque
+        var cubinSize : uint64
+
+        var options = arrayof(C.CUjit_option,C.CU_JIT_TARGET, C.CU_JIT_ERROR_LOG_BUFFER,C.CU_JIT_ERROR_LOG_BUFFER_SIZE_BYTES)
+        var option_values = arrayof([&opaque], [&opaque](version), error_str, [&opaque](error_sz));
+
+
+        cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
+        cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
+
+    
         return1(linker(linkState,error_str,error_sz))
-    end
 
-    cd("cuLinkComplete",linkState,&cubin,&cubinSize)
+        cd("cuLinkComplete",linkState,&cubin,&cubinSize)
 
-    if module ~= nil then
-        module(cubin,cubinSize)
+        if module ~= nil then
+            module(cubin,cubinSize)
+        end
+        cd("cuModuleLoadData",cudaM, cubin)
+        cd("cuLinkDestroy",linkState)
+    else
+        cd("cuModuleLoadData",cudaM, ptx)
     end
-    cd("cuModuleLoadData",cudaM, cubin)
-    cd("cuLinkDestroy",linkState)
 end
 
 function cudalib.wrapptx(module,ptx)
@@ -298,6 +320,7 @@ function cudalib.wrapptx(module,ptx)
                 end
             end
         end
+        return 0
     end
     return m,loader
 end
@@ -318,6 +341,7 @@ function cudalib.compile(module,dumpmodule,version,jitload)
     local ptx = cudalib.toptx(module,dumpmodule,version)
     local m,loader = cudalib.wrapptx(module,ptx,dumpmodule)
     if jitload then
+        cudalib.linkruntime()
         if 0 ~= loader(nil,dumpmodule and dumpsass or nil,error_buf,error_buf_sz) then
             error(ffi.string(error_buf),2)
         end
