@@ -732,6 +732,11 @@ int include_c(lua_State * L) {
     int N = lua_objlen(L, 3);
     std::vector<const char *> args;
 
+    args.push_back("-triple");
+    args.push_back(CU->Triple.c_str());
+    args.push_back("-target-cpu");
+    args.push_back(CU->CPU.c_str());
+
 #ifdef _WIN32
     args.push_back("-fms-extensions");
     args.push_back("-fms-compatibility");
