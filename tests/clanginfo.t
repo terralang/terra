@@ -1,1 +1,1 @@
-terralib.includec("stdio.h","-v")
+terralib.includec("stdio.h",{"-v"})

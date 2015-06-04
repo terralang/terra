@@ -215,25 +215,43 @@ bool HostHasAVX() {
 }
 
 void InitCompilationOptions(lua_State * L, terra_State * T, int optiontable, TerraCompilationUnit * CU, TargetOptions * options) {
-    #if LLVM_VERSION >= 33
-    CU->Triple = llvm::sys::getProcessTriple();
-    #else
-    CU->Triple = llvm::sys::getDefaultTargetTriple();
-    #endif
     
-    CU->CPU = llvm::sys::getHostCPUName();
-    CU->Features = HostHasAVX() ? "+avx" : "";
+    lua_getfield(L,optiontable,"Triple");
+    if(const char * Triple = lua_tostring(L,-1)) {
+        CU->Triple = Triple;
+    } else {
+        #if LLVM_VERSION >= 33
+        CU->Triple = llvm::sys::getProcessTriple();
+        #else
+        CU->Triple = llvm::sys::getDefaultTargetTriple();
+        #endif
+    }
+    lua_getfield(L,optiontable,"CPU");
+    if(const char * CPU = lua_tostring(L,-1))
+        CU->CPU = CPU;
+    else
+        CU->CPU = llvm::sys::getHostCPUName();
+    
+    lua_getfield(L,optiontable,"Features");
+    if(const char * Features = lua_tostring(L,-1))
+        CU->Features = Features;
+    else
+        CU->Features = HostHasAVX() ? "+avx" : "";
     
     DEBUG_ONLY(T) {
         options->NoFramePointerElim = true;
     }
-#ifdef __arm__
-    //force MCJIT since old JIT is partially broken on ARM
-    //force hard float since we currently onlly work on platforms that have it
-    options.FloatABIType = FloatABI::Hard;
-    T->options.usemcjit = true;
-#endif
-
+    
+    lua_getfield(L,optiontable, "FloatABIHard");
+    if(lua_toboolean(L,-1)) {
+        options->FloatABIType = FloatABI::Hard;
+    } else {
+        #ifdef __arm__
+            //force hard float since we currently onlly work on platforms that have it
+            options->FloatABIType = FloatABI::Hard;
+        #endif
+    }
+    lua_pop(L,4); //getfield calls
 }
 
 int terra_initcompilationunit(lua_State * L) {
@@ -251,9 +269,10 @@ int terra_initcompilationunit(lua_State * L) {
 
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(CU->Triple, err);
+    if(!TheTarget) {
+        luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",CU->Triple.c_str(),err.c_str());
+    }
     CU->tm = TheTarget->createTargetMachine(CU->Triple, CU->CPU, CU->Features, options,Reloc::PIC_,CodeModel::Default,CodeGenOpt::Aggressive);
-    if(!TheTarget)
-        terra_reporterror(T,"llvm: %s\n",err.c_str());
     CU->td = CU->tm->getDataLayout();
     CU->M = new Module("terra",*T->C->ctx);
     CU->M->setTargetTriple(CU->Triple);

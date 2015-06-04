@@ -527,10 +527,16 @@ local function newweakkeytable()
     return setmetatable({},weakkeys)
 end
 
+local function totargetoptions(to)
+    if type(to) == "table" then return to
+    elseif to == nil then return {}
+    else error("expected a table for target options") end
+end
+
 local compilationunit = {}
 compilationunit.__index = compilationunit
-function terra.newcompilationunit(opt)
-    return setmetatable({ symbols = newweakkeytable(), livefunctions = opt and newweakkeytable() or nil, llvm_cu = terra.initcompilationunit(opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+function terra.newcompilationunit(opt,to)
+    return setmetatable({ symbols = newweakkeytable(), livefunctions = opt and newweakkeytable() or nil, llvm_cu = terra.initcompilationunit(opt,totargetoptions(to)) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
@@ -3576,19 +3582,21 @@ local function includetableindex(tbl,name)    --this is called when a table retu
 end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
-function terra.includecstring(code,...)
+function terra.includecstring(code,cargs,targetoptions)
     local clangresourcedirectory = terra.terrahome..(ffi.os == "Windows" and "\\include\\clang_resource" or "/include/clang_resource")
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
     if ffi.os == "Linux" then
         args:insert("-internal-isystem")
         args:insert(clangresourcedirectory.."/include")
     end
-    args:insertall {...}
+    if cargs then
+        args:insertall(cargs)
+    end
     for p in terra.includepath:gmatch("([^;]+);?") do
         args:insert("-I")
         args:insert(p)
     end
-    local result = terra.registercfile(terra.initcompilationunit(false),code,args)
+    local result = terra.registercfile(terra.initcompilationunit(false,totargetoptions(targetoptions)),code,args)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros
     local mt = { __index = includetableindex, errors = result.errors }
     local function addtogeneral(tbl)
@@ -3604,8 +3612,8 @@ function terra.includecstring(code,...)
     setmetatable(tagged,mt)
     return general,tagged,macros
 end
-function terra.includec(fname,...)
-    return terra.includecstring("#include \""..fname.."\"\n",...)
+function terra.includec(fname,cargs,targetoptions)
+    return terra.includecstring("#include \""..fname.."\"\n",cargs,targetoptions)
 end
 
 
@@ -4205,11 +4213,11 @@ function compilationunit:saveobj(filename,filekind,arguments)
     return terra.saveobjimpl(filename,filekind,self,arguments or {})
 end
 
-function terra.saveobj(filename,filekind,env,arguments)
+function terra.saveobj(filename,filekind,env,arguments,targetoptions)
     if type(filekind) ~= "string" then
-        filekind,env,arguments = nil,filekind,env
+        filekind,env,arguments,targetoptions = nil,filekind,env,arguments
     end
-    local cu = terra.newcompilationunit(false)
+    local cu = terra.newcompilationunit(false,totargetoptions(targetoptions))
     for k,v in pairs(env) do
         if terra.isfunction(v) then
             local definitions = v:getdefinitions()
@@ -4401,8 +4409,8 @@ function terra.linklibrary(filename)
     assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
     terra.linklibraryimpl(filename)
 end
-function terra.linkllvm(filename)
-    local llvm_cu = terra.initcompilationunit()
+function terra.linkllvm(filename,to)
+    local llvm_cu = terra.initcompilationunit(false,totargetoptions(to))
     terra.linkllvmimpl(llvm_cu,filename)
     return { llvm_cu = llvm_cu, extern = function(self,name,typ)
         return terra.externfunction(name,typ,assert(self.llvm_cu))

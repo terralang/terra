@@ -226,6 +226,9 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     assert(T);
     memset(T,0,sizeof(terra_State)); //some of lua stuff expects pointers to be null on entry
     T->options = *options;
+#ifdef __arm__
+    T->options.usemcjit = true; //force MCJIT since old JIT is partially broken on ARM 
+#endif
     T->numlivefunctions = 1;
     T->L = L;
     assert (T->L);
