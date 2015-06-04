@@ -528,7 +528,12 @@ local function newweakkeytable()
 end
 
 local function totargetoptions(to)
-    if type(to) == "table" then return to
+    if type(to) == "table" then 
+        if to.Triple then
+            to.CPU = to.CPU or ""
+            to.Features = to.Features or ""
+        end
+        return to
     elseif to == nil then return {}
     else error("expected a table for target options") end
 end
