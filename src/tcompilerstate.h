@@ -13,10 +13,13 @@ struct TerraFunctionInfo {
 };
 class Types; struct CCallingConv; struct Obj;
 struct TerraCompilationUnit {
-    TerraCompilationUnit() : nreferences(0), T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    TerraCompilationUnit() : optimize(false), nreferences(0), T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    //configuration
+    bool optimize;
+    std::string Triple,CPU,Features;
+    // LLVM state used in compiltion unit
     int nreferences;
     terra_State * T;
-    std::string Triple,CPU;
     llvm::Module * M;
     ManualInliner * mi;
     llvm::FunctionPassManager * fpm;

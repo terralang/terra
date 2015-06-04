@@ -214,20 +214,7 @@ bool HostHasAVX() {
 #endif
 }
 
-int terra_initcompilationunit(lua_State * L) {
-    terra_State * T = terra_getstate(L, 1);
-    bool optimize = lua_toboolean(L,1);
-    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_newuserdata(L,sizeof(TerraCompilationUnit));
-    new (CU) TerraCompilationUnit();
-    CU->nreferences = 1;
-    CU->T = T;
-    CU->T->C->nreferences++;
-    TargetOptions options;
-    DEBUG_ONLY(T) {
-        options.NoFramePointerElim = true;
-    }
-    CodeGenOpt::Level OL = CodeGenOpt::Aggressive;
-    
+void InitCompilationOptions(lua_State * L, terra_State * T, int optiontable, TerraCompilationUnit * CU, TargetOptions * options) {
     #if LLVM_VERSION >= 33
     CU->Triple = llvm::sys::getProcessTriple();
     #else
@@ -235,7 +222,11 @@ int terra_initcompilationunit(lua_State * L) {
     #endif
     
     CU->CPU = llvm::sys::getHostCPUName();
-
+    CU->Features = HostHasAVX() ? "+avx" : "";
+    
+    DEBUG_ONLY(T) {
+        options->NoFramePointerElim = true;
+    }
 #ifdef __arm__
     //force MCJIT since old JIT is partially broken on ARM
     //force hard float since we currently onlly work on platforms that have it
@@ -243,16 +234,31 @@ int terra_initcompilationunit(lua_State * L) {
     T->options.usemcjit = true;
 #endif
 
+}
+
+int terra_initcompilationunit(lua_State * L) {
+    terra_State * T = terra_getstate(L, 1);
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_newuserdata(L,sizeof(TerraCompilationUnit));
+    new (CU) TerraCompilationUnit();
+    
+    CU->nreferences = 1;
+    CU->T = T;
+    CU->T->C->nreferences++;
+    CU->optimize = lua_toboolean(L,1);
+    
+    TargetOptions options;
+    InitCompilationOptions(L, T, 2, CU, &options);
+
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(CU->Triple, err);
-    CU->tm = TheTarget->createTargetMachine(CU->Triple, CU->CPU, HostHasAVX() ? "+avx" : "", options,Reloc::PIC_,CodeModel::Default,OL);
+    CU->tm = TheTarget->createTargetMachine(CU->Triple, CU->CPU, CU->Features, options,Reloc::PIC_,CodeModel::Default,CodeGenOpt::Aggressive);
     if(!TheTarget)
         terra_reporterror(T,"llvm: %s\n",err.c_str());
     CU->td = CU->tm->getDataLayout();
     CU->M = new Module("terra",*T->C->ctx);
     CU->M->setTargetTriple(CU->Triple);
     
-    if(optimize) {
+    if(CU->optimize) {
         CU->mi = new ManualInliner(CU->tm,CU->M);
         CU->fpm = new FunctionPassManager(CU->M);
         llvmutil_addtargetspecificpasses(CU->fpm, CU->tm);
@@ -265,7 +271,7 @@ int terra_initcompilationunit(lua_State * L) {
 static void InitializeJIT(TerraCompilationUnit * CU) {
     if(CU->ee) return; //already initialized
 #ifdef _WIN32
-	std::string MCJITTriple = llvm::sys::getProcessTriple();
+	std::string MCJITTriple = CU->Triple;
 	MCJITTriple.append("-elf"); //on windows we need to use an elf container because coff is not supported yet
 	topeemodule->setTargetTriple(MCJITTriple);
 #endif
@@ -328,7 +334,7 @@ static void freecompilationunit(TerraCompilationUnit * CU) {
             delete CU->jiteventlistener;
             delete CU->ee;
         }
-        if(CU->mi) {
+        if(CU->optimize) {
             delete CU->mi;
             delete CU->fpm;
         }
@@ -1179,10 +1185,10 @@ struct FunctionEmitter {
             
             mapSymbol(CU->symbols,funcobj,func); //map the declaration first so that recursive uses do not re-emit
             if(!isextern) {
-                if(CU->mi)
+                if(CU->optimize)
                     CU->tooptimize->push_back(func);
                 emitBody();
-                if(CU->mi && prevscc != scc) { //this is the end of a strongly connect component run optimizations on it
+                if(CU->optimize && prevscc != scc) { //this is the end of a strongly connect component run optimizations on it
                     VERBOSE_ONLY(T) {
                         printf("optimizing scc containing: ");
                     }
