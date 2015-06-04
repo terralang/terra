@@ -180,9 +180,11 @@ bool OneTimeInit(struct terra_State * T) {
 #ifndef __arm__
         AddLLVMOptions(1,"-x86-asm-syntax=intel");
 #endif
-        InitializeNativeTarget();
-        InitializeNativeTargetAsmPrinter();
-        InitializeNativeTargetAsmParser();
+        InitializeAllTargets();
+        InitializeAllTargetInfos();
+        InitializeAllAsmPrinters();
+        InitializeAllAsmParsers();
+        InitializeAllTargetMCs();
     } else {
         #if LLVM_VERSION <= 34
         if(!llvm_is_multithreaded()) {
@@ -2599,7 +2601,7 @@ static bool SaveAndLink(TerraCompilationUnit * CU, Module * M, std::vector<const
         unlink(tmpnamebuf);
         return true;
     }
-    if(llvmutil_emitobjfile(M,CU->tm,tmp,&err)) {
+    if(llvmutil_emitobjfile(M,CU->tm,true,tmp,&err)) {
         terra_pusherror(CU->T,"llvm: %s",err.c_str());
         unlink(tmpnamebuf);
         return true;
@@ -2641,8 +2643,8 @@ static bool SaveAndLink(TerraCompilationUnit * CU, Module * M, std::vector<const
 
 static bool SaveObject(TerraCompilationUnit * CU, Module * M, const std::string & filekind, raw_ostream & dest) {
     std::string err;
-    if(filekind == "object") {
-        if(llvmutil_emitobjfile(M,CU->tm,dest,&err)) {
+    if(filekind == "object" || filekind == "asm") {
+        if(llvmutil_emitobjfile(M,CU->tm,filekind == "object",dest,&err)) {
             terra_pusherror(CU->T,"llvm: %s\n",err.c_str());
             return true;
         }

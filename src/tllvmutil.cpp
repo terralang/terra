@@ -141,13 +141,13 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
 }
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
-bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, raw_ostream & dest, std::string * ErrorMessage) {
+bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, raw_ostream & dest, std::string * ErrorMessage) {
 
     PassManager pass;
 
     llvmutil_addtargetspecificpasses(&pass, TM);
     
-    TargetMachine::CodeGenFileType ft = TargetMachine::CGFT_ObjectFile;
+    TargetMachine::CodeGenFileType ft = outputobjectfile? TargetMachine::CGFT_ObjectFile : TargetMachine::CGFT_AssemblyFile;
     
     formatted_raw_ostream destf(dest);
     

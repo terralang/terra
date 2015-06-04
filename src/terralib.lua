@@ -4183,7 +4183,7 @@ end
 
 
 -- END DEBUG
-local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true }
+local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true, asm = true }
 local mustbefile = { sharedlibrary = true, executable = true }
 function compilationunit:saveobj(filename,filekind,arguments)
     if filekind ~= nil and type(filekind) ~= "string" then
@@ -4200,6 +4200,8 @@ function compilationunit:saveobj(filename,filekind,arguments)
             filekind = "llvmir"
         elseif filename:match("%.so$") or filename:match("%.dylib$") or filename:match("%.dll$") then
             filekind = "sharedlibrary"
+        elseif filename:match("%.s") then
+            filekind = "asm"
         else
             filekind = "executable"
         end
