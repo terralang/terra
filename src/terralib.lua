@@ -3590,7 +3590,7 @@ terra.includepath = os.getenv("INCLUDE_PATH") or "."
 function terra.includecstring(code,cargs,targetoptions)
     local clangresourcedirectory = terra.terrahome..(ffi.os == "Windows" and "\\include\\clang_resource" or "/include/clang_resource")
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
-    if ffi.os == "Linux" then
+    if ffi.os == "Linux" or (targetoptions and targetoptions.Triple and targetoptions.Triple:match("linux")) then
         args:insert("-internal-isystem")
         args:insert(clangresourcedirectory.."/include")
     end
