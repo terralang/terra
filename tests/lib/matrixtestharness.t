@@ -38,12 +38,12 @@ function MTH.timefunctions(typstring,M,K,N,...)
 	local A,B = ffi.new(ctyp,M*K), ffi.new(ctyp,K*N)
 	for m = 0, M-1 do
 		for k = 0, K-1 do
-			A[m*k + k] = math.random(0,9)
+			A[m*K + k] = math.random(0,9)
 		end
 	end
-	for k = 0, M-1 do
+	for k = 0, K-1 do
 		for n = 0, N-1 do
-			A[k*N + n] = math.random(0,9)
+			B[k*N + n] = math.random(0,9)
 		end
 	end
 	local fns = {...}
