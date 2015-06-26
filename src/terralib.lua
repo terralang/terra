@@ -3978,11 +3978,12 @@ local function printpretty(breaklines,toptree,returntype,start,...)
      "==",3,"<",3,"<=",3,
      "~=",3,">",3,">=",3,
      "and",2,"or",1,
-     "@",9,"-",9,"&",9,"not",9,"select",12)
+     "@",9,"&",9,"not",9,"select",12)
     
     local function getprec(e)
         if e:is "operator" then
-            return prectable[terra.kinds[e.operator]]
+            if terra.kinds.sub == e.operator and #e.operands == 1 then return 9 --unary minus case
+            else return prectable[terra.kinds[e.operator]] end
         else
             return 12
         end
