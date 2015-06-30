@@ -1132,6 +1132,12 @@ do  --constructor functions for terra functions and variables
         return fn
     end
 
+    function terra.externglobal(name, typ)
+        local gbl = terra.global(typ, nil, true)
+        gbl.name = name
+        return gbl
+    end
+
     function terra.definequote(tree,envfn)
         return terra.newquote(terra.specialize(tree,envfn(),2))
     end

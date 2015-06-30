@@ -1105,7 +1105,18 @@ static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const c
         Obj t;
         global->obj("type",&t);
         Type * typ = Types(T).Get(&t)->type;
-        
+
+        if(global->boolean("isextern")) {
+            const char * _name = name;
+            if(global->hasfield("name")) _name = global->asstring("name");
+            gv = T->C->m->getGlobalVariable(_name);
+            if(gv) {
+                lua_pushlightuserdata(T->L, gv);
+                global->setfield("llvm_value");
+                return gv;
+            }
+        }
+
         Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
         Obj constant;
         if(global->obj("initializer",&constant)) {
@@ -2846,6 +2857,3 @@ static int terra_dumpmodule(lua_State * L) {
     T->C->m->dump();
     return 0;
 }
-
-
-
