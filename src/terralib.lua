@@ -717,18 +717,16 @@ function terra.globalvar:gettype()
 end
 
 --terra.createglobal provided by tcompiler.cpp
-function terra.global(a0, a1, isextern, as)
-    local typ,c
-    if terra.types.istype(a0) then
-        typ = a0
-        if a1 then
-            c = terra.constant(typ,a1)
-        end
-    else
-        c = terra.constant(a0)
+function terra.global(typ,c, name, isextern, addressspace)
+    if not terra.types.istype(typ) then
+        c,name,isextern,addressspace = typ,c,name,isextern --shift arguments right
+        c = terra.constant(c)
         typ = c.type
+    elseif c ~= nil then
+        c = terra.constant(typ,c)
     end
-    local gbl =  setmetatable({type = typ, isglobal = true, symbol = terra.newsymbol("<global>"), initializer = c, isextern = isextern or false, addressspace = tonumber(as) or 0},terra.globalvar)
+    
+    local gbl =  setmetatable({type = typ, isglobal = true, symbol = terra.newsymbol(name or "<global>"), initializer = c, name = name, isextern = isextern or false, addressspace = tonumber(addressspace) or 0},terra.globalvar)
     
     if c then --if we have an initializer we know that the type is not opaque and we can create the variable
               --we need to call this now because it is possible for the initializer's underlying cdata object to change value
@@ -1130,12 +1128,6 @@ do  --constructor functions for terra functions and variables
         fn:adddefinition(obj)
         
         return fn
-    end
-
-    function terra.externglobal(name, typ)
-        local gbl = terra.global(typ, nil, true)
-        gbl.name = name
-        return gbl
     end
 
     function terra.definequote(tree,envfn)

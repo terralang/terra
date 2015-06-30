@@ -351,7 +351,7 @@ function cudalib.compile(module,dumpmodule,version,jitload)
 end
 
 function cudalib.sharedmemory(typ,N)
-    local gv = terralib.global(typ[N],nil,N == 0,3)
+    local gv = terralib.global(typ[N],nil,nil,N == 0,3)
     return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
 end
 local constant = {
@@ -363,7 +363,7 @@ function cudalib.isconstant(c)
     return getmetatable(c) == constant
 end
 function cudalib.constantmemory(typ,N)
-    local c = { type = typ, global = terralib.global(typ[N],nil,false,4) }
+    local c = { type = typ, global = terralib.global(typ[N],nil,nil,false,4) }
     return setmetatable(c,constant)
 end
 ]]

@@ -1098,32 +1098,31 @@ static Constant * GetConstant(terra_State * T, Obj * v) {
     }
 }
 
+static GlobalVariable * CreateGlobalVariable(terra_State * T, Obj * global, const char * name) {
+    Obj t;
+    global->obj("type",&t);
+    Type * typ = Types(T).Get(&t)->type;
+
+    Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
+    Obj constant;
+    if(global->obj("initializer",&constant)) {
+        llvmconstant = GetConstant(T,&constant);
+    }
+    int as = global->number("addressspace");
+    return new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+}
 
 static GlobalVariable * GetGlobalVariable(terra_State * T, Obj * global, const char * name) {
     GlobalVariable * gv = (GlobalVariable *) global->ud("llvm_value");
     if (gv == NULL) {
-        Obj t;
-        global->obj("type",&t);
-        Type * typ = Types(T).Get(&t)->type;
-
-        if(global->boolean("isextern")) {
-            const char * _name = name;
-            if(global->hasfield("name")) _name = global->asstring("name");
-            gv = T->C->m->getGlobalVariable(_name);
-            if(gv) {
-                lua_pushlightuserdata(T->L, gv);
-                global->setfield("llvm_value");
-                return gv;
+        if(global->hasfield("name")) { //globals given name overrides the alternate name given when the global is created
+            name = global->string("name");
+            if(global->boolean("isextern")) {
+                 gv = T->C->m->getGlobalVariable(name); //this is a named extern, so see if it is already known to llvm from being imported from C code.
             }
         }
-
-        Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
-        Obj constant;
-        if(global->obj("initializer",&constant)) {
-            llvmconstant = GetConstant(T,&constant);
-        }
-        int as = global->number("addressspace");
-        gv = new GlobalVariable(*T->C->m, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+        if(gv == NULL)
+            gv = CreateGlobalVariable(T,global,name);
         lua_pushlightuserdata(T->L, gv);
         global->setfield("llvm_value");
     }
