@@ -331,14 +331,14 @@ public:
         unsigned IntSize = static_cast<unsigned>(Context->getTypeSize(Context->IntTy));
         return IntegerLiteral::Create(*Context, llvm::APInt(IntSize, 0), Context->IntTy, SourceLocation());
     }
-    DeclRefExpr * GetFunctionReference(FunctionDecl * df) {
-        DeclRefExpr *DR = DeclRefExpr::Create(*Context, NestedNameSpecifierLoc(),SourceLocation(),df, false, SourceLocation(),
-                          df->getType(),
+    DeclRefExpr * GetDeclReference(ValueDecl * vd) {
+        DeclRefExpr *DR = DeclRefExpr::Create(*Context, NestedNameSpecifierLoc(),SourceLocation(),vd, false, SourceLocation(),
+                          vd->getType(),
                           VK_LValue);
         return DR;
     }
-    void KeepFunctionLive(FunctionDecl * df) {
-        Expr * castexp = CreateCast(Context->VoidTy, clang::CK_ToVoid, GetFunctionReference(df));
+    void KeepLive(ValueDecl * vd) {
+        Expr * castexp = CreateCast(Context->VoidTy, clang::CK_ToVoid, GetDeclReference(vd));
         outputstmts.push_back(castexp);
     }
     bool VisitTypedefDecl(TypedefDecl * TD) {
@@ -451,7 +451,7 @@ public:
         }
         CreateFunction(FuncName,InternalName,&typ);
         
-        KeepFunctionLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
+        KeepLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
         
         return true;
     }
@@ -496,6 +496,37 @@ public:
         #endif
         F->setBody(stmts);
         return F;
+    }
+    bool TraverseVarDecl(VarDecl *v) {
+        if(!(v->isFileVarDecl() && (v->hasExternalStorage() || v->getStorageClass() == clang::SC_None))) //is this a non-static global variable?
+            return true;
+        
+        QualType t = v->getType();
+        Obj typ;
+
+        if(!GetType(t, &typ))
+            return true;
+
+        std::string name = v->getNameAsString();
+        CreateExternGlobal(name, &typ);
+        KeepLive(v);
+
+        return true;
+    }
+    void CreateExternGlobal(const std::string & name, Obj * typ) {
+        if(!general.hasfield(name.c_str())) {
+            lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+            lua_getfield(L, -1, "global");
+            lua_remove(L, -2); //terra table
+            typ->push();
+            lua_pushnil(L); //no initializer
+            lua_pushstring(L, name.c_str());
+            lua_pushboolean(L,true);
+            lua_call(L, 4, 1);
+            lua_pushvalue(L,COMPILATION_UNIT_POS);
+            lua_setfield(L,-2,"llvm_definingmodule");
+            general.setfield(name.c_str());
+        }
     }
   private:
     std::vector<Stmt*> outputstmts;

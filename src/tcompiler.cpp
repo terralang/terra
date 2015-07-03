@@ -1124,20 +1124,36 @@ static Constant * EmitConstant(TerraCompilationUnit * CU, Obj * v) {
     }
 }
 
+static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * global, const char * name) {
+    Obj t;
+    global->obj("type",&t);
+    Type * typ = CU->Ty->Get(&t)->type;
+    
+    Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
+    Obj constant;
+    if(global->obj("initializer",&constant)) {
+        llvmconstant = EmitConstant(CU,&constant);
+    }
+    int as = global->number("addressspace");
+    return new GlobalVariable(*CU->M, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+}
+
 static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * global, const char * name) {
     GlobalVariable * gv = (GlobalVariable*) CU->symbols->getud(global);
     if (gv == NULL) {
-        Obj t;
-        global->obj("type",&t);
-        Type * typ = CU->Ty->Get(&t)->type;
-        
-        Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
-        Obj constant;
-        if(global->obj("initializer",&constant)) {
-            llvmconstant = EmitConstant(CU,&constant);
+        if(global->hasfield("name"))
+            name = global->string("name"); //globals given name overrides the alternate name given when the global is created
+        if(TerraCompilationUnit * CI = (TerraCompilationUnit*)global->ud("llvm_definingmodule")) {
+            gv = CU->M->getGlobalVariable(name);
+            if(!gv) {   
+                std::string err;
+                if(llvm::Linker::LinkModules(CU->M, CI->M, llvm::Linker::PreserveSource, &err))
+                    terra_reporterror(CU->T, "linker reported error: %s",err.c_str());
+            }
+            gv = CU->M->getGlobalVariable(name); assert(gv);
+        } else {
+            gv = CreateGlobalVariable(CU,global,name);
         }
-        int as = global->number("addressspace");
-        gv = new GlobalVariable(*CU->M, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
         CU->symbols->setud(global, gv);
     }
     return gv;
@@ -2795,6 +2811,3 @@ static int terra_dumpmodule(lua_State * L) {
         M->dump();
     return 0;
 }
-
-
-
