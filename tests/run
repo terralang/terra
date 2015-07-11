@@ -57,3 +57,7 @@ end
 printtests("passing tests",passed)
 printtests("FAILING tests",failed)
 print(tostring(#passed).." tests passed. "..tostring(#failed).." tests failed.")
+
+if #failed > 0 then
+    os.exit(1)
+end
