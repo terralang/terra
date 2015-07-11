@@ -38,7 +38,7 @@ struct TerraCompilationUnit {
 struct terra_CompilerState {
     int nreferences;
     llvm::LLVMContext * ctx;
-    llvm::JITMemoryManager * JMM;
+    llvm::sys::MemoryBlock MB;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
     size_t next_unused_id; //for creating names for dummy functions
 };

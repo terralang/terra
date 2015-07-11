@@ -16,8 +16,6 @@
 #include "clang/AST/ASTContext.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JIT.h"
-#include "llvm/ExecutionEngine/JITMemoryManager.h"
 
 #include "llvm/PassManager.h"
 #include "llvm/Support/Host.h"
@@ -32,8 +30,10 @@
 #include "llvm/Transforms/Vectorize.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Object/ObjectFile.h"
 
 #if LLVM_VERSION == 32
 #include "llvmheaders_32.h"
@@ -43,15 +43,37 @@
 #include "llvmheaders_34.h"
 #elif LLVM_VERSION == 35
 #include "llvmheaders_35.h"
+#elif LLVM_VERSION == 36
+#include "llvmheaders_36.h"
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
-#define LLVM_VERSION 35
-#include "llvmheaders_35.h"
+#define LLVM_VERSION 36
+#include "llvmheaders_36.h"
 #endif
 
 #if LLVM_VERSION >= 34
 #define TERRA_CAN_USE_MCJIT
+#endif
+
+#if LLVM_VERSION <= 35
+#define TERRA_CAN_USE_OLD_JIT
+#endif
+
+#if LLVM_VERSION == 36
+static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getSubtargetImpl()->getDataLayout(); }
+#define UNIQUEIFY(T,x) (std::unique_ptr<T>(x))
+#define FD_ERRTYPE std::error_code
+#define FD_ISERR(x) (x)
+#define FD_ERRSTR(x) ((x).message().c_str())
+#define METADATA_ROOT_TYPE llvm::Metadata
+#else
+static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getDataLayout(); }
+#define UNIQUEIFY(T,x) (x)
+#define FD_ERRTYPE std::string
+#define FD_ISERR(x) (!(x).empty())
+#define FD_ERRSTR(x) ((x).c_str())
+#define METADATA_ROOT_TYPE llvm::Value
 #endif
 
 #endif

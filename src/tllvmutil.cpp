@@ -32,11 +32,14 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
     TLI->setUnavailable(LibFunc::memset_pattern16);
 #endif
     fpm->add(TLI);
-    DataLayout * TD = new DataLayout(*TM->getDataLayout());
+    DataLayout * TD = new DataLayout(*GetDataLayout(TM));
 #if LLVM_VERSION <= 34
     fpm->add(TD);
-#else
+#elif LLVM_VERSION == 35
     fpm->add(new DataLayoutPass(*TD));
+#else
+    (void) TD;
+    fpm->add(new DataLayoutPass());
 #endif
     
 #if LLVM_VERSION == 32
@@ -122,14 +125,23 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
                                                      *MAI, *MII, *MRI, *STI);
     assert(IP && "Unable to create instruction printer!");
 
+    #if LLVM_VERSION < 36
     SimpleMemoryObject SMO;
+    #else
+    ArrayRef<uint8_t> Bytes((uint8_t*)data,numBytes);
+    #endif
+    
     uint64_t addr = (uint64_t)data;
     uint64_t Size;
     fflush(stdout);
     raw_fd_ostream Out(fileno(stdout), false);
     for(size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
+        #if LLVM_VERSION >= 36
+        MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, Bytes.slice(b),addr + b, nulls(), Out);
+        #else
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(Inst, Size, SMO,addr + b, nulls(), Out);
+        #endif
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
             break;
         Out << (void*) ((uintptr_t)data + b) << "(+" << b << ")" << ":\t";
@@ -141,7 +153,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
 }
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
-bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, raw_ostream & dest, std::string * ErrorMessage) {
+bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, raw_ostream & dest) {
 
     PassManager pass;
 
@@ -152,7 +164,6 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfil
     formatted_raw_ostream destf(dest);
     
     if (TM->addPassesToEmitFile(pass, destf, ft)) {
-        *ErrorMessage = "addPassesToEmitFile";
         return true;
     }
 
@@ -178,7 +189,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
         if(NamedMDNode * NMD = src->getNamedMetadata("llvm.module.flags")) {
             NamedMDNode * New = dest->getOrInsertNamedMetadata(NMD->getName());
             for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
+            #if LLVM_VERSION <= 35
                 New->addOperand(MapValue(NMD->getOperand(i), VMap));
+            #else
+                New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
+            #endif
             }
         }
 
@@ -221,9 +236,18 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 }
             }
             return newGV;
+#if LLVM_VERSION <= 35
         } else if(MDNode * MD = dyn_cast<MDNode>(V)) {
             DISubprogram SP(MD);
             if(DI != NULL && SP.isSubprogram()) {
+#else
+        } else if(auto * MDV = dyn_cast<MetadataAsValue>(V)) {
+            Metadata * MDraw = MDV->getMetadata();
+            MDNode * MD = dyn_cast<MDNode>(MDraw);
+            DISubprogram SP(MD);
+            if(MD != NULL && DI != NULL && SP.isSubprogram()) {
+#endif
+           
                 
                 if(Function * OF = SP.getFunction()) {
                     Function * F = cast<Function>(MapValue(OF,VMap,RF_None,NULL,this));
@@ -233,7 +257,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
                                                       SP.isLocalToUnit(), SP.isDefinition(),
                                                       SP.getScopeLineNumber(),SP.getFlags(),SP.isOptimized(),
                                                       F);
+                    #if LLVM_VERSION <= 35
                     return NSP;
+                    #else
+                    return MetadataAsValue::get(dest->getContext(),NSP);
+                    #endif
                 }
                 /* fallthrough */
             }

@@ -5,7 +5,7 @@ if 0 == terralib.isdebug then
   return
 end
 C = terralib.includec("stdio.h")
-print(terralib.verbose)
+
 terra foo(a : int, b : int)
   var c = a + b
   return c * 2
@@ -22,7 +22,6 @@ terra findptr(a : &opaque)
   C.printf("line = %.*s:%d\n",li.namelength,li.name,[int](li.linenum))
   return li.linenum
 end
---foo:disas()
 assert(11 == findptr(ptr+6))
 assert(10 == findptr(ptr+4))
 local ra = terralib.intrinsic("llvm.returnaddress", int32 -> &opaque )

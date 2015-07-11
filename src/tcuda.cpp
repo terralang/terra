@@ -72,12 +72,18 @@ void initializeNVVMState(terra_State * T) {
 }
 
 static void annotateKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel, const char * name, int value) {
-    std::vector<llvm::Value *> vals;
+    std::vector<METADATA_ROOT_TYPE *> vals;
     llvm::NamedMDNode * annot = M->getOrInsertNamedMetadata("nvvm.annotations");
     llvm::MDString * str = llvm::MDString::get(*T->C->ctx, name);
+    #if LLVM_VERSION <= 35
     vals.push_back(kernel);
     vals.push_back(str);
-    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value));  
+    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value));
+    #else
+    vals.push_back(llvm::ValueAsMetadata::get(kernel));
+    vals.push_back(str);
+    vals.push_back(llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value)));
+    #endif
     llvm::MDNode * node = llvm::MDNode::get(*T->C->ctx, vals);
     annot->addOperand(node); 
 }
@@ -103,6 +109,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
         M->setTargetTriple("nvptx64-unknown-cuda");
     else
         M->setTargetTriple(""); //clear these because nvvm doesn't like them
+    M->setDataLayout(NULL); //nvvm doesn't like data layout either
     
     std::stringstream device;
     device << "-arch=compute_" << major << minor;

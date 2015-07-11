@@ -6,7 +6,7 @@
 void llvmutil_addtargetspecificpasses(llvm::PassManagerBase * fpm, llvm::TargetMachine * tm);
 void llvmutil_addoptimizationpasses(llvm::PassManagerBase * fpm);
 extern "C" void llvmutil_disassemblefunction(void * data, size_t sz, size_t inst);
-bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, bool outputobjectfile, llvm::raw_ostream & dest, std::string * ErrorMessage);
+bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, bool outputobjectfile, llvm::raw_ostream & dest);
 
 #if LLVM_VERSION >= 33
 typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);

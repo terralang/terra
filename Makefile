@@ -78,9 +78,12 @@ SO_FLAGS  += -lclangFrontend -lclangDriver \
            -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
            -lclangAnalysis \
            -lclangEdit -lclangAST -lclangLex -lclangBasic
-ifneq ($(LLVM_VERSION), 35)
+
+CLANG_REWRITE_CORE = "32 33 34"
+ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
 SO_FLAGS += -lclangRewriteCore
 endif
+
 SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)

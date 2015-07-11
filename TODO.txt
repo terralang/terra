@@ -1,3 +1,9 @@
+Upgrade to LLVM 3.6:
+    remove dependencies on JITMemoryManager
+    resolve changes to NotifyObjectEmitted
+    resolve changes to LinkModule (need to copy the src module, fix error handling)
+    resolve changes to Metadata types all over the code
+
 Debugging:
   terralib.traceback() -- make a version of debug.traceback() that is aware of Terra compilation state. Rather than printing the raw stack frames for specialization/compilation, it should report the line
   of Terra code that it is doing the operation:

@@ -232,11 +232,11 @@ static bool terra_lookupline(void * fnaddr, void * ip, LineInfo * r ,terra_Compi
     return true;
 }
 
-static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void ** env, int nenv) {
+#define CLOSURE_MAX_SIZE 64
+
+static void * createclosure(uint8_t * buf, void * fn, int nargs, void ** env, int nenv) {
     assert(nargs <= 4);
     assert(*env);
-    size_t fnsize = 2 + 10*(nenv + 1);
-    uint8_t * buf = JMM->allocateSpace(fnsize, 16);
     uint8_t * code = buf;
 #define ENCODE_MOV(reg,imm) do {  \
     *code++ = 0x48 | ((reg) >> 3);\
@@ -260,12 +260,16 @@ static void * createclosure(JITMemoryManager * JMM, void * fn, int nargs, void *
 }
 
 int terra_debuginit(struct terra_State * T) {
+    
+    std::error_code ec;
+    T->C->MB = llvm::sys::Memory::allocateMappedMemory(CLOSURE_MAX_SIZE*3, NULL, llvm::sys::Memory::MF_READ|llvm::sys::Memory::MF_WRITE|llvm::sys::Memory::MF_EXEC, ec);
+    
+    void * stacktracefn = createclosure((uint8_t*)T->C->MB.base(),(void*)printstacktrace,2,(void**)&T->C,1);
+    void * lookupsymbol = createclosure((uint8_t*)T->C->MB.base()+CLOSURE_MAX_SIZE,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
+    void * lookupline =   createclosure((uint8_t*)T->C->MB.base()+2*CLOSURE_MAX_SIZE,(void*)terra_lookupline,4,(void**)&T->C,1);
+    
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    void * stacktracefn = createclosure(T->C->JMM,(void*)printstacktrace,2,(void**)&T->C,1);
-    void * lookupsymbol = createclosure(T->C->JMM,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
-    void * lookupline =   createclosure(T->C->JMM,(void*)terra_lookupline,4,(void**)&T->C,1);
     lua_getfield(T->L, -1, "initdebugfns");
-
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
     lua_pushlightuserdata(T->L, (void*)terra_backtrace);
     lua_pushlightuserdata(T->L, (void*)lookupsymbol);

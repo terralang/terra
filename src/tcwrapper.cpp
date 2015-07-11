@@ -627,7 +627,7 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
 #if LLVM_VERSION <= 34
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
 #else   
-    SourceMgr.setMainFileID(SourceMgr.createFileID(membuffer));
+    SourceMgr.setMainFileID(SourceMgr.createFileID(UNIQUEIFY(llvm::MemoryBuffer,membuffer)));
 #endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
     Preprocessor &PP = TheCompInst->getPreprocessor();
@@ -716,7 +716,13 @@ static int dofile(TerraCompilationUnit * CU, const char * code, const char ** ar
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
+    
+    #if LLVM_VERSION >=36
+    llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>").release();
+    #else
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
+    #endif
+    
     initializeclang(CU->T, membuffer, argbegin, argend, &TheCompInst);
     
     #if LLVM_VERSION <= 32

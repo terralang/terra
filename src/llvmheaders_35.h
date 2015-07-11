@@ -14,6 +14,8 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/ExecutionEngine/JIT.h"
+#include "llvm/ExecutionEngine/JITMemoryManager.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"
