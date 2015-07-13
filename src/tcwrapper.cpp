@@ -291,16 +291,10 @@ public:
                     return false;
                 }
           } break;
-          case Type::FunctionNoProto:
-                break;
+          case Type::FunctionNoProto: /* fallthrough */
           case Type::FunctionProto: {
-                const FunctionProtoType *FT = cast<FunctionProtoType>(Ty);
-                //call functype... getNumArgs();
-                if(FT && GetFuncType(FT,tt))
-                    return true;
-                else
-                    return false;
-                break;
+                const FunctionType *FT = cast<FunctionType>(Ty);
+                return FT && GetFuncType(FT,tt);
           }
           case Type::ObjCObject:
           case Type::ObjCInterface:
