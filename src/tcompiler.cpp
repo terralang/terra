@@ -663,10 +663,11 @@ struct CCallingConv {
     CCallingConv(TerraCompilationUnit * CU_, Types * Ty_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {}
     
     enum RegisterClass {
-        C_INTEGER,
-        C_NO_CLASS,
-        C_SSE,
-        C_MEMORY
+        C_NO_CLASS = 0,
+        C_SSE_FLOAT = 1,
+        C_SSE_DOUBLE = 2,
+        C_INTEGER = 3,
+        C_MEMORY = 4
     };
     
     enum ArgumentKind {
@@ -700,28 +701,7 @@ struct CCallingConv {
     };
     
     RegisterClass Meet(RegisterClass a, RegisterClass b) {
-        switch(a) {
-            case C_INTEGER:
-                switch(b) {
-                    case C_INTEGER: case C_NO_CLASS: case C_SSE:
-                        return C_INTEGER;
-                    case C_MEMORY:
-                        return C_MEMORY;
-                }
-            case C_SSE:
-                switch(b) {
-                    case C_INTEGER:
-                        return C_INTEGER;
-                    case C_NO_CLASS: case C_SSE:
-                        return C_SSE;
-                    case C_MEMORY:
-                        return C_MEMORY;
-                }
-            case C_NO_CLASS:
-                return b;
-            case C_MEMORY:
-                return C_MEMORY;
-        }
+        return (a > b) ? a : b;
     }
     
     void MergeValue(RegisterClass * classes, size_t offset, Obj * type) {
@@ -729,8 +709,10 @@ struct CCallingConv {
         int entry = offset / 8;
         if(t->isVectorTy()) //we don't handle structures with vectors in them yet
             classes[entry] = C_MEMORY;
-        else if(t->isFloatingPointTy())
-            classes[entry] = Meet(classes[entry],C_SSE);
+        else if(t->isFloatTy())
+            classes[entry] = Meet(classes[entry],C_SSE_FLOAT);
+        else if(t->isDoubleTy())
+            classes[entry] = Meet(classes[entry],C_SSE_DOUBLE);
         else if(t->isIntegerTy() || t->isPointerTy())
             classes[entry] = Meet(classes[entry],C_INTEGER);
         else if(t->isStructTy()) {
@@ -763,10 +745,10 @@ struct CCallingConv {
 #ifndef _WIN32
     Type * TypeForClass(size_t size, RegisterClass clz) {
         switch(clz) {
-             case C_SSE:
+             case C_SSE_FLOAT: case C_SSE_DOUBLE:
                 switch(size) {
                     case 4: return Type::getFloatTy(*C->ctx);
-                    case 8: return Type::getDoubleTy(*C->ctx);
+                    case 8: return (C_SSE_DOUBLE == clz) ? Type::getDoubleTy(*C->ctx) : VectorType::get(Type::getFloatTy(*C->ctx),2);
                     default: assert(!"unexpected size for floating point class");
                 }
             case C_INTEGER:
@@ -814,7 +796,7 @@ struct CCallingConv {
         if(classes[0] == C_MEMORY || classes[1] == C_MEMORY) {
             return Argument(C_AGGREGATE_MEM,t);
         }
-        int nfloat = (classes[0] == C_SSE) + (classes[1] == C_SSE);
+        int nfloat = (classes[0] == C_SSE_FLOAT || classes[0] == C_SSE_DOUBLE) + (classes[1] == C_SSE_FLOAT || classes[1] == C_SSE_DOUBLE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
         if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
             return Argument(C_AGGREGATE_MEM,t);
