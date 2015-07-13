@@ -2262,13 +2262,19 @@ if(baseT->isIntegerTy()) { \
         BasicBlock * bb = createAndInsertBB("dead");
         setInsertBlock(bb);
     }
+    BasicBlock * copyBlock(BasicBlock * BB) {
+        ValueToValueMapTy VMap;
+        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", func);
+        for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
+            RemapInstruction(II, VMap);
+        return NewBB;
+    }
     //emit an exit path that includes the most recent num deferred statements
     //this is used by gotos,returns, and breaks. unlike scope ends it copies the dtor stack
     void emitDeferred(size_t num) {
-        ValueToValueMapTy VMap;
         for(size_t i = 0; i < num; i++) {
             BasicBlock * bb = deferred[deferred.size() - 1 - i];
-            bb = CloneBasicBlock(bb, VMap, "", func);
+            bb = copyBlock(bb);
             B->CreateBr(bb);
             setInsertBlock(bb);
         }
