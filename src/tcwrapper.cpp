@@ -19,6 +19,7 @@ extern "C" {
 
 #include "llvmheaders.h"
 #include "tllvmutil.h"
+#include "llvm/Support/Errc.h"
 #include "clang/AST/Attr.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "tcompilerstate.h"
@@ -36,6 +37,7 @@ static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
 }
 
 const int COMPILATION_UNIT_POS = 1;
+const int HEADERPROVIDER_POS = 4;
 
 // part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
 // By implementing RecursiveASTVisitor, we can specify which AST nodes
@@ -580,6 +582,101 @@ public:
 
 };
 
+class LuaProvidedFile : public clang::vfs::File {
+private:
+  std::string Name;
+  clang::vfs::Status Status;
+  StringRef Buffer;
+public:
+  LuaProvidedFile(const std::string & Name_, const clang::vfs::Status & Status_, const StringRef & Buffer_) : Name(Name_), Status(Status_), Buffer(Buffer_) {}
+  virtual ~LuaProvidedFile() override {}
+  virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
+  
+  virtual std::error_code
+  getBuffer(const Twine &Name, std::unique_ptr<llvm::MemoryBuffer> &Result, int64_t FileSize,
+            bool RequiresNullTerminator, bool IsVolatile) override {
+        Result.reset(llvm::MemoryBuffer::getMemBuffer(Buffer,"",RequiresNullTerminator));
+        return std::error_code();
+  }
+  virtual std::error_code close() override { return std::error_code(); }
+  virtual void setName(StringRef Name_) override { Name = Name_; }
+};
+
+
+class LuaOverlayFileSystem : public clang::vfs::FileSystem {
+private:
+  IntrusiveRefCntPtr<vfs::FileSystem> RFS;
+  lua_State * L;
+public:
+  LuaOverlayFileSystem(lua_State * L_) : RFS(vfs::getRealFileSystem()), L(L_) {}
+  
+  bool GetFile(const llvm::Twine &Path, clang::vfs::Status * status, StringRef * contents) {
+    lua_pushvalue(L, HEADERPROVIDER_POS);
+    lua_pushstring(L, Path.str().c_str());
+    lua_call(L,1,1);
+    if(!lua_istable(L, -1)) {
+        lua_pop(L,1);
+        return false;
+    }
+    llvm::sys::fs::file_type filetype = llvm::sys::fs::file_type::directory_file;
+    int64_t size = 0;
+    lua_getfield(L, -1, "kind");
+    const char * kind = lua_tostring(L, -1);
+    if(strcmp(kind,"file") == 0) {
+        filetype = llvm::sys::fs::file_type::regular_file;
+        lua_getfield(L,-2,"contents");
+        const char * data = (const char*)lua_touserdata(L,-1);
+        if(!data) {
+            data = lua_tostring(L,-1);
+        }
+        if(!data) {
+            lua_pop(L,3); //pop table,kind,contents
+            return false;
+        }
+        lua_getfield(L,-3,"size");
+        size = (lua_isnumber(L,-1)) ? lua_tonumber(L,-1) : ::strlen(data);
+        *contents = StringRef(data,size);
+        lua_pop(L,2); //pop contents, size
+    }
+    *status = clang::vfs::Status(Path.str(), "", clang::vfs::getNextVirtualUniqueID(), llvm::sys::TimeValue::ZeroTime, 0, 0, size, filetype, llvm::sys::fs::all_all);
+    lua_pop(L, 2); //pop table, kind
+    return true;
+  }
+  virtual ~LuaOverlayFileSystem() {}
+
+  virtual llvm::ErrorOr<clang::vfs::Status> status(const llvm::Twine &Path) {
+    llvm::ErrorOr<clang::vfs::Status> RealStatus = RFS->status(Path);
+    if (RealStatus || RealStatus.getError() != std::errc::no_such_file_or_directory)
+        return RealStatus;
+    clang::vfs::Status Status;
+    StringRef Buffer;
+    if (GetFile(Path,&Status,&Buffer)) {
+        return Status;
+    }
+    return llvm::errc::no_such_file_or_directory;
+  }
+  virtual std::error_code
+  openFileForRead(const llvm::Twine &Path, std::unique_ptr<clang::vfs::File> &Result) {
+    
+    std::error_code ec = RFS->openFileForRead(Path,Result);
+    if(!ec || ec != llvm::errc::no_such_file_or_directory)
+        return ec;
+    clang::vfs::Status Status;
+    StringRef Buffer;
+    if (GetFile(Path,&Status,&Buffer)) {
+        Result.reset(new LuaProvidedFile(Path.str(),Status,Buffer));
+        return std::error_code();
+    }
+    return llvm::errc::no_such_file_or_directory;
+  }
+  virtual clang::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
+                                       std::error_code &EC) {
+        printf("BUGBUG: unexpected call to directory iterator in C header include. report this a bug on github.com/zdevito/terra"); //as far as I can tell this isn't used by the things we are using, so I am leaving it unfinished until this changes.
+        return RFS->dir_begin(Dir,EC);
+  }
+};
+
+
 static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, const char ** argbegin, const char ** argend, CompilerInstance * TheCompInst) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
@@ -606,6 +703,8 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
     
+    llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+    TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
@@ -778,7 +877,7 @@ int include_c(lua_State * L) {
 #endif
     
     for(int i = 0; i < N; i++) {
-        lua_rawgeti(L, -1, i+1);
+        lua_rawgeti(L, 3, i+1);
         args.push_back(luaL_checkstring(L,-1));
         lua_pop(L,1);
     }

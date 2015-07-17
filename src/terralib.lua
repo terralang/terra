@@ -3585,6 +3585,11 @@ local function includetableindex(tbl,name)    --this is called when a table retu
 end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
+
+local function headerprovider(path)
+    return nil
+end
+
 function terra.includecstring(code,cargs,targetoptions)
     local clangresourcedirectory = terra.terrahome..(ffi.os == "Windows" and "\\include\\clang_resource" or "/include/clang_resource")
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
@@ -3599,7 +3604,7 @@ function terra.includecstring(code,cargs,targetoptions)
         args:insert("-I")
         args:insert(p)
     end
-    local result = terra.registercfile(terra.initcompilationunit(false,totargetoptions(targetoptions)),code,args)
+    local result = terra.registercfile(terra.initcompilationunit(false,totargetoptions(targetoptions)),code,args,headerprovider)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros
     local mt = { __index = includetableindex, errors = result.errors }
     local function addtogeneral(tbl)
