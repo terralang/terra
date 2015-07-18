@@ -4302,9 +4302,10 @@ end
 
 
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
-terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or "."
+local defaultterrahome = ffi.os == "Windows" and "C:\\Program Files\\terra" or "/usr/local"
+terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or defaultterrahome
 local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
-                          or ";./?.t;"..terra.terrahome.."/include/?.t;"
+                          or ";./?.t;"..terra.terrahome.."/share/terra/?.t;"
 
 package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)
 

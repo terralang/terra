@@ -1,7 +1,7 @@
 if not terralib.traceback then return end
 --this test require debug on, if it is not on, relaunch with it on
 if 0 == terralib.isdebug then
-  assert(0 == os.execute(terralib.terrahome.."/terra -g testdebug.t"))
+  assert(0 == os.execute(terralib.terrahome.."/bin/terra -g testdebug.t"))
   return
 end
 C = terralib.includec("stdio.h")

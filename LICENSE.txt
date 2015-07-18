@@ -1,1 +1,1 @@
-release/LICENSE.txt
+release/share/terra/LICENSE.txt

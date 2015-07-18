@@ -127,9 +127,9 @@ LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 
 OBJS = $(LIBOBJS) $(EXEOBJS)
 
-EXECUTABLE = release/terra
+EXECUTABLE = release/bin/terra
 LIBRARY = build/libterra.a
-DYNLIBRARY = release/libterra.so
+DYNLIBRARY = release/lib/libterra.so
 
 BIN2C = build/bin2c
 
@@ -168,7 +168,7 @@ $(DYNLIBRARY):	$(LIBRARY)
 	$(TERRA_LINK) $(DYNFLAGS) -o $@ $(SO_FLAGS)  
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
-	cp -r $(CLANG_RESOURCE_DIRECTORY) release/include/clang_resource
+	mkdir -p release/bin release/lib
 	$(TERRA_LINK) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(SO_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
@@ -191,14 +191,16 @@ build/clanginternalizedheaders.h:	$(PACKAGE_DEPS) src/genclanginternalizedheader
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY) release/include/clang_resource
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY)
 
 purge:	clean
 	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
 
+TERRA_SHARE_PATH=release/share/terra
+
 RELEASE_NAME := terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/CYGWIN.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
 release:
-	for i in `git ls-tree HEAD -r tests --name-only`; do mkdir -p release/`dirname $$i`; cp $$i release/$$i; done;
+	for i in `git ls-tree HEAD -r tests --name-only`; do mkdir -p $(TERRA_SHARE_PATH)/`dirname $$i`; cp $$i $(TERRA_SHARE_PATH)/$$i; done;
 	mv release $(RELEASE_NAME)
 	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release

@@ -7,6 +7,7 @@ C = terralib.includecstring [[
 #include "terra.h"
 ]]
 
+local libpath = terralib.terrahome.."/lib"
 
 terra doerror(L : &C.lua_State)
     C.printf("%s\n",C.luaL_checklstring(L,-1,nil))
@@ -28,7 +29,7 @@ end
 
 if ffi.os ~= "Windows" then
 
-    local flags = terralib.newlist {"-L", terralib.terrahome,"-Wl,-rpath,"..terralib.terrahome,"-lterra"}
+    local flags = terralib.newlist {"-L", libpath,"-Wl,-rpath,"..libpath,"-lterra"}
     if require("ffi").os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
@@ -39,7 +40,7 @@ if ffi.os ~= "Windows" then
 
 else
     local putenv = terralib.externfunction("_putenv", rawstring -> int)
-    local flags = {terralib.terrahome.."\\terra.lib",terralib.terrahome.."\\lua51.lib"}
+    local flags = {libpath.."\\terra.lib",libpath.."\\lua51.lib"}
     terralib.saveobj("dynlib.exe",{main = main},flags)
     putenv("Path="..os.getenv("Path")..";"..terralib.terrahome) --make dll search happy
     assert(0 == os.execute(".\\dynlib.exe"))

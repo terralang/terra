@@ -1,1 +1,1 @@
-release/README.md
+release/share/terra/README.md

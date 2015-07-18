@@ -178,7 +178,7 @@ static bool pushterrahome(lua_State * L) {
             char exe_path[PATH_MAX];
               ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path));
             if(len > 0) {
-                lua_pushstring(L, dirname(exe_path));
+                lua_pushstring(L, dirname(dirname(exe_path)));
                 return true;
             }
         }
@@ -186,7 +186,7 @@ static bool pushterrahome(lua_State * L) {
 #endif
     if (info.dli_fname) {
             char * full = realpath(info.dli_fname, NULL);
-            lua_pushstring(L, dirname(full)); //TODO: dirname not reentrant
+            lua_pushstring(L, dirname(dirname(full))); //TODO: dirname not reentrant
             free(full);
             return true;
         }
