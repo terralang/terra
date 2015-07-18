@@ -3586,12 +3586,41 @@ end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
 
+local clanginternalizedheaders = {}
+function terra.registerclanginternalizedheaders(names,contents,sizes)
+    names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
+    for i = 0,math.huge do
+        if names[i] == nil then break end
+        local name,content,size = ffi.string(names[i]),contents[i],sizes[i]
+        --print(name,size)
+        local cur = clanginternalizedheaders
+        for segment in name:gmatch("/([^/]*)") do 
+            cur.children = cur.children or {}
+            cur.kind = "directory"
+            if not cur.children[segment] then
+                cur.children[segment] = {} 
+            end
+            cur = cur.children[segment]
+        end
+        cur.contents,cur.size,cur.kind =  terra.pointertolightuserdata(content), size, "file"
+    end
+end
+local clangresourcedirectory = "$CLANG_RESOURCE$"
 local function headerprovider(path)
-    return nil
+    if path:sub(1,#clangresourcedirectory) == clangresourcedirectory then
+        local cur = clanginternalizedheaders
+        for segment in path:gmatch("/([^/]*)") do
+            if cur.children and cur.children[segment] then
+                cur = cur.children[segment]
+            else return end
+        end
+        return cur
+    end
 end
 
+
+
 function terra.includecstring(code,cargs,targetoptions)
-    local clangresourcedirectory = terra.terrahome..(ffi.os == "Windows" and "\\include\\clang_resource" or "/include/clang_resource")
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
     if ffi.os == "Linux" or (targetoptions and targetoptions.Triple and targetoptions.Triple:match("linux")) then
         args:insert("-internal-isystem")

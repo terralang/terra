@@ -37,4 +37,7 @@ void terra_ongc(lua_State * L, int idx, lua_CFunction gcfn);
 #define VERBOSE_ONLY(T) if((T)->options.verbose != 0)
 #define DEBUG_ONLY(T) if((T)->options.debug != 0)
 
+//definition in tclanginternalizedheaders.cpp
+void terra_registerclanginternalizedheaders(lua_State * L, int terratable);
+
 #endif
