@@ -67,34 +67,35 @@ endif
 
 ifeq ($(UNAME), Linux)
 DYNFLAGS = -shared -fPIC
-SO_FLAGS += -Wl,-export-dynamic -Wl,--whole-archive $(LUAJIT_LIB) $(LIBRARY) -Wl,--no-whole-archive
+TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra.so"
-SO_FLAGS += -Wl,-force_load,$(LUAJIT_LIB),-force_load,$(LIBRARY)
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra_dynamic.so"
+TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
-SO_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
-SO_FLAGS  += -lclangFrontend -lclangDriver \
-           -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
-           -lclangAnalysis \
-           -lclangEdit -lclangAST -lclangLex -lclangBasic
+LLVM_LIBRARY_FLAGS += $(LUAJIT_LIB)
+LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
+LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
+                      -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
+                      -lclangAnalysis \
+                      -lclangEdit -lclangAST -lclangLex -lclangBasic
 
 CLANG_REWRITE_CORE = "32 33 34"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
-SO_FLAGS += -lclangRewriteCore
+LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
-SO_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
-    SO_FLAGS += -lcurses 
+    SUPPORT_LIBRARY_FLAGS += -lcurses 
 endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
-    SO_FLAGS += -lz
+    SUPPORT_LIBRARY_FLAGS += -lz
 endif
 
 ifeq ($(UNAME), Linux)
-SO_FLAGS += -ldl -pthread
+SUPPORT_LIBRARY_FLAGS += -ldl -pthread
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
@@ -128,8 +129,8 @@ LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 OBJS = $(LIBOBJS) $(EXEOBJS)
 
 EXECUTABLE = release/bin/terra
-LIBRARY = build/libterra.a
-DYNLIBRARY = release/lib/libterra.so
+LIBRARY = release/lib/libterra.a
+DYNLIBRARY = release/lib/libterra_dynamic.so
 
 BIN2C = build/bin2c
 
@@ -160,16 +161,25 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include
 	
-$(LIBRARY):	$(addprefix build/, $(LIBOBJS))
+build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
+	mkdir -p build/dep_objects/luajit
+	$(TERRA_LINK) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
+	# extract needed LLVM objects based on a dummy linker invocation
+	< build/dep_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
+	# include all luajit objects, since the entire lua interface is used in terra 
+	cd build/dep_objects/luajit; ar x ../../../$(LUAJIT_LIB)
+	
+$(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
 	rm -f $(LIBRARY)
-	$(AR) -cq $@ $^
+	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/dep_objects/*/*.o
+	ranlib $@
 
 $(DYNLIBRARY):	$(LIBRARY)
-	$(TERRA_LINK) $(DYNFLAGS) -o $@ $(SO_FLAGS)  
+	$(TERRA_LINK) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	mkdir -p release/bin release/lib
-	$(TERRA_LINK) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(SO_FLAGS)
+	$(TERRA_LINK) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 $(BIN2C):	src/bin2c.c
@@ -191,7 +201,7 @@ build/clanginternalizedheaders.h:	$(PACKAGE_DEPS) src/genclanginternalizedheader
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY)
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY) build/dep_objects
 
 purge:	clean
 	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))

@@ -28,8 +28,8 @@ terra main(argc : int, argv : &rawstring)
 end
 
 if ffi.os ~= "Windows" then
-
-    local flags = terralib.newlist {"-L", libpath,"-Wl,-rpath,"..libpath,"-lterra"}
+    print(libpath)
+    local flags = terralib.newlist {"-L", libpath,"-Wl,-rpath,"..libpath,"-lterra_dynamic"}
     if require("ffi").os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
@@ -40,8 +40,8 @@ if ffi.os ~= "Windows" then
 
 else
     local putenv = terralib.externfunction("_putenv", rawstring -> int)
-    local flags = {libpath.."\\terra.lib",libpath.."\\lua51.lib"}
+    local flags = {libpath.."\\terra_dynamic.lib",libpath.."\\lua51.lib"}
     terralib.saveobj("dynlib.exe",{main = main},flags)
-    putenv("Path="..os.getenv("Path")..";"..terralib.terrahome) --make dll search happy
+    putenv("Path="..os.getenv("Path")..";"..terralib.terrahome.."\\lib") --make dll search happy
     assert(0 == os.execute(".\\dynlib.exe"))
 end
