@@ -376,14 +376,14 @@ int terra_compilerinit(struct terra_State * T) {
 static void freecompilationunit(TerraCompilationUnit * CU) {
     if(CU->T && 0 == --CU->nreferences) {
         VERBOSE_ONLY(CU->T) { printf("Freeing Compilation Unit %p\n",CU); }
+        if(CU->optimize) {
+            delete CU->mi;
+            delete CU->fpm;
+        }
         if(CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
             delete CU->jiteventlistener;
             delete CU->ee;
-        }
-        if(CU->optimize) {
-            delete CU->mi;
-            delete CU->fpm;
         }
         delete CU->tm;
         if(CU->T->options.usemcjit || !CU->ee) //we own the module so we delete it
@@ -2248,7 +2248,7 @@ if(baseT->isIntegerTy()) { \
         ValueToValueMapTy VMap;
         BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", func);
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
-            RemapInstruction(II, VMap);
+            RemapInstruction(II, VMap,RF_IgnoreMissingEntries);
         return NewBB;
     }
     //emit an exit path that includes the most recent num deferred statements
