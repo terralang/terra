@@ -52,7 +52,7 @@ LUAJIT_DIR=build/$(LUAJIT_VERSION)
 
 LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
-FLAGS += -I build -I release/include -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
+FLAGS += -I build -I release/include/terra -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
 
@@ -159,7 +159,7 @@ endif
 $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
-	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include
+	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
 	
 build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
 	mkdir -p build/dep_objects/luajit
@@ -205,7 +205,7 @@ clean:
 	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY) build/dep_objects
 
 purge:	clean
-	rm -rf build/* $(addprefix release/include/,$(LUAHEADERS))
+	rm -rf build/* $(addprefix release/include/terra,$(LUAHEADERS))
 
 TERRA_SHARE_PATH=release/share/terra
 
