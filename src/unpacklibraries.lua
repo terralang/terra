@@ -13,7 +13,8 @@ local function exists(path)
     return true
 end
 for line in io.lines() do
-    local archivepath,objectfile = line:match("^(.*)%(([^(]*)%)$")
+    line = line:gsub("[()]"," ")
+    local archivepath,objectfile = line:match("(%S+)%s+(%S+)")
     local archivename = archivepath:match("/([^/]*)%.a$")
     if not exists( ("%s/%s/%s"):format(destination,archivename,objectfile) ) then
         exe("mkdir -p %s/%s",destination,archivename) 

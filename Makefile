@@ -170,6 +170,7 @@ build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
 	cd build/dep_objects/luajit; ar x ../../../$(LUAJIT_LIB)
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
+	mkdir -p release/lib
 	rm -f $(LIBRARY)
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/dep_objects/*/*.o
 	ranlib $@
