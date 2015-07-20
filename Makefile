@@ -116,13 +116,13 @@ ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))
 FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
-LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tclanginternalizedheaders.o
+LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o
 LIBLUA = terralib.lua strict.lua cudalib.lua
 
 EXEOBJS = main.o linenoise.o
 
 EMBEDDEDLUA = $(addprefix build/,$(LIBLUA:.lua=.h))
-GENERATEDHEADERS = $(EMBEDDEDLUA) build/clangpaths.h build/clanginternalizedheaders.h
+GENERATEDHEADERS = $(EMBEDDEDLUA) build/clangpaths.h build/internalizedfiles.h
 
 LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 
@@ -196,8 +196,8 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
-build/clanginternalizedheaders.h:	$(PACKAGE_DEPS) src/genclanginternalizedheaders.lua
-	$(LUAJIT_DIR)/src/luajit src/genclanginternalizedheaders.lua $(CLANG_RESOURCE_DIRECTORY) $@
+build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua
+	$(LUAJIT_DIR)/src/luajit src/geninternalizedfiles.lua $(CLANG_RESOURCE_DIRECTORY) $@
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)

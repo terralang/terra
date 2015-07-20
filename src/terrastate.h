@@ -38,6 +38,6 @@ void terra_ongc(lua_State * L, int idx, lua_CFunction gcfn);
 #define DEBUG_ONLY(T) if((T)->options.debug != 0)
 
 //definition in tclanginternalizedheaders.cpp
-void terra_registerclanginternalizedheaders(lua_State * L, int terratable);
+void terra_registerinternalizedfiles(lua_State * L, int terratable);
 
 #endif

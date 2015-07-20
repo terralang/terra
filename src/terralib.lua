@@ -3586,14 +3586,14 @@ end
 
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
 
-local clanginternalizedheaders = {}
-function terra.registerclanginternalizedheaders(names,contents,sizes)
+local internalizedfiles = {}
+function terra.registerinternalizedfiles(names,contents,sizes)
     names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
     for i = 0,math.huge do
         if names[i] == nil then break end
         local name,content,size = ffi.string(names[i]),contents[i],sizes[i]
         --print(name,size)
-        local cur = clanginternalizedheaders
+        local cur = internalizedfiles
         for segment in name:gmatch("/([^/]*)") do 
             cur.children = cur.children or {}
             cur.kind = "directory"
@@ -3605,16 +3605,20 @@ function terra.registerclanginternalizedheaders(names,contents,sizes)
         cur.contents,cur.size,cur.kind =  terra.pointertolightuserdata(content), size, "file"
     end
 end
+local function getinternalizedfile(path)
+    local cur = internalizedfiles
+    for segment in path:gmatch("/([^/]*)") do
+        if cur.children and cur.children[segment] then
+            cur = cur.children[segment]
+        else return end
+    end
+    return cur
+end
+
 local clangresourcedirectory = "$CLANG_RESOURCE$"
 local function headerprovider(path)
     if path:sub(1,#clangresourcedirectory) == clangresourcedirectory then
-        local cur = clanginternalizedheaders
-        for segment in path:gmatch("/([^/]*)") do
-            if cur.children and cur.children[segment] then
-                cur = cur.children[segment]
-            else return end
-        end
-        return cur
+        return getinternalizedfile(path)
     end
 end
 

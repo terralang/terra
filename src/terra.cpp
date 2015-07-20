@@ -270,7 +270,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     lua_pushinteger(L, T->options.debug);
     lua_setfield(L, -2, "isdebug");
     
-    terra_registerclanginternalizedheaders(L,-1);
+    terra_registerinternalizedfiles(L,-1);
     lua_pop(T->L,1); //'terra' global
     
     luaX_init(T);
