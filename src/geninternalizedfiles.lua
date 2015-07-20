@@ -1,6 +1,15 @@
-local clangresourcepath,outputfilename = unpack(arg)
+local outputfilename = arg[1]
 
-local listoffiles = assert(io.popen(("find %q -name '*.h' -or -name '*.modulemap'"):format(clangresourcepath)))
+local listoffiles = {}
+for i = 2,#arg,2 do
+    local path,pattern = arg[i],arg[i+1]
+    local p = assert(io.popen(("find %q"):format(path)))
+    for l in p:lines() do
+        if l:match(pattern) then
+            table.insert(listoffiles,{ name = l:sub(#path+1), path = l })
+        end
+    end
+end
 
 local ContentTemplate = [[
 static const uint8_t headerfile_%d[] = { %s 0x0};
@@ -42,11 +51,11 @@ local function EmitRegister(name,contents)
     table.insert(sizes,("\n%d"):format(#contents))
 end
 
-for filename in listoffiles:lines() do
-    local file = io.open(filename)
+for i,entry in ipairs(listoffiles) do
+    local file = io.open(entry.path)
     local contents = file:read("*all")
     file:close()
-    EmitRegister(filename:sub(#clangresourcepath+1),contents)
+    EmitRegister(entry.name,contents)
 end
 
 table.insert(output,RegisterTemplate:format(table.concat(names,","),table.concat(files,","),table.concat(sizes,",")))

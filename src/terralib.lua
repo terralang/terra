@@ -4327,9 +4327,21 @@ local function terraloader(name)
         end
         loaderr = loaderr .. "\n\tno file '"..fpath.."'"
     end
-    if file then
-        local fn,err = terra.loadfile(file)
-        return fn or error(string.format("error loading terra module %s from file %s:\n\t%s",name,file,err))
+    local function check(fn,err) return fn or error(string.format("error loading terra module %s from file %s:\n\t%s",name,file,err)) end
+    if file then return check(terra.loadfile(file)) end
+    -- if we didn't find the file on the real file system, see if it is included in the binary itself
+    file = ("/?.t"):gsub("%?",fname)
+    local internal = getinternalizedfile(file)
+    if internal and internal.kind == "file" then
+        local str = ffi.string(ffi.cast("const char *",internal.contents))
+        local fn,err = terra.load(function()
+            local r = str
+            str = nil
+            return r
+        end,file)
+        return check(fn,err)
+    else
+        loaderr = loaderr .. "\n\tno internal file '"..file.."'"
     end
     return loaderr
 end

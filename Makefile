@@ -197,7 +197,7 @@ build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua
-	$(LUAJIT_DIR)/src/luajit src/geninternalizedfiles.lua $(CLANG_RESOURCE_DIRECTORY) $@
+	$(LUAJIT_DIR)/src/luajit src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)

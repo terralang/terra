@@ -109,7 +109,6 @@ int terra_luaload(lua_State * L) {
     } else {
         fnvalue = lua_gettop(L);
     }
-
     if(terra_load(L,reader_luaload,(void*)fnvalue,chunkname)) {
         lua_pushnil(L);
         lua_pushvalue(L,-2);
