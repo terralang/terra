@@ -591,17 +591,31 @@ public:
   LuaProvidedFile(const std::string & Name_, const clang::vfs::Status & Status_, const StringRef & Buffer_) : Name(Name_), Status(Status_), Buffer(Buffer_) {}
   virtual ~LuaProvidedFile() override {}
   virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
-  
+#if LLVM_VERSION >= 36
+  virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer> >
+  getBuffer(const Twine &Name, int64_t FileSize,
+            bool RequiresNullTerminator, bool IsVolatile) override {
+        return llvm::MemoryBuffer::getMemBuffer(Buffer,"",RequiresNullTerminator);
+  }
+#else
   virtual std::error_code
   getBuffer(const Twine &Name, std::unique_ptr<llvm::MemoryBuffer> &Result, int64_t FileSize,
             bool RequiresNullTerminator, bool IsVolatile) override {
         Result.reset(llvm::MemoryBuffer::getMemBuffer(Buffer,"",RequiresNullTerminator));
         return std::error_code();
   }
+#endif
   virtual std::error_code close() override { return std::error_code(); }
   virtual void setName(StringRef Name_) override { Name = Name_; }
 };
 
+static llvm::sys::TimeValue ZeroTime() {
+#if LLVM_VERSION >= 36
+    return llvm::sys::TimeValue::ZeroTime();
+#else   
+    return llvm::sys::TimeValue::ZeroTime;
+#endif
+}
 
 class LuaOverlayFileSystem : public clang::vfs::FileSystem {
 private:
@@ -638,13 +652,13 @@ public:
         *contents = StringRef(data,size);
         lua_pop(L,2); //pop contents, size
     }
-    *status = clang::vfs::Status(Path.str(), "", clang::vfs::getNextVirtualUniqueID(), llvm::sys::TimeValue::ZeroTime, 0, 0, size, filetype, llvm::sys::fs::all_all);
+    *status = clang::vfs::Status(Path.str(), "", clang::vfs::getNextVirtualUniqueID(), ZeroTime(), 0, 0, size, filetype, llvm::sys::fs::all_all);
     lua_pop(L, 2); //pop table, kind
     return true;
   }
   virtual ~LuaOverlayFileSystem() {}
 
-  virtual llvm::ErrorOr<clang::vfs::Status> status(const llvm::Twine &Path) {
+  virtual llvm::ErrorOr<clang::vfs::Status> status(const llvm::Twine &Path) override {
     llvm::ErrorOr<clang::vfs::Status> RealStatus = RFS->status(Path);
     if (RealStatus || RealStatus.getError() != std::errc::no_such_file_or_directory)
         return RealStatus;
@@ -655,9 +669,9 @@ public:
     }
     return llvm::errc::no_such_file_or_directory;
   }
+  #if LLVM_VERSION <= 35
   virtual std::error_code
-  openFileForRead(const llvm::Twine &Path, std::unique_ptr<clang::vfs::File> &Result) {
-    
+  openFileForRead(const llvm::Twine &Path, std::unique_ptr<clang::vfs::File> &Result) override {
     std::error_code ec = RFS->openFileForRead(Path,Result);
     if(!ec || ec != llvm::errc::no_such_file_or_directory)
         return ec;
@@ -669,8 +683,21 @@ public:
     }
     return llvm::errc::no_such_file_or_directory;
   }
+  #else
+  virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> openFileForRead(const llvm::Twine &Path) override {
+    llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > ec = RFS->openFileForRead(Path);
+    if(ec || ec.getError() != llvm::errc::no_such_file_or_directory)
+        return ec;
+    clang::vfs::Status Status;
+    StringRef Buffer;
+    if (GetFile(Path,&Status,&Buffer)) {
+        return std::unique_ptr<clang::vfs::File>(new LuaProvidedFile(Path.str(),Status,Buffer));
+    }
+    return llvm::errc::no_such_file_or_directory;
+  }
+  #endif
   virtual clang::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
-                                       std::error_code &EC) {
+                                       std::error_code &EC) override {
         printf("BUGBUG: unexpected call to directory iterator in C header include. report this a bug on github.com/zdevito/terra"); //as far as I can tell this isn't used by the things we are using, so I am leaving it unfinished until this changes.
         return RFS->dir_begin(Dir,EC);
   }
