@@ -201,6 +201,7 @@ static bool pushterrahome(lua_State * L) {
     VirtualQuery((void *)terra_init, &mbi, sizeof(mbi));
     GetModuleFileNameA((HINSTANCE)mbi.AllocationBase, path, MAX_PATH);
     PathRemoveFileSpecA(path);
+    PathRemoveFileSpecA(path);
     lua_pushstring(L, path);
     return true;
 }

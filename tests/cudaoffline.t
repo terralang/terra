@@ -59,6 +59,6 @@ path = terralib.cudahome..path
 local args = ffi.os == "Windows" and {path.."\\cuda.lib", path.."\\cudart.lib"} 
                                  or {"-L"..path, "-Wl,-rpath,"..path, "-lcuda", "-lcudart"}
 
-terralib.saveobj("cudaoffline",{ main = main },args)
-local exe = ffi.os == "Windows" and ".\\cudaoffline" or "./cudaoffline"
-assert(os.execute(exe) == 0)
+local name = ffi.os == "Windows" and ".\\cudaoffline.exe" or "./cudaoffline"
+terralib.saveobj(name,{ main = main },args)
+assert(os.execute(name) == 0)

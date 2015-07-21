@@ -3587,14 +3587,18 @@ end
 terra.includepath = os.getenv("INCLUDE_PATH") or "."
 
 local internalizedfiles = {}
+local function fileparts(path)
+    local fileseparators = ffi.os == "Windows" and "\\/" or "/"
+    local pattern = "[%s]([^%s]*)"
+    return path:gmatch(pattern:format(fileseparators,fileseparators))
+end
 function terra.registerinternalizedfiles(names,contents,sizes)
     names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
     for i = 0,math.huge do
         if names[i] == nil then break end
         local name,content,size = ffi.string(names[i]),contents[i],sizes[i]
-        --print(name,size)
         local cur = internalizedfiles
-        for segment in name:gmatch("/([^/]*)") do 
+        for segment in fileparts(name) do
             cur.children = cur.children or {}
             cur.kind = "directory"
             if not cur.children[segment] then
@@ -3605,9 +3609,10 @@ function terra.registerinternalizedfiles(names,contents,sizes)
         cur.contents,cur.size,cur.kind =  terra.pointertolightuserdata(content), size, "file"
     end
 end
+
 local function getinternalizedfile(path)
     local cur = internalizedfiles
-    for segment in path:gmatch("/([^/]*)") do
+    for segment in fileparts(path) do
         if cur.children and cur.children[segment] then
             cur = cur.children[segment]
         else return end
@@ -3626,7 +3631,7 @@ end
 
 function terra.includecstring(code,cargs,targetoptions)
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
-    if ffi.os == "Linux" or (targetoptions and targetoptions.Triple and targetoptions.Triple:match("linux")) then
+    if ffi.os == "Linux" or ffi.os == "Windows" or (targetoptions and targetoptions.Triple and targetoptions.Triple:match("linux")) then
         args:insert("-internal-isystem")
         args:insert(clangresourcedirectory.."/include")
     end

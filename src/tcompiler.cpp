@@ -317,13 +317,15 @@ int terra_initcompilationunit(lua_State * L) {
 
 static void InitializeJIT(TerraCompilationUnit * CU) {
     if(CU->ee) return; //already initialized
+    Module * topeemodule = (CU->T->options.usemcjit) ? new Module("terra",*CU->T->C->ctx) : CU->M;
 #ifdef _WIN32
 	std::string MCJITTriple = CU->Triple;
 	MCJITTriple.append("-elf"); //on windows we need to use an elf container because coff is not supported yet
 	topeemodule->setTargetTriple(MCJITTriple);
-#endif
-    Module * topeemodule = (CU->T->options.usemcjit) ? new Module("terra",*CU->T->C->ctx) : CU->M;
+#else
     topeemodule->setTargetTriple(CU->Triple);
+#endif
+    
     std::string err;
     EngineBuilder eb(UNIQUEIFY(Module,topeemodule));
     eb.setErrorStr(&err)

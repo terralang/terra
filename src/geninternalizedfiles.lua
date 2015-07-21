@@ -1,9 +1,13 @@
 local outputfilename = arg[1]
 
+local ffi = require("ffi")
+local findcmd = ffi.os == "Windows" and "cmd /c dir /b /s \"%s\"" or "find %q"
+
 local listoffiles = {}
 for i = 2,#arg,2 do
     local path,pattern = arg[i],arg[i+1]
-    local p = assert(io.popen(("find %q"):format(path)))
+    local p = assert(io.popen(findcmd:format(path)))
+    print(findcmd:format(path))
     for l in p:lines() do
         if l:match(pattern) then
             table.insert(listoffiles,{ name = l:sub(#path+1), path = l })

@@ -40,8 +40,8 @@ if ffi.os ~= "Windows" then
 
 else
     local putenv = terralib.externfunction("_putenv", rawstring -> int)
-    local flags = {libpath.."\\terra_dynamic.lib",libpath.."\\lua51.lib"}
+    local flags = {libpath.."\\terra.lib",libpath.."\\lua51.lib"}
     terralib.saveobj("dynlib.exe",{main = main},flags)
-    putenv("Path="..os.getenv("Path")..";"..terralib.terrahome.."\\lib") --make dll search happy
+    putenv("Path="..os.getenv("Path")..";"..terralib.terrahome.."\\bin") --make dll search happy
     assert(0 == os.execute(".\\dynlib.exe"))
 end

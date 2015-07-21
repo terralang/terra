@@ -81,7 +81,7 @@ add4_val_val:disas()
 -- add4_ref_ref_tempvar:disas()
  
 
-if terralib.lookupsymbol then
+if terralib.lookupsymbol and require("ffi").os ~= "Windows" then
     terra sizecheck() 
      var si : terralib.SymbolInfo
      terralib.lookupsymbol(add4_val_val,&si)
