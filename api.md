@@ -866,10 +866,10 @@ Target Options
 The functions `terralib.saveobj` and `terralib.includec` take an optional target options table, that tells the compiler to compile the code for a different architecture. These options can be used for cross-compilation. For example, using an x86 machine to to compile ARM code for a Raspberry Pi. The table as the form:
 
     {
-        Triple = "armv6-unknown-linux-gnueabi" -- LLVM target triple
-        CPU = "arm1176jzf-s",  -- LLVM CPU name,
-        Features = "" -- LLVM feature string
-        FloatABIHard = true -- For ARM, use floating point registers 
+        Triple = "armv6-unknown-linux-gnueabi"; -- LLVM target triple
+        CPU = "arm1176jzf-s";,  -- LLVM CPU name,
+        Features = ""; -- LLVM feature string
+        FloatABIHard = true; -- For ARM, use floating point registers 
     }
 
 All arguments except the `Triple` field are optional. [Documentation](http://clang.llvm.org/docs/CrossCompilation.html) for `clang` includes more information about what these strings should be set to.
