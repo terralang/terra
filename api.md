@@ -748,25 +748,32 @@ However, we currently do not support importing global variables or constants. Th
 
 ---
 
-    table = terralib.includecstring(code,...)
+    table = terralib.includecstring(code,[args,targetoptions])
 
-Import the string `code` as C code.  Flags to Clang can be passed as additional arguments (e.g. `includecstring(code,"-I","..")`). Returns a Lua table mapping the names of included C functions to Terra [function](#function) objects, and names of included C types (e.g. typedefs) to Terra [types](#types).
+Import the string `code` as C code. Returns a Lua table mapping the names of included C functions to Terra [function](#function) objects, and names of included C types (e.g. typedefs) to Terra [types](#types). The Lua variable `terralib.includepath` can be used to add additional paths to the header search. It is a semi-colon separated list of directories to search. `args` is an optional list of strings that are flags to Clang (e.g. `includecstring(code,"-I","..")`). `targetoptions` is a [targetoptions](#target-options) table that makes sure the headers are imported correctly for the target desired.
 
 ---
 
-    table = terralib.includec(filename,...)
+    table = terralib.includec(filename,[args,targetoptions])
 
 Similar to `includecstring` except that C code is loaded from `filename`. This uses Clangs default path for header files. `...` allows you to pass additional arguments to Clang (including more directories to search).
 
 ---
 
     terralib.linklibrary(filename)
+
+Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. 
+
+---
+
+    local llvmobj = terralib.linkllvm(filename)
+    local sym = llvmobj:extern(functionname,functiontype)
     
-Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. `filename` can also be an LLVM bitcode file with extension `.bc` generated with `clang` or `clang++`:
+Link an LLVM bitcode file `filename` with extension `.bc` generated with `clang` or `clang++`:
     
     clang++ -O3 -emit-llvm -c mycode.cpp -o mybitcode.bc
 
-In this case, the code is loaded as bitcode rather than machine code. This allows for more aggressive optimization (such as inlining the function calls) but will take longer to initialize in Terra since it must be compiled to machine code.
+The code is loaded as bitcode rather than machine code. This allows for more aggressive optimization (such as inlining the function calls) but will take longer to initialize in Terra since it must be compiled to machine code. To extract functions from this bitcode file, call the `llvmobj:extern` method providing the function's name in the bitcode and its Terra-equivalent type (e.g. `int -> int`). 
 
 Managing Terra Values from Lua
 ------------------------------
@@ -845,12 +852,27 @@ Saving Terra Code
 
 ---
 
-    terralib.saveobj(filename [, filetype], functiontable[, arguments])
+    terralib.saveobj(filename [, filetype], functiontable[, arguments, targetoptions])
 
 Save Terra code to an external representation such as an object file, or executable. `filetype` can be one of `"object"` (an object file `*.o`), `"bitcode"` (LLVM bitcode `*.bc`), `"llvmir"` (LLVM textual IR `*.ll`), or `"executable"` (no extension).
 If `filetype` is missing then it is inferred from the extension. `functiontable` is a table from strings to Terra functions. These functions will be included in the code that is written out with the name given in the table.
-`arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string.
+`arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string. 
 
+To cross-compile objects for a different architecture, you can specific a table of [targetoptions](#target-options), which describe the architecture to compile for. Otherwise `saveobj` will use the native architecture.
+
+Target Options
+--------------
+
+The functions `terralib.saveobj` and `terralib.includec` take an optional target options table, that tells the compiler to compile the code for a different architecture. These options can be used for cross-compilation. For example, using an x86 machine to to compile ARM code for a Raspberry Pi. The table as the form:
+
+    {
+        Triple = "armv6-unknown-linux-gnueabi" -- LLVM target triple
+        CPU = "arm1176jzf-s",  -- LLVM CPU name,
+        Features = "" -- LLVM feature string
+        FloatABIHard = true -- For ARM, use floating point registers 
+    }
+
+All arguments except the `Triple` field are optional. [Documentation](http://clang.llvm.org/docs/CrossCompilation.html) for `clang` includes more information about what these strings should be set to.
 
 Converting between Lua values and Terra values
 ----------------------------------------------
