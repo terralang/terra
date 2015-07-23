@@ -419,6 +419,27 @@ static void GetStructEntries(Obj * typ, Obj * entries) {
     layout.obj("entries",entries);
 }
 
+static void LinkPreservingSource(TerraCompilationUnit * dest, TerraCompilationUnit * src) {
+#if LLVM_VERSION <= 35
+    std::string err;
+    if(llvm::Linker::LinkModules(dest->M, src->M, llvm::Linker::PreserveSource, &err))
+        terra_reporterror(dest->T, "linker reported error: %s",err.c_str());
+#else
+    std::string err;
+    raw_string_ostream Stream(err);
+    DiagnosticPrinterRawOStream DP(Stream);
+    Module * copySrc = CloneModule(src->M); //we really need to do linking ourselves since this step now requires a module copy
+    bool result = llvm::Linker::LinkModules(dest->M, copySrc, [&](const DiagnosticInfo &DI) {
+        if (DI.getSeverity() == DS_Error) {
+            DI.print(DP);
+        }
+    });
+    if(result) {
+        terra_reporterror(dest->T, "linker reported error: %s",err.c_str());
+    }
+#endif
+}
+
 struct TType { //contains llvm raw type pointer and any metadata about it we need
     Type * type;
     bool issigned;
@@ -527,7 +548,11 @@ class Types {
     StructType * CreateStruct(Obj * typ) {
         //check to see if it was initialized externally first
         if(TerraCompilationUnit * CI = (TerraCompilationUnit*)typ->ud("llvm_definingmodule")) {
-            Function * df = CI->M->getFunction(CI->livenessfunction);
+            Function * df = CU->M->getFunction(CI->livenessfunction);
+            if(!df) {
+                LinkPreservingSource(CU, CI);
+                df = CU->M->getFunction(CI->livenessfunction); assert(df);
+            }
             int argpos = typ->number("llvm_argumentposition");
             StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
             assert(st);
@@ -1148,27 +1173,6 @@ static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * gl
     }
     int as = global->number("addressspace");
     return new GlobalVariable(*CU->M, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
-}
-
-static void LinkPreservingSource(TerraCompilationUnit * dest, TerraCompilationUnit * src) {
-#if LLVM_VERSION <= 35
-    std::string err;
-    if(llvm::Linker::LinkModules(dest->M, src->M, llvm::Linker::PreserveSource, &err))
-        terra_reporterror(dest->T, "linker reported error: %s",err.c_str());
-#else
-    std::string err;
-    raw_string_ostream Stream(err);
-    DiagnosticPrinterRawOStream DP(Stream);
-    Module * copySrc = CloneModule(src->M); //we really need to do linking ourselves since this step now requires a module copy
-    bool result = llvm::Linker::LinkModules(dest->M, copySrc, [&](const DiagnosticInfo &DI) {
-        if (DI.getSeverity() == DS_Error) {
-            DI.print(DP);
-        }
-    });
-    if(result) {
-        terra_reporterror(dest->T, "linker reported error: %s",err.c_str());
-    }
-#endif
 }
 
 static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * global, const char * name) {
@@ -2859,8 +2863,8 @@ static int terra_linkllvmimpl(lua_State * L) {
 
 static int terra_dumpmodule(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
-    Module * M = (Module*) lua_touserdata(L,1);
-    if(M)
-        M->dump();
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,1);
+    if(CU)
+        CU->M->dump();
     return 0;
 }
