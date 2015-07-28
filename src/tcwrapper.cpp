@@ -36,7 +36,7 @@ static void CreateTableWithName(Obj * parent, const char * name, Obj * result) {
     parent->setfield(name);
 }
 
-const int COMPILATION_UNIT_POS = 1;
+const int TARGET_POS = 1;
 const int HEADERPROVIDER_POS = 4;
 
 // part of the setup is adapted from: http://eli.thegreenplace.net/2012/06/08/basic-source-to-source-transformation-with-clang/
@@ -45,11 +45,11 @@ const int HEADERPROVIDER_POS = 4;
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Obj * res, TerraCompilationUnit * CI_)
+    IncludeCVisitor(Obj * res, const std::string & livenessfunction_)
         : resulttable(res),
           L(res->getState()),
           ref_table(res->getRefTable()),
-          CI(CI_) {
+          livenessfunction(livenessfunction_) {
         
         //create tables for errors messages, general namespace, and the tagged namespace
         InitTable(&error_table,"errors");
@@ -134,15 +134,16 @@ public:
             }
             //if name == "" then we have an anonymous struct
             if(!thenamespace->obj(name.c_str(),tt)) {
-                PushTypeField("getorcreatecstruct");
+                lua_getfield(L,TARGET_POS,"getorcreatecstruct");
+                lua_pushvalue(L,TARGET_POS);
                 lua_pushstring(L, name.c_str());
                 lua_pushboolean(L, thenamespace == &tagged);
-                lua_call(L,2,1);
+                lua_call(L,3,1);
                 tt->initFromStack(L,ref_table);
-                if(!tt->boolean("llvm_definingmodule")) {
+                if(!tt->boolean("llvm_definingfunction")) {
                     size_t argpos = RegisterRecordType(Context->getRecordType(rd));
-                    lua_pushvalue(L,COMPILATION_UNIT_POS);
-                    tt->setfield("llvm_definingmodule");
+                    lua_pushstring(L,livenessfunction.c_str());
+                    tt->setfield("llvm_definingfunction");
                     lua_pushinteger(L,argpos);
                     tt->setfield("llvm_argumentposition");
                 }
@@ -458,8 +459,7 @@ public:
             lua_remove(L,-2); //terra table
             lua_pushstring(L, internalname.c_str());
             typ->push();
-            lua_pushvalue(L, COMPILATION_UNIT_POS);
-            lua_call(L, 3, 1);
+            lua_call(L, 2, 1);
             general.setfield(name.c_str());
         }
     }
@@ -467,7 +467,7 @@ public:
         Context = ctx;
     }
     FunctionDecl * GetLivenessFunction() {
-        IdentifierInfo & II = Context->Idents.get(CI->livenessfunction);
+        IdentifierInfo & II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
         #if LLVM_VERSION >= 33
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes, FunctionProtoType::ExtProtoInfo());
@@ -519,8 +519,6 @@ public:
             lua_pushstring(L, name.c_str());
             lua_pushboolean(L,true);
             lua_call(L, 4, 1);
-            lua_pushvalue(L,COMPILATION_UNIT_POS);
-            lua_setfield(L,-2,"llvm_definingmodule");
             general.setfield(name.c_str());
         }
     }
@@ -535,13 +533,13 @@ public:
     Obj general; //name -> function or type in the general namespace
     Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
     std::string error_message;
-    TerraCompilationUnit * CI;
+    std::string livenessfunction;
 };
 
 class CodeGenProxy : public ASTConsumer {
 public:
-  CodeGenProxy(CodeGenerator * CG_, Obj * result, TerraCompilationUnit * CI)
-  : CG(CG_), Visitor(result,CI) {}
+  CodeGenProxy(CodeGenerator * CG_, Obj * result, const std::string & livenessfunction)
+  : CG(CG_), Visitor(result,livenessfunction) {}
   CodeGenerator * CG;
   IncludeCVisitor Visitor;
   virtual ~CodeGenProxy() {}
@@ -804,12 +802,12 @@ static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * 
 }
 #endif
 
-static void optimizemodule(TerraCompilationUnit * CU) {
+static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
     //cleanup after clang.
     //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
     //the linker will then delete it because it is not used.
     //switching it to WeakODR means that the linker will keep it even if it is not used
-    for(llvm::Module::iterator it = CU->M->begin(), end = CU->M->end();
+    for(llvm::Module::iterator it = M->begin(), end = M->end();
         it != end;
         ++it) {
         llvm::Function * fn = it;
@@ -825,14 +823,14 @@ static void optimizemodule(TerraCompilationUnit * CU) {
         
     #endif
     }
-    CU->M->setTargetTriple(CU->Triple); //suppress warning that occur due to unmatched os versions
+    M->setTargetTriple(TT->Triple); //suppress warning that occur due to unmatched os versions
     llvm::PassManager opt;
-    llvmutil_addtargetspecificpasses(&opt, CU->tm);
+    llvmutil_addtargetspecificpasses(&opt, TT->tm);
     opt.add(llvm::createFunctionInliningPass());
     llvmutil_addoptimizationpasses(&opt);
-    opt.run(*CU->M);
+    opt.run(*M);
 }
-static int dofile(TerraCompilationUnit * CU, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
+static int dofile(terra_State * T, TerraTarget * TT, const char * code, const char ** argbegin, const char ** argend, Obj * result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
@@ -843,20 +841,20 @@ static int dofile(TerraCompilationUnit * CU, const char * code, const char ** ar
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
     #endif
     
-    initializeclang(CU->T, membuffer, argbegin, argend, &TheCompInst);
+    initializeclang(T,membuffer, argbegin, argend, &TheCompInst);
     
     #if LLVM_VERSION <= 32
-    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *T->C->ctx );
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *TT->ctx );
     #else
-    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *CU->T->C->ctx );
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *TT->ctx );
     #endif
     
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";
-    ss << CU->T->C->next_unused_id++;
-    CU->livenessfunction = ss.str();
+    ss << TT->next_unused_id++;
+    std::string livenessfunction = ss.str();
 
-    CodeGenProxy proxy(codegen,result,CU);
+    CodeGenProxy proxy(codegen,result,livenessfunction);
     ParseAST(TheCompInst.getPreprocessor(),
             &proxy,
             TheCompInst.getASTContext());
@@ -868,31 +866,36 @@ static int dofile(TerraCompilationUnit * CU, const char * code, const char ** ar
     for(Preprocessor::macro_iterator it = PP.macro_begin(false),end = PP.macro_end(false); it != end; ++it) {
         const IdentifierInfo * II = it->first;
         MacroDirective * MD = it->second;
-        AddMacro(CU->T,PP,II,MD,&macros);
+        AddMacro(T,PP,II,MD,&macros);
     }
     #endif
     
-    delete CU->M; //get rid of the empty original module
-    CU->M = codegen->ReleaseModule();
+    llvm::Module * M = codegen->ReleaseModule();
     delete codegen;
-    if(!CU->M) {
-        terra_reporterror(CU->T,"compilation of included c code failed\n");
+    if(!M) {
+        terra_reporterror(T,"compilation of included c code failed\n");
     }
-    optimizemodule(CU);
+    optimizemodule(TT,M);
+
+    std::string err;
+    if(llvm::Linker::LinkModules(TT->external, M, llvm::Linker::DestroySource, &err))
+        terra_reporterror(T, "linker reported error: %s",err.c_str());
+    
     return 0;
 }
 
 int include_c(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void) T;
-    TerraCompilationUnit * CU = (TerraCompilationUnit*)lua_touserdata(L,COMPILATION_UNIT_POS);
+    lua_getfield(L, TARGET_POS, "llvm_target");
+    TerraTarget * TT = (TerraTarget*)terra_tocdatapointer(L,-1);
     const char * code = luaL_checkstring(L, 2);
     int N = lua_objlen(L, 3);
     std::vector<const char *> args;
 
     args.push_back("-triple");
-    args.push_back(CU->Triple.c_str());
+    args.push_back(TT->Triple.c_str());
     args.push_back("-target-cpu");
-    args.push_back(CU->CPU.c_str());
+    args.push_back(TT->CPU.c_str());
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");
@@ -922,7 +925,7 @@ int include_c(lua_State * L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
         
-        dofile(CU,code,&args[0],&args[args.size()],&result);
+        dofile(T,TT,code,&args[0],&args[args.size()],&result);
     }
     
     lobj_removereftable(L, ref_table);

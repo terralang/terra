@@ -6,26 +6,38 @@
 
 
 struct TerraFunctionInfo {
+    llvm::LLVMContext * ctx;
     std::string name;
     void * addr;
     size_t size;
     llvm::JITEvent_EmittedFunctionDetails efd;
 };
 class Types; struct CCallingConv; struct Obj;
+
+struct TerraTarget {
+    TerraTarget() : nreferences(0), tm(NULL), td(NULL), ctx(NULL), external(NULL), next_unused_id(0) {}
+    int nreferences;
+    std::string Triple,CPU,Features;
+    llvm::TargetMachine * tm;
+    const llvm::DataLayout * td;
+    llvm::LLVMContext * ctx;
+    llvm::Module * external; //module that holds IR for externally included things (from includec or linkllvm)
+    size_t next_unused_id; //for creating names for dummy functions
+};
+
 struct TerraCompilationUnit {
-    TerraCompilationUnit() : optimize(false), nreferences(0), T(NULL), M(NULL), mi(NULL), fpm(NULL), tm(NULL), td(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    TerraCompilationUnit() : nreferences(0), optimize(false), T(NULL), C(NULL), M(NULL), mi(NULL), fpm(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    int nreferences;
     //configuration
     bool optimize;
-    std::string Triple,CPU,Features;
+    
     // LLVM state used in compiltion unit
-    int nreferences;
     terra_State * T;
+    terra_CompilerState * C;
+    TerraTarget * TT;
     llvm::Module * M;
     ManualInliner * mi;
     llvm::FunctionPassManager * fpm;
-    llvm::TargetMachine * tm;
-    const llvm::DataLayout * td;
-    std::string livenessfunction; //used in imported C code to find the LLVM types that correspond to the C types imported
     llvm::ExecutionEngine * ee;
     llvm::JITEventListener * jiteventlistener; //for reporting debug info
     // Temporary storage for objects that exist only during emitting functions
@@ -37,10 +49,8 @@ struct TerraCompilationUnit {
 
 struct terra_CompilerState {
     int nreferences;
-    llvm::LLVMContext * ctx;
     llvm::sys::MemoryBlock MB;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
-    size_t next_unused_id; //for creating names for dummy functions
 };
 
 #endif

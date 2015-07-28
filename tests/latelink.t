@@ -18,6 +18,7 @@ C2 = terralib.includecstring [[
 terra second()
     var a : C2.B
     var b : C.A
+    
     a.a = b.a
 end
 second:disas()

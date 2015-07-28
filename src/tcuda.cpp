@@ -18,6 +18,7 @@ extern "C" {
 #include "terrastate.h"
 #include "tcompilerstate.h"
 #include "tllvmutil.h"
+#include "tobj.h"
 #include "cudalib.h"
 #include <sstream>
 #ifndef _WIN32
@@ -72,19 +73,20 @@ void initializeNVVMState(terra_State * T) {
 }
 
 static void annotateKernel(terra_State * T, llvm::Module * M, llvm::Function * kernel, const char * name, int value) {
+    llvm::LLVMContext & ctx = M->getContext();
     std::vector<METADATA_ROOT_TYPE *> vals;
     llvm::NamedMDNode * annot = M->getOrInsertNamedMetadata("nvvm.annotations");
-    llvm::MDString * str = llvm::MDString::get(*T->C->ctx, name);
+    llvm::MDString * str = llvm::MDString::get(ctx, name);
     #if LLVM_VERSION <= 35
     vals.push_back(kernel);
     vals.push_back(str);
-    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value));
+    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), value));
     #else
     vals.push_back(llvm::ValueAsMetadata::get(kernel));
     vals.push_back(str);
-    vals.push_back(llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(*T->C->ctx), value)));
+    vals.push_back(llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), value)));
     #endif
-    llvm::MDNode * node = llvm::MDNode::get(*T->C->ctx, vals);
+    llvm::MDNode * node = llvm::MDNode::get(ctx, vals);
     annot->addOperand(node); 
 }
 
@@ -162,7 +164,7 @@ int terra_toptx(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeNVVMState(T);
     lua_getfield(L,1,"llvm_cu");
-    TerraCompilationUnit * CU = (TerraCompilationUnit*) lua_touserdata(L,-1);
+    TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,-1);
     llvm::Module * M = CU->M;
     int annotations = 2;
     int dumpmodule = lua_toboolean(L,3);

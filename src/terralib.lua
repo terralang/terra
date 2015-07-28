@@ -527,21 +527,47 @@ local function newweakkeytable()
     return setmetatable({},weakkeys)
 end
 
-local function totargetoptions(to)
-    if type(to) == "table" then 
-        if to.Triple then
-            to.CPU = to.CPU or ""
-            to.Features = to.Features or ""
-        end
-        return to
-    elseif to == nil then return {}
-    else error("expected a table for target options") end
+local function cdatawithdestructor(ud,dest)
+    local cd = ffi.cast("void*",ud)
+    ffi.gc(cd,dest)
+    return cd
+end
+
+terra.target = {}
+terra.target.__index = terra.target
+function terra.istarget(a) return getmetatable(a) == terra.target end
+function terra.newtarget(tbl)
+    if not type(tbl) == "table" then error("expected a table",2) end
+    local Triple,CPU,Features,FloatABIHard = tbl.Triple,tbl.CPU,tbl.Features,tbl.FloatABIHard
+    if Triple then
+        CPU = CPU or ""
+        Features = Features or ""
+    end
+    return setmetatable({ llvm_target = cdatawithdestructor(terra.inittarget(Triple,CPU,Features,FloatABIHard),terra.freetarget),
+                          cnametostruct = { general = {}, tagged = {}}  --map from llvm_name -> terra type used to make c structs unique per llvm_name
+                        },terra.target)
+end
+function terra.target:getorcreatecstruct(displayname,tagged)
+    local namespace
+    if displayname ~= "" then
+        namespace = tagged and self.cnametostruct.tagged or self.cnametostruct.general
+    end
+    local typ = namespace and namespace[displayname]
+    if not typ then
+        typ = terra.types.newstruct(displayname == "" and "anon" or displayname)
+        typ.undefined = true
+        if namespace then namespace[displayname] = typ end
+    end
+    return typ
 end
 
 local compilationunit = {}
 compilationunit.__index = compilationunit
-function terra.newcompilationunit(opt,to)
-    return setmetatable({ symbols = newweakkeytable(), livefunctions = opt and newweakkeytable() or nil, llvm_cu = terra.initcompilationunit(opt,totargetoptions(to)) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+function terra.newcompilationunit(target,opt)
+    assert(terra.istarget(target),"expected a target object")
+    return setmetatable({ symbols = newweakkeytable(), 
+                          livefunctions = opt and newweakkeytable() or nil,
+                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
@@ -555,10 +581,12 @@ function compilationunit:jitvalue(v)
 end
 function compilationunit:free()
     assert(not self.livefunctions, "cannot explicitly release a compilation unit with auto-delete functions")
+    ffi.gc(self.llvm_cu,nil) --unregister normal destructor object
     terra.freecompilationunit(self.llvm_cu)
 end
 
-terra.jitcompilationunit = terra.newcompilationunit(true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
+terra.nativetarget = terra.newtarget {}
+terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 function terra.funcdefinition:jit(checknocont)
     assert(checknocont == nil, "compile no longer supports deferred action, use :gettype instead")
@@ -911,7 +939,7 @@ function terra.intrinsic(str, typ)
             diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",terra.type(intrinsictype))
             intrinsictype = terra.types.funcpointer(types,{})
         end
-        local fn = terralib.externfunction(name,intrinsictype,nil,e)
+        local fn = terralib.externfunction(name,intrinsictype,e)
         local literal = terra.createterraexpression(diag,e,fn)
         local rawargs = args:map("tree")
         return terra.newtree(e, { kind = terra.kinds.apply, value = literal, arguments = rawargs })
@@ -1097,10 +1125,10 @@ do  --constructor functions for terra functions and variables
         return fn
     end
 
-    function terra.externfunction(name,typ,module,anchor)
+    function terra.externfunction(name,typ,anchor)
         anchor = anchor or terra.newanchor(1)
         typ = typ:ispointertofunction() and typ.type or typ
-        local obj = { type = typ, state = "untyped", isextern = true, untypedtree = anchor, llvm_definingmodule = module, stats = {} }
+        local obj = { type = typ, state = "untyped", isextern = true, untypedtree = anchor, stats = {} }
         setmetatable(obj,terra.funcdefinition)
         
         local fn = mkfunction(name)
@@ -1169,7 +1197,7 @@ do
     
     local types = {}
     
-    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_definingmodule = false} --all types have this as their metatable
+    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_definingfunction = false } --all types have this as their metatable
     types.type.__index = function(self,key)
         local N = tonumber(key)
         if N then
@@ -1767,20 +1795,6 @@ do
         displayname = displayname or "anon"
         depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
-    end
-    local cnametostruct = { general = {}, tagged = {}} --map from llvm_name -> terra type used to make c structs unique per llvm_name
-    function types.getorcreatecstruct(displayname,tagged)
-        local namespace
-        if displayname ~= "" then
-            namespace = tagged and cnametostruct.tagged or cnametostruct.general
-        end
-        local typ = namespace and namespace[displayname]
-        if not typ then
-            typ = types.newstruct(displayname == "" and "anon" or displayname)
-            typ.undefined = true
-            if namespace then namespace[displayname] = typ end
-        end
-        return typ
     end
     function types.newstructwithanchor(displayname,anchor)
         
@@ -3629,12 +3643,11 @@ end
 
 
 
-function terra.includecstring(code,cargs,targetoptions)
+function terra.includecstring(code,cargs,target)
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
-    if ffi.os == "Linux" or ffi.os == "Windows" or (targetoptions and targetoptions.Triple and targetoptions.Triple:match("linux")) then
-        args:insert("-internal-isystem")
-        args:insert(clangresourcedirectory.."/include")
-    end
+    args:insert("-internal-isystem")
+    args:insert(clangresourcedirectory.."/include")
+    
     if cargs then
         args:insertall(cargs)
     end
@@ -3642,7 +3655,9 @@ function terra.includecstring(code,cargs,targetoptions)
         args:insert("-I")
         args:insert(p)
     end
-    local result = terra.registercfile(terra.initcompilationunit(false,totargetoptions(targetoptions)),code,args,headerprovider)
+    target = target or terra.nativetarget
+    assert(terra.istarget(target),"expected a target or nil to specify the native target")
+    local result = terra.registercfile(target,code,args,headerprovider)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros
     local mt = { __index = includetableindex, errors = result.errors }
     local function addtogeneral(tbl)
@@ -3658,8 +3673,8 @@ function terra.includecstring(code,cargs,targetoptions)
     setmetatable(tagged,mt)
     return general,tagged,macros
 end
-function terra.includec(fname,cargs,targetoptions)
-    return terra.includecstring("#include \""..fname.."\"\n",cargs,targetoptions)
+function terra.includec(fname,cargs,target)
+    return terra.includecstring("#include \""..fname.."\"\n",cargs,target)
 end
 
 
@@ -4262,11 +4277,11 @@ function compilationunit:saveobj(filename,filekind,arguments)
     return terra.saveobjimpl(filename,filekind,self,arguments or {})
 end
 
-function terra.saveobj(filename,filekind,env,arguments,targetoptions)
+function terra.saveobj(filename,filekind,env,arguments,target)
     if type(filekind) ~= "string" then
-        filekind,env,arguments,targetoptions = nil,filekind,env,arguments
+        filekind,env,arguments,target = nil,filekind,env,arguments
     end
-    local cu = terra.newcompilationunit(false,totargetoptions(targetoptions))
+    local cu = terra.newcompilationunit(target or terra.nativetarget,false)
     for k,v in pairs(env) do
         if terra.isfunction(v) then
             local definitions = v:getdefinitions()
@@ -4471,12 +4486,11 @@ function terra.linklibrary(filename)
     assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
     terra.linklibraryimpl(filename)
 end
-function terra.linkllvm(filename,to)
-    local llvm_cu = terra.initcompilationunit(false,totargetoptions(to))
-    terra.linkllvmimpl(llvm_cu,filename)
-    return { llvm_cu = llvm_cu, extern = function(self,name,typ)
-        return terra.externfunction(name,typ,assert(self.llvm_cu))
-    end }
+function terra.linkllvm(filename,target)
+    target = target or terra.nativetarget
+    assert(terra.istarget(target),"expected a target or nil to specify native target")
+    terra.linkllvmimpl(target.llvm_target,filename)
+    return { extern = function(self,name,typ) return terra.externfunction(name,typ) end }
 end
 
 terra.languageextension = {

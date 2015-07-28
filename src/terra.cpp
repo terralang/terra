@@ -287,7 +287,7 @@ static int terra_free(lua_State * L) {
     terra_State * T = (terra_State *) lua_touserdata(L, -1);
     assert(T);
     terra_cudafree(T);
-    terra_compilerfree(T);
+    terra_compilerfree(T->C);
     return 0;
 }
 

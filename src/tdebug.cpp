@@ -34,7 +34,7 @@ static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo
         if(lineno)
             *lineno = LineStarts[i].Loc.getLine();
         if(file)
-            *file = DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename();
+            *file = DIFile(LineStarts[i].Loc.getScope(*fi->ctx)).getFilename();
         return true;
     } else {
         return false;

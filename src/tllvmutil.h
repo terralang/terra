@@ -11,6 +11,7 @@ bool llvmutil_emitobjfile(llvm::Module * Mod, llvm::TargetMachine * TM, bool out
 #if LLVM_VERSION >= 33
 typedef bool (*llvmutil_Property)(llvm::GlobalValue *,void*);
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap);
+void llvmutil_copyfrommodule(llvm::Module * Dest, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data);
 #endif
 void llvmutil_optimizemodule(llvm::Module * M, llvm::TargetMachine * TM);
 #if LLVM_VERSION >= 35

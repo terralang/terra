@@ -185,7 +185,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
     DIBuilder * DI;
     DICompileUnit NCU;
     CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
-    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_), DI(NULL) {
+    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_), DI(NULL) {}
+    
+    void CopyDebugMetadata() {
         if(NamedMDNode * NMD = src->getNamedMetadata("llvm.module.flags")) {
             NamedMDNode * New = dest->getOrInsertNamedMetadata(NMD->getName());
             for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
@@ -203,6 +205,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
         }
     }
+    
     virtual Value * materializeValueFor(Value * V) {
         if(Function * fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);
@@ -281,10 +284,17 @@ llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, ll
     Module * Dest = new Module(DestName,Src->getContext());
     Dest->setTargetTriple(Src->getTargetTriple());
     CopyConnectedComponent cp(Dest,Src,copyGlobal,data,VMap);
+    cp.CopyDebugMetadata();
     for(size_t i = 0; i < N; i++)
         MapValue(gvs[i],VMap,RF_None,NULL,&cp);
     cp.finalize();
     return Dest;
+}
+void llvmutil_copyfrommodule(llvm::Module * Dest, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data) {
+    llvm::ValueToValueMapTy VMap;
+    CopyConnectedComponent cp(Dest,Src,copyGlobal,data,VMap);
+    for(size_t i = 0; i < N; i++)
+        MapValue(gvs[i],VMap,RF_None,NULL,&cp);
 }
 #endif
 
