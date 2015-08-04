@@ -544,6 +544,7 @@ function terra.newtarget(tbl)
         Features = Features or ""
     end
     return setmetatable({ llvm_target = cdatawithdestructor(terra.inittarget(Triple,CPU,Features,FloatABIHard),terra.freetarget),
+                          Triple = Triple,
                           cnametostruct = { general = {}, tagged = {}}  --map from llvm_name -> terra type used to make c structs unique per llvm_name
                         },terra.target)
 end
@@ -3645,8 +3646,12 @@ end
 
 function terra.includecstring(code,cargs,target)
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
-    args:insert("-internal-isystem")
-    args:insert(clangresourcedirectory.."/include")
+    target = target or terra.nativetarget
+
+    if (target == terra.nativetarget and ffi.os == "Linux") or (target.Triple and target.Triple:match("linux")) then
+        args:insert("-internal-isystem")
+        args:insert(clangresourcedirectory.."/include")
+    end
     
     if cargs then
         args:insertall(cargs)
@@ -3655,7 +3660,6 @@ function terra.includecstring(code,cargs,target)
         args:insert("-I")
         args:insert(p)
     end
-    target = target or terra.nativetarget
     assert(terra.istarget(target),"expected a target or nil to specify the native target")
     local result = terra.registercfile(target,code,args,headerprovider)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros

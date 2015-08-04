@@ -328,7 +328,7 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     if(CU->ee) return; //already initialized
     Module * topeemodule = (CU->T->options.usemcjit) ? new Module("terra",*CU->TT->ctx) : CU->M;
 #ifdef _WIN32
-	std::string MCJITTriple = CU->Triple;
+	std::string MCJITTriple = CU->TT->Triple;
 	MCJITTriple.append("-elf"); //on windows we need to use an elf container because coff is not supported yet
 	topeemodule->setTargetTriple(MCJITTriple);
 #else
@@ -787,7 +787,7 @@ struct CCallingConv {
 #else
     Type * TypeForClass(size_t size, RegisterClass clz) {
         assert(size <= 8);
-        return Type::getIntNTy(*C->ctx, size * 8); 
+        return Type::getIntNTy(*CU->TT->ctx, size * 8); 
     }
     bool ValidAggregateSize(size_t sz) {
         bool isPow2 = sz && !(sz & (sz - 1));
@@ -847,7 +847,7 @@ struct CCallingConv {
         //to be translated to void. So if it is unit, force the return value to be void by overriding the normal 
         //classification decision
         if(Ty->IsUnitType(&returntype)) {
-            info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,StructType::get(*C->ctx));
+            info->returntype = Argument(C_AGGREGATE_REG,info->returntype.type,StructType::get(*CU->TT->ctx));
         }
         #endif
         
