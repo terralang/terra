@@ -748,13 +748,13 @@ However, we currently do not support importing global variables or constants. Th
 
 ---
 
-    table = terralib.includecstring(code,[args,targetoptions])
+    table = terralib.includecstring(code,[args,target])
 
-Import the string `code` as C code. Returns a Lua table mapping the names of included C functions to Terra [function](#function) objects, and names of included C types (e.g. typedefs) to Terra [types](#types). The Lua variable `terralib.includepath` can be used to add additional paths to the header search. It is a semi-colon separated list of directories to search. `args` is an optional list of strings that are flags to Clang (e.g. `includecstring(code,"-I","..")`). `targetoptions` is a [targetoptions](#target-options) table that makes sure the headers are imported correctly for the target desired.
+Import the string `code` as C code. Returns a Lua table mapping the names of included C functions to Terra [function](#function) objects, and names of included C types (e.g. typedefs) to Terra [types](#types). The Lua variable `terralib.includepath` can be used to add additional paths to the header search. It is a semi-colon separated list of directories to search. `args` is an optional list of strings that are flags to Clang (e.g. `includecstring(code,"-I","..")`). `target` is a [target](#targets) object that makes sure the headers are imported correctly for the target desired.
 
 ---
 
-    table = terralib.includec(filename,[args,targetoptions])
+    table = terralib.includec(filename,[args,target])
 
 Similar to `includecstring` except that C code is loaded from `filename`. This uses Clangs default path for header files. `...` allows you to pass additional arguments to Clang (including more directories to search).
 
@@ -852,27 +852,27 @@ Saving Terra Code
 
 ---
 
-    terralib.saveobj(filename [, filetype], functiontable[, arguments, targetoptions])
+    terralib.saveobj(filename [, filetype], functiontable[, arguments, target])
 
 Save Terra code to an external representation such as an object file, or executable. `filetype` can be one of `"object"` (an object file `*.o`), `"bitcode"` (LLVM bitcode `*.bc`), `"llvmir"` (LLVM textual IR `*.ll`), or `"executable"` (no extension).
 If `filetype` is missing then it is inferred from the extension. `functiontable` is a table from strings to Terra functions. These functions will be included in the code that is written out with the name given in the table.
 `arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string. 
 
-To cross-compile objects for a different architecture, you can specific a table of [targetoptions](#target-options), which describe the architecture to compile for. Otherwise `saveobj` will use the native architecture.
+To cross-compile objects for a different architecture, you can specific a [target](#targets) object, which describes the architecture to compile for. Otherwise `saveobj` will use the native architecture.
 
-Target Options
---------------
+Targets
+-------
 
-The functions `terralib.saveobj` and `terralib.includec` take an optional target options table, that tells the compiler to compile the code for a different architecture. These options can be used for cross-compilation. For example, using an x86 machine to to compile ARM code for a Raspberry Pi. The table as the form:
+The functions `terralib.saveobj` and `terralib.includec` take an optional target object, that tells the compiler to compile the code for a different architecture. These targets  can be used for cross-compilation. For example, to use an x86 machine to to compile ARM code for a Raspberry Pi, you can create the following target object:
 
-    {
+    local armtarget = terralib.newtarget {
         Triple = "armv6-unknown-linux-gnueabi"; -- LLVM target triple
         CPU = "arm1176jzf-s";,  -- LLVM CPU name,
         Features = ""; -- LLVM feature string
         FloatABIHard = true; -- For ARM, use floating point registers 
     }
 
-All arguments except the `Triple` field are optional. [Documentation](http://clang.llvm.org/docs/CrossCompilation.html) for `clang` includes more information about what these strings should be set to.
+All entries in the table except the `Triple` field are optional. [Documentation](http://clang.llvm.org/docs/CrossCompilation.html) for `clang` includes more information about what these strings should be set to.
 
 Converting between Lua values and Terra values
 ----------------------------------------------
