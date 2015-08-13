@@ -877,10 +877,12 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     }
     optimizemodule(TT,M);
 
-    std::string err;
-    if(llvm::Linker::LinkModules(TT->external, M, llvm::Linker::DestroySource, &err))
-        terra_reporterror(T, "linker reported error: %s",err.c_str());
-    
+    char * err;
+    if(LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource, &err)) {
+        terra_pusherror(T, "linker reported error: %s",err);
+        LLVMDisposeMessage(err);
+        lua_error(T->L);
+    }
     return 0;
 }
 

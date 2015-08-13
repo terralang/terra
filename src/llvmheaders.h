@@ -34,6 +34,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm-c/Linker.h"
 
 #if LLVM_VERSION == 32
 #include "llvmheaders_32.h"

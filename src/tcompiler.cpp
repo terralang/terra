@@ -2035,7 +2035,7 @@ if(baseT->isIntegerTy()) { \
                     #if LLVM_VERSION <= 35
                     auto list = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1);
                     #else
-                    auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*C->ctx), 1));
+                    auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1));
                     #endif
                     store->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
                 }
@@ -2843,7 +2843,7 @@ static int terra_linkllvmimpl(lua_State * L) {
     if(!mb)
         terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
     #if LLVM_VERSION >= 36
-    ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*CU->T->C->ctx);
+    ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #else
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*TT->ctx);
     #endif
@@ -2852,10 +2852,12 @@ static int terra_linkllvmimpl(lua_State * L) {
     Module * M = mm.get();
 #endif
     M->setTargetTriple(TT->Triple);
-    std::string err;
-    if(llvm::Linker::LinkModules(TT->external, M, llvm::Linker::DestroySource, &err))
-        terra_reporterror(T, "linker reported error: %s",err.c_str());
-    
+    char * err;
+    if(LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource, &err)) {
+        terra_pusherror(T, "linker reported error: %s",err);
+        LLVMDisposeMessage(err);
+        lua_error(T->L);
+    }
     return 0;
 }
 
