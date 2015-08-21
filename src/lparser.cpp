@@ -906,11 +906,11 @@ static void primaryexp (LexState *ls) {
         
         break;
       }
-      case '(': /* funcargs */
+      case '(': case '`': case TK_QUOTE: /* funcargs */
         if(issplitprimary(ls))
             return;
         /* fallthrough */
-      case TK_STRING: case '{': case '`': case TK_QUOTE: {
+      case TK_STRING: case '{': {
         //luaK_exp2nextreg(fs, v);
         int tbl = new_table_before(ls,T_apply,true);
         add_field(ls,tbl,"value");
