@@ -205,7 +205,12 @@ struct CopyConnectedComponent : public ValueMaterializer {
             NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
         }
     }
-    
+    bool needsFreshlyNamedConstant(GlobalVariable * GV, GlobalVariable * newGV) {
+        if(GV->isConstant() && GV->hasPrivateLinkage() && GV->hasUnnamedAddr()) { //this is a candidate constant
+            return !newGV->isConstant() || newGV->getInitializer() != GV->getInitializer(); //it is not equal to its target
+        }
+        return false;
+    }
     virtual Value * materializeValueFor(Value * V) {
         if(Function * fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);
@@ -226,7 +231,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
             GlobalVariable * newGV = dest->getGlobalVariable(GV->getName(),true);
-            if(!newGV) {
+            if(!newGV || needsFreshlyNamedConstant(GV,newGV)) {
                 newGV = new GlobalVariable(*dest,GV->getType()->getElementType(),GV->isConstant(),GV->getLinkage(),NULL,GV->getName(),NULL,GlobalVariable::NotThreadLocal,GV->getType()->getAddressSpace());
                 newGV->copyAttributesFrom(GV);
                 if(!GV->isDeclaration()) {
