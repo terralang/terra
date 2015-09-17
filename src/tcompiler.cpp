@@ -83,7 +83,7 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if LLVM_VERSION >= 34
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if(type == object::SymbolRef::ST_Function) {
-            #ifndef __arm__
+            #if !defined(__arm__) && !defined(__linux__)
             name = name.substr(1);
             #endif
             void * addr = (void*) CU->ee->getFunctionAddress(name);
