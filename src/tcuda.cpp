@@ -190,10 +190,14 @@ int terra_toptx(lua_State * L) {
     //sanitize names
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         const char * prefix = "cudart:";
-        if(it->getName().startswith(prefix))
-            it->setName(it->getName().substr(strlen(prefix)));
-        if(!it->isDeclaration())
+        int prefixsize = strlen(prefix);
+        std::string name = it->getName();
+        if(name.size() >= prefixsize && name.substr(0,prefixsize) == prefix) {
+            std::string shortname = name.substr(prefixsize);
+            it->setName(shortname);
+        } if(!it->isDeclaration()) {
             it->setName(sanitizeName(it->getName()));
+        }
     }
     for(llvm::Module::global_iterator it = M->global_begin(), end = M->global_end(); it != end; ++it) {
         it->setName(sanitizeName(it->getName()));
