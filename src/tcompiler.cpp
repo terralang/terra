@@ -933,7 +933,7 @@ struct CCallingConv {
         Classification * info = ClassifyFunction(ftype);
         Function * fn = Function::Create(info->fntype, Function::ExternalLinkage, name, M);
         AttributeFnOrCall(fn,info);
-        #if LLVM_VERSION > 32
+        #if LLVM_VERSION > 32 && defined(__arm__)
             fn->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::NoUnwind);
         #endif
         return fn;
