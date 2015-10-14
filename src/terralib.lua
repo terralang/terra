@@ -1311,7 +1311,7 @@ do
                 local layout = self:getlayout()
                 for i,e in ipairs(layout.entries) do
                     indent()
-                    io.write(e.key..": ")
+                    io.write(tostring(e.key)..": ")
                     print(e.type,d+1)
                 end
             elseif self:isarray() or self:ispointer() then
