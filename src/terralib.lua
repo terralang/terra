@@ -4566,7 +4566,7 @@ do
     end
 end
 
-function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,islocal)
+function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstatement,islocal)
     local lex = {}
     
     lex.name = terra.languageextension.name
@@ -4602,17 +4602,23 @@ function terra.runlanguage(lang,cur,lookahead,next,luaexpr,source,isstatement,is
         next()
         return v
     end
-    function lex:luaexpr()
+    local function doembeddedcode(self,isterra,isexp)
         self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
-        local expr = luaexpr()
+        local expr = embeddedcode(isterra,isexp)
         return function(env)
             local oldenv = getfenv(expr)
             setfenv(expr,env)
-            local results = {expr()}
-            setfenv(expr,oldenv)
-            return unpack(results)
+            local function passandfree(...)
+                setfenv(expr,oldenv)
+                return ...
+            end
+            return passandfree(expr())
         end
     end
+    function lex:luaexpr() return doembeddedcode(self,false,true) end
+    function lex:luastats() return doembeddedcode(self,false,false) end
+    function lex:terraexpr() return doembeddedcode(self,true,true) end
+    function lex:terrastats() return doembeddedcode(self,true,false) end
 
     function lex:ref(name)
         if type(name) ~= "string" then

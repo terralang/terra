@@ -209,8 +209,8 @@ static void statement (LexState *ls);
 static void expr (LexState *ls);
 static void terratype(LexState * ls);
 static void luaexpr(LexState * ls);
-static void luacode(LexState * ls, int isexp);
-static void doquote(LexState * ls);
+static void embeddedcode(LexState * ls, int isterra, int isexp);
+static void doquote(LexState * ls, int isexp);
 static void languageextension(LexState * ls, int isstatement, int islocal);
 
 static void definevariable(LexState * ls, TString * varname) {
@@ -810,7 +810,7 @@ static void funcargs (LexState *ls, int line) {
     }
     case '`': case TK_QUOTE: {
         int exps = new_list(ls);
-        doquote(ls);
+        doquote(ls,ls->t.token == '`');
         add_entry(ls, exps);
         break;
     }
@@ -943,16 +943,17 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
     OutputBuffer_printf(&ls->output_buffer," },_G.terra._trees[%d],getfenv()) end",defined);
 }
 
-static void doquote(LexState * ls) {
-    bool isexp = ls->t.token == '`';
+static void doquote(LexState * ls, int isexp) {
+    int isfullquote = ls->t.token == '`' || ls->t.token == TK_QUOTE;
+    
     check_no_terra(ls, isexp ? "`" : "quote");
     
     TerraCnt tc;
     enterterra(ls, &tc);
-    
     Token begin = ls->t;
     int line = ls->linenumber;
-    luaX_next(ls); //skip ` or quote
+    if(isfullquote)
+        luaX_next(ls); //skip ` or quote
     if(isexp) {
         RETURNS_1(expr(ls));
     } else {
@@ -962,13 +963,14 @@ static void doquote(LexState * ls) {
         int let = new_table(ls, T_treelist);
         RETURNS_1(statlist(ls));
         add_field(ls, let, "statements");
-        if(testnext(ls, TK_IN)) {
+        if(isfullquote && testnext(ls, TK_IN)) {
             RETURNS_1(explist(ls));
         } else {
             new_list(ls);
         }
          add_field(ls, let, "expressions");
-        check_match(ls, TK_END, TK_QUOTE, line);
+        if(isfullquote)
+            check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
     }
     
@@ -998,7 +1000,7 @@ static void blockescape(LexState * ls) {
     check_terra(ls, "escape");
     int line = ls->linenumber;
     luaX_next(ls);
-    luacode(ls, 0);
+    embeddedcode(ls,0,0);
     check_match(ls, TK_END, TK_ESCAPE, line);
 }
 
@@ -1056,7 +1058,7 @@ static void simpleexp (LexState *ls) {
       return;
     }
     case '`': case TK_QUOTE: { /* quote expression */
-        doquote(ls);
+        doquote(ls,ls->t.token == '`');
         return;
     }
     case TK_ESCAPE: {
@@ -1302,7 +1304,7 @@ const char * expr_reader(lua_State * L, void * data, size_t * size) {
 }
 
 
-static void luacode(LexState * ls, int isexp) {
+static void embeddedcode(LexState * ls, int isterra, int isexp) {
     assert(ls->in_terra);
     
     //terra types are lua expressions.
@@ -1316,7 +1318,10 @@ static void luacode(LexState * ls, int isexp) {
     FuncState * fs = ls->fs;
     BlockCnt bl;
     enterblock(ls->fs, &bl, 0);
-    if(isexp)
+    
+    if(isterra) {
+        doquote(ls,isexp);
+    } else if(isexp)
         expr(ls);
     else
         statlist(ls);
@@ -1324,7 +1329,7 @@ static void luacode(LexState * ls, int isexp) {
     ls->in_terra = in_terra;
     
     ExprReaderData data;
-    data.step = isexp ? 0 : 1;
+    data.step = (isexp || isterra) ? 0 : 1; //is the string we captured an expression? it is if we captured a quote (terra.definequote(...)) or a lua expression
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     
     if(lua_load(ls->L, expr_reader, &data, "$terra$") != 0) {
@@ -1346,7 +1351,7 @@ static void luacode(LexState * ls, int isexp) {
 }
 
 static void luaexpr(LexState * ls) {
-    luacode(ls, 1);
+    embeddedcode(ls,0, 1);
 }
 
 static void terratype(LexState * ls) {
@@ -2014,11 +2019,12 @@ static int le_lookahead(lua_State * L) {
     return 1;
 }
 
-static int le_luaexpr(lua_State * L) {
+static int le_embeddedcode(lua_State * L) {
   LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
-  
+  bool isterra = lua_toboolean(L,1);
+  bool isexp = lua_toboolean(L,2);
   try {
-    luaexpr(ls);
+    embeddedcode(ls,isterra,isexp);
   } catch(...) {
     le_handleerror(ls);
   }
@@ -2053,7 +2059,7 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     lua_pushcclosure(ls->L,le_next,1);
 
     lua_pushlightuserdata(ls->L,(void*)ls);
-    lua_pushcclosure(ls->L,le_luaexpr,1);
+    lua_pushcclosure(ls->L,le_embeddedcode,1);
     
     lua_pushstring(ls->L,getstr(ls->source));
     lua_pushboolean(ls->L,isstatement);
