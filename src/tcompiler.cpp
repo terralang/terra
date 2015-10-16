@@ -48,6 +48,7 @@ using namespace llvm;
     _(llvmsizeof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
+    _(bindtoluaapi,0) \
     _(gcdebug,0) \
     _(saveobjimpl,1) \
     _(linklibraryimpl,1) \
@@ -2804,6 +2805,14 @@ static int terra_saveobjimpl(lua_State * L) {
 
 static int terra_pointertolightuserdata(lua_State * L) {
     lua_pushlightuserdata(L, terra_tocdatapointer(L, -1));
+    return 1;
+}
+static int terra_bindtoluaapi(lua_State * L) {
+    int N = lua_gettop(L);
+    assert(N >= 1);
+    void ** fn = (void**) lua_topointer(L,1);
+    assert(fn);
+    lua_pushcclosure(L, (lua_CFunction) *fn, N - 1);
     return 1;
 }
 #ifdef _WIN32
