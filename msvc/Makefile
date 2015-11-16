@@ -71,7 +71,7 @@ $(LUAJIT) $(TERRA_DIR)\release\include\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	copy lauxlib.h $(TERRA_DIR)\release\include\terra
 	copy luaconf.h $(TERRA_DIR)\release\include\terra
 
-$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT)
+$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\lua.h
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
 	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
 	$(LUAJIT) -bg $(SRC)\strict.lua $(BUILD)\strict.h
