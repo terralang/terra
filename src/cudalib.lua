@@ -10,7 +10,7 @@ local ffi = require('ffi')
 
 local cudapaths = { OSX = {"/usr/local/cuda/lib/libcuda.dylib", "$CUDA_HOME/lib/libcudart.dylib"}; 
                     Linux =  {"libcuda.so", "$CUDA_HOME/lib64/libcudart.so"}; 
-                    Windows = {"nvcuda.dll", "$CUDA_HOME\\bin\\cudart64_65.dll"}; }
+                    Windows = {"nvcuda.dll", "$CUDA_HOME\\bin\\cudart64_70.dll"}; }
 local cudaruntimelinked = false
 function cudalib.linkruntime(cudahome)
     if cudaruntimelinked then return end

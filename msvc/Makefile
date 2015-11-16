@@ -5,10 +5,10 @@
 # (3) directory where you downloaded the Terra source
 # all paths must be ABSOLUTE
 
-LLVM_DIR=C:\Users\zdevito\LLVM
-LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
-TERRA_DIR=C:\Users\zdevito\terra
-CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
+LLVM_DIR=E:\Work\DSL\LLVM
+LUAJIT_DIR=E:\Work\DSL\LuaJIT-2.0.4
+TERRA_DIR=E:\Work\DSL\terra
+CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0
 
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build

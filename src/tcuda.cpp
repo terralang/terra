@@ -38,7 +38,7 @@ extern "C" {
 #ifdef __linux__
 static const char * libnvvm = "/nvvm/lib64/libnvvm.so";
 #elif _WIN32
-static const char * libnvvm= "\\nvvm\\bin\\nvvm64_20_0.dll";
+static const char * libnvvm= "\\nvvm\\bin\\nvvm64_30_0.dll";
 #else
 static const char * libnvvm = "/nvvm/lib/libnvvm.dylib";
 #endif
