@@ -320,6 +320,7 @@ int terra_initcompilationunit(lua_State * L) {
         CU->fpm = new FunctionPassManager(CU->M);
         llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
         llvmutil_addoptimizationpasses(CU->fpm);
+        CU->fpm->doInitialization(); 
     }
     lua_pushlightuserdata(L, CU);
     return 1;
