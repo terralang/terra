@@ -1416,13 +1416,13 @@ struct FunctionEmitter {
     }
     Value * emitCompare(T_Kind op, TType * t, Value * a, Value * b) {
         Type * baseT = getPrimitiveType(t);
-#define RETURN_OP(op) \
+#define RETURN_OP(op,u) \
 if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     return B->CreateICmp(CmpInst::ICMP_##op,a,b); \
 } else { \
-    return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
+    return B->CreateFCmp(CmpInst::FCMP_##u##op,a,b); \
 }
-#define RETURN_SOP(op) \
+#define RETURN_SOP(op,u) \
 if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
     if(t->issigned) { \
         return B->CreateICmp(CmpInst::ICMP_S##op,a,b); \
@@ -1430,16 +1430,16 @@ if(baseT->isIntegerTy() || t->type->isPointerTy()) { \
         return B->CreateICmp(CmpInst::ICMP_U##op,a,b); \
     } \
 } else { \
-    return B->CreateFCmp(CmpInst::FCMP_O##op,a,b); \
+    return B->CreateFCmp(CmpInst::FCMP_##u##op,a,b); \
 }
         
         switch(op) {
-            case T_ne: RETURN_OP(NE) break;
-            case T_eq: RETURN_OP(EQ) break;
-            case T_lt: RETURN_SOP(LT) break;
-            case T_gt: RETURN_SOP(GT) break;
-            case T_ge: RETURN_SOP(GE) break;
-            case T_le: RETURN_SOP(LE) break;
+            case T_ne: RETURN_OP(NE,U) break;
+            case T_eq: RETURN_OP(EQ,O) break;
+            case T_lt: RETURN_SOP(LT,O) break;
+            case T_gt: RETURN_SOP(GT,O) break;
+            case T_ge: RETURN_SOP(GE,O) break;
+            case T_le: RETURN_SOP(LE,O) break;
             default: 
                 assert(!"unknown op");
                 return NULL;
