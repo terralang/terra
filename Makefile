@@ -24,9 +24,9 @@ CLANG ?= $(CLANG_PREFIX)/bin/clang
 
 #path to the compiler you want to use to compile libterra
 #can be any c/c++ compiler
-TERRA_CXX ?= $(CLANG)++
-TERRA_CC  ?= $(CLANG)
-TERRA_LINK ?= $(CLANG)++
+TERRA_CXX ?= $(CLANG)++ $(TARGET_ARCH)
+TERRA_CC  ?= $(CLANG) $(TARGET_ARCH)
+TERRA_LINK ?= $(CLANG)++ $(TARGET_ARCH)
 
 CUDA_HOME ?= /usr/local/cuda
 ENABLE_CUDA ?= $(shell test -e /usr/local/cuda && echo 1 || echo 0)
@@ -137,10 +137,10 @@ BIN2C = build/bin2c
 #put any install-specific stuff in here
 -include Makefile.inc
 
-.PHONY:	all clean purge test release
+.PHONY:	all clean purge test release tests
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
-test:	$(EXECUTABLE)
+test tests:	$(EXECUTABLE)
 	(cd tests; ./run)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
@@ -158,16 +158,19 @@ endif
 
 $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
+	# Terra does not work on x86 32bit.
+	(cd $(LUAJIT_DIR); test ! -n "`$(CC) -E -dM src/lj_arch.h | grep '\<LJ_TARGET_X86\>'`" )
+	(cd $(LUAJIT_DIR); make CC="$(CC)" STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
 	
 build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
 	mkdir -p build/dep_objects/luajit
-	$(TERRA_LINK) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
+	$(TERRA_LINK) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list.tmp
 	# extract needed LLVM objects based on a dummy linker invocation
-	< build/dep_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
+	< build/dep_objects/llvm_list.tmp $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
 	# include all luajit objects, since the entire lua interface is used in terra 
 	cd build/dep_objects/luajit; ar x ../../../$(LUAJIT_LIB)
+	mv build/dep_objects/llvm_list.tmp build/dep_objects/llvm_list
 	
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
 	mkdir -p release/lib

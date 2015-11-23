@@ -2696,6 +2696,11 @@ static bool SaveAndLink(TerraCompilationUnit * CU, Module * M, std::vector<const
         cmd.insert(cmd.end(),linkargs->begin(),linkargs->end());
     
 #ifndef _WIN32
+#if defined(__amd64__)
+	cmd.push_back("-m64");
+#elif defined(__i386__)
+	#error "Only AMD64 target currently supported on x86"
+#endif
     cmd.push_back("-o");
     cmd.push_back(filename);
 #else
