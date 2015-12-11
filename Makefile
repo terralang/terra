@@ -1,38 +1,29 @@
 
 # If the defaults for LLVM_CONFIG are not right for your installation
 # create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution
-# you may also need to reassign the TERRA_CXX and TERRA_CC compilers if they are not valid.
 # If you want to enable cuda compiler support is enabled if the path specified by
 # CUDA_HOME exists
 
 -include Makefile.inc
 
-LLVM_CONFIG ?= $(shell which llvm-config)
+# Debian packages name llvm-config with a version number - list them here in preference order
+LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
+
+# same with clang
+CLANG ?= $(shell which clang-3.5 clang | head -1)
 
 LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 
 #if clang is not installed in the same prefix as llvm
 #then use the clang in the caller's path
 ifeq ($(wildcard $(LLVM_PREFIX)/bin/clang),)
-CLANG_PREFIX ?= $(dir $(shell which clang))..
+CLANG_PREFIX ?= $(dir $(CLANG))..
 else
 CLANG_PREFIX ?= $(LLVM_PREFIX)
 endif
 
-#path to the clang binary, must be specifically clang
-CLANG ?= $(CLANG_PREFIX)/bin/clang
-
-#path to the compiler you want to use to compile libterra
-#can be any c/c++ compiler
-TERRA_CXX ?= $(CLANG)++
-TERRA_CC  ?= $(CLANG)
-TERRA_LINK ?= $(CLANG)++
-
 CUDA_HOME ?= /usr/local/cuda
 ENABLE_CUDA ?= $(shell test -e /usr/local/cuda && echo 1 || echo 0)
-
-CXX := $(TERRA_CXX)
-CC := $(TERRA_CC)
 
 .SUFFIXES:
 .SECONDARY:
@@ -61,7 +52,11 @@ LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 ifneq ($(LLVM_VERSION), 32)
-CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
+  ifeq ($(findstring $(CXX),clang),clang)
+    CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
+  else
+    CPPFLAGS = -std=c++11 -Wno-narrowing
+  endif
 endif
 
 
@@ -160,15 +155,15 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
-	
+
 build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
 	mkdir -p build/dep_objects/luajit
-	$(TERRA_LINK) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/dep_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
 	# include all luajit objects, since the entire lua interface is used in terra 
 	cd build/dep_objects/luajit; ar x ../../../$(LUAJIT_LIB)
-	
+
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
 	mkdir -p release/lib
 	rm -f $(LIBRARY)
@@ -176,11 +171,11 @@ $(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
 	ranlib $@
 
 $(DYNLIBRARY):	$(LIBRARY)
-	$(TERRA_LINK) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
+	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	mkdir -p release/bin release/lib
-	$(TERRA_LINK) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
+	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 $(BIN2C):	src/bin2c.c
@@ -215,7 +210,7 @@ release:
 	mv release $(RELEASE_NAME)
 	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release
-    
+
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
 build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
