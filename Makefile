@@ -54,14 +54,15 @@ LUAJIT_LIB=build/$(LUAJIT_VERSION)/src/libluajit.a
 
 FLAGS += -I build -I release/include/terra -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
-FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-rtti -fno-common -Woverloaded-virtual -Wcast-qual -fvisibility-inlines-hidden
+FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-common -Wcast-qual
+CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 ifneq ($(LLVM_VERSION), 32)
-CPPFLAGS = -std=c++11 -Wno-c++11-narrowing
+CPPFLAGS += -std=c++11
 endif
 
 
@@ -188,8 +189,9 @@ $(BIN2C):	src/bin2c.c
 
 
 #rule for packaging lua code into a header file
+# fix narrowing warnings by using unsigned char
 build/%.h:	src/%.lua $(PACKAGE_DEPS)
-	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg $< $@
+	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg $< -t h - | sed "s/char/unsigned char/" > $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper

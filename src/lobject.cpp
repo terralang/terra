@@ -35,7 +35,7 @@ static luaP_Number luaP_strx2number (const char *s, char **endptr) {
   luaP_Number r = 0.0;
   int e = 0, i = 0;
   int neg = 0;  /* 1 if number is negative */
-  *endptr = cast(char *, s);  /* nothing is valid yet */
+  *endptr = const_cast<char *>(cast(const char *, s));  /* nothing is valid yet */
   while (lisspace(cast_uchar(*s))) s++;  /* skip initial spaces */
   neg = isneg(&s);  /* check signal */
   if (!(*s == '0' && (*(s + 1) == 'x' || *(s + 1) == 'X')))  /* check '0x' */
@@ -49,7 +49,7 @@ static luaP_Number luaP_strx2number (const char *s, char **endptr) {
   if (i == 0 && e == 0)
     return 0.0;  /* invalid format (no digit) */
   e *= -4;  /* each fractional digit divides value by 2^-4 */
-  *endptr = cast(char *, s);  /* valid up to here */
+  *endptr = const_cast<char *>(cast(const char *, s));  /* valid up to here */
   if (*s == 'p' || *s == 'P') {  /* exponent part? */
     int exp1 = 0;
     int neg1;
@@ -62,7 +62,7 @@ static luaP_Number luaP_strx2number (const char *s, char **endptr) {
     if (neg1) exp1 = -exp1;
     e += exp1;
   }
-  *endptr = cast(char *, s);  /* valid up to here */
+  *endptr = const_cast<char *>(cast(const char *, s));  /* valid up to here */
  ret:
   if (neg) r = -r;
   return ldexp(r, e);

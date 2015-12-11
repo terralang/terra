@@ -13,7 +13,7 @@ static inline void * terra_tocdatapointer(lua_State * L, int idx) {
     if(10 != lua_type(L,idx)) return NULL; //not a cdata, 10 is from LuaJIT sources since it is not exposed in the normal API
     //argument is a 'cdata'.
     //calling topointer on it will return a pointer to the cdata payload
-    void ** cdata = (void**) lua_topointer(L,idx);
+    void * const * cdata = (void * const *) lua_topointer(L,idx);
     if(!cdata) return NULL;
     return *cdata;
 }

@@ -1403,11 +1403,10 @@ static void assignment (LexState *ls, int nvars, int lhs) {
     RETURNS_0(assignment(ls, nvars+1,lhs));
   }
   else {  /* assignment -> `=' explist */
-    int nexps;
     checknext(ls, '=');
     int tbl = new_table_before(ls,T_assignment, true);
     add_field(ls,tbl,"lhs");
-    RETURNS_1(nexps = explist(ls));
+    RETURNS_1(explist(ls));
     add_field(ls,tbl,"rhs");
   }
   //init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
@@ -1701,7 +1700,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
     
     std::vector<Name> names;
     std::vector<TDefn> defs;
-    int nlocals = 0;
+    size_t nlocals = 0;
     
     TerraCnt tc;
     
@@ -1803,12 +1802,10 @@ static void exprstat (LexState *ls) {
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
   int tbl = new_table(ls,T_return);
-  int first, nret;  /* registers with returned values */
   if (block_follow(ls, 1) || ls->t.token == ';') {
-    first = nret = 0;  /* return no values */
     new_list(ls);
   } else {
-    RETURNS_1(nret = explist(ls));  /* optional return values */
+    RETURNS_1(explist(ls));  /* optional return values */
   }
   add_field(ls,tbl,"expressions");
   testnext(ls, ';');  /* skip optional semicolon */
@@ -1942,7 +1939,7 @@ static void le_handleerror(LexState * ls) {
   lua_error(ls->L); /* does not return */
 }
 static int le_next(lua_State * L) {
-    LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
+    LexState * ls = const_cast<LexState*>((const LexState *) lua_topointer(L,lua_upvalueindex(1)));
     try {
       luaX_next(ls);
     } catch(...) {
@@ -2003,13 +2000,13 @@ static void converttokentolua(LexState * ls, Token * t) {
 }
 
 static int le_cur(lua_State * L) {
-    LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
+    LexState * ls = const_cast<LexState*>((const LexState *) lua_topointer(L,lua_upvalueindex(1)));
     converttokentolua(ls, &ls->t);
     table_setposition(ls, lua_gettop(ls->L), ls->linenumber, ls->currentoffset - 1);
     return 1;
 }
 static int le_lookahead(lua_State * L) {
-    LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
+    LexState * ls = const_cast<LexState*>((const LexState *) lua_topointer(L,lua_upvalueindex(1)));
     try {
       luaX_lookahead(ls);
       converttokentolua(ls, &ls->lookahead);
@@ -2020,7 +2017,7 @@ static int le_lookahead(lua_State * L) {
 }
 
 static int le_embeddedcode(lua_State * L) {
-  LexState * ls = (LexState*) lua_topointer(L,lua_upvalueindex(1));
+  LexState * ls = const_cast<LexState*>((const LexState *) lua_topointer(L,lua_upvalueindex(1)));
   bool isterra = lua_toboolean(L,1);
   bool isexp = lua_toboolean(L,2);
   try {
