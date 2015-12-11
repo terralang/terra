@@ -63,7 +63,7 @@ void setupcrashsignal(lua_State * L) {
     const void * tb = lua_topointer(L,-1);
     if(!tb)
         return; //debug not supported
-    terratraceback = *(void(**)(void*))tb;
+    terratraceback = *(void(* const *)(void*))tb;
 	registerhandler();
     lua_pop(L,2);
 }

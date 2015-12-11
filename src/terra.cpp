@@ -70,7 +70,7 @@ void terra_reporterror(terra_State * T, const char * fmt, ...) {
 }
 
 terra_State * terra_getstate(lua_State * L, int upvalue) {
-    terra_State * T = (terra_State*) lua_topointer(L,lua_upvalueindex(upvalue));
+    terra_State * T = const_cast<terra_State *>((const terra_State *) lua_topointer(L,lua_upvalueindex(upvalue)));
     assert(T);
     T->L = L;
     return T;
@@ -147,8 +147,8 @@ int terra_lualoadstring(lua_State * L) {
 //defines strict.lua bytecodes
 #include "strict.h"
 
-int terra_loadandrunbytecodes(lua_State * L, const char * bytecodes, size_t size, const char * name) {
-    return luaL_loadbuffer(L, bytecodes, size, name) 
+int terra_loadandrunbytecodes(lua_State * L, const unsigned char * bytecodes, size_t size, const char * name) {
+  return luaL_loadbuffer(L, (const char *)bytecodes, size, name) 
            || lua_pcall(L,0,LUA_MULTRET,0);
 }
 

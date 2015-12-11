@@ -1621,6 +1621,8 @@ if(baseT->isIntegerTy()) { \
         }
 #undef RETURN_OP
 #undef RETURN_SOP
+	// should not be reachable - every case above should either return or assert
+	return 0;
     }
     Value * emitStructCast(Obj * exp, TType * from, Obj * toObj, TType * to, Value * input) {
         //allocate memory to hold input variable
@@ -2057,6 +2059,8 @@ if(baseT->isIntegerTy()) { \
                 assert(!"NYI - exp");
             } break;
         }
+	// should not be reachable - every case above should either return or assert
+	return 0;
     }
     BasicBlock * createAndInsertBB(StringRef name) {
         return BasicBlock::Create(*CU->TT->ctx, name,func);
@@ -2811,7 +2815,7 @@ static int terra_pointertolightuserdata(lua_State * L) {
 static int terra_bindtoluaapi(lua_State * L) {
     int N = lua_gettop(L);
     assert(N >= 1);
-    void ** fn = (void**) lua_topointer(L,1);
+    void * const * fn = (void * const *) lua_topointer(L,1);
     assert(fn);
     lua_pushcclosure(L, (lua_CFunction) *fn, N - 1);
     return 1;

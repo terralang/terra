@@ -26,7 +26,7 @@ static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNex
 }
 static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> & LineStarts = fi->efd.LineStarts;
-    int i;
+    size_t i;
     for(i = 0; i + 1 < LineStarts.size() && pointisbeforeinstruction(LineStarts[i + 1].Address, ip, isNextInstr); i++) {
         //printf("\nscanning for %p, %s:%d %p\n",(void*)ip,DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename().data(),(int)LineStarts[i].Loc.getLine(),(void*)LineStarts[i].Address);
     }
@@ -98,7 +98,7 @@ static void stacktrace_printsourceline(const char * filename, size_t lineno) {
     if(!file)
         return;
     int c = fgetc(file);
-    for(int i = 1; i < lineno && c != EOF;) {
+    for(size_t i = 1; i < lineno && c != EOF;) {
         if(c == '\n')
             i++;
         c = fgetc(file);
