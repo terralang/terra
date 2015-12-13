@@ -657,8 +657,9 @@ public:
   virtual ~LuaOverlayFileSystem() {}
 
   virtual llvm::ErrorOr<clang::vfs::Status> status(const llvm::Twine &Path) override {
+    static const std::error_code noSuchFileErr = std::make_error_code(std::errc::no_such_file_or_directory);
     llvm::ErrorOr<clang::vfs::Status> RealStatus = RFS->status(Path);
-    if (RealStatus || RealStatus.getError() != std::errc::no_such_file_or_directory)
+    if (RealStatus || RealStatus.getError() != noSuchFileErr)
         return RealStatus;
     clang::vfs::Status Status;
     StringRef Buffer;
