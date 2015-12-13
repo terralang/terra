@@ -12,6 +12,9 @@ LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
 # same with clang
 CLANG ?= $(shell which clang-3.5 clang | head -1)
 
+CXX ?= $(CLANG)++
+CC ?= $(CLANG)
+
 LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 
 #if clang is not installed in the same prefix as llvm
