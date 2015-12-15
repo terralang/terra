@@ -26,7 +26,7 @@ CLANG_PREFIX ?= $(LLVM_PREFIX)
 endif
 
 CUDA_HOME ?= /usr/local/cuda
-ENABLE_CUDA ?= $(shell test -e /usr/local/cuda && echo 1 || echo 0)
+ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 
 .SUFFIXES:
 .SECONDARY:
