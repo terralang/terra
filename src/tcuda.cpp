@@ -148,7 +148,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
 static std::string sanitizeName(std::string name) {
     std::string s;
     llvm::raw_string_ostream out(s);
-    for(int i = 0; i < name.size(); i++) {
+    for(size_t i = 0; i < name.size(); i++) {
         char c = name[i];
         if(isalnum(c) || c == '_')
             out << c;
@@ -173,7 +173,7 @@ int terra_toptx(lua_State * L) {
     int minor = version % 10;
 
     int N = lua_objlen(L,annotations);
-    for(size_t i = 0; i < N; i++) {
+    for(int i = 0; i < N; i++) {
         lua_rawgeti(L,annotations,i+1); // {kernel,annotation,value}
         lua_rawgeti(L,-1,1); //kernel name
         lua_rawgeti(L,-2,2); // annotation name
@@ -190,7 +190,7 @@ int terra_toptx(lua_State * L) {
     //sanitize names
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         const char * prefix = "cudart:";
-        int prefixsize = strlen(prefix);
+        size_t prefixsize = strlen(prefix);
         std::string name = it->getName();
         if(name.size() >= prefixsize && name.substr(0,prefixsize) == prefix) {
             std::string shortname = name.substr(prefixsize);
