@@ -55,7 +55,7 @@ static const char * libnvvm = "/nvvm/lib/libnvvm.dylib";
 
 struct terra_CUDAState {
     int initialized;
-    #define INIT_SYM(x) decltype(&x) x;
+    #define INIT_SYM(x) decltype(&::x) x;
     CUDA_SYM(INIT_SYM)
     #undef INIT_SYM    
 };
