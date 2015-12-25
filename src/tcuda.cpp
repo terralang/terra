@@ -237,7 +237,7 @@ int terra_cudainit(struct terra_State * T) {
     lua_pushcclosure(T->L,terra_toptx,1);
     lua_setfield(T->L,-2,"toptximpl");
 
-    int err = terra_loadandrunbytecodes(T->L, luaJIT_BC_cudalib,luaJIT_BC_cudalib_SIZE, "cudalib.lua");
+    int err = terra_loadandrunbytecodes(T->L, (const unsigned char *)luaJIT_BC_cudalib,luaJIT_BC_cudalib_SIZE, "cudalib.lua");
     if(err) {
         return err;
     }
