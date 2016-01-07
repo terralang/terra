@@ -81,6 +81,13 @@ LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
 LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+
+ifeq ($(UNAME), Linux)
+SUPPORT_LIBRARY_FLAGS = -L$(dir $(LUAJIT_LIB)) -Wl,-Bstatic -Wl,--whole-archive -lluajit -Wl,-Bdynamic -Wl,--no-whole-archive
+else
+SUPPORT_LIBRARY_FLAGS = -Wl,-force-load,$(LUAJIT_LIB)
+endif
+
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lcurses 
@@ -111,7 +118,7 @@ ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))
 FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
-LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o
+LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o lj_strscan.o
 LIBLUA = terralib.lua strict.lua cudalib.lua
 
 EXEOBJS = main.o linenoise.o
@@ -156,13 +163,11 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
 
-build/dep_objects/llvm_list:    $(LUAJIT_LIB) $(addprefix build/, $(LIBOBJS))
-	mkdir -p build/dep_objects/luajit
+build/dep_objects/llvm_list:    $(addprefix build/, $(LIBOBJS))
+	mkdir -p build/dep_objects
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/dep_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
-	# include all luajit objects, since the entire lua interface is used in terra 
-	cd build/dep_objects/luajit; ar x ../../../$(LUAJIT_LIB)
 
 $(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
 	mkdir -p release/lib
