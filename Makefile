@@ -85,7 +85,7 @@ LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 ifeq ($(UNAME), Linux)
 SUPPORT_LIBRARY_FLAGS = -L$(dir $(LUAJIT_LIB)) -Wl,-Bstatic -Wl,--whole-archive -lluajit -Wl,-Bdynamic -Wl,--no-whole-archive
 else
-SUPPORT_LIBRARY_FLAGS = -Wl,-force-load,$(LUAJIT_LIB)
+SUPPORT_LIBRARY_FLAGS = -Wl,-force_load,$(LUAJIT_LIB)
 endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
