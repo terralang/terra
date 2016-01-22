@@ -164,9 +164,9 @@ build/$(LUAJIT_VERSION)/src/libluajit.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 
-$(RELEASE_HEADERS):  $(LUAJIT_LIB)
-	cp $(addprefix $(LUAJIT_INCLUDE)/,$(LUAHEADERS)) release/include/terra
-
+release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
+	cp $(LUAJIT_INCLUDE)/$*.h $@
+    
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
