@@ -82,12 +82,6 @@ endif
 
 LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 
-ifeq ($(UNAME), Linux)
-SUPPORT_LIBRARY_FLAGS = -L$(dir $(LUAJIT_LIB)) -Wl,-Bstatic -Wl,--whole-archive -lluajit -Wl,-Bdynamic -Wl,--no-whole-archive
-else
-SUPPORT_LIBRARY_FLAGS = -Wl,-force_load,$(LUAJIT_LIB)
-endif
-
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lcurses 
@@ -132,6 +126,9 @@ OBJS = $(LIBOBJS) $(EXEOBJS)
 
 EXECUTABLE = release/bin/terra
 LIBRARY = release/lib/libterra.a
+LIBRARY_NOLUA = release/lib/libterra_nolua.a
+LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
+LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 DYNLIBRARY = release/lib/libterra_dynamic.so
 
 BIN2C = build/bin2c
@@ -144,6 +141,8 @@ all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	$(EXECUTABLE)
 	(cd tests; ./run)
+
+variants:	$(LIBRARY_VARIANTS)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 	$(CXX) $(FLAGS) $(CPPFLAGS) $< -c -o $@
@@ -163,17 +162,33 @@ $(LUAJIT_LIB): build/$(LUAJIT_TAR)
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
 	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
 
-build/dep_objects/llvm_list:    $(addprefix build/, $(LIBOBJS))
-	mkdir -p build/dep_objects
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/dep_objects/llvm_list
+build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
+	mkdir -p build/llvm_objects/luajit
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
-	< build/dep_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/dep_objects
+	< build/llvm_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/llvm_objects
+	# include all luajit objects, since the entire lua interface is used in terra 
 
-$(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/dep_objects/llvm_list
+
+build/lua_objects/lj_obj.o:    $(LUAJIT_LIB)
+	mkdir -p build/lua_objects
+	cd build/lua_objects; ar x ../../$(LUAJIT_LIB)
+
+$(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
 	mkdir -p release/lib
-	rm -f $(LIBRARY)
-	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/dep_objects/*/*.o
+	rm -f $@
+	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/llvm_objects/*/*.o build/lua_objects/*.o
 	ranlib $@
+
+$(LIBRARY_NOLUA): 	$(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list
+	mkdir -p release/lib
+	rm -f $@
+	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/llvm_objects/*/*.o
+
+$(LIBRARY_NOLUA_NOLLVM): 	$(addprefix build/, $(LIBOBJS))
+	mkdir -p release/lib
+	rm -f $@
+	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
 
 $(DYNLIBRARY):	$(LIBRARY)
 	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
@@ -203,7 +218,7 @@ build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(DYNLIBRARY) build/dep_objects
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM) $(DYNLIBRARY) build/dep_objects
 
 purge:	clean
 	rm -rf build/* $(addprefix release/include/terra,$(LUAHEADERS))
