@@ -43,10 +43,13 @@ LUAJIT_VERSION ?= LuaJIT-2.0.4
 LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
-
+# the rest of the build process requires these to be set correctly, override if you want to use your own copy of LUAJIT
 LUAJIT_LIB ?= build/$(LUAJIT_VERSION)/src/libluajit.a
+LUAJIT_INCLUDE ?= $(LUAJIT_DIR)/src
+LUAJIT_PATH ?= $(LUAJIT_DIR)/src/?.lua
+LUAJIT ?= $(LUAJIT_DIR)/src/luajit
 
-FLAGS += -I build -I release/include/terra -I $(LUAJIT_DIR)/src -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
+FLAGS += -I build -I release/include/terra -I $(LUAJIT_INCLUDE) -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-common -Wcast-qual
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
@@ -130,7 +133,7 @@ LIBRARY_NOLUA = release/lib/libterra_nolua.a
 LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 DYNLIBRARY = release/lib/libterra_dynamic.so
-
+RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 BIN2C = build/bin2c
 
 #put any install-specific stuff in here
@@ -157,35 +160,37 @@ else
 	wget $(LUAJIT_URL) -O build/$(LUAJIT_TAR)
 endif
 
-$(LUAJIT_LIB): build/$(LUAJIT_TAR)
+build/$(LUAJIT_VERSION)/src/libluajit.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	(cd $(LUAJIT_DIR); make CC=$(CC) STATIC_CC="$(CC) -fPIC")
-	cp $(addprefix $(LUAJIT_DIR)/src/,$(LUAHEADERS)) release/include/terra
+
+$(RELEASE_HEADERS):  $(LUAJIT_LIB)
+	cp $(addprefix $(LUAJIT_INCLUDE)/,$(LUAHEADERS)) release/include/terra
 
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
-	< build/llvm_objects/llvm_list $(LUAJIT_DIR)/src/luajit src/unpacklibraries.lua build/llvm_objects
+	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
 	# include all luajit objects, since the entire lua interface is used in terra 
 
 
 build/lua_objects/lj_obj.o:    $(LUAJIT_LIB)
 	mkdir -p build/lua_objects
-	cd build/lua_objects; ar x ../../$(LUAJIT_LIB)
+	cd build/lua_objects; ar x $(realpath $(LUAJIT_LIB))
 
-$(LIBRARY):	$(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
+$(LIBRARY):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
 	mkdir -p release/lib
 	rm -f $@
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/llvm_objects/*/*.o build/lua_objects/*.o
 	ranlib $@
 
-$(LIBRARY_NOLUA): 	$(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list
+$(LIBRARY_NOLUA): 	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list
 	mkdir -p release/lib
 	rm -f $@
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS)) build/llvm_objects/*/*.o
 
-$(LIBRARY_NOLUA_NOLLVM): 	$(addprefix build/, $(LIBOBJS))
+$(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 	mkdir -p release/lib
 	rm -f $@
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
@@ -205,20 +210,20 @@ $(BIN2C):	src/bin2c.c
 #rule for packaging lua code into a header file
 # fix narrowing warnings by using unsigned char
 build/%.h:	src/%.lua $(PACKAGE_DEPS)
-	LUA_PATH=$(LUAJIT_DIR)/src/?.lua $(LUAJIT_DIR)/src/luajit -bg $< -t h - | sed "s/char/unsigned char/" > $@
+	LUA_PATH=$(LUAJIT_PATH) $(LUAJIT) -bg $< -t h - | sed "s/char/unsigned char/" > $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(LUAJIT_DIR)/src/luajit src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
+	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua
-	$(LUAJIT_DIR)/src/luajit src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
+	$(LUAJIT) src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM) $(DYNLIBRARY) build/dep_objects
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM) $(DYNLIBRARY) $(RELEASE_HEADERS) build/llvm_objects build/lua_objects
 
 purge:	clean
 	rm -rf build/* $(addprefix release/include/terra,$(LUAHEADERS))
