@@ -387,4 +387,17 @@ namespace llvm {
 void terra_llvmshutdown() { 
     llvm::llvm_shutdown();
 }
-
+//for require
+extern "C" int luaopen_libterra_dynamic(lua_State * L) {
+    terra_Options options;
+    memset(&options,0, sizeof(terra_Options));
+    if(!lua_isnil(L,1))
+        options.verbose = lua_tonumber(L,1);
+    if(!lua_isnil(L,2))
+        options.debug = lua_tonumber(L,2);
+    if(!lua_isnil(L,3))
+        options.usemcjit = lua_tonumber(L,3);
+    if(terra_initwithoptions(L,&options))
+        lua_error(L);
+    return 0;
+}
