@@ -139,7 +139,7 @@ BIN2C = build/bin2c
 #put any install-specific stuff in here
 -include Makefile.inc
 
-.PHONY:	all clean purge test release
+.PHONY:	all clean purge test release install
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	$(EXECUTABLE)
@@ -236,6 +236,10 @@ release:
 	mv release $(RELEASE_NAME)
 	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release
+
+PREFIX ?= /usr/local
+install: all
+	cp -R release/* $(PREFIX)
 
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
