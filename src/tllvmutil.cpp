@@ -3,8 +3,12 @@
 #include <stdio.h>
 
 #include "tllvmutil.h"
-#include "llvm/Target/TargetLibraryInfo.h"
 
+#if LLVM_VERSION <= 36
+#include "llvm/Target/TargetLibraryInfo.h"
+#else
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#endif
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCDisassembler.h"
 #include "llvm/MC/MCInst.h"
@@ -24,28 +28,30 @@
 using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM) {
+    assert(TM && fpm);
+#if LLVM_VERSION >= 37
+    TargetLibraryInfoImpl TLII(TM->getTargetTriple());
+    fpm->add(new TargetLibraryInfoWrapperPass(TLII));
+#else
     TargetLibraryInfo * TLI = new TargetLibraryInfo(Triple(TM->getTargetTriple()));
-#if defined(TERRA_ENABLE_CUDA) && defined(__APPLE__)
-    //currently there isn't a seperate pathway for optimization when code will be running on CUDA
-    //so we need to avoid generating functions that don't exist there like memset_pattern16 for all code
-    //we only do this if cuda is enabled on OSX where the problem occurs to avoid slowing down other code
-    TLI->setUnavailable(LibFunc::memset_pattern16);
-#endif
     fpm->add(TLI);
+#endif
     DataLayout * TD = new DataLayout(*GetDataLayout(TM));
+    (void) TD;
 #if LLVM_VERSION <= 34
     fpm->add(TD);
 #elif LLVM_VERSION == 35
     fpm->add(new DataLayoutPass(*TD));
-#else
-    (void) TD;
+#elif LLVM_VERSION == 36
     fpm->add(new DataLayoutPass());
+#else
+    fpm->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 #endif
     
 #if LLVM_VERSION == 32
     fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
                                      TM->getVectorTargetTransformInfo()));
-#elif LLVM_VERSION >= 33
+#elif LLVM_VERSION >= 33 && LLVM_VERSION <= 36
     TM->addAnalysisPasses(*fpm);
 #endif
 }
@@ -121,8 +127,16 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
     assert(DisAsm && "Unable to create disassembler!");
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
-    MCInstPrinter *IP = TheTarget->createMCInstPrinter(AsmPrinterVariant,
-                                                     *MAI, *MII, *MRI, *STI);
+    MCInstPrinter *IP = TheTarget->createMCInstPrinter(
+                                                      #if LLVM_VERSION >= 37
+                                                      Triple(TripleName),
+                                                      #endif
+                                                      AsmPrinterVariant,
+                                                     *MAI, *MII, *MRI
+                                                     #if LLVM_VERSION <= 36
+                                                     , *STI
+                                                     #endif
+                                                     );
     assert(IP && "Unable to create instruction printer!");
 
     #if LLVM_VERSION < 36
@@ -145,7 +159,11 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
         if(MCDisassembler::Fail == S || MCDisassembler::SoftFail == S)
             break;
         Out << (void*) ((uintptr_t)data + b) << "(+" << b << ")" << ":\t";
-        IP->printInst(&Inst,Out,"");
+        IP->printInst(&Inst,Out,""
+        #if LLVM_VERSION >= 37
+        , *STI
+        #endif
+        );
         Out << "\n";
     }
     Out.flush();
@@ -153,21 +171,24 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
 }
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
-bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, raw_ostream & dest) {
+bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, emitobjfile_t & dest) {
 
     PassManager pass;
-
     llvmutil_addtargetspecificpasses(&pass, TM);
     
     TargetMachine::CodeGenFileType ft = outputobjectfile? TargetMachine::CGFT_ObjectFile : TargetMachine::CGFT_AssemblyFile;
     
+    #if LLVM_VERSION <= 36
     formatted_raw_ostream destf(dest);
-    
+    #else
+    emitobjfile_t & destf = dest;
+    #endif
     if (TM->addPassesToEmitFile(pass, destf, ft)) {
         return true;
     }
 
     pass.run(*Mod);
+    
     destf.flush();
     dest.flush();
 
@@ -183,7 +204,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
     void * data;
     ValueToValueMapTy & VMap;
     DIBuilder * DI;
+    #ifdef DEBUG_INFO_WORKING
     DICompileUnit NCU;
+    #endif
     CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
     : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_), DI(NULL) {}
     
@@ -198,12 +221,14 @@ struct CopyConnectedComponent : public ValueMaterializer {
             #endif
             }
         }
-
+        #ifdef DEBUG_INFO_WORKING
         if(NamedMDNode * CUN = src->getNamedMetadata("llvm.dbg.cu")) {
             DI = new DIBuilder(*dest);
+            
             DICompileUnit CU(CUN->getOperand(0));
             NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
         }
+        #endif
     }
     bool needsFreshlyNamedConstant(GlobalVariable * GV, GlobalVariable * newGV) {
         if(GV->isConstant() && GV->hasPrivateLinkage() && GV->hasUnnamedAddr()) { //this is a candidate constant
@@ -244,12 +269,14 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 }
             }
             return newGV;
+        }
+#ifdef DEBUG_INFO_WORKING
 #if LLVM_VERSION <= 35
-        } else if(MDNode * MD = dyn_cast<MDNode>(V)) {
+        else if(MDNode * MD = dyn_cast<MDNode>(V)) {
             DISubprogram SP(MD);
             if(DI != NULL && SP.isSubprogram()) {
 #else
-        } else if(auto * MDV = dyn_cast<MetadataAsValue>(V)) {
+        else if(auto * MDV = dyn_cast<MetadataAsValue>(V)) {
             Metadata * MDraw = MDV->getMetadata();
             MDNode * MD = dyn_cast<MDNode>(MDraw);
             DISubprogram SP(MD);
@@ -275,6 +302,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
             /* fallthrough */
         }
+#endif
         return NULL;
     }
     void finalize() {

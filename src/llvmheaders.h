@@ -17,7 +17,12 @@
 #include "llvm/Analysis/Passes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 
+#if LLVM_VERSION <= 36
 #include "llvm/PassManager.h"
+#else
+#include "llvm/IR/LegacyPassManager.h"
+#endif
+
 #include "llvm/Support/Host.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
@@ -46,11 +51,13 @@
 #include "llvmheaders_35.h"
 #elif LLVM_VERSION == 36
 #include "llvmheaders_36.h"
+#elif LLVM_VERSION == 37
+#include "llvmheaders_37.h"
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
-#define LLVM_VERSION 36
-#include "llvmheaders_36.h"
+#define LLVM_VERSION 37
+#include "llvmheaders_37.h"
 #endif
 
 #if LLVM_VERSION >= 34
@@ -63,18 +70,35 @@
 
 #if LLVM_VERSION == 36
 static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getSubtargetImpl()->getDataLayout(); }
+#else
+static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getDataLayout(); }
+#endif
+
+#if LLVM_VERSION >= 36
 #define UNIQUEIFY(T,x) (std::unique_ptr<T>(x))
 #define FD_ERRTYPE std::error_code
 #define FD_ISERR(x) (x)
 #define FD_ERRSTR(x) ((x).message().c_str())
 #define METADATA_ROOT_TYPE llvm::Metadata
 #else
-static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getDataLayout(); }
 #define UNIQUEIFY(T,x) (x)
 #define FD_ERRTYPE std::string
 #define FD_ISERR(x) (!(x).empty())
 #define FD_ERRSTR(x) ((x).c_str())
 #define METADATA_ROOT_TYPE llvm::Value
+#endif
+
+#if LLVM_VERSION >= 37
+using llvm::legacy::PassManager;
+using llvm::legacy::FunctionPassManager;
+typedef llvm::raw_pwrite_stream emitobjfile_t;
+typedef llvm::DIFile* DIFileP;
+#else
+#define DEBUG_INFO_WORKING
+using llvm::PassManager;
+using llvm::FunctionPassManager;
+typedef llvm::raw_ostream emitobjfile_t;
+typedef llvm::DIFile DIFileP;
 #endif
 
 #endif

@@ -37,7 +37,7 @@ struct TerraCompilationUnit {
     TerraTarget * TT;
     llvm::Module * M;
     ManualInliner * mi;
-    llvm::FunctionPassManager * fpm;
+    FunctionPassManager * fpm;
     llvm::ExecutionEngine * ee;
     llvm::JITEventListener * jiteventlistener; //for reporting debug info
     // Temporary storage for objects that exist only during emitting functions

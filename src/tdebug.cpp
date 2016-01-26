@@ -30,6 +30,7 @@ static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo
     for(i = 0; i + 1 < LineStarts.size() && pointisbeforeinstruction(LineStarts[i + 1].Address, ip, isNextInstr); i++) {
         //printf("\nscanning for %p, %s:%d %p\n",(void*)ip,DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename().data(),(int)LineStarts[i].Loc.getLine(),(void*)LineStarts[i].Address);
     }
+    #ifdef DEBUG_INFO_WORKING
     if(i < LineStarts.size()) {
         if(lineno)
             *lineno = LineStarts[i].Loc.getLine();
@@ -39,6 +40,9 @@ static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo
     } else {
         return false;
     }
+    #else
+    return false;
+    #endif
 }
 
 static bool stacktrace_findsymbol(terra_CompilerState * C, uintptr_t ip, const TerraFunctionInfo ** rfi) {

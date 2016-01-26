@@ -14,17 +14,18 @@ ManualInliner::ManualInliner(TargetMachine * TM, Module * m) {
     //First we run it on the (currently empty) module to initialize
     //the inlining pass with the Analysis passes it needs.
     DataLayout * TD = new DataLayout(*GetDataLayout(TM));
-    
+    (void) TD;
     #if LLVM_VERSION <= 34
     PM.add(TD);
     #elif LLVM_VERSION <= 35
     PM.add(new DataLayoutPass(*TD));
-    #else
-    (void) TD;
+    #elif LLVM_VERSION <= 36
     PM.add(new DataLayoutPass());
+    #else
+    PM.add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
     #endif
     
-    #if LLVM_VERSION >= 33
+    #if LLVM_VERSION >= 33 && LLVM_VERSION <= 36
     TM->addAnalysisPasses(PM);
     #endif
     SI = (CallGraphSCCPass*) createFunctionInliningPass();

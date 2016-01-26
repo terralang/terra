@@ -565,7 +565,11 @@ public:
   virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) { CG->HandleTopLevelDeclInObjCContainer(D); }
   virtual void CompleteTentativeDefinition(VarDecl *D) { CG->CompleteTentativeDefinition(D); }
   virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *D) { CG->HandleCXXStaticMemberVarInstantiation(D); }
+  #if LLVM_VERSION >= 37
+  virtual void HandleVTable(CXXRecordDecl *RD) { CG->HandleVTable(RD); }
+  #else
   virtual void HandleVTable(CXXRecordDecl *RD, bool DefinitionRequired) { CG->HandleVTable(RD, DefinitionRequired); }
+  #endif
   virtual ASTMutationListener *GetASTMutationListener() { return CG->GetASTMutationListener(); }
   virtual ASTDeserializationListener *GetASTDeserializationListener() { return CG->GetASTDeserializationListener(); }
   virtual void PrintStats() { CG->PrintStats(); }
@@ -825,7 +829,7 @@ static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
     #endif
     }
     M->setTargetTriple(TT->Triple); //suppress warning that occur due to unmatched os versions
-    llvm::PassManager opt;
+    PassManager opt;
     llvmutil_addtargetspecificpasses(&opt, TT->tm);
     opt.add(llvm::createFunctionInliningPass());
     llvmutil_addoptimizationpasses(&opt);
@@ -846,8 +850,10 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     
     #if LLVM_VERSION <= 32
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *TT->ctx );
-    #else
+    #elif LLVM_VERSION <= 36
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), TheCompInst.getTargetOpts(), *TT->ctx );
+    #else
+    CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",  TheCompInst.getHeaderSearchOpts(), TheCompInst.getPreprocessorOpts(), TheCompInst.getCodeGenOpts(), *TT->ctx );
     #endif
     
     std::stringstream ss;
@@ -866,7 +872,11 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     Preprocessor & PP = TheCompInst.getPreprocessor();
     for(Preprocessor::macro_iterator it = PP.macro_begin(false),end = PP.macro_end(false); it != end; ++it) {
         const IdentifierInfo * II = it->first;
+        #if LLVM_VERSION <= 36
         MacroDirective * MD = it->second;
+        #else
+        MacroDirective * MD = it->second.getLatest();
+        #endif
         AddMacro(T,PP,II,MD,&macros);
     }
     #endif

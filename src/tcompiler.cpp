@@ -118,7 +118,7 @@ struct DisassembleFunctionListener : public JITEventListener {
             InitializeDebugData(name,t,sz);
         }
     }
-#elif LLVM_VERSION >= 36
+#elif LLVM_VERSION == 36
     virtual void NotifyObjectEmitted(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
         for(auto I = Obj.symbol_begin(), E = Obj.symbol_end(); I != E; ++I) {
             object::SymbolRef sym(I->getRawDataRefImpl(),&Obj);
@@ -129,6 +129,13 @@ struct DisassembleFunctionListener : public JITEventListener {
             sym.getType(t);
             sym.getSize(sz);
             InitializeDebugData(name, t, sz);
+        }
+    }
+#else
+    virtual void NotifyObjectEmitted(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
+        for(auto I = Obj.symbol_begin(), E = Obj.symbol_end(); I != E; ++I) {
+            object::SymbolRef sym(I->getRawDataRefImpl(),&Obj);
+            InitializeDebugData(sym.getName().get(), sym.getType(),sym.getCommonSize());
         }
     }
 #endif
@@ -230,20 +237,10 @@ bool OneTimeInit(struct terra_State * T) {
 }
 
 //LLVM 3.1 doesn't enable avx even if it is present, we detect and force it here
-namespace llvm {
-    namespace X86_MC {
-      bool GetCpuIDAndInfo(unsigned value, unsigned *rEAX,
-                           unsigned *rEBX, unsigned *rECX, unsigned *rEDX);
-    }
-}
 bool HostHasAVX() {
-#ifdef __arm__
-    return false;
-#else
-    unsigned EAX,EBX,ECX,EDX;
-    llvm::X86_MC::GetCpuIDAndInfo(1,&EAX,&EBX,&ECX,&EDX);
-    return (ECX >> 28) & 1;
-#endif
+    StringMap<bool> Features;
+    sys::getHostCPUFeatures(Features);
+    return Features["avx"];
 }
 
 int terra_inittarget(lua_State * L) {
@@ -272,7 +269,9 @@ int terra_inittarget(lua_State * L) {
     
     TargetOptions options;
     DEBUG_ONLY(T) {
+        #if LLVM_VERSION <= 36
         options.NoFramePointerElim = true;
+        #endif
     }
     
     if(lua_toboolean(L,4)) { //FloatABIHard boolean
@@ -313,7 +312,11 @@ int terra_initcompilationunit(lua_State * L) {
     
     CU->M = new Module("terra",*TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
+    #if LLVM_VERSION >= 37
+    CU->M->setDataLayout(*TT->td);
+    #else
     CU->M->setDataLayout(TT->td);
+    #endif
     
     if(CU->optimize) {
         CU->mi = new ManualInliner(TT->tm,CU->M);
@@ -677,6 +680,14 @@ static AllocaInst *CreateAlloca(IRBuilder<> * B, Type *Ty, Value *ArraySize = 0,
 }
 
 
+static Value * CreateConstGEP2_32(IRBuilder<> * B, Value *Ptr, unsigned Idx0, unsigned Idx1) {
+    #if LLVM_VERSION <= 36
+    return B->CreateConstGEP2_32(Ptr,Idx0,Idx1);
+    #else
+    return B->CreateConstGEP2_32(Ptr->getType()->getPointerElementType(),Ptr,Idx0,Idx1);
+    #endif
+}
+
 //functions that handle the details of the x86_64 ABI (this really should be handled by LLVM...)
 struct CCallingConv {
     TerraCompilationUnit * CU;
@@ -938,6 +949,11 @@ struct CCallingConv {
         #if LLVM_VERSION > 32 && defined(__arm__)
             fn->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::NoUnwind);
         #endif
+        #if LLVM_VERSION >= 37
+        DEBUG_ONLY(T) {
+            fn->addFnAttr("no-frame-pointer-elim","true");
+        }
+        #endif
         return fn;
     }
     
@@ -973,7 +989,7 @@ struct CCallingConv {
                     Value * dest = B->CreateBitCast(v,Ptr(p->cctype));
                     int N = p->GetNumberOfTypesInParamList();
                     for(int j = 0; j < N; j++) {
-                        B->CreateStore(ai,B->CreateConstGEP2_32(dest, 0, j));
+                        B->CreateStore(ai,CreateConstGEP2_32(B,dest, 0, j));
                         ++ai;
                     }
                 } break;
@@ -996,7 +1012,7 @@ struct CCallingConv {
             B->CreateStore(result,dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.GetNumberOfTypesInParamList() == 1)
-                result = B->CreateConstGEP2_32(result, 0, 0);
+                result = CreateConstGEP2_32(B,result, 0, 0);
             B->CreateRet(B->CreateLoad(result));
         } else {
             assert(!"unhandled return value");
@@ -1031,7 +1047,7 @@ struct CCallingConv {
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
                     int N = a->GetNumberOfTypesInParamList();
                     for(int j = 0; j < N; j++) {
-                        arguments.push_back(B->CreateLoad(B->CreateConstGEP2_32(casted,0,j)));
+                        arguments.push_back(B->CreateLoad(CreateConstGEP2_32(B,casted,0,j)));
                     }
                 } break;
             }
@@ -1057,7 +1073,7 @@ struct CCallingConv {
                 aggregate = CreateAlloca(B,info.returntype.type->type);
                 Value * casted = B->CreateBitCast(aggregate,Ptr(info.returntype.cctype));
                 if(info.returntype.GetNumberOfTypesInParamList() == 1)
-                    casted = B->CreateConstGEP2_32(casted, 0, 0);
+                    casted = CreateConstGEP2_32(B,casted, 0, 0);
                 if(info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call,casted);
             }
@@ -1214,7 +1230,9 @@ struct FunctionEmitter {
     IRBuilder<> * B;
     
     DIBuilder * DB;
+    #ifdef DEBUG_INFO_WORKING
     DISubprogram SP;
+    #endif
     StringMap<MDNode*> filenamecache; //map from filename to lexical scope object representing file.
     const char * customfilename;
     int customlinenumber;
@@ -1655,7 +1673,7 @@ if(baseT->isIntegerTy()) { \
     }
     Value * emitArrayToPointer(Obj * exp) {
         Value * v = emitAddressOf(exp);
-        return B->CreateConstGEP2_32(v,0,0);
+        return CreateConstGEP2_32(B,v,0,0);
     }
     Type * getPrimitiveType(TType * t) {
         if(t->type->isVectorTy())
@@ -1727,7 +1745,7 @@ if(baseT->isIntegerTy()) { \
         
         int allocindex = entry.number("allocation");
         
-        Value * addr = B->CreateConstGEP2_32(structPtr,0,allocindex);
+        Value * addr = CreateConstGEP2_32(B,structPtr,0,allocindex);
         //in three cases the type of the value in the struct does not match the expected type returned
         //1. if it is a union then the llvm struct will have some buffer space to hold the object but
         //   the space may have a different type
@@ -2096,7 +2114,7 @@ if(baseT->isIntegerTy()) { \
         
     }
     
-    DIFile createDebugInfoForFile(const char * filename) {
+    DIFileP createDebugInfoForFile(const char * filename) {
         //checking the existence of a file once per function can be expensive,
         //so only do it if debug mode is set to slow compile anyway.
         //In the future, we can cache across functions calls if needed
@@ -2108,6 +2126,7 @@ if(baseT->isIntegerTy()) { \
             return DB->createFile(filename,".");
         }
     }
+#ifdef DEBUG_INFO_WORKING
     MDNode * debugScopeForFile(const char * filename) {
         StringMap<MDNode*>::iterator it = filenamecache.find(filename);
         if(it != filenamecache.end())
@@ -2122,7 +2141,7 @@ if(baseT->isIntegerTy()) { \
         DEBUG_ONLY(T) {
             DB = new DIBuilder(*M);
             
-            DIFile file = createDebugInfoForFile(filename);
+            DIFileP file = createDebugInfoForFile(filename);
             #if LLVM_VERSION >= 34
             DICompileUnit CU =
             #endif
@@ -2161,6 +2180,12 @@ if(baseT->isIntegerTy()) { \
             B->SetCurrentDebugLocation(DebugLoc::get(customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
         }
     }
+#else
+    void initDebug(const char * filename, int lineno) {}
+    void endDebug() {}
+    void setDebugPoint(Obj * obj) {}
+#endif
+
     void setInsertBlock(BasicBlock * bb) {
         B->SetInsertPoint(bb);
     }
@@ -2228,7 +2253,7 @@ if(baseT->isIntegerTy()) { \
         std::vector<Value *> values;
         emitExpressionList(expressions,true,&values);
         for(size_t i = 0; i < values.size(); i++) {
-            Value * addr = B->CreateConstGEP2_32(result,0,i);
+            Value * addr = CreateConstGEP2_32(B,result,0,i);
             B->CreateStore(values[i],addr);
         }
         return B->CreateLoad(result);
@@ -2721,7 +2746,7 @@ static bool SaveAndLink(TerraCompilationUnit * CU, Module * M, std::vector<const
     return false;
 }
 
-static bool SaveObject(TerraCompilationUnit * CU, Module * M, const std::string & filekind, raw_ostream & dest) {
+static bool SaveObject(TerraCompilationUnit * CU, Module * M, const std::string & filekind, emitobjfile_t & dest) {
     if(filekind == "object" || filekind == "asm") {
         if(llvmutil_emitobjfile(M,CU->TT->tm,filekind == "object",dest)) {
             terra_pusherror(CU->T,"llvm: llvmutil_emitobjfile");
@@ -2856,14 +2881,20 @@ static int terra_linkllvmimpl(lua_State * L) {
     ErrorOr<std::unique_ptr<MemoryBuffer> > mb = MemoryBuffer::getFile(filename);
     if(!mb)
         terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
-    #if LLVM_VERSION >= 36
+    #if LLVM_VERSION == 36
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
+    #elif LLVM_VERSION >= 37
+    ErrorOr<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #else
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*TT->ctx);
     #endif
     if(!mm)
         terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
+    #if LLVM_VERSION >= 37
+    Module * M = mm.get().get();
+    #else
     Module * M = mm.get();
+    #endif
 #endif
     M->setTargetTriple(TT->Triple);
     char * err;
