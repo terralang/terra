@@ -6,7 +6,6 @@
  
  ]]
 
-
 local C = {
     printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true)),
     exit = terralib.externfunction("exit", int -> {}),
@@ -110,7 +109,7 @@ terra tk(n : int)
 end
 
 
-terra doit(N : int)
+local terra doit(N : int)
     maxflips = 0
     odd = false
     checksum = 0
@@ -128,7 +127,7 @@ terra doit(N : int)
     return checksum
 end
 
-terra main(argc : int, v : &&int8)
+local terra main(argc : int, v : &&int8)
     if argc < 2 then
       C.printf("usage: %s number\n", v[0])
       C.exit(1);
@@ -145,4 +144,7 @@ print(test.time(function()
     test.eq(doit(10),73196)
 end))
 
+local N = assert(tonumber(...)) or 10
+doit(N)
 terralib.saveobj("benchmark_fannkuchredux", { main = main } )
+os.execute("./benchmark_fannkuchredux "..N)

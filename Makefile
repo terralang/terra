@@ -46,10 +46,10 @@ LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
 LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
-LUAJIT_INCLUDE ?= $(LUAJIT_PREFIX)/include/luajit-2.0
+LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-2.0/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-2.0/lua.h))
 LUAJIT ?= $(LUAJIT_PREFIX)/bin/luajit
 
-FLAGS += -I build -I release/include/terra -I $(LUAJIT_INCLUDE) -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
+FLAGS += -I build -I $(LUAJIT_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-common -Wcast-qual
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
