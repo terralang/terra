@@ -20,6 +20,7 @@
 #include "clang/Rewrite/Frontend/Rewriters.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
+#include "llvm/Object/SymbolSize.h"
 
 #define LLVM_PATH_TYPE std::string
 #define RAW_FD_OSTREAM_NONE sys::fs::F_None

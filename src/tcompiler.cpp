@@ -133,9 +133,10 @@ struct DisassembleFunctionListener : public JITEventListener {
     }
 #else
     virtual void NotifyObjectEmitted(const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
-        for(auto I = Obj.symbol_begin(), E = Obj.symbol_end(); I != E; ++I) {
-            object::SymbolRef sym(I->getRawDataRefImpl(),&Obj);
-            InitializeDebugData(sym.getName().get(), sym.getType(),sym.getCommonSize());
+        auto size_map = llvm::object::computeSymbolSizes(Obj);
+        for(auto & S : size_map) {
+            object::SymbolRef sym = S.first;
+            InitializeDebugData(sym.getName().get(), sym.getType(),S.second);
         }
     }
 #endif
