@@ -82,7 +82,7 @@ end
 
 NBODIES = 5
 
-terra main(argc : int, argv : &&int8)
+local terra main(argc : int, argv : &&int8)
     var bodies = array(
       planet {                               -- sun */
         0, 0, 0, 0, 0, 0, solar_mass
@@ -126,6 +126,7 @@ terra main(argc : int, argv : &&int8)
     )
     var n = C.atoi(argv[1])    
     offset_momentum(NBODIES, bodies)
+    C.printf("%d\n",n)
     C.printf ("%.9f\n", energy(NBODIES, bodies))
     for i = 0,n do
         advance(NBODIES, bodies, 0.01)
@@ -134,17 +135,10 @@ terra main(argc : int, argv : &&int8)
   return 0
 end
 
-terra run()
-    main(2,array("what","1000000"))
+local N = (...) or "1000000"
+local terra run()
+    main(2,array("what",N))
 end
 
---run:compile()
-
-
---local test = require("test")
-
---print(test.time(run))
-
 terralib.saveobj("benchmark_nbody",{ main = main } )
-energy:disas()
-energy:printpretty()
+os.execute("./benchmark_nbody "..tostring(N))
