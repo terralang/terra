@@ -126,7 +126,6 @@ local terra main(argc : int, argv : &&int8)
     )
     var n = C.atoi(argv[1])    
     offset_momentum(NBODIES, bodies)
-    C.printf("%d\n",n)
     C.printf ("%.9f\n", energy(NBODIES, bodies))
     for i = 0,n do
         advance(NBODIES, bodies, 0.01)
