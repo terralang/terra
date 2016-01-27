@@ -16,13 +16,9 @@ build = {
    type = "command",
    build_command = [[
 make clean
-make LUAJIT_LIB=$(LUA_LIBDIR)/libluajit-5.1.a \
-   CXX=clang++ \
-   CC=clang \
-   LLVM_CONFIG=$(LUA_BINDIR)/llvm-config \
-   LUAJIT_INCLUDE=$(LUA_INCDIR) \
-   LUAJIT_PATH=$(LUA_INCDIR)/../share/luajit-2.0.4/?.lua \
-   LUAJIT=$(LUA)
+libdir=$(LUA_LIBDIR)
+LUAJIT_PREFIX=${libdir%/lib}
+make LUAJIT_PREFIX=$LUAJIT_PREFIX CXX=clang++ CC=clang LLVM_CONFIG=$(LUA_BINDIR)/llvm-config
    ]],
    install_command = [[
 make PREFIX=$(PREFIX) install
