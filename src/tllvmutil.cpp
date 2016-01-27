@@ -261,7 +261,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 newGV->copyAttributesFrom(GV);
                 if(!GV->isDeclaration()) {
                     if(!copyGlobal(GV,data)) {
-                        newGV->setExternallyInitialized(true);
+                        newGV->setLinkage(GlobalValue::ExternalLinkage);
                     } else if(GV->hasInitializer()) {
                         Value * C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
                         newGV->setInitializer(cast<Constant>(C));
