@@ -29,7 +29,7 @@ end
 
 if ffi.os ~= "Windows" then
     print(libpath)
-    local flags = terralib.newlist {"-L", libpath,"-Wl,-rpath,"..libpath,"-lterra_dynamic"}
+    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so"}
     if require("ffi").os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
