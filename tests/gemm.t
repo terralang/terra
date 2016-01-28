@@ -129,7 +129,7 @@ function generatedgemm(NB,NBF,RM,RN,V)
 	local l1dgemm0b = genkernel(NB,1,1,1,0,true)
 	local l1dgemm1b = genkernel(NB,1,1,1,1,true)
 
-	return terra(gettime : {} -> double, M : int, N : int, K : int, alpha : number, A : &number, lda : int, B : &number, ldb : int, 
+	return terra(M : int, N : int, K : int, alpha : number, A : &number, lda : int, B : &number, ldb : int, 
 		           beta : number, C : &number, ldc : int)
 		[ blockedloop(N,M,K,{NB2,NB},function(m,n,k) return quote
 								var MM,NN,KK = min(M-m,NB),min(N-n,NB),min(K-k,NB)
@@ -202,6 +202,8 @@ end
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 if number == double then
 	terralib.saveobj("my_dgemm.o", { my_dgemm = my_dgemm })
+	return my_dgemm
 else
 	terralib.saveobj("my_sgemm.o", { my_sgemm = my_dgemm })
+	return my_sgemm
 end

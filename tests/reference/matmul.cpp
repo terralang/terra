@@ -76,7 +76,7 @@ void naive_dgemm(const enum CBLAS_ORDER Order, const enum CBLAS_TRANSPOSE TransA
 }
 
 extern "C"
-void my_dgemm(double (*gettime)(), const int M, const int N,
+void my_dgemm(const int M, const int N,
                  const int K, const double alpha, const double *A,
                  const int lda, const double *B, const int ldb,
                  const double beta, double *C, const int ldc);
@@ -139,7 +139,7 @@ void testsize(int M, int K, int N) {
 	double mytime;
 	times = 0;
 	while(CalcTime(&times,&mytime))
-		my_dgemm(CurrentTimeInSeconds,M,N,K,1.f,A,K,B,N,0.f,C3,N);
+		my_dgemm(M,N,K,1.f,A,K,B,N,0.f,C3,N);
 	
 	/*
 	for(int m = 0; m < M; m++) {

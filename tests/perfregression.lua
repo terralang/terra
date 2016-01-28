@@ -1,5 +1,6 @@
 local perf_tests = { benchmark_fannkuchredux = {"10"}, 
-                     benchmark_nbody = {"20000000"}
+                     benchmark_nbody = {"20000000"},
+                     benchmark_dgemm = {tostring(3*2048*2048)}
                    }
                      
 local r = terralib.loadfile("perfregression.dat")
