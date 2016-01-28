@@ -220,15 +220,23 @@ int terra_cudainit(struct terra_State * T) {
     const char * cudahome = lua_tostring(T->L,-1);
     lua_pop(T->L,1);
     
-    if(!cudahome) return 0; //any early return disables cuda
-    
+    if(!cudahome) {
+        lua_pushstring(T->L,"cuda home not set");
+        lua_setfield(T->L,-2,"cudaloaderror");
+        return 0; //any early return disables cuda
+    }
     //dynamically load libnvvm libraries, the other libraries are loaded from the cudalib library only when needed
 	llvm::SmallString<256> libnvvmpath;
 	libnvvmpath.append(cudahome);
 	libnvvmpath.append(libnvvm);
-	if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(libnvvmpath.c_str()))
-		return 0; //couldn't find the libnvvm library, do not load cudalib.lua
-
+	if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(libnvvmpath.c_str())) {
+		llvm::SmallString<256> err;
+        err.append("failed to load libnvvm at: ");
+        err.append(libnvvmpath);
+        lua_pushstring(T->L,err.c_str());
+        lua_setfield(T->L,-2,"cudaloaderror");
+        return 0; //couldn't find the libnvvm library, do not load cudalib.lua
+    }
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
     T->cuda->initialized = 0; /* actual CUDA initalization is done on first call to terra_cudacompile */
                               /* this function just registers all the Lua state associated with CUDA */
