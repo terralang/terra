@@ -388,7 +388,7 @@ void terra_llvmshutdown() {
     llvm::llvm_shutdown();
 }
 //for require
-extern "C" int luaopen_libterra_dynamic(lua_State * L) {
+extern "C" int luaopen_terra(lua_State * L) {
     terra_Options options;
     memset(&options,0, sizeof(terra_Options));
     if(!lua_isnil(L,1))

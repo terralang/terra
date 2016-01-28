@@ -67,7 +67,7 @@ ifeq ($(UNAME), Linux)
 DYNFLAGS = -shared -fPIC
 TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra_dynamic.so"
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.so"
 TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
@@ -132,7 +132,7 @@ LIBRARY = release/lib/libterra.a
 LIBRARY_NOLUA = release/lib/libterra_nolua.a
 LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
-DYNLIBRARY = release/lib/libterra_dynamic.so
+DYNLIBRARY = release/lib/terra.so
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 BIN2C = build/bin2c
 
