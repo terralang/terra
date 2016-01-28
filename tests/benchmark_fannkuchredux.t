@@ -144,7 +144,7 @@ print(test.time(function()
     test.eq(doit(10),73196)
 end))
 
-local N = assert(tonumber(...)) or 10
+local N = assert(tonumber((...) or 10))
 doit(N)
 terralib.saveobj("benchmark_fannkuchredux", { main = main } )
 os.execute("./benchmark_fannkuchredux "..N)

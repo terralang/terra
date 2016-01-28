@@ -1230,10 +1230,11 @@ struct FunctionEmitter {
     
     IRBuilder<> * B;
     
-    DIBuilder * DB;
     #ifdef DEBUG_INFO_WORKING
+    DIBuilder * DB;
     DISubprogram SP;
     #endif
+    
     StringMap<MDNode*> filenamecache; //map from filename to lexical scope object representing file.
     const char * customfilename;
     int customlinenumber;
@@ -2115,6 +2116,7 @@ if(baseT->isIntegerTy()) { \
         
     }
     
+#ifdef DEBUG_INFO_WORKING
     DIFileP createDebugInfoForFile(const char * filename) {
         //checking the existence of a file once per function can be expensive,
         //so only do it if debug mode is set to slow compile anyway.
@@ -2127,7 +2129,6 @@ if(baseT->isIntegerTy()) { \
             return DB->createFile(filename,".");
         }
     }
-#ifdef DEBUG_INFO_WORKING
     MDNode * debugScopeForFile(const char * filename) {
         StringMap<MDNode*>::iterator it = filenamecache.find(filename);
         if(it != filenamecache.end())

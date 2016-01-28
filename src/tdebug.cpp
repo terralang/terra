@@ -25,12 +25,13 @@ static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNex
     return point < inst || (!isNextInst && point == inst);
 }
 static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
+    #ifdef DEBUG_INFO_WORKING
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> & LineStarts = fi->efd.LineStarts;
     size_t i;
     for(i = 0; i + 1 < LineStarts.size() && pointisbeforeinstruction(LineStarts[i + 1].Address, ip, isNextInstr); i++) {
         //printf("\nscanning for %p, %s:%d %p\n",(void*)ip,DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename().data(),(int)LineStarts[i].Loc.getLine(),(void*)LineStarts[i].Address);
     }
-    #ifdef DEBUG_INFO_WORKING
+   
     if(i < LineStarts.size()) {
         if(lineno)
             *lineno = LineStarts[i].Loc.getLine();

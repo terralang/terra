@@ -203,33 +203,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
     llvmutil_Property copyGlobal;
     void * data;
     ValueToValueMapTy & VMap;
-    DIBuilder * DI;
-    #ifdef DEBUG_INFO_WORKING
-    DICompileUnit NCU;
-    #endif
-    CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
-    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_), DI(NULL) {}
     
-    void CopyDebugMetadata() {
-        if(NamedMDNode * NMD = src->getNamedMetadata("llvm.module.flags")) {
-            NamedMDNode * New = dest->getOrInsertNamedMetadata(NMD->getName());
-            for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
-            #if LLVM_VERSION <= 35
-                New->addOperand(MapValue(NMD->getOperand(i), VMap));
-            #else
-                New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
-            #endif
-            }
-        }
-        #ifdef DEBUG_INFO_WORKING
-        if(NamedMDNode * CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-            DI = new DIBuilder(*dest);
-            
-            DICompileUnit CU(CUN->getOperand(0));
-            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
-        }
-        #endif
-    }
+    CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
+    : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_) {}
     bool needsFreshlyNamedConstant(GlobalVariable * GV, GlobalVariable * newGV) {
         if(GV->isConstant() && GV->hasPrivateLinkage() && GV->hasUnnamedAddr()) { //this is a candidate constant
             return !newGV->isConstant() || newGV->getInitializer() != GV->getInitializer(); //it is not equal to its target
@@ -269,19 +245,42 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 }
             }
             return newGV;
-        }
+        } else return materializeValueForMetadata(V);
+    }
 #ifdef DEBUG_INFO_WORKING
-#if LLVM_VERSION <= 35
-        else if(MDNode * MD = dyn_cast<MDNode>(V)) {
+    DIBuilder * DI;
+    DICompileUnit NCU;
+    void CopyDebugMetadata() {
+        DI = NULL;
+        if(NamedMDNode * NMD = src->getNamedMetadata("llvm.module.flags")) {
+            NamedMDNode * New = dest->getOrInsertNamedMetadata(NMD->getName());
+            for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
+            #if LLVM_VERSION <= 35
+                New->addOperand(MapValue(NMD->getOperand(i), VMap));
+            #else
+                New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
+            #endif
+            }
+        }
+        if(NamedMDNode * CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+            DI = new DIBuilder(*dest);
+            
+            DICompileUnit CU(CUN->getOperand(0));
+            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(), CU.getProducer(), CU.isOptimized(), CU.getFlags(), CU.getRunTimeVersion());
+        }
+    }
+    Value * materializeValueForMetadata(Value * V) {
+    #if LLVM_VERSION <= 35
+        if(MDNode * MD = dyn_cast<MDNode>(V)) {
             DISubprogram SP(MD);
             if(DI != NULL && SP.isSubprogram()) {
-#else
-        else if(auto * MDV = dyn_cast<MetadataAsValue>(V)) {
+    #else
+        if(auto * MDV = dyn_cast<MetadataAsValue>(V)) {
             Metadata * MDraw = MDV->getMetadata();
             MDNode * MD = dyn_cast<MDNode>(MDraw);
             DISubprogram SP(MD);
             if(MD != NULL && DI != NULL && SP.isSubprogram()) {
-#endif
+    #endif
            
                 
                 if(Function * OF = SP.getFunction()) {
@@ -302,7 +301,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
             /* fallthrough */
         }
-#endif
         return NULL;
     }
     void finalize() {
@@ -311,6 +309,12 @@ struct CopyConnectedComponent : public ValueMaterializer {
             delete DI;
         }
     }
+#else
+    void CopyDebugMetadata() {}
+    Value * materializeValueForMetadata(Value * V) { return NULL; }
+    void finalize() {}
+#endif
+    
 };
 
 llvm::Module * llvmutil_extractmodulewithproperties(llvm::StringRef DestName, llvm::Module * Src, llvm::GlobalValue ** gvs, size_t N, llvmutil_Property copyGlobal, void * data, llvm::ValueToValueMapTy & VMap) {
