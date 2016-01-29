@@ -1,6 +1,7 @@
 local ffi = require("ffi")
-if ffi.os == "windows" then
+if ffi.os == "Windows" then
     print("not supported on windows")
+    return
 end
 C = terralib.includecstring [[
 #include<stdio.h>

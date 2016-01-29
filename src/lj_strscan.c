@@ -22,7 +22,16 @@
 #define LJ_UNLIKELY(cond) (cond)
 #define U64x(hi, lo)	(((uint64_t)0x##hi << 32) + (uint64_t)0x##lo)
 #define lj_num2int(n)   ((int32_t)(n))
+#ifndef _WIN32
 #define lj_fls(x)	((uint32_t)(__builtin_clz(x)^31))
+#else
+unsigned char _BitScanReverse(uint32_t *, unsigned long);
+#pragma intrinsic(_BitScanReverse)
+static uint32_t lj_fls(uint32_t x)
+{
+  uint32_t r; _BitScanReverse(&r, x); return r;
+}
+#endif
 
 /* SJT: originally from lj_char.h ... */
 #include <ctype.h>

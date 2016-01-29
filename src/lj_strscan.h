@@ -23,6 +23,8 @@
 typedef unsigned __int8 uint8_t;
 typedef __int64 int64_t;
 typedef unsigned __int64 uint64_t;
+typedef unsigned __int32 uint32_t;
+typedef __int32 int32_t;
 #elif defined(__symbian__)
 /* Cough. */
 typedef unsigned char uint8_t;

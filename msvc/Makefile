@@ -5,10 +5,10 @@
 # (3) directory where you downloaded the Terra source
 # all paths must be ABSOLUTE
 
-LLVM_DIR=E:\Work\DSL\LLVM
-LUAJIT_DIR=E:\Work\DSL\LuaJIT-2.0.4
-TERRA_DIR=E:\Work\DSL\terra
-CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v7.0
+LLVM_DIR=C:\Users\zdevito\LLVM
+LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
+TERRA_DIR=C:\Users\zdevito\terra
+CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
 
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
@@ -49,8 +49,7 @@ LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
 
 CLANG_RESOURCE_DIRECTORY=$(LLVM_DIR)\lib\clang\3.5.0
 
-TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\tinternalizedfiles.cpp $(SRC)\treadnumber.c
-
+TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\tinternalizedfiles.cpp $(SRC)\treadnumber.c $(SRC)\lj_strscan.c
 CPP=cl
 LINK=link
 
@@ -63,7 +62,7 @@ CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /
 
 all:	$(TERRA_DIR)\release\bin\terra.exe
 
-$(LUAJIT) $(TERRA_DIR)\release\include\lua.h:	$(LUAJIT_DIR)\src\luajit.c
+$(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	cd $(LUAJIT_DIR)\src
 	msvcbuild.bat
 	copy lua.h $(TERRA_DIR)\release\include\terra
@@ -71,7 +70,7 @@ $(LUAJIT) $(TERRA_DIR)\release\include\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	copy lauxlib.h $(TERRA_DIR)\release\include\terra
 	copy luaconf.h $(TERRA_DIR)\release\include\terra
 
-$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\lua.h
+$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
 	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
 	$(LUAJIT) -bg $(SRC)\strict.lua $(BUILD)\strict.h
