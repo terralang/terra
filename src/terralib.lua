@@ -1,6 +1,8 @@
 -- See Copyright Notice in ../LICENSE.txt
 
 local ffi = require("ffi")
+local asdl = require("asdl")
+local List = asdl.List
 
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
@@ -152,63 +154,15 @@ end
 
 -- END TREE
 
-
--- LIST
-terra.list = {} --used for all ast lists
-setmetatable(terra.list,{ __index = table })
-terra.list.__index = terra.list
-function terra.newlist(lst)
-    if lst == nil then
-        lst = {}
-    end
-    return setmetatable(lst,terra.list)
-end
-
-function terra.list:map(fn,...)
-    local l = terra.newlist()
-    if type(fn) == "function" then
-        for i,v in ipairs(self) do
-            l[i] = fn(v,...)
-        end 
-    else
-        for i,v in ipairs(self) do
-            local sel = v[fn]
-            if type(sel) == "function" then
-                l[i] = sel(v,...)
-            else
-                l[i] = sel
-            end
-        end
-    end
-    return l
-end
-function terra.list:insertall(elems)
-    for i,e in ipairs(elems) do
-        self:insert(e)
-    end
-end
-
-function terra.list:printraw()
-    for i,v in ipairs(self) do
-        if v.printraw then
-            print(i,v:printraw())
-        else
-            print(i,v)
-        end
-    end
-end
-function terra.list:mkstring(begin,sep,finish)
+local function mkstring(self,begin,sep,finish)
     if sep == nil then
         begin,sep,finish = "",begin,""
     end
     return begin..table.concat(self:map(tostring),sep)..finish
 end
+terra.newlist = List
+function terra.islist(l) return List:is(l) end
 
-function terra.islist(exp)
-    return getmetatable(exp) == terra.list
-end
-
--- END LIST
 
 -- CONTEXT
 terra.context = {}
@@ -1221,7 +1175,7 @@ do
             return self.name
         elseif self:ispointer() then return "&"..tostring(self.type)
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
-        elseif self:isfunction() then return self.parameters:mkstring("{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
+        elseif self:isfunction() then return mkstring(self.parameters,"{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
         elseif self:isarray() then
             local t = tostring(self.type)
             if self.type:ispointer() then
@@ -1427,7 +1381,7 @@ do
                 end
                 local pa = ftype.parameters:map(getcstring)
                 if not self.cachedcstring then
-                    pa = pa:mkstring("(",",","")
+                    pa = mkstring(pa,"(",",","")
                     if ftype.isvararg then
                         pa = pa .. ",...)"
                     else
@@ -1786,7 +1740,7 @@ do
             t.entries:insert {"_"..(i-1),e}
         end
         t.metamethods.__typename = function(self)
-            return args:mkstring("{",",","}")
+            return mkstring(args,"{",",","}")
         end
         t:setconvertible("tuple")
         return t
@@ -2841,14 +2795,14 @@ function terra.funcdefinition:typecheckbody()
                 if not speculate then
                     diag:reporterror(anchor,"call to overloaded function does not apply to any arguments")
                     for i,typelist in ipairs(typelists) do
-                        diag:reporterror(anchor,"option ",i," with type ",typelist:mkstring("(",",",")"))
+                        diag:reporterror(anchor,"option ",i," with type ",mkstring(typelist,"(",",",")"))
                         trylist(typelist,false)
                     end
                 end
                 return paramlist,nil
             else
                 if #results > 1 and not allowambiguous then
-                    local strings = results:map(function(x) return typelists[x.idx]:mkstring("type list (",",",") ") end)
+                    local strings = results:map(function(x) return mkstring(typelists[x.idx],"type list (",",",") ") end)
                     diag:reporterror(anchor,"call to overloaded function is ambiguous. can apply to ",unpack(strings))
                 end 
                 return results[1].expressions, results[1].idx

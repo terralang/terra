@@ -116,7 +116,7 @@ FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
 LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o lj_strscan.o
-LIBLUA = terralib.lua strict.lua cudalib.lua
+LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua
 
 EXEOBJS = main.o linenoise.o
 

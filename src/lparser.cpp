@@ -87,10 +87,9 @@ static int new_table(LexState * ls) {
 }
 static int new_list(LexState * ls) {
     if(ls->in_terra) {
-        int t = new_table(ls); //printf("(new table)\n");
-        luaX_globalpush(ls,TA_LIST_METATABLE);
-        lua_setmetatable(ls->L,-2);
-        return t;
+        luaX_globalpush(ls,TA_NEWLIST);
+        lua_call(ls->L,0,1);
+        return lua_gettop(ls->L);
     } else return 0;
 }
 
@@ -2197,8 +2196,8 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_getfield(L,to,"tree");
   luaX_globalset(&lexstate, TA_TREE_METATABLE);
   
-  lua_getfield(L,to,"list");
-  luaX_globalset(&lexstate, TA_LIST_METATABLE);
+  lua_getfield(L,to,"newlist");
+  luaX_globalset(&lexstate, TA_NEWLIST);
   
   lua_getfield(L,to,"kinds");
   luaX_globalset(&lexstate, TA_KINDS_TABLE);
