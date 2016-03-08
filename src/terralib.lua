@@ -690,6 +690,7 @@ function terra.func:__call(...)
 end
 
 function terra.func:adddefinition(v)
+    if not terra.isfunctiondefinition(v) then error("expected function definition but found "..terra.type(v)) end
     v.name = self.name --propagate function name to definition 
                        --this will be used as the name for llvm debugging, etc.
     self.fastcall = nil
