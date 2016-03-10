@@ -133,9 +133,12 @@ struct Obj {
     }
     T_Kind kind(const char * field) {
         push();
-        lua_getfield(L,-1,field);
+        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getfield(L,-1,"kinds");
+        lua_getfield(L,-3,field);
+        lua_gettable(L,-2);
         int k = luaL_checkint(L,-1);
-        pop(2);
+        pop(4);
         return (T_Kind) k;
     }
     void setfield(const char * key) { //sets field to value on top of the stack and pops it off

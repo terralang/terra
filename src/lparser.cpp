@@ -26,7 +26,6 @@
 //#include "lstate.h"
 #include "lstring.h"
 //#include "ltable.h"
-#include "tkind.h"
 #include <vector>
 #include <set>
 #include "llvm/ADT/SmallSet.h"
@@ -108,13 +107,7 @@ static void push_string(LexState * ls, const char * str) {
         lua_pushstring(ls->L,str);
     }
 }
-static void push_kind(LexState * ls, const char * str) {
-    if(ls->in_terra) {
-        lua_pushstring(ls->L,str);
-        luaX_globalgettable(ls,TA_KINDS_TABLE);
-        assert(!lua_isnil(ls->L,-1));
-    }
-}
+
 static void table_setposition(LexState * ls, int t, int line, int offset) {
     lua_pushinteger(ls->L,line);
     lua_setfield(ls->L,t,"linenumber");
@@ -126,11 +119,11 @@ static void table_setposition(LexState * ls, int t, int line, int offset) {
     lua_setfield(ls->L,t, "filename");
     
 }
-static int new_table(LexState * ls, T_Kind k) {
+static int new_table(LexState * ls, const char * k) {
     if(ls->in_terra) {
         //printf("push %s ",str);
         int t = new_table(ls);
-        lua_pushinteger(ls->L,k);
+        lua_pushstring(ls->L,k);
         add_field(ls, t,"kind");
         luaX_globalpush(ls, TA_TREE_METATABLE);
         lua_setmetatable(ls->L,-2);
@@ -138,7 +131,7 @@ static int new_table(LexState * ls, T_Kind k) {
         return t;
     } else return 0;
 }
-static int new_table_before(LexState * ls, T_Kind k, bool infix = false) {
+static int new_table_before(LexState * ls, const char * k, bool infix = false) {
     lua_State * L = ls->L;
     if(ls->in_terra) {
         int t = new_table(ls,k);
@@ -305,7 +298,7 @@ static TString *str_checkname (LexState *ls) {
 }
 
 static TString * singlevar (LexState *ls) {
-  int tbl = new_table(ls,T_var); 
+  int tbl = new_table(ls,"var"); 
   TString *varname = str_checkname(ls);
   push_string(ls,varname);
   add_field(ls,tbl,"name");
@@ -317,7 +310,7 @@ static TString * singlevar (LexState *ls) {
 //returns true if a name was parsed and sets str to that name
 //otherwise, str is not modified
 static bool checksymbol(LexState * ls, TString ** str) {
-  int tbl = new_table(ls,T_symbol);
+  int tbl = new_table(ls,"symbol");
   int line = ls->linenumber;
   if(ls->in_terra && testnext(ls,'[')) {
     RETURNS_1(luaexpr(ls));
@@ -473,7 +466,7 @@ static void push_type(LexState * ls, const char * typ) {
 
 static void push_literal(LexState * ls, const char * typ) {
     if(ls->in_terra) {
-        int lit = new_table_before(ls,T_literal);
+        int lit = new_table_before(ls,"literal");
         add_field(ls,lit,"value");
         push_type(ls,typ);
         add_field(ls,lit,"type");
@@ -518,7 +511,7 @@ struct ConsControl {
 static void recfield (LexState *ls, struct ConsControl *cc) {
   /* recfield -> (NAME | `['exp1`]') = exp1 */
   FuncState *fs = ls->fs;
-  int tbl = new_table(ls,T_recfield);
+  int tbl = new_table(ls,"recfield");
   if (ls->t.token == TK_NAME) {
     checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
     RETURNS_1(checksymbol(ls, NULL));
@@ -530,19 +523,19 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
       RETURNS_1(expr(ls));
       if(ls->t.token == '=') {
         lua_getfield(ls->L,-1, "kind");
-        int kind = lua_tointeger(ls->L, -1);
-        lua_pop(ls->L,1); /* the kind */
-        if(kind != T_luaexpression)
+        lua_pushstring(ls->L,"luaexpression");
+        if(!lua_equal(ls->L,-1,-2))
             luaX_syntaxerror(ls, "unexpected symbol");
-        int sym = new_table_before(ls, T_symbol);
+        lua_pop(ls->L,2); //kind and luaexpression
+        int sym = new_table_before(ls, "symbol");
         add_field(ls, sym, "expression");
         
       } else {
         /* oops! this wasn't a recfield, but a listfield with an antiquote
            this is a somewhat unfortunate corner case of terra's parsing rules: we need to fix the AST now */
         add_field(ls,tbl,"value");
-        //replace T_recfield with T_listfield
-        push_double(ls,T_listfield);
+        //replace "recfield" with "listfield"
+        push_string(ls,"listfield");
         add_field(ls,tbl,"kind");
         return;        
       }
@@ -557,7 +550,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
 
 static void listfield (LexState *ls, struct ConsControl *cc) {
   /* listfield -> exp */
-  int tbl = new_table(ls,T_listfield);
+  int tbl = new_table(ls,"listfield");
   RETURNS_1(expr(ls));
   add_field(ls,tbl,"value");
   checklimit(ls->fs, cc->na, MAX_INT, "items in a constructor");
@@ -593,7 +586,7 @@ static void constructor (LexState *ls) {
   int line = ls->linenumber;
   struct ConsControl cc;
   cc.na = cc.nh = 0;
-  int tbl = new_table(ls,T_constructor);
+  int tbl = new_table(ls,"constructor");
   int records = new_list(ls);
   checknext(ls, '{');
   do {
@@ -606,7 +599,7 @@ static void constructor (LexState *ls) {
 }
 
 static void structfield (LexState *ls) {
-  int tbl = new_table(ls,T_structentry);
+  int tbl = new_table(ls,"structentry");
   push_string(ls,str_checkname(ls));
   add_field(ls,tbl,"key");
   checknext(ls, ':');
@@ -632,7 +625,7 @@ static void structbody(LexState * ls) {
 static void structconstructor(LexState * ls) {
     // already parsed 'struct' or 'struct' name.
     //starting at '{' or '('
-    int tbl = new_table(ls,T_struct);
+    int tbl = new_table(ls,"struct");
     int line = ls->linenumber;
     if(testnext(ls,'(')) {
         RETURNS_1(luaexpr(ls));
@@ -693,7 +686,7 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 /* }====================================================================== */
 
 static int vardecl(LexState *ls, int requiretype, TString ** vname) {
-    int entry = new_table(ls,T_entry);
+    int entry = new_table(ls,"entry");
     int wasstring = checksymbol(ls, vname);
     add_field(ls, entry, "name");
     if (ls->in_terra && ( (wasstring && requiretype) || ls->t.token == ':')) {
@@ -742,7 +735,7 @@ static void body (LexState *ls, int ismethod, int line) {
   open_func(ls, &new_fs, &bl);
   new_fs.f.linedefined = line;
   checknext(ls, '(');
-  int tbl = new_table(ls,T_function);
+  int tbl = new_table(ls,"function");
   RETURNS_1(parlist(ls));
   if (ismethod) {
     definevariable(ls, luaS_new(ls->LP,"self"));
@@ -876,7 +869,7 @@ static void primaryexp (LexState *ls) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
         luaX_next(ls);
-        int tbl = new_table_before(ls,T_select, true);
+        int tbl = new_table_before(ls,"select", true);
         add_field(ls,tbl,"value");
         checksymbol(ls,NULL);
         add_field(ls,tbl,"field");
@@ -887,7 +880,7 @@ static void primaryexp (LexState *ls) {
             return;
         //luaK_exp2anyregup(fs, v);
         
-        int tbl = new_table_before(ls,T_index,true);
+        int tbl = new_table_before(ls,"index",true);
         add_field(ls,tbl,"value");
         RETURNS_1(yindex(ls));
         add_field(ls,tbl,"index");
@@ -896,7 +889,7 @@ static void primaryexp (LexState *ls) {
       }
       case ':': {  /* `:' NAME funcargs */
         luaX_next(ls);
-        int tbl = new_table_before(ls,T_method,true);
+        int tbl = new_table_before(ls,"method",true);
         add_field(ls,tbl,"value");
         RETURNS_1(checksymbol(ls,NULL));
         add_field(ls,tbl,"name");
@@ -911,7 +904,7 @@ static void primaryexp (LexState *ls) {
         /* fallthrough */
       case TK_STRING: case '{': {
         //luaK_exp2nextreg(fs, v);
-        int tbl = new_table_before(ls,T_apply,true);
+        int tbl = new_table_before(ls,"apply",true);
         add_field(ls,tbl,"value");
         RETURNS_1(funcargs(ls, line));
         add_field(ls,tbl,"arguments");
@@ -959,7 +952,7 @@ static void doquote(LexState * ls, int isexp) {
         FuncState * fs = ls->fs;
         BlockCnt bc;
         enterblock(fs, &bc, 0);
-        int let = new_table(ls, T_treelist);
+        int let = new_table(ls, "treelist");
         RETURNS_1(statlist(ls));
         add_field(ls, let, "statements");
         if(isfullquote && testnext(ls, TK_IN)) {
@@ -1216,8 +1209,8 @@ static BinOpr subexpr (LexState *ls, int limit) {
   Token begintoken = ls->t;
   
   if (uop != OPR_NOUNOPR) {
-    int tbl = new_table(ls,T_operator);
-    push_kind(ls,luaX_token2rawstr(ls,ls->t.token));
+    int tbl = new_table(ls,"operator");
+    push_string(ls,luaX_token2rawstr(ls,ls->t.token));
     add_field(ls,tbl,"operator");
     luaX_next(ls);
     Token beginexp = ls->t;
@@ -1247,7 +1240,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
     BinOpr nextop;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
-    int tbl = new_table_before(ls,T_operator,true); //need to create this before we call next to ensure we record the right position
+    int tbl = new_table_before(ls,"operator",true); //need to create this before we call next to ensure we record the right position
     exps++; //we just put a table before it, so it is one higher on the stack
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
@@ -1266,7 +1259,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
     
    
     add_field(ls,tbl,"operands");
-    push_kind(ls,token);
+    push_string(ls,token);
     add_field(ls,tbl,"operator");
     op = nextop;
   }
@@ -1309,7 +1302,7 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
     //terra types are lua expressions.
     //to resolve them we stop processing terra code and start processing lua code
     //we capture the string of lua code and then evaluate it later to get the actual type
-    int tbl = new_table(ls, T_luaexpression);
+    int tbl = new_table(ls, "luaexpression");
     Token begintoken = ls->t;
     int in_terra = ls->in_terra;
     
@@ -1372,8 +1365,8 @@ static void block (LexState *ls) {
   /* block -> statlist */
   FuncState *fs = ls->fs;
   BlockCnt bl;
-  int blk = new_table(ls,T_block);
-  int treelist = new_table(ls,T_treelist);
+  int blk = new_table(ls,"block");
+  int treelist = new_table(ls,"treelist");
   enterblock(fs, &bl, 0);
   RETURNS_1(statlist(ls));
   leaveblock(fs);
@@ -1403,7 +1396,7 @@ static void assignment (LexState *ls, int nvars, int lhs) {
   }
   else {  /* assignment -> `=' explist */
     checknext(ls, '=');
-    int tbl = new_table_before(ls,T_assignment, true);
+    int tbl = new_table_before(ls,"assignment", true);
     add_field(ls,tbl,"lhs");
     RETURNS_1(explist(ls));
     add_field(ls,tbl,"rhs");
@@ -1420,13 +1413,13 @@ static void cond (LexState *ls) {
 
 static void gotostat (LexState *ls) {
   if (testnext(ls, TK_GOTO)) {
-    int tbl = new_table(ls,T_goto);
+    int tbl = new_table(ls,"goto");
     
     checksymbol(ls,NULL);
     add_field(ls,tbl,"label");
 
   } else {
-    new_table(ls,T_break);
+    new_table(ls,"break");
     luaX_next(ls);  /* skip break */
   }
 
@@ -1435,7 +1428,7 @@ static void gotostat (LexState *ls) {
 static void labelstat (LexState *ls) {
   check_terra(ls,"goto labels");
   /* label -> '::' NAME '::' */
-  int tbl = new_table(ls,T_label);
+  int tbl = new_table(ls,"label");
   RETURNS_1(checksymbol(ls,NULL));
   checknext(ls, TK_DBCOLON);  /* skip double colon */
   /* create new entry for this label */
@@ -1448,7 +1441,7 @@ static void whilestat (LexState *ls, int line) {
   /* whilestat -> WHILE cond DO block END */
   FuncState *fs = ls->fs;
   //int whileinit;
-  int tbl = new_table(ls,T_while);
+  int tbl = new_table(ls,"while");
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
   RETURNS_1(cond(ls));
@@ -1469,9 +1462,9 @@ static void repeatstat (LexState *ls, int line) {
   enterblock(fs, &bl1, 1);  /* loop block */
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
-  int blk = new_table(ls,T_block);
-  int tbl = new_table(ls,T_repeat);
-  int treelist = new_table(ls,T_treelist);
+  int blk = new_table(ls,"block");
+  int tbl = new_table(ls,"repeat");
+  int treelist = new_table(ls,"treelist");
   RETURNS_1(statlist(ls));
   add_field(ls,treelist,"statements");
   add_field(ls,tbl,"body");
@@ -1495,7 +1488,7 @@ static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
 
 static void fornum (LexState *ls, TString *varname, int line) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
-  int tbl = new_table_before(ls,T_fornum);
+  int tbl = new_table_before(ls,"fornum");
   add_field(ls,tbl,"variable");
   checknext(ls, '=');
   RETURNS_1(expr(ls));  /* initial value */
@@ -1517,7 +1510,7 @@ static void fornum (LexState *ls, TString *varname, int line) {
 
 static void forlist (LexState *ls, TString *indexname) {
   /* forlist -> NAME {,NAME} IN explist forbody */
-  int tbl = new_table_before(ls,T_forlist);
+  int tbl = new_table_before(ls,"forlist");
   int vars = new_list_before(ls);
   add_entry(ls,vars);
   /* create declared variables */
@@ -1566,7 +1559,7 @@ static void test_then_block (LexState *ls) {
   /* test_then_block -> [IF | ELSEIF] cond THEN block */
   BlockCnt bl;
   luaX_next(ls);  /* skip IF or ELSEIF */
-  int tbl = new_table(ls,T_ifbranch);
+  int tbl = new_table(ls,"ifbranch");
   RETURNS_1(cond(ls));  /* read condition */
   add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
@@ -1576,7 +1569,7 @@ static void test_then_block (LexState *ls) {
 
 static void ifstat (LexState *ls, int line) {
   /* ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END */
-  int tbl = new_table(ls,T_if);
+  int tbl = new_table(ls,"if");
   int branches = new_list(ls);
   RETURNS_1(test_then_block(ls));  /* IF cond THEN block */
   add_entry(ls,branches);
@@ -1610,7 +1603,7 @@ void print_name_list(LexState * ls, std::vector<Name> * definednames) {
 
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
-  int tbl = new_table(ls,T_defvar);
+  int tbl = new_table(ls,"defvar");
   int vars = new_list(ls);
   std::vector<TString *> declarednames;
   do {
@@ -1800,7 +1793,7 @@ static void exprstat (LexState *ls) {
 
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
-  int tbl = new_table(ls,T_return);
+  int tbl = new_table(ls,"return");
   if (block_follow(ls, 1) || ls->t.token == ';') {
     new_list(ls);
   } else {
@@ -1912,7 +1905,7 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_DEFER: {
-        int tbl = new_table(ls, T_defer);
+        int tbl = new_table(ls, "defer");
         luaX_next(ls);
         expr(ls);
         add_field(ls, tbl, "expression");
@@ -1957,19 +1950,19 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         if(!iskeyword) {
             lua_setfield(ls->L,-2,"value");
-            lua_pushinteger(ls->L,T_nametoken);
+            lua_pushstring(ls->L,"<name>");
         }
         lua_setfield(ls->L,-2,"type");
     } break;
     case TK_STRING:
-        lua_pushinteger(ls->L,T_stringtoken);
+        lua_pushstring(ls->L,"<string>");
         lua_setfield(ls->L,-2,"type");
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"value");
         break;
     case TK_NUMBER: {
         char buf[128];
-        lua_pushinteger(ls->L,T_numbertoken);
+        lua_pushstring(ls->L,"<number>");
         lua_setfield(ls->L,-2,"type");
         int flags = t->seminfo.flags;
         number_type(ls, flags, &buf[0]);
@@ -1988,7 +1981,7 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_setfield(ls->L,-2,"type");
         break;
     case TK_EOS:
-        lua_pushnumber(ls->L,T_eostoken);
+        lua_pushstring(ls->L,"<eos>");
         lua_setfield(ls->L,-2,"type");
         break;
     default:
@@ -2198,10 +2191,6 @@ int luaY_parser (terra_State *T, ZIO *z,
   
   lua_getfield(L,to,"newlist");
   luaX_globalset(&lexstate, TA_NEWLIST);
-  
-  lua_getfield(L,to,"kinds");
-  luaX_globalset(&lexstate, TA_KINDS_TABLE);
-  
   
   lua_newtable(L);
   luaX_globalset(&lexstate, TA_ENTRY_POINT_TABLE);

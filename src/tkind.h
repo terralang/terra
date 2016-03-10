@@ -2,8 +2,8 @@
 #define t_kind_h
 
 struct terra_State;
-//all value that can go into the terra AST's kind field, and the functions to initialize the terra.kinds table in the lua state
-
+//a list of strings that the C++ code in tcompiler.cpp needs to examine for code emission
+//a table terra.kinds maps these strings to enum values that are defined here.
 
 #define T_KIND_LIST(_) \
 _(add, "+") \
@@ -79,10 +79,6 @@ _(luaexpression,"luaexpression") \
 _(symbol, "symbol") \
 _(treelist, "treelist") \
 _(typedexpression, "typedexpression") \
-_(nametoken, "<name>") \
-_(numbertoken, "<number>") \
-_(stringtoken, "<string>") \
-_(eostoken, "<eof>") \
 _(constant,"constant") \
 _(attrload,"attrload") \
 _(attrstore,"attrstore") \
@@ -101,7 +97,5 @@ enum T_Kind {
 
 const char * tkindtostr(T_Kind k);
 void terra_kindsinit(terra_State * T);
-
-
 
 #endif

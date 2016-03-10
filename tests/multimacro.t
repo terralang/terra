@@ -1,6 +1,6 @@
 
 local bar = terralib.internalmacro(function(ctx,tree,typ,x)
-	return {terralib.newtree(typ.tree, { kind = terralib.kinds.literal, type = double, value = 4.0 }), x }
+	return {terralib.newtree(typ.tree, { kind = "literal", type = double, value = 4.0 }), x }
 end)
 
 local x,y,z = 1,2,3
