@@ -219,7 +219,7 @@ for i in string.gmatch("nil number string boolean table thread userdata cdata fu
 end
 defaultchecks["any"] = function() return true end
 
-local function newcontext()
+local function NewContext()
     return setmetatable({ checks = setmetatable({},{__index = defaultchecks}), members = {}, list = {}, uniquelist = {}, listcache = {}, optional = {}, definitions = {} },Context)
 end
 
@@ -387,4 +387,4 @@ function Context:Define(text)
         end
     end
 end
-package.loaded["asdl"] = { newcontext = newcontext, List = List }
+package.loaded["asdl"] = { NewContext = NewContext, List = List }

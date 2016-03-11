@@ -38,6 +38,51 @@ setmetatable(terra.kinds, { __index = function(self,idx)
     error("unknown kind accessed: "..tostring(idx))
 end })
 
+local T = asdl.NewContext()
+
+T:Extern("Type", function(t) return terra.types.istype(t) end)
+T:Define [[
+symbol = expressionsymbol(luaexpression expression)
+       | namedsymbol(string name) 
+
+field = recfield(symbol key, tree value)
+      | listfield(tree value)
+      
+structbody = structentry(string key, luaexpression type)
+           | structlist(structbody* entries)
+
+entry = (symbol name, luaexpression? type)
+functiondef = (entry* parameters, boolean is_varargs, luaexpression? returntype, block body)
+struct = (luaexpression? metatype, structlist records)
+
+ifbranch = (tree condition, block body)
+
+tree = var(string name)
+     | literal(any? value, Type type)
+     | constructor(field* records)
+     | select(tree value, symbol field) 
+     | index(tree value,tree index)
+     | method(tree value,symbol name,tree* arguments)
+     | apply(tree value, tree* arguments)
+     | treelist(tree* statements, tree* expressions)
+     | operator(tree* operands, string operator)
+     | block(treelist body)
+     | assignment(tree* lhs,tree* rhs)
+     | gotostat(symbol label)
+     | breakstat()
+     | label(symbol value)
+     | whilestat(tree condition, block body)
+     | repeatstat(block body, tree condition)
+     | fornum(entry variable, tree initial, tree limit, tree? step,block body)
+     | forlist(entry* variables, tree iterator, block body)
+     | ifstat(ifbranch* branches, block? orelse)
+     | defvar(entry* variables,  boolean hasinit, tree* initializers)
+     | returnstat(tree* expressions)
+     | defer(tree expression)
+     | luaexpression(function expression, boolean isexpression)
+]]
+terra.irtypes = T
+
 -- temporary until we replace with asdl
 local tokens = setmetatable({},{__index = function(self,idx) return idx end })
 
