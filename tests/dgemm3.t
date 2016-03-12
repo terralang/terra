@@ -196,7 +196,7 @@ if false then
 						local avg = times[1]	
 						if  best.gflops < avg then
 							best = { gflops = avg, b = b, rm = rm, rn = rn, v = v }
-							terralib.tree.printraw(best)
+							terralib.printraw(best)
 						end
 					end
 				end
@@ -205,7 +205,7 @@ if false then
 	end
 end
 
-terralib.tree.printraw(best)
+terralib.printraw(best)
 
 local my_dgemm = generatedgemm(best.b, 5, best.rm, best.rn, best.v)
 

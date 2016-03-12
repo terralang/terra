@@ -41,45 +41,60 @@ end })
 local T = asdl.NewContext()
 
 T:Extern("Type", function(t) return terra.types.istype(t) end)
+T:Extern("Symbol", function(t) return terra.issymbol(t) end)
+T:Extern("GlobalVar", function(t) return terra.isglobalvar(t) end)
+T:Extern("Constant", function(t) return terra.isconstant(t) end)
+T:Extern("LuaExprOrType",function(t) return terra.types.istype(t) or T.luaexpression:isclassof(t) end) -- temporary until eager typing is sorted out
 T:Define [[
-symbol = expressionsymbol(luaexpression expression)
-       | namedsymbol(string name) 
+ident =     escapedident(luaexpression expression) # removed during specialization
+          | namedident(string name)
+          | symbolident(Symbol symbol) 
 
-field = recfield(symbol key, tree value)
+field = recfield(ident key, tree value)
       | listfield(tree value)
       
 structbody = structentry(string key, luaexpression type)
            | structlist(structbody* entries)
 
-entry = (symbol name, luaexpression? type)
-functiondef = (entry* parameters, boolean is_varargs, luaexpression? returntype, block body)
+param = unevaluatedparam(ident name, luaexpression? type) # removed during specialization
+      | concreteparam(Type? type, string name, Symbol symbol)
+      
+functiondef = (param* parameters, boolean is_varargs, LuaExprOrType? returntype, block body)
 struct = (luaexpression? metatype, structlist records)
 
 ifbranch = (tree condition, block body)
 
-tree = var(string name)
+tree = 
+     # introduced by parsing
+       var(string name, Symbol? symbol) #symbol is added during specialization
      | literal(any? value, Type type)
      | constructor(field* records)
-     | select(tree value, symbol field) 
+     | select(tree value, ident field) 
      | index(tree value,tree index)
-     | method(tree value,symbol name,tree* arguments)
+     | method(tree value,ident name,tree* arguments)
      | apply(tree value, tree* arguments)
-     | treelist(tree* statements, tree* expressions)
-     | operator(tree* operands, string operator)
-     | block(treelist body)
+     | treelist(tree* trees)
+     | letin(tree* statements, tree* expressions)
+     | operator(string operator, tree* operands)
+     | block(tree* statements)
      | assignment(tree* lhs,tree* rhs)
-     | gotostat(symbol label)
+     | gotostat(ident label)
      | breakstat()
-     | label(symbol value)
+     | label(ident value)
      | whilestat(tree condition, block body)
      | repeatstat(block body, tree condition)
-     | fornum(entry variable, tree initial, tree limit, tree? step,block body)
-     | forlist(entry* variables, tree iterator, block body)
+     | fornum(param variable, tree initial, tree limit, tree? step,block body)
+     | forlist(param* variables, tree iterator, block body)
      | ifstat(ifbranch* branches, block? orelse)
-     | defvar(entry* variables,  boolean hasinit, tree* initializers)
+     | defvar(param* variables,  boolean hasinit, tree* initializers)
      | returnstat(tree* expressions)
      | defer(tree expression)
-     | luaexpression(function expression, boolean isexpression)
+     | luaexpression(function expression, boolean isexpression) # removed during specialization
+     
+     # introduced by specialization/typing
+     | globalvar(string name, GlobalVar value)
+     | constant(Constant value, Type type)
+     | luaobject(any value)
 ]]
 terra.irtypes = T
 
@@ -95,7 +110,7 @@ local function dbprint(level,...)
 end
 local function dbprintraw(level,obj)
     if terra.isverbose >= level then
-        obj:printraw()
+        terra.printraw(obj)
     end
 end
 
@@ -107,17 +122,15 @@ ffi.cdef = function(...)
 end
 
 -- TREE
-terra.tree = {} --metatype for trees
-terra.tree.__index = terra.tree
-function terra.tree:is(value)
+function T.tree:is(value)
     return self.kind == value
 end
  
-function terra.tree:printraw()
-    local function header(key,t)
-        if type(t) == "table" and (getmetatable(t) == nil or type(getmetatable(t).__index) ~= "function") then
-            local kt = t.kind
-            return (type(kt) == "string" and kt) or ""
+function terra.printraw(self)
+    local function header(t)
+        local mt = getmetatable(t)
+        if type(t) == "table" and mt and type(mt.__fields) == "table" then
+            return t.kind or tostring(mt)
         else return tostring(t) end
     end
     local function isList(t)
@@ -136,17 +149,18 @@ function terra.tree:printraw()
             parents[t] = true
             depth = depth + 1
             for k,v in pairs(t) do
+                local prefix
                 if type(k) == "table" and not terra.issymbol(k) then
-                    print("this table:")
-                    terra.tree.printraw(k)
-                    error("table is key?")
+                    prefix = ("<table (mt = %s)>"):format(tostring(getmetatable(k)))
+                else
+                    prefix = tostring(k)
                 end
-                if k ~= "kind" and k ~= "offset" --[[and k ~= "linenumber"]] then
-                    local prefix = spacing..tostring(k)..": "
+                if k ~= "kind" and k ~= "offset" then
+                    prefix = spacing..prefix..": "
                     if terra.types.istype(v) then --dont print the raw form of types unless printraw was called directly on the type
                         print(prefix..tostring(v))
                     else
-                        print(prefix..header(k,v))
+                        print(prefix..header(v))
                         if isList(v) then
                             printElem(v,string.rep(" ",2+#spacing))
                         else
@@ -159,35 +173,38 @@ function terra.tree:printraw()
             parents[t] = nil
         end
     end
-    print(header(nil,self))
+    print(header(self))
     if type(self) == "table" then
         printElem(self,"  ")
     end
 end
 
-function terra.tree:copy(new_tree)
-    if not new_tree then
-        print(debug.traceback())
-        error("empty tree?")
-    end
-    for k,v in pairs(self) do
-        if not new_tree[k] then
-            new_tree[k] = v
-        end
-    end
-    return setmetatable(new_tree,getmetatable(self))
+local function newobject(ref,ctor,...) -- create a new object, copying the line/file info from the reference
+    assert(ref.linenumber and ref.filename, "not a anchored object?")
+    local r = ctor(...)
+    r.linenumber,r.filename,r.offset = ref.linenumber,ref.filename,ref.offset
+    return r
 end
 
-function terra.newtree(ref,body)
-    if not ref or not terra.istree(ref) then
-        terra.tree.printraw(ref)
-        print(debug.traceback())
-        error("not a tree?",2)
+local function copyobject(ref,newfields) -- copy an object, extracting any new replacement fields from newfields table
+    local class = getmetatable(ref)
+    local fields = class.__fields
+    assert(fields,"not a asdl object?")
+    local function handlefield(i,...) -- need to do this with tail recursion rather than a loop to handle nil values
+        if i == 0 then
+            return newobject(ref,class,...)
+        else
+            local f = fields[i]
+            local a = newfields[f.name] or ref[f.name]
+            newfields[f.name] = nil
+            return handlefield(i-1,a,...)
+        end
     end
-    body.offset = ref.offset
-    body.linenumber = ref.linenumber
-    body.filename = ref.filename
-    return setmetatable(body,terra.tree)
+    local r = handlefield(#fields)
+    for k,v in pairs(newfields) do
+        error("unused field in copy: "..tostring(k))
+    end
+    return r
 end
 
 function terra.newanchor(depth)
@@ -197,7 +214,7 @@ function terra.newanchor(depth)
 end
 
 function terra.istree(v) 
-    return terra.tree == getmetatable(v)
+    return T.tree:isclassof(v)
 end
 
 -- END TREE
@@ -209,7 +226,7 @@ local function mkstring(self,begin,sep,finish)
     return begin..table.concat(self:map(tostring),sep)..finish
 end
 terra.newlist = List
-function terra.islist(l) return List:is(l) end
+function terra.islist(l) return List:isclassof(l) end
 
 
 -- CONTEXT
@@ -390,7 +407,7 @@ terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
     if not anchor or not anchor.filename or not anchor.linenumber then
         print(debug.traceback())
-        print(terralib.tree.printraw(anchor))
+        print(terralib.printraw(anchor))
         error("nil anchor")
     end
     local errlist = self:errorlist()
@@ -901,6 +918,7 @@ function terra.newsymbol(typ,displayname)
             error("argument is not a type",2)
         end
     end
+    assert(not displayname or type(displayname) == "string")
     local self = setmetatable({
         id = terra.symbol.count,
         type = typ,
@@ -967,16 +985,13 @@ do  --constructor functions for terra functions and variables
         --handle desugaring of methods defintions by adding an implicit self argument
         if reciever ~= nil then
             local pointerto = terra.types.pointer
-            local addressof = terra.newtree(newtree, { kind = tokens.luaexpression, expression = function() return pointerto(reciever) end })
-            local sym = terra.newtree(newtree, { kind = tokens.symbol, name = "self"})
-            local implicitparam = terra.newtree(newtree, { kind = tokens.entry, name = sym, type = addressof })
-            
+            local addressof = newobject(newtree,T.luaexpression,function() return pointerto(reciever) end,true)
+            local sym = newobject(newtree,T.namedident,"self")
+            local implicitparam = newobject(newtree,T.unevaluatedparam,sym,addressof)
             --add the implicit parameter to the parameter list
-            local newparameters = terra.newlist{implicitparam}
-            for _,p in ipairs(newtree.parameters) do
-                newparameters:insert(p)
-            end
-            fn.untypedtree = newtree:copy { parameters = newparameters} 
+            local newparameters = List{implicitparam}
+            newparameters:insertall(newtree.parameters)
+            fn.untypedtree = copyobject(newtree,{ parameters = newparameters})
         end
         local starttime = terra.currenttimeinseconds() 
         fn.untypedtree = terra.specialize(fn.untypedtree,env,3)
@@ -999,7 +1014,7 @@ do  --constructor functions for terra functions and variables
         end
         st.undefined = nil
 
-        local function getstructentry(v)
+        local function getstructentry(v) assert(v.kind == "structentry")
             local success,resolvedtype = terra.evalluaexpression(diag,env,v.type)
             if not success then return end
             if not terra.types.istype(resolvedtype) then
@@ -1011,8 +1026,8 @@ do  --constructor functions for terra functions and variables
         
         local function getrecords(records)
             return records:map(function(v)
-                if terra.islist(v) then
-                    return getrecords(v)
+                if v.kind == "structlist" then
+                    return getrecords(v.entries)
                 else
                     return getstructentry(v)
                 end
@@ -1022,7 +1037,7 @@ do  --constructor functions for terra functions and variables
         if tree.metatype then
             success,metatype = terra.evalluaexpression(diag,env,tree.metatype)
         end
-        st.entries = getrecords(tree.records)
+        st.entries = getrecords(tree.records.entries)
         st.tree = tree --to track whether the struct has already beend defined
                        --we keep the tree to improve error reporting
         st.anchor = tree --replace the anchor generated by newstruct with this struct definition
@@ -1208,7 +1223,7 @@ do
         else
             local m = types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
             if m == nil then 
-                terralib.tree.printraw(self)
+                terralib.printraw(self)
                 error("type has no field "..tostring(key),2) 
             end
             return m
@@ -1237,7 +1252,7 @@ do
         if not self.name then error("unknown type?") end
         return self.name
     end)
-    types.type.printraw = terra.tree.printraw
+    types.type.printraw = terra.printraw
     function types.type:isprimitive()
         return self.kind == tokens.primitive
     end
@@ -1549,7 +1564,7 @@ do
                         return
                     end
                 end
-                terra.tree.printraw(e)
+                terra.printraw(e)
                 diag:reporterror(self.anchor,"expected either a field type pair (e.g. { field = <string>, type = <type> } or {<string>,<type>} ), or a list of valid entries representing a union")
             end
             local checkedentries = terra.newlist()
@@ -1853,6 +1868,12 @@ do
     terra.memoize = memoizefunction
 end
 
+function T.tree:setlvalue(v)
+    if v then
+        self.lvalue = true
+    end
+    return self
+end
 -- END TYPE
 
 -- SPECIALIZATION (removal of escape expressions, escape sugar, evaluation of type expressoins)
@@ -1861,9 +1882,12 @@ end
 function terra.createterraexpression(diag,anchor,v)
     local function createsingle(v)
         if terra.isglobalvar(v) or terra.issymbol(v) then
-            local name = anchor:is "var" and anchor.name and tostring(anchor.name) --propage original variable name for debugging purposes
-            return terra.newtree(anchor, { kind = tokens["var"], value = v, name = name or tostring(v), lvalue = true }) 
+            local name = anchor:is "var" and anchor.name --propage original variable name for debugging purposes
+            return newobject(anchor,terra.isglobalvar(v) and T.globalvar or T.var,name or tostring(v),v):setlvalue(true)
         elseif terra.isquote(v) then
+            if not terra.istree(v.tree) then
+                print(v.tree)
+            end
             assert(terra.istree(v.tree))
             return v.tree
         elseif terra.istree(v) then
@@ -1874,16 +1898,16 @@ function terra.createterraexpression(diag,anchor,v)
             if typ:isaggregate() then --when an aggregate is directly referenced from Terra we get its pointer
                                       --a constant would make an entire copy of the object
                 local ptrobj = createsingle(terra.constant(terra.types.pointer(typ),v))
-                return terra.newtree(anchor, { kind = tokens.operator, operator = tokens["@"], operands = terra.newlist { ptrobj } }) 
+                return newobject(anchor,T.operator, "@", List { ptrobj })
             end
             return createsingle(terra.constant(typ,v))
         elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
             return createsingle(terra.constant(v))
         elseif terra.isconstant(v) then
             if v.stringvalue then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
-                return terra.newtree(anchor, { kind = tokens.literal, value = v.stringvalue, type = terra.types.rawstring })
+                return newobject(anchor,T.literal,v.stringvalue,terra.types.rawstring)
             else 
-                return terra.newtree(anchor, { kind = tokens.constant, value = v, type = v.type, lvalue = v.type:isaggregate()})
+                return newobject(anchor,T.constant,v,v.type):setlvalue(v.type:isaggregate())
             end
         end
         local mt = getmetatable(v)
@@ -1893,7 +1917,7 @@ function terra.createterraexpression(diag,anchor,v)
             if not (terra.isfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "function" or type(v) == "table") then
                 diag:reporterror(anchor,"lua object of type ", terra.type(v), " not understood by terra code.")
             end
-            return terra.newtree(anchor, { kind = tokens.luaobject, value = v })
+            return newobject(anchor,T.luaobject,v)
         end
     end
     if terra.israwlist(v) then
@@ -1901,13 +1925,14 @@ function terra.createterraexpression(diag,anchor,v)
         for _,i in ipairs(v) do
             values:insert(createsingle(i))
         end
-        return terra.newtree(anchor, { kind = tokens.treelist, trees = values})
+        return newobject(anchor,T.treelist,values)
     else
         return createsingle(v)
     end
 end
 
 function terra.specialize(origtree, luaenv, depth)
+    terra.printraw(origtree)
     local env = terra.newenvironment(luaenv)
     local diag = terra.newdiagnostics()
     diag:begin()
@@ -1929,15 +1954,31 @@ function terra.specialize(origtree, luaenv, depth)
         end
         return terra.types.error
     end
+    local function translateident(e,stringok)
+        if e.kind == "namedident" then return e end
+        local success, r = terra.evalluaexpression(diag,env:combinedenv(),e.expression)
+        if type(r) == "string" then
+            if not stringok then
+                diag:reporterror(p,"expected a symbol but found string")
+            end
+            return newobject(e,T.namedident,r)
+        elseif not terra.issymbol(r) then
+            if success then
+                diag:reporterror(e,"expected a string or symbol but found ",terra.type(r))
+            end
+            r = terra.newsymbol(nil,"error")
+        end
+        return newobject(e,T.symbolident,r)
+    end
     function translatetree(e)
-        if e:is "var" then
+        if T.var:isclassof(e) then
             local v = env:combinedenv()[e.name]
             if v == nil then
                 diag:reporterror(e,"variable '"..e.name.."' not found")
                 return e
             end
             return terra.createterraexpression(diag,e,v)
-        elseif e:is "select" then
+        elseif T.select.isclassof(e) then
             local ee = translategenerictree(e)
             if not ee.value:is "luaobject" then
                 return ee
@@ -1959,7 +2000,7 @@ function terra.specialize(origtree, luaenv, depth)
                 return ee
             end
             return terra.createterraexpression(diag,e,selected)
-        elseif e:is "luaexpression" then
+        elseif T.luaexpression:isclassof(e) then
             local value = {}
             if e.isexpression then
                 local success, returnvalue = terra.evalluaexpression(diag,env:combinedenv(),e)
@@ -1971,32 +2012,18 @@ function terra.specialize(origtree, luaenv, depth)
                 env:leaveblock()
             end
             return terra.createterraexpression(diag, e, value)
-        elseif e:is "symbol" then
-            local v
-            if e.name then
-                v = e.name
-            else
-                local success, r = terra.evalluaexpression(diag,env:combinedenv(),e.expression)
-                if not success then 
-                    v = terra.newsymbol(nil,"error")
-                elseif type(r) ~= "string" and not terra.issymbol(r) then
-                    diag:reporterror(e,"expected a string or symbol but found ",terra.type(r))
-                    v = terra.newsymbol(nil,"error")
-                else
-                    v = r
-                end
-            end
-            return v
-        elseif e:is "defvar" then
-            local initializers = e.initializers and translatelist(e.initializers)
+        elseif T.ident:isclassof(e) then
+            return translateident(e,true)
+        elseif T.defvar:isclassof(e) then
+            local initializers = translatelist(e.initializers)
             local variables = createformalparameterlist(e.variables, initializers == nil)     
-            return e:copy { variables = variables, initializers = initializers }
-        elseif e:is "function" then
+            return newobject(e,T.defvar,variables,e.hasinit,initializers)
+        elseif T.functiondef:isclassof(e) then
             local parameters = createformalparameterlist(e.parameters,true)
             local returntype = e.returntype and evaltype(e,e.returntype)
             local body = translatetree(e.body)
-            return e:copy { parameters = parameters, returntype = returntype, body = body }
-        elseif e:is "fornum" then
+            return newobject(e,T.functiondef,parameters,e.is_varargs,returntype,body)
+        elseif T.fornum:isclassof(e) then
             local initial,limit,step = translatetree(e.initial),translatetree(e.limit), e.step and translatetree(e.step)
             env:enterblock()
             local variables = createformalparameterlist(terra.newlist { e.variable }, false)
@@ -2005,93 +2032,73 @@ function terra.specialize(origtree, luaenv, depth)
             end
             local body = translatetree(e.body)
             env:leaveblock()
-            return e:copy { initial = initial, limit = limit, step = step, variable = variables[1], body = body }
-        elseif e:is "forlist" then
+            return newobject(e,T.fornum,variables[1],initial,limit,step,body)
+        elseif T.forlist:isclassof(e) then
             local iterator = translatetree(e.iterator)
             env:enterblock()
             local variables = createformalparameterlist(e.variables,false)
             local body = translatetree(e.body)
             env:leaveblock()
-            return e:copy { iterator = iterator, variables = variables, body = body }
-        elseif e:is "block" then
+            return newobject(e,T.forlist,variables,iterator,body)
+        elseif T.block:isclassof(e) then
             env:enterblock()
-            local r = translategenerictree(e)
+            local r = translatelist(e.statements)
             env:leaveblock()
-            return r
-        elseif e:is "repeat" then
+            if r == e.statements then return e
+            else return newobject(e,T.block,r) end
+        elseif T.repeatstat:isclassof(e) then
             --special handling for order of repeat
             local nb = translatetree(e.body)
             local nc = translatetree(e.condition)
-            if nb ~= e.body or nc ~= e.condition then
-                return e:copy { body = nb, condition = nc }
-            else
+            if nb == e.body and nc == e.condition then
                 return e
             end
-        elseif e:is "treelist" then
-            --special handling for ordering of treelist
-            local ns = e.statements and translatelist(e.statements)
-            local nt = e.trees and translatelist(e.trees)
-            local ne = e.expressions and translatelist(e.expressions)
-            if ns ~= e.statements or nt ~= e.trees or ne ~= e.expressions then
-                return e:copy { statements = ns, trees = nt, expressions = ne }
-            else
+            return newobject(e,T.repeatstat,nb,nc)
+        elseif T.letin:isclassof(e) then
+            --special handling for ordering of letin
+            local ns = translatelist(e.statements)
+            local ne = translatelist(e.expressions)
+            if ns == e.statements and ne == e.expressions then
                 return e
             end
+            return newobject(e,T.letin,ns,ne)
         else
             return translategenerictree(e)
         end
     end
     function createformalparameterlist(paramlist, requiretypes)
+        local function registername(p,name,sym)
+            local lenv = env:localenv()
+            if rawget(lenv,name) then
+                diag:reporterror(p,"duplicate definition of variable ",name)
+            end
+            lenv[name] = sym
+        end
+                
         local result = terra.newlist()
         for i,p in ipairs(paramlist) do
-            if p.type or p.name.name then
-                --treat the entry as a _single_ parameter if any are true:
-                --it has an explicit type
-                --it is a string (and hence cannot be multiple items) then
-            
-                local typ = p.type and evaltype(p,p.type)
-                local function registername(name,sym)
-                    local lenv = env:localenv()
-                    if rawget(lenv,name) then
-                        diag:reporterror(p,"duplicate definition of variable ",name)
-                    end
-                    lenv[name] = sym
-                end
-                local symorstring = translatetree(p.name)
-                local sym,name
-                if type(symorstring) == "string" then
-                    name = symorstring
-                    if p.name.expression then
-                        --in statement: "var [a] : int = ..." don't let 'a' resolve to a string 
-                        diag:reporterror(p,"expected a symbol but found string")
-                    else
-                        --generate a new unique symbol for this variable and add it to the environment
-                        --this will allow quotes to see it hygientically and references to it to be resolved to the symbol
-                        local name = symorstring
-                        local lenv = env:localenv()
-                        sym = terra.newsymbol(nil,name)
-                        registername(name,sym)
-                    end
+            local evaltype = p.type and evaltype(p,p.type)
+            if p.name.kind == "namedident" then
+                local sym = terra.newsymbol(nil,p.name.name)
+                registername(p,p.name.name,sym)
+                result:insert(newobject(p,T.concreteparam,evaltype,p.name.name,sym))
+            else assert(p.name.kind == "escapedident")
+                if p.type then
+                    local symident = translateident(p.name,false)
+                    result:insert(newobject(p,T.concreteparam,evaltype,tostring(symident.symbol),symident.symbol))
                 else
-                    sym = symorstring
-                    name = tostring(sym)
-                    registername(sym,sym)
-                end
-                result:insert(p:copy { type = typ, name = name, symbol = sym })
-            else
-                local sym = p.name
-                assert(sym.expression)
-                local success, value = terra.evalluaexpression(diag,env:combinedenv(),sym.expression)
-                if success then
-                    if not value then
-                        diag:reporterror(p,"expected a symbol or string but found nil")
-                    end
-                    local symlist = (terra.israwlist(value) and value) or terra.newlist{ value }
-                    for i,entry in ipairs(symlist) do
-                        if terra.issymbol(entry) then
-                            result:insert(p:copy { symbol = entry, name = tostring(entry) })
-                        else
-                            diag:reporterror(p,"expected a symbol but found ",terra.type(entry))
+                    local success, value = terra.evalluaexpression(diag,env:combinedenv(),p.name.expression)
+                    if success then
+                        if not value then
+                            diag:reporterror(p,"expected a symbol or string but found nil")
+                        end
+                        local symlist = (terra.israwlist(value) and value) or terra.newlist{ value }
+                        for i,entry in ipairs(symlist) do
+                            if terra.issymbol(entry) then
+                                result:insert(newobject(p,T.concreteparam,nil,tostring(entry),entry))
+                            else
+                                diag:reporterror(p,"expected a symbol but found ",terra.type(entry))
+                            end
                         end
                     end
                 end
@@ -2111,21 +2118,26 @@ function terra.specialize(origtree, luaenv, depth)
     --recursively translate any tree or list of trees.
     --new objects are only created when we find a new value
     function translategenerictree(tree)
-        assert(terra.istree(tree))
+        local function isasdl(tree)
+            return type(tree) == "table" and type(tree.__fields) == "table"
+        end
+        if not isasdl(tree) then terra.printraw(tree) end
+        assert(isasdl(tree))
         local nt = nil
         local function addentry(k,origv,newv)
             if origv ~= newv then
                 if not nt then
-                    nt = tree:copy {}
+                    nt = copyobject(tree,{})
                 end
                 nt[k] = newv
             end
         end
-        for k,v in pairs(tree) do
-            if terra.istree(v) then
-                addentry(k,v,translatetree(v))
-            elseif terra.islist(v) and #v > 0 and terra.istree(v[1]) then
-                addentry(k,v,translatelist(v))
+        for _,f in ipairs(tree.__fields) do
+            local v = tree[f.name]
+            if T.tree:isclassof(v) then
+                addentry(f.name,v,translatetree(v))
+            elseif List:isclassof(v) and #v > 0 and isasdl(v[1]) then
+                addentry(f.name,v,translatelist(v))
             end 
         end
         return nt or tree
@@ -2133,7 +2145,6 @@ function terra.specialize(origtree, luaenv, depth)
     function translatelist(lst)
         local changed = false
         local nl = lst:map(function(e)
-            assert(terra.istree(e)) 
             local ee = translatetree(e)
             changed = changed or ee ~= e
             return ee
@@ -2161,9 +2172,7 @@ function terra.evalluaexpression(diag, env, e)
             return startline, errmsg
         end
     end
-    if not terra.istree(e) or not e:is "luaexpression" then
-       print(debug.traceback())
-       terra.tree.printraw(e)
+    if not T.luaexpression:isclassof(e) then
        error("not a lua expression?") 
     end
     assert(type(e.expression) == "function")
@@ -2173,8 +2182,10 @@ function terra.evalluaexpression(diag, env, e)
     local success,v = pcall(fn)
     setfenv(fn,oldenv) --otherwise, we hold false reference to env
     if not success then --v contains the error message
-        local ln,err = parseerrormessage(e.linenumber,v)
-        diag:reporterror(e:copy( { linenumber = ln }),"error evaluating lua code: ", diag.source, "lua error was:\n", err)
+        local oldln,ln,err = e.linenumber,parseerrormessage(e.linenumber,v)
+        e.linenumber = ln
+        diag:reporterror(e,"error evaluating lua code: ", diag.source, "lua error was:\n", err)
+        e.linenumber = oldln
         return false
     end
     return true,v
@@ -2199,6 +2210,12 @@ function terra.unsafetypeofsymbol(sym)
 end
 
 function terra.funcdefinition:typecheckbody()
+    print("first call to typecheck body, exiting")
+    ffi.cdef [[
+        int exit(int);
+    ]]
+    ffi.C.exit(0)
+    
     assert(self.state == "untyped")
     self.state = "typechecking"
     if self.isextern then
@@ -3051,7 +3068,7 @@ function terra.funcdefinition:typecheckbody()
             if not terra.istree(e) then
                 print("not a tree?")
                 print(debug.traceback())
-                terra.tree.printraw(e)
+                terra.printraw(e)
             end
             if e:is "luaobject" then
                 return e
@@ -4362,11 +4379,12 @@ local function terraloader(name)
     file = ("/?.t"):gsub("%?",fname)
     local internal = getinternalizedfile(file)
     if internal and internal.kind == "file" then
-        local str = ffi.string(ffi.cast("const char *",internal.contents))
+        local str,done = ffi.string(ffi.cast("const char *",internal.contents)),false
         local fn,err = terra.load(function()
-            local r = str
-            str = nil
-            return r
+            if not done then
+                done = true
+                return str
+            end
         end,file)
         return check(fn,err)
     else

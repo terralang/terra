@@ -19,7 +19,7 @@ return {
 		end
 
 		return function(env)
-			terralib.tree.printraw(ts)
+			terralib.printraw(ts)
 			return ts
 		end
 

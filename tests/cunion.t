@@ -28,7 +28,7 @@ terra foo() : int
 end
 
 
-terralib.tree.printraw(C.S)
+terralib.printraw(C.S)
 
 local test = require("test")
 test.eq(foo(),3)

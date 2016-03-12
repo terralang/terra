@@ -32,7 +32,7 @@ function List:insertall(elems)
         self:insert(e)
     end
 end
-function List:is(exp)
+function List:isclassof(exp)
     return getmetatable(exp) == self
 end
 
@@ -182,7 +182,7 @@ end
 
 local function checklist(checkt)
     return function(vs)
-        if not List:is(vs) then return false end
+        if not List:isclassof(vs) then return false end
         for i,e in ipairs(vs) do
             if not checkt(e) then return false,i end
         end
@@ -193,7 +193,7 @@ end
 local valuekey,nilkey = {},{}
 local function checkuniquelist(checkt,listcache)
     return function(vs)
-        if not List:is(vs) then return false end
+        if not List:isclassof(vs) then return false end
         local node = listcache
         for i,e in ipairs(vs) do
             if not checkt(e) then return false,i end
@@ -264,6 +264,7 @@ function Context:DefineClass(name,unique,fields)
     local class = self.definitions[name]
     
     if fields then
+        class.__fields = fields -- for reflection in user-defined behavior
         local names = List()
         local checks = List()
         local tns = List()
@@ -348,7 +349,7 @@ function Context:DefineClass(name,unique,fields)
         end
     end
     local check = assert(self.checks[name])
-    function class:is(obj)
+    function class:isclassof(obj)
         return check(obj)
     end
     class.__index = class

@@ -99,7 +99,12 @@ static int new_list_before(LexState * ls) {
         return t - 1;
     } else return 0;
 }
-
+static void push_string_before(LexState * ls, const char * str) {
+    if(ls->in_terra) {
+        lua_pushstring(ls->L,str);
+        lua_insert(ls->L,-2);
+    }
+}
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
     if(ls->in_terra) {
@@ -313,7 +318,7 @@ static bool checksymbol(LexState * ls, TString ** str) {
   int line = ls->linenumber;
   if(ls->in_terra && testnext(ls,'[')) {
     RETURNS_1(luaexpr(ls));
-    new_object(ls,"expressionsymbol",1,&p);
+    new_object(ls,"escapedident",1,&p);
     check_match(ls, ']', '[', line);
     return false;
   }
@@ -321,7 +326,7 @@ static bool checksymbol(LexState * ls, TString ** str) {
   if(str)
     *str = nm;
   push_string(ls,nm);
-  new_object(ls,"namedsymbol",1,&p);
+  new_object(ls,"namedident",1,&p);
   return true;
 }
 
@@ -527,7 +532,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
         if(!lua_equal(ls->L,-1,-2))
             luaX_syntaxerror(ls, "unexpected symbol");
         lua_pop(ls->L,2); //kind and luaexpression
-        new_object(ls,"expressionsymbol",1,&pos);
+        new_object(ls,"escapedident",1,&pos);
       } else {
         /* oops! this wasn't a recfield, but a listfield with an escape */
         new_object(ls,"listfield",1,&pos);
@@ -655,7 +660,6 @@ static void print_stack(lua_State * L, int idx) {
 
 //store the lua object on the top of the stack to to the _G.terra._trees table, returning its index in the table
 static int store_value(LexState * ls) {
-    print_stack(ls->L,-1);
     int i = 0;
     if(ls->in_terra) {
         luaX_globalpush(ls, TA_FUNCTION_TABLE);
@@ -691,7 +695,7 @@ static int vardecl(LexState *ls, int requiretype, TString ** vname) {
         checknext(ls, ':');
         RETURNS_1(terratype(ls));
     } else push_nil(ls);
-    new_object(ls,"entry",2,&p);
+    new_object(ls,"unevaluatedparam",2,&p);
     return wasstring;
 }
 
@@ -941,7 +945,7 @@ static void doquote(LexState * ls, int isexp) {
         if(isfullquote)
             check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
-        new_object(ls,"treelist",2,&p);
+        new_object(ls,"letin",2,&p);
     }
     
     luaX_patchbegin(ls,&begin);
@@ -1188,7 +1192,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
   
   if (uop != OPR_NOUNOPR) {
     Position p = getposition(ls);
-    const char * token = luaX_token2rawstr(ls,ls->t.token);
+    push_string(ls,luaX_token2rawstr(ls,ls->t.token));
     luaX_next(ls);
     Token beginexp = ls->t;
     int exps = new_list(ls);
@@ -1201,7 +1205,6 @@ static BinOpr subexpr (LexState *ls, int limit) {
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
         luaX_patchend(ls, &begintoken);
     }
-    push_string(ls, token);
     new_object(ls, "operator", 2, &p);
   }
   else RETURNS_1(simpleexp(ls));
@@ -1234,7 +1237,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
     }
     add_entry(ls,exps);
     
-    push_string(ls,token);
+    push_string_before(ls,token);
     
     new_object(ls,"operator",2,&pos);
     
@@ -1345,10 +1348,8 @@ static void block (LexState *ls) {
   
   enterblock(fs, &bl, 0);
   RETURNS_1(statlist(ls));
-  new_list(ls);
   leaveblock(fs);
   
-  new_object(ls,"treelist",2,&p);
   new_object(ls,"block",1,&p);
 }
 
@@ -1429,8 +1430,6 @@ static void repeatstat (LexState *ls, int line) {
   Position pos = getposition(ls);
   
   RETURNS_1(statlist(ls));
-  new_list(ls);
-  new_object(ls,"treelist",2,&pos);
   new_object(ls,"block",1,&pos);
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   RETURNS_1(cond(ls));
@@ -2194,8 +2193,6 @@ int luaY_parser (terra_State *T, ZIO *z,
   int err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);
   cleanup(&lexstate);
   
-  printf("parser is finished, exiting early\n");
-  exit(0);
   return err;
 }
 
