@@ -309,7 +309,6 @@ function terra.context:finish(anchor)
         else
             for i,o in ipairs(scc) do
                 o.state,o.scc = "typechecked",obj.compileindex
-                o:printpretty()
             end
             --dispatch callbacks that should occur once the function is typechecked
             for i,o in ipairs(scc) do
@@ -740,7 +739,6 @@ function terra.func:adddefinition(v)
                        --this will be used as the name for llvm debugging, etc.
     self.fastcall = nil
     self.definitions:insert(v)
-    v:printpretty(false)
 end
 
 function terra.func:getdefinitions()
@@ -3992,7 +3990,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit(" do\n")
             emitStmt(s.body)
             begin(s,"end\n")
-        elseif s:is "repeat" then
+        elseif s:is "repeatstat" then
             begin(s,"repeat\n")
             enterblock()
             emitStmt(s.body)
@@ -4197,7 +4195,13 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitLetIn(e)
         elseif e:is "treelist" then
             emitList(e.trees,"{",",","}",emitExp)
-      elseif e:is "attrstore" then
+        elseif e:is "attrload" then
+            emit("attrload(")
+            emitExp(e.address)
+            emit(", ")
+            emitAttr(e.attrs)
+            emit(")")
+        elseif e:is "attrstore" then
             emit("attrstore(")
             emitExp(e.address)
             emit(", ")
@@ -4233,6 +4237,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit(")")
         else
             emit("<??"..e.kind.."??>")
+            error("??"..tostring(e.kind))
         end
     end
     function emitParamList(pl)
