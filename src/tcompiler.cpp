@@ -1332,8 +1332,6 @@ struct FunctionEmitter {
         return func;
     }
     void emitBody() {
-        printf("reached emit body, exiting...\n");
-        exit(0);
         B = new IRBuilder<>(*CU->TT->ctx);
         Obj localtbl;
         lua_newtable(L);
@@ -1391,7 +1389,7 @@ struct FunctionEmitter {
     }
     
     AllocaInst * allocVar(Obj * v) {
-        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->asstring("name"));
+        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->string("name"));
         mapSymbol(locals,v,a);
         return a;
     }
@@ -1646,35 +1644,6 @@ if(baseT->isIntegerTy()) { \
 	// should not be reachable - every case above should either return or assert
 	return 0;
     }
-    Value * emitStructCast(Obj * exp, TType * from, Obj * toObj, TType * to, Value * input) {
-        //allocate memory to hold input variable
-        Obj structvariable;
-        exp->obj("structvariable", &structvariable);
-        Value * sv = allocVar(&structvariable);
-        B->CreateStore(input,sv);
-        
-        //allocate temporary to hold output variable
-        //type must be complete before we try to allocate space for it
-        //this is enforced by the callers
-        assert(!to->incomplete);
-        Value * output = CreateAlloca(B,to->type);
-        
-        Obj entries;
-        exp->obj("entries",&entries);
-        int N = entries.size();
-        
-        for(int i = 0; i < N; i++) {
-            Obj entry;
-            entries.objAt(i,&entry);
-            Obj value;
-            entry.obj("value", &value);
-            int idx = entry.number("index");
-            Value * oe = emitStructSelect(toObj,output,idx);
-            Value * in = emitExp(&value); //these expressions will select from the structvariable and perform any casts necessary
-            B->CreateStore(in,oe);
-        }
-        return B->CreateLoad(output);
-    }
     Value * emitArrayToPointer(Obj * exp) {
         Value * v = emitAddressOf(exp);
         return CreateConstGEP2_32(B,v,0,0);
@@ -1793,21 +1762,27 @@ if(baseT->isIntegerTy()) { \
         }
         return raw;
     }
-    /* alignment for load
-
-    */
     
     Value * emitExpRaw(Obj * exp) {
         setDebugPoint(exp);
         switch(exp->kind("kind")) {
             case T_var:  {
-                return variableFromDefinition(exp);
+                Obj def;
+                exp->obj("definition",&def);
+                Value * v = lookupSymbol<Value>(locals,&def);
+                assert(v);
+                return v;
+            } break;
+            case T_globalvar:  {
+                Obj global;
+                exp->obj("value",&global);
+                return EmitGlobalVariable(CU,&global,exp->string("name"));
             } break;
             case T_allocvar: {
                 return allocVar(exp);
             } break;
-            case T_treelist: {
-                return emitTreeList(exp);
+            case T_letin: {
+                return emitLetIn(exp);
             } break;
             case T_operator: {
                 
@@ -1940,6 +1915,38 @@ if(baseT->isIntegerTy()) { \
             case T_apply: {
                 return emitCall(exp,false);
             } break;
+            case T_structcast: {
+                Obj expression,structvariable,to;
+                exp->obj("expression",&expression);
+                 //allocate memory to hold input variable
+                exp->obj("structvariable", &structvariable);
+                exp->obj("type",&to);
+                TType * toT = getType(&to);
+                Value * sv = allocVar(&structvariable);
+                B->CreateStore(emitExp(&expression),sv);
+                
+                //allocate temporary to hold output variable
+                //type must be complete before we try to allocate space for it
+                //this is enforced by the callers
+                assert(!toT->incomplete);
+                Value * output = CreateAlloca(B,toT->type);
+                
+                Obj entries;
+                exp->obj("entries",&entries);
+                int N = entries.size();
+                
+                for(int i = 0; i < N; i++) {
+                    Obj entry;
+                    entries.objAt(i,&entry);
+                    Obj value;
+                    entry.obj("value", &value);
+                    int idx = entry.number("index");
+                    Value * oe = emitStructSelect(&to,output,idx);
+                    Value * in = emitExp(&value); //these expressions will select from the structvariable and perform any casts necessary
+                    B->CreateStore(in,oe);
+                }
+                return B->CreateLoad(output);
+            } break;
             case T_cast: {
                 Obj a;
                 Obj to,from;
@@ -1952,9 +1959,7 @@ if(baseT->isIntegerTy()) { \
                     return emitArrayToPointer(&a);
                 }
                 Value * v = emitExp(&a);
-                if(fromT->type->isStructTy()) {
-                    return emitStructCast(exp,fromT,&to,toT,v);
-                } else if(fromT->type->isPointerTy()) {
+                if(fromT->type->isPointerTy()) {
                     if(toT->type->isPointerTy()) {
                         return B->CreateBitCast(v, toT->type);
                     } else {
@@ -2032,7 +2037,7 @@ if(baseT->isIntegerTy()) { \
                 Obj addr,type,attr;
                 exp->obj("type",&type);
                 exp->obj("address",&addr);
-                exp->obj("attributes",&attr);
+                exp->obj("attrs",&attr);
                 Ty->EnsureTypeIsComplete(&type);
                 LoadInst * l = B->CreateLoad(emitExp(&addr));
                 if(attr.hasfield("alignment")) {
@@ -2048,7 +2053,7 @@ if(baseT->isIntegerTy()) { \
             case T_attrstore: {
                 Obj addr,attr,value;
                 exp->obj("address",&addr);
-                exp->obj("attributes",&attr);
+                exp->obj("attrs",&attr);
                 exp->obj("value",&value);
                 Value * addrexp = emitExp(&addr);
                 Value * valueexp = emitExp(&value);
@@ -2202,7 +2207,7 @@ if(baseT->isIntegerTy()) { \
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
         BasicBlock * bb = lookupSymbol<BasicBlock>(locals, lbl);
         if(!bb) {
-            bb = createAndInsertBB(lbl->string("labelname"));
+            bb = createAndInsertBB(lbl->asstring("value"));
             mapSymbol(locals, lbl, bb);
         }
         return bb;
@@ -2267,25 +2272,25 @@ if(baseT->isIntegerTy()) { \
         }
         return B->CreateLoad(result);
     }
-    Value * emitTreeList(Obj * treelist) {
-        Obj stmts;
-        if(treelist->obj("statements",&stmts)) {
-            int NS = stmts.size();
-            for(int i = 0; i < NS; i++) {
-                Obj s;
-                stmts.objAt(i,&s);
-                emitStmt(&s);
-            }
+    void emitStmtList(Obj * stmts) {
+        int NS = stmts->size();
+        for(int i = 0; i < NS; i++) {
+            Obj s;
+            stmts->objAt(i,&s);
+            emitStmt(&s);
         }
-        Obj exps;
-        if(!treelist->obj("expressions",&exps))
-            return NULL;
+    }
+    Value * emitLetIn(Obj * letin) {
+        Obj stmts,exps;
+        letin->obj("statements",&stmts);
+        emitStmtList(&stmts);
+        letin->obj("expressions",&exps);
         if (exps.size() == 1) {
             Obj exp;
             exps.objAt(0,&exp);
             return emitExp(&exp,false);
         }
-        return emitConstructor(treelist, &exps);
+        return emitConstructor(letin, &exps);
     }
     void startDeadCode() {
         BasicBlock * bb = createAndInsertBB("dead");
@@ -2322,12 +2327,12 @@ if(baseT->isIntegerTy()) { \
         switch(kind) {
             case T_block: {
                 size_t N = deferred.size();
-                Obj treelist;
-                stmt->obj("body",&treelist);
-                emitStmt(&treelist);
+                Obj stmts;
+                stmt->obj("statements",&stmts);
+                emitStmtList(&stmts);
                 unwindDeferred(N);
             } break;
-            case T_return: {
+            case T_returnstat: {
                 Obj exp;
                 stmt->obj("expression",&exp);
                 Value * result = emitExp(&exp);;
@@ -2343,7 +2348,7 @@ if(baseT->isIntegerTy()) { \
                 followsBB(bb);
                 setInsertBlock(bb);
             } break;
-            case T_goto: {
+            case T_gotostat: {
                 Obj lbl;
                 stmt->obj("definition",&lbl);
                 BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
@@ -2351,7 +2356,7 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(bb);
                 startDeadCode();
             } break;
-            case T_break: {
+            case T_breakstat: {
                 Obj def;
                 stmt->obj("breaktable",&def);
                 BasicBlock * breakpoint = lookupSymbol<BasicBlock>(locals, &def);
@@ -2360,7 +2365,7 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(breakpoint);
                 startDeadCode();
             } break;
-            case T_while: {
+            case T_whilestat: {
                 Obj cond,body;
                 stmt->obj("condition",&cond);
                 stmt->obj("body",&body);
@@ -2418,7 +2423,7 @@ if(baseT->isIntegerTy()) { \
                 followsBB(merge);
                 setInsertBlock(merge);
             } break;
-            case T_if: {
+            case T_ifstat: {
                 Obj branches;
                 stmt->obj("branches",&branches);
                 int N = branches.size();
@@ -2435,10 +2440,10 @@ if(baseT->isIntegerTy()) { \
                 followsBB(footer);
                 setInsertBlock(footer);
             } break;
-            case T_repeat: {
-                Obj cond,body;
+            case T_repeatstat: {
+                Obj cond,statements;
                 stmt->obj("condition",&cond);
-                stmt->obj("body",&body);
+                stmt->obj("statements",&statements);
                 
                 BasicBlock * loopBody = createAndInsertBB("repeatbody");
                 BasicBlock * merge = createAndInsertBB("merge");
@@ -2448,7 +2453,7 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
                 size_t N = deferred.size();
-                emitStmt(&body);
+                emitStmtList(&statements);
                 if(N < deferred.size()) { //because the body and the conditional are in the same block scope
                                           //we need special handling for deferred
                                           //along the back edge of the loop we must emit the deferred blocks

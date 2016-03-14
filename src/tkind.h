@@ -8,86 +8,67 @@ struct terra_State;
 #define T_KIND_LIST(_) \
 _(add, "+") \
 _(addressof,"&") \
+_(allocvar, "allocvar") \
 _(and,"and") \
 _(apply,"apply") \
+_(array, "array") \
+_(arrayconstructor,"arrayconstructor") \
 _(assignment,"assignment") \
+_(attrload,"attrload") \
+_(attrstore,"attrstore") \
 _(block,"block") \
-_(break,"break") \
-_(concat,"..") \
+_(breakstat,"breakstat") \
+_(cast,"cast") \
+_(constant,"constant") \
 _(constructor,"constructor") \
-_(defvar,"defvar") \
+_(debuginfo,"debuginfo") \
+_(defer, "defer") \
 _(dereference,"@") \
 _(div, "/") \
-_(entry,"entry") \
 _(eq,"==") \
-_(forlist,"forlist") \
+_(float,"float") \
 _(fornum,"fornum") \
-_(funcptr,"->") \
-_(function,"function") \
+_(functype,"functype") \
 _(ge,">=") \
-_(goto,"goto") \
+_(globalvar, "globalvar") \
+_(gotostat,"gotostat") \
 _(gt,">") \
-_(if,"if") \
-_(ifbranch,"ifbranch") \
+_(ifstat,"ifstat") \
 _(index,"index") \
+_(inlineasm,"inlineasm") \
+_(integer,"integer") \
 _(label,"label") \
 _(le,"<=") \
-_(listfield,"listfield") \
+_(letin,"letin") \
 _(literal,"literal") \
+_(logical,"logical") \
+_(lshift, "<<") \
 _(lt,"<") \
-_(method,"method") \
+_(luafunction, "luafunction") \
 _(mod, "%") \
 _(mul, "*") \
 _(ne,"~=") \
+_(niltype, "niltype") \
 _(not,"not") \
+_(opaque, "opaque") \
 _(operator,"operator") \
 _(or, "or") \
+_(pointer,"pointer") \
 _(pow, "^") \
-_(recfield,"recfield") \
-_(repeat,"repeat") \
-_(return,"return") \
+_(primitive,"primitive") \
+_(repeatstat,"repeatstat") \
+_(returnstat,"returnstat") \
+_(rshift, ">>") \
 _(select,"select") \
+_(setter,"setter") \
+_(sizeof, "sizeof") \
+_(struct, "struct") \
+_(structcast, "structcast") \
 _(sub, "-") \
 _(var,"var") \
-_(while,"while") \
-_(pointer,"pointer") \
-_(primitive,"primitive") \
-_(error, "error") \
-_(functype,"functype") \
-_(float,"float") \
-_(integer,"integer") \
-_(logical,"logical") \
-_(cast,"cast") \
-_(globalvar, "globalvar") \
-_(struct, "struct") \
-_(structentry, "structentry") \
-_(type, "type") \
-_(proxy, "proxy") \
-_(array, "array") \
-_(sizeof, "sizeof") \
-_(niltype, "niltype") \
-_(union, "union") \
-_(lshift, "<<") \
-_(rshift, ">>") \
-_(luafunction, "luafunction") \
-_(luatable, "luaobject") \
-_(quote, "quote") \
 _(vector, "vector") \
 _(vectorconstructor,"vectorconstructor") \
-_(arrayconstructor,"arrayconstructor") \
-_(luaexpression,"luaexpression") \
-_(symbol, "symbol") \
-_(treelist, "treelist") \
-_(typedexpression, "typedexpression") \
-_(constant,"constant") \
-_(attrload,"attrload") \
-_(attrstore,"attrstore") \
-_(opaque, "opaque") \
-_(allocvar, "allocvar") \
-_(defer, "defer") \
-_(setter,"setter") \
-_(inlineasm,"inlineasm") \
-_(debuginfo,"debuginfo")
+_(whilestat,"whilestat")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

@@ -177,22 +177,17 @@ struct Obj {
         return r;
     }
     void dump() {
-        printf("object is:\n");
-        
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-        lua_getfield(L,-1,"tree");
-        
         lua_getfield(L,-1,"printraw");
         push();
         lua_call(L, 1, 0);
         
-        lua_pop(L,2);
-        
-        printf("stack is:\n");
-        int n = lua_gettop(L);
-        for (int i = 1; i <= n; i++) {
-            printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
-        }
+        lua_pop(L,1);
+    }
+    void print() {
+        lua_getfield(L,LUA_GLOBALSINDEX,"print");
+        push();
+        lua_call(L,1,0);
     }
     void newlist(Obj * lst) {
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");

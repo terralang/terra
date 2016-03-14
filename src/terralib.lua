@@ -84,8 +84,8 @@ tree =
      # introduced temporarily during specialization/typing, but removed after typing
      | luaobject(any value)
      | typedexpression(tree expression, table key)
-     | setter(function setter) # temporary node introduced and removed during typechecking to handle __update
-     
+     | setteru(function setter) # temporary node introduced and removed during typechecking to handle __update and __setfield
+          
      # trees that exist after typechecking and handled by the backend:
      | var(string name, Symbol? symbol) #symbol is added during specialization
      | literal(any? value, Type type)
@@ -99,7 +99,7 @@ tree =
      | breakstat()
      | label(ident value)
      | whilestat(tree condition, block body)
-     | repeatstat(block body, tree condition)
+     | repeatstat(tree* statements, tree condition)
      | fornum(allocvar variable, tree initial, tree limit, tree? step, block body)
      | ifstat(ifbranch* branches, block? orelse)
      | defer(tree expression)
@@ -119,6 +119,7 @@ tree =
      | structcast(allocvar structvariable, tree expression, storelocation* entries)
      | constructor(tree* expressions)
      | returnstat(tree expression)
+     | setter(tree setter, allocvar rhs) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
 ]]
 terra.irtypes = T
 
@@ -1991,7 +1992,8 @@ function terra.specialize(origtree, luaenv, depth)
         local success, r = terra.evalluaexpression(diag,env:combinedenv(),e.expression)
         if type(r) == "string" then
             if not stringok then
-                diag:reporterror(p,"expected a symbol but found string")
+                diag:reporterror(e,"expected a symbol but found string")
+                return newobject(e,T.symbolident,terra.newsymbol(r))
             end
             return newobject(e,T.namedident,r)
         elseif not terra.issymbol(r) then
@@ -2048,7 +2050,7 @@ function terra.specialize(origtree, luaenv, depth)
             return translateident(e,true)
         elseif T.defvar:isclassof(e) then
             local initializers = translatelist(e.initializers)
-            local variables = createformalparameterlist(e.variables, initializers == nil)     
+            local variables = createformalparameterlist(e.variables, not e.hasinit)
             return newobject(e,T.defvar,variables,e.hasinit,initializers)
         elseif T.functiondefu:isclassof(e) then
             local parameters = createformalparameterlist(e.parameters,true)
@@ -2080,12 +2082,12 @@ function terra.specialize(origtree, luaenv, depth)
             else return newobject(e,T.block,r) end
         elseif T.repeatstat:isclassof(e) then
             --special handling for order of repeat
-            local nb = translatetree(e.body)
+            local ns = translatelist(e.statements)
             local nc = translatetree(e.condition)
-            if nb == e.body and nc == e.condition then
+            if ns == e.statements and nc == e.condition then
                 return e
             end
-            return newobject(e,T.repeatstat,nb,nc)
+            return newobject(e,T.repeatstat,ns,nc)
         elseif T.letin:isclassof(e) then
             --special handling for ordering of letin
             local ns = translatelist(e.statements)
@@ -2366,6 +2368,7 @@ function terra.funcdefinition:typecheckbody()
     local function allocvar(anchor,typ,name)
         local av = newobject(anchor,T.allocvar,name,terra.newsymbol(name)):setlvalue(true):withtype(typ:complete(anchor))
         local v = newobject(anchor,T.var,name,av.symbol):setlvalue(true):withtype(typ)
+        v.definition = av
         return av,v
     end
     
@@ -2397,7 +2400,6 @@ function terra.funcdefinition:typecheckbody()
                 entries:insert(newobject(exp,T.storelocation,offset,v))
             end
         end
-        
         return newobject(exp,T.structcast,structvariable,exp,entries):withtype(typ)
     end
     
@@ -2417,7 +2419,7 @@ function terra.funcdefinition:typecheckbody()
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return createcast(exp,typ), true
             elseif typ:isstruct() and typ.convertible and exp.type:isstruct() and exp.type.convertible then 
-                return structcast(false,exp,typ,speculative)
+                return structcast(false,exp,typ,speculative), true
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 return createcast(exp,typ), true
             elseif typ:isvector() and exp.type:isprimitive() then
@@ -2961,7 +2963,7 @@ function terra.funcdefinition:typecheckbody()
                         arguments:insert(rhs)
                         return checkmethodwithreciever(exp, true, "__update", fnlike, arguments, "statement") 
                     end
-                    return newobject(exp,T.setter,setter)
+                    return newobject(exp,T.setteru,setter)
                 end
                 return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, location) 
             end
@@ -3016,7 +3018,7 @@ function terra.funcdefinition:typecheckbody()
 
         local function createcall(callee, paramlist)
             callee.type.type:completefunction(anchor)
-            return newobject(anchor,T.apply,callee,arguments):withtype(callee.type.type.returntype)
+            return newobject(anchor,T.apply,callee,paramlist):withtype(callee.type.type.returntype)
         end
 
         local function generatenativewrapper(fn)
@@ -3027,7 +3029,7 @@ function terra.funcdefinition:typecheckbody()
             local success, cb = pcall(function() return terra.cast(castedtype,fn) end)
             if not success then
                 diag:reporterror(anchor, "unsupported callback function type: ", castedtype)
-                return anchor:copy {}:withtype(castedtype)
+                return anchor:copy {}:withtype(castedtype),paramlist
             end
             local fptr = cb and terra.pointertolightuserdata(cb)
             return newobject(anchor,T.luafunction,cb,fptr):withtype(castedtype),paramlist
@@ -3152,7 +3154,7 @@ function terra.funcdefinition:typecheckbody()
                             local function setter(rhs)
                                 return checkmacro("__setentry", terra.newlist { v , rhs }, "statement")
                             end
-                            return newobject(v,T.setter,setter)
+                            return newobject(v,T.setteru,setter)
                         elseif terra.ismacro(typ.metamethods.__entrymissing) then
                             return checkmacro("__entrymissing",terra.newlist { v },location)
                         else
@@ -3247,7 +3249,7 @@ function terra.funcdefinition:typecheckbody()
                     return e:aserror()
                 end
                 local value = insertcast(checkexp(e.value),addr.type.type)
-                return e:copy { address = addr, value = value }:withtype(terra.types.unit)
+                return e:copy { address = addr, value = value }:withtype(terra.types.unit:complete(e))
             elseif e:is "apply" then
                 return checkapply(e,location)
             elseif e:is "method" then
@@ -3287,7 +3289,7 @@ function terra.funcdefinition:typecheckbody()
             elseif e:is "inlineasm" then
                 return e:copy { arguments = checkexpressions(e.arguments) }
             elseif e:is "debuginfo" then
-                return e:copy{}:withtype(terra.types.unit)
+                return e:copy{}:withtype(terra.types.unit:complete(e))
             else
                 diag:reporterror(e,"statement found where an expression is expected ", e.kind)
                 return e:aserror()
@@ -3296,7 +3298,7 @@ function terra.funcdefinition:typecheckbody()
         
         local result = docheck(e_)
         --freeze all types returned by the expression (or list of expressions)
-        if not result:is "luaobject" and not result:is "setter" then
+        if not result:is "luaobject" and not result:is "setteru" then
             assert(terra.types.istype(result.type))
             result.type:complete(result)
         end
@@ -3399,7 +3401,9 @@ function terra.funcdefinition:typecheckbody()
         end
         return 0
     end
-    
+    local function createstatementlist(anchor,stmts)
+        return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit:complete(anchor))
+    end
     local function createassignment(anchor,lhs,rhs)
         if #lhs > #rhs and #rhs > 0 then
             local last = rhs[#rhs]
@@ -3417,16 +3421,16 @@ function terra.funcdefinition:typecheckbody()
                 end
                 newlhs[#rhs] = av
                 local a1,a2 = createassignment(anchor,newlhs,rhs), createassignment(anchor,lhsp,rhsp)
-                return newobject(anchor,T.letin,List { a1,a2 }, List {}, true)
+                return createstatementlist(anchor, List {a1, a2})
             end
         end
         local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
         rhs = insertcasts(anchor,vtypes,rhs)
         for i,v in ipairs(lhs) do
             local rhstype = rhs[i] and rhs[i].type or terra.types.error
-            if v:is "setter" then
+            if v:is "setteru" then
                 local rv,r = allocvar(v,rhstype,"<rhs>")
-                v.setter,v.rhs = v.setter(r),rv
+                lhs[i] = newobject(v,T.setter, v.setter(r), rv)
             else
                 ensurelvalue(v)
             end
@@ -3549,17 +3553,17 @@ function terra.funcdefinition:typecheckbody()
             return s:copy{ branches = br, orelse = els }
         elseif s:is "repeatstat" then
             local breaktable = enterloop()
-            local new_body = checkstmt(s.body)
+            local stmts = s.statements:map(checkstmt)
             local e = checkcond(s.condition)
             leaveloop()
-            local r = s:copy { body = new_body, condition = e }
+            local r = s:copy { statements = stmts, condition = e }
             r.breaktable = breaktable
             return r
         elseif s:is "defvar" then
             local rhs = s.hasinit and checkexpressions(s.initializers)
             local lhs = checkformalparameterlist(s.variables)
             local res = s.hasinit and createassignment(s,lhs,rhs) 
-                        or newobject(s,T.letin,lhs,List{},true)
+                        or createstatementlist(s,lhs)
             return res
         elseif s:is "assignment" then
             local rhs = checkexpressions(s.rhs)
@@ -3950,7 +3954,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
     local emitStmt, emitExp,emitParamList,emitLetIn
     local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
         for i,ss in ipairs(lst) do
-            if ss:is "block" then
+            if ss:is "block" and not (#ss.statements == 1 and ss.statements[1].kind == "repeatstat") then
                 begin(ss,"do\n")
                 emitStmt(ss)
                 begin(ss,"end\n")
@@ -3997,7 +4001,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         elseif s:is "repeatstat" then
             begin(s,"repeat\n")
             enterblock()
-            emitStmt(s.body)
+            emitStmtList(s.statements)
             leaveblock()
             begin(s.condition,"until ")
             emitExp(s.condition)

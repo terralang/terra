@@ -1428,16 +1428,18 @@ static void repeatstat (LexState *ls, int line) {
   enterblock(fs, &bl1, 1);  /* loop block */
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
+  int stmts = new_list(ls);
   Position pos = getposition(ls);
   
   RETURNS_1(statlist(ls));
-  new_object(ls,"block",1,&pos);
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   RETURNS_1(cond(ls));
   
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
   new_object(ls,"repeatstat",2,&pos);
+  add_entry(ls, stmts);
+  new_object(ls,"block",1,&pos);
 }
 
 static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
