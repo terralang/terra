@@ -1945,7 +1945,7 @@ if(baseT->isIntegerTy()) { \
                 Obj to,from;
                 exp->obj("expression",&a);
                 exp->obj("to",&to);
-                exp->obj("from",&from);
+                a.obj("type",&from);
                 TType * fromT = getType(&from);
                 TType * toT = getType(&to);
                 if(fromT->type->isArrayTy()) {

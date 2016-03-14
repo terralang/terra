@@ -1757,7 +1757,7 @@ static void retstat (LexState *ls) {
   } else {
     RETURNS_1(explist(ls));  /* optional return values */
   }
-  push_boolean(ls, true); //has statements
+  push_boolean(ls, false); //has statements
   testnext(ls, ';');  /* skip optional semicolon */
   new_object(ls, "letin", 3, &p);
   new_object(ls,"returnstat",1,&p);

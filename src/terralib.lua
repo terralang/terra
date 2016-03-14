@@ -92,7 +92,7 @@ tree =
      | forlist(param* variables, tree iterator, block body)
      | ifstat(ifbranch* branches, block? orelse)
      | defvar(param* variables,  boolean hasinit, tree* initializers) #removed during typechecking
-     | returnstat(letin expression)
+     | returnstat(tree expression)
      | defer(tree expression)
      | luaexpression(function expression, boolean isexpression) # removed during specialization
      
@@ -108,7 +108,7 @@ tree =
      | vectorconstructor(Type? oftype,tree* expressions)
      | sizeof(Type oftype)
      | inlineasm(Type type, string asm, boolean volatile, string constraints, tree* arguments)
-     | cast(Type? from, Type to, tree expression, boolean explicit) # from is optional for untyped cast, will be removed eventually
+     | cast(Type to, tree expression, boolean explicit) # from is optional for untyped cast, will be removed eventually
      | typedexpression(tree expression, table key)
      | allocvar(string name, Symbol symbol)
      | setter(function setter) # temporary node introduced and removed during typechecking to handle __update
@@ -309,6 +309,7 @@ function terra.context:finish(anchor)
         else
             for i,o in ipairs(scc) do
                 o.state,o.scc = "typechecked",obj.compileindex
+                o:printpretty()
             end
             --dispatch callbacks that should occur once the function is typechecked
             for i,o in ipairs(scc) do
@@ -739,6 +740,7 @@ function terra.func:adddefinition(v)
                        --this will be used as the name for llvm debugging, etc.
     self.fastcall = nil
     self.definitions:insert(v)
+    v:printpretty(false)
 end
 
 function terra.func:getdefinitions()
@@ -1021,7 +1023,6 @@ do  --constructor functions for terra functions and variables
         local starttime = terra.currenttimeinseconds() 
         fn.untypedtree = terra.specialize(fn.untypedtree,env,3)
         fn.stats.specialize = terra.currenttimeinseconds() - starttime
-
         return fn
     end
     
@@ -2283,7 +2284,7 @@ function terra.funcdefinition:typecheckbody()
     
     --tree constructors for trees created in the typechecking process
     local function createcast(exp,typ)
-        return newobject(exp,T.cast,exp.type,typ,exp,false):withtype(typ:complete(exp))
+        return newobject(exp,T.cast,typ,exp,false):withtype(typ:complete(exp))
     end
     
     local validkeystack = { {} }
@@ -2966,7 +2967,7 @@ function terra.funcdefinition:typecheckbody()
         return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, location)
     end
     local function createuntypedcast(value,totype,explicit)
-        return newobject(value,T.cast,nil,totype,value,explicit)
+        return newobject(value,T.cast,totype,value,explicit)
     end
     function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, location)
         --arguments are always typed trees, or a lua object
@@ -3447,7 +3448,6 @@ function terra.funcdefinition:typecheckbody()
         elseif s:is "label" then
             local ss = s:copy {}
             local label = ss.value.value
-            ss.labelname = tostring(label)
             ss.position = getscopeposition()
             local lbls = labels[label] or terra.newlist()
             if terra.istree(lbls) then
@@ -3856,11 +3856,6 @@ function terra.func:__tostring()
 end
 
 local function printpretty(breaklines,toptree,returntype,start,...)
-    print("exiting at printpretty")
-    ffi.cdef [[
-        int exit(int);
-    ]]
-    ffi.C.exit(0)
     breaklines = breaklines == nil or breaklines
     local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
@@ -3921,27 +3916,36 @@ local function printpretty(breaklines,toptree,returntype,start,...)
     local function emitType(t)
         emit("%s",t)
     end
-    local function emitIdent(name,sym)
-        sym = terra.isglobalvar(sym) and sym.symbol or sym
-        assert(sym) assert(name) assert(terra.issymbol(sym))
+
+    local function UniqueName(name,key)
+        assert(name) assert(key)
         local lenv = env:localenv()
-        local assignedname = lenv[sym]
-        --if we haven't seen this symbol in this scope yet, assign a name for this symbol, favoring the non-mangled name
+        local assignedname = lenv[key]
+        --if we haven't seen this key in this scope yet, assign a name for this key, favoring the non-mangled name
         if not assignedname then
-            if lenv[name] then
-                name = name.."$"..sym.id
+            local basename,i = name,1
+            while lenv[name] do
+                name,i = basename.."$"..tostring(i),i+1
             end
-            lenv[name],lenv[sym],assignedname = true,name,name
+            lenv[name],lenv[key],assignedname = true,name,name
         end
-        emit("%s",assignedname)
+        return assignedname
+    end
+    local function emitIdent(name,sym)
+        assert(name) assert(terra.issymbol(sym))
+        emit("%s",UniqueName(name,sym))
+    end
+    local function IdentToString(ident)
+        return tostring(ident.value)
     end
     local function emitParam(p)
+        assert(T.allocvar:isclassof(p) or T.concreteparam:isclassof(p))
         emitIdent(p.name,p.symbol)
         if p.type then 
             emit(" : %s",p.type)
         end
     end
-    local emitStmt, emitExp,emitParamList,emitTreeList
+    local emitStmt, emitExp,emitParamList,emitLetIn
     local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
         for i,ss in ipairs(lst) do
             if ss:is "block" then
@@ -3954,13 +3958,13 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         end
     end
     local function emitAttr(a)
-        emit("{ nontemporal = %s, align = %s, isvolatile = %s }",a.nontemporal or "false",a.align or "native",a.isvolatile or "false")
+        emit("{ nontemporal = %s, align = %s, isvolatile = %s }",a.nontemporal,a.align or "native",a.isvolatile)
     end
     function emitStmt(s)
         if s:is "block" then
             enterblock()
             env:enterblock()
-            emitStmt(s.body)
+            emitStmtList(s.statements)
             env:leaveblock()
             leaveblock()
         elseif s:is "letin" then
@@ -3969,27 +3973,34 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         elseif s:is "treelist" then
             emitStmtList(s.trees)
         elseif s:is "apply" then
-            begin(s,"r%s = ",tostring(s):match("(0x.*)$"))
+            begin(s,"%s = ",UniqueName("r",s))
             emitExp(s)
             emit("\n")
-        elseif s:is "return" then
+        elseif s:is "returnstat" then
             begin(s,"return ")
-            if s.expression then emitExp(s.expression)
-            else emitParamList(s.expressions) end
+            emitExp(s.expression)
             emit("\n")
         elseif s:is "label" then
-            begin(s,"::%s::\n",s.labelname or s.value)
-        elseif s:is "goto" then
-            begin(s,"goto %s (%s)\n",s.definition and s.definition.labelname or s.label,s.deferred or "")
-        elseif s:is "break" then
+            begin(s,"::%s::\n",IdentToString(s.value))
+        elseif s:is "gotostat" then
+            begin(s,"goto %s (%s)\n",IdentToString(s.label),s.deferred or "")
+        elseif s:is "breakstat" then
             begin(s,"break (%s)\n",s.deferred or "")
-        elseif s:is "while" then
+        elseif s:is "whilestat" then
             begin(s,"while ")
             emitExp(s.condition)
             emit(" do\n")
             emitStmt(s.body)
             begin(s,"end\n")
-        elseif s:is "fornum" then
+        elseif s:is "repeat" then
+            begin(s,"repeat\n")
+            enterblock()
+            emitStmt(s.body)
+            leaveblock()
+            begin(s.condition,"until ")
+            emitExp(s.condition)
+            emit("\n")
+        elseif s:is "fornum"or s:is "fornumu" then
             begin(s,"for ")
             emitParam(s.variable)
             emit(" = ")
@@ -4006,7 +4017,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit(" do\n")
             emitStmt(s.body)
             begin(s,"end\n")
-        elseif s:is "if" then
+        elseif s:is "ifstat" then
             for i,b in ipairs(s.branches) do
                 if i == 1 then
                     begin(b,"if ")
@@ -4022,18 +4033,10 @@ local function printpretty(breaklines,toptree,returntype,start,...)
                 emitStmt(s.orelse)
             end
             begin(s,"end\n")
-        elseif s:is "repeat" then
-            begin(s,"repeat\n")
-            enterblock()
-            emitStmt(s.body)
-            leaveblock()
-            begin(s.condition,"until ")
-            emitExp(s.condition)
-            emit("\n")
         elseif s:is "defvar" then
             begin(s,"var ")
             emitList(s.variables,"",", ","",emitParam)
-            if s.initializers then
+            if s.hasinit then
                 emit(" = ")
                 emitParamList(s.initializers)
             end
@@ -4101,12 +4104,14 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             lastanchor = e
         end
         if e:is "var" then
-            emitIdent(e.name,e.value)
+            emitIdent(e.name,e.symbol)
+        elseif e:is "globalvar" then
+            emitIdent(e.name,e.value.symbol)
         elseif e:is "allocvar" then
             emit("var ")
             emitParam(e)
         elseif e:is "setter" then
-            emitStmt(e.setter)
+            emit("<setter>")
         elseif e:is "operator" then
             local op = e.operator
             local function emitOperand(o,isrhs)
@@ -4123,7 +4128,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
                 emit("terralib.select")
                 emitList(e.operands,"(",", ",")",emitExp)
             else
-                emit("<??operator??>")
+                emit("<??operator:"..op.."??>")
             end
         elseif e:is "index" then
             doparens(e,e.value)
@@ -4141,12 +4146,12 @@ local function printpretty(breaklines,toptree,returntype,start,...)
                 emit("%s",tostring(e.value))
             end
         elseif e:is "luafunction" then
-            emit("<lua %s>",tostring(e.callback))
-        elseif e:is "cast" then
+            emit("<lua %s>",tostring(e.fptr))
+        elseif e:is "cast" or e:is "structcast" then
             emit("[")
-            emitType(e.to)
+            emitType(e.to or e.type)
             emit("](")
-            emitExp(e.expression or e.value)
+            emitExp(e.expression)
             emit(")")
         elseif e:is "sizeof" then
             emit("sizeof(%s)",e.oftype)
@@ -4155,10 +4160,10 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit("(")
             emitParamList(e.arguments)
             emit(")")
-        elseif e:is "select" then
+        elseif e:is "selectu" or e:is "select" then
             doparens(e,e.value)
             emit(".")
-            emit("%s",e.field)
+            emit("%s",e.fieldname or IdentToString(e.field))
         elseif e:is "vectorconstructor" then
             emit("vector(")
             emitParamList(e.expressions)
@@ -4168,21 +4173,19 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitParamList(e.expressions)
             emit(")")
         elseif e:is "constructor" then
+            local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return tostring(e.key) end) end)
+            if not success then emit("<layouttypeerror> = ") 
+            else emitList(keys,"",", "," = ",emit) end
+            emitParamList(e.expressions)
+        elseif e:is "constructoru" then
             emit("{")
-            if e.type then
-                local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return tostring(e.key) end) end)
-                if not success then emit("<layouttypeerror> = ") 
-                else emitList(keys,"",", "," = ",emit) end
-                emitParamList(e.expressions,keys)
-            else
-                local function emitRec(r)
-                    if r.key then
-                        emit("%s = ",r.key)
-                    end
-                    emitExp(r.value)
+            local function emitField(r)
+                if r.type == "recfield" then
+                    emit("%s = ",IdentToString(r.key))
                 end
-                emitList(e.records,"",", ","",emitRec)
+                emitExp(r.value)
             end
+            emitList(e.records,"",", ","",emitField)
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
@@ -4190,15 +4193,11 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             else
                 emit("<constant:"..tostring(e.type)..">")
             end
+        elseif e:is "letin" then
+            emitLetIn(e)
         elseif e:is "treelist" then
-            emitTreeList(e)
-        elseif e:is "attrload" then
-            emit("attrload(")
-            emitExp(e.address)
-            emit(", ")
-            emitAttr(e.attrs)
-            emit(")")
-        elseif e:is "attrstore" then
+            emitList(e.trees,"{",",","}",emitExp)
+      elseif e:is "attrstore" then
             emit("attrstore(")
             emitExp(e.address)
             emit(", ")
@@ -4218,12 +4217,20 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             end
         elseif e:is "method" then
              doparens(e,e.value)
-             emit(":%s",e.name)
+             emit(":%s",IdentToString(e.name))
              emit("(")
              emitParamList(e.arguments)
              emit(")")
         elseif e:is "typedexpression" then
             emitExp(e.expression)
+        elseif e:is "debuginfo" then
+            emit("debuginfo(%q,%d)",e.customfilename,e.customlinenumber)
+        elseif e:is "inlineasm" then
+            emit("inlineasm(")
+            emitType(e.type)
+            emit(",%s,%s,%s,",e.asm,tostring(volatile),e.constraints)
+            emitParams(e.arguments)
+            emit(")")
         else
             emit("<??"..e.kind.."??>")
         end
@@ -4231,8 +4238,8 @@ local function printpretty(breaklines,toptree,returntype,start,...)
     function emitParamList(pl)
         emitList(pl,"",", ","",emitExp)
     end
-    function emitTreeList(pl)
-        if pl.statements then
+    function emitLetIn(pl)
+        if pl.hasstatements then
             enterindenttocurrentline()
             emit("let\n")
             enterblock()
@@ -4242,20 +4249,16 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             enterblock()
             begin(pl,"")
         end
-        local exps = pl.expressions or pl.trees
-        if exps then
-            emitList(exps,"",", ","",emitExp)
-        end
-        if pl.statements then
+        emitList(pl.expressions,"",", ","",emitExp)
+        if pl.hasstatements then
             leaveblock()
             emit("\n")
             begin(pl,"end")
             leaveblock()
         end
-    end
-    
+    end    
     begin(toptree,start,...)
-    if toptree:is "function" then
+    if T.functiondef:isclassof(toptree) or T.functiondefu:isclassof(toptree) then
         emit("terra")
         emitList(toptree.parameters,"(",",",") ",emitParam)
         if returntype then
