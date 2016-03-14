@@ -2055,6 +2055,14 @@ if(baseT->isIntegerTy()) { \
                     int alignment = attr.number("alignment");
                     l->setAlignment(alignment);
                 }
+                if(attr.boolean("nontemporal")) {
+                    #if LLVM_VERSION <= 35
+                    auto list = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1);
+                    #else
+                    auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1));
+                    #endif
+                    l->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
+                }
                 l->setVolatile(attr.boolean("isvolatile"));
                 return l;
             } break;
