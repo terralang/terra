@@ -1332,6 +1332,8 @@ struct FunctionEmitter {
         return func;
     }
     void emitBody() {
+        printf("reached emit body, exiting...\n");
+        exit(0);
         B = new IRBuilder<>(*CU->TT->ctx);
         Obj localtbl;
         lua_newtable(L);
@@ -2211,7 +2213,12 @@ if(baseT->isIntegerTy()) { \
         Obj func;
         
         call->obj("arguments",&paramlist);
-        call->obj("paramtypes",&paramtypes);
+        paramlist.pushfield("map"); //call arguments:map("type") to get paramtypes
+        paramlist.push();
+        lua_pushstring(L,"type");
+        lua_call(L,2,1);
+        paramlist.fromStack(&paramtypes);
+        
         call->obj("value",&func);
         
         Value * fn = emitExp(&func);

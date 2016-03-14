@@ -593,7 +593,7 @@ static void constructor (LexState *ls) {
     add_entry(ls,records);
   } while (testnext(ls, ',') || testnext(ls, ';'));
   check_match(ls, '}', '{', line);
-  new_object(ls,"constructor",1,&pos);
+  new_object(ls,"constructoru",1,&pos);
 }
 
 static void structfield (LexState *ls) {
@@ -751,7 +751,7 @@ static void body (LexState *ls, int ismethod, int line) {
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
   close_func(ls);
-  new_object(ls,"functiondef",4,&p);
+  new_object(ls,"functiondefu",4,&p);
 }
 
 static int explist (LexState *ls) {
@@ -867,7 +867,7 @@ static void primaryexp (LexState *ls) {
       case '.': {  /* fieldsel */
         luaX_next(ls);
         checksymbol(ls,NULL);
-        new_object(ls,"select",2,&p);
+        new_object(ls,"selectu",2,&p);
         break;
       }
       case '[': {  /* `[' exp1 `]' */
@@ -942,10 +942,11 @@ static void doquote(LexState * ls, int isexp) {
         } else {
             new_list(ls);
         }
+        push_boolean(ls, true);
         if(isfullquote)
             check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
-        new_object(ls,"letin",2,&p);
+        new_object(ls,"letin",3,&p);
     }
     
     luaX_patchbegin(ls,&begin);
@@ -1463,7 +1464,7 @@ static void fornum (LexState *ls, TString *varname, Position * p) {
   if(varname)
     definevariable(ls, varname);
   RETURNS_1(forbody(ls, p->linenumber, 1, &bl));
-  new_object(ls,"fornum",5,p);
+  new_object(ls,"fornumu",5,p);
 }
 
 
@@ -1750,12 +1751,15 @@ static void exprstat (LexState *ls) {
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
   Position p = getposition(ls);
+  new_list(ls); //empty statements
   if (block_follow(ls, 1) || ls->t.token == ';') {
     new_list(ls);
   } else {
     RETURNS_1(explist(ls));  /* optional return values */
   }
+  push_boolean(ls, true); //has statements
   testnext(ls, ';');  /* skip optional semicolon */
+  new_object(ls, "letin", 3, &p);
   new_object(ls,"returnstat",1,&p);
 }
 
