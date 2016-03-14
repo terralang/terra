@@ -69,15 +69,28 @@ attr = (boolean nontemporal, number? alignment, boolean isvolatile)
 storelocation = (number index, tree value) # for struct cast, value uses structvariable
 
 tree = 
-     # introduced by parsing
-       var(string name, Symbol? symbol) #symbol is added during specialization
+     # trees that are introduced in parsing and are ...
+     # removed during specialization
+       luaexpression(function expression, boolean isexpression)
+     # removed during typechecking
+     | constructoru(field* records) #untyped version
+     | selectu(tree value, ident field) #untyped version
+     | method(tree value,ident name,tree* arguments) 
+     | treelist(tree* trees)
+     | fornumu(param variable, tree initial, tree limit, tree? step,block body) #untyped version
+     | defvar(param* variables,  boolean hasinit, tree* initializers)
+     | forlist(param* variables, tree iterator, block body)
+     
+     # introduced temporarily during specialization/typing, but removed after typing
+     | luaobject(any value)
+     | typedexpression(tree expression, table key)
+     | setter(function setter) # temporary node introduced and removed during typechecking to handle __update
+     
+     # trees that exist after typechecking and handled by the backend:
+     | var(string name, Symbol? symbol) #symbol is added during specialization
      | literal(any? value, Type type)
-     | constructoru(field* records) #untyped version, removed during typechecking
-     | selectu(tree value, ident field) #untyped version, removed during typechecking
      | index(tree value,tree index)
-     | method(tree value,ident name,tree* arguments) #removed during typechecking
      | apply(tree value, tree* arguments)
-     | treelist(tree* trees) #removed during typechecking
      | letin(tree* statements, tree* expressions, boolean hasstatements)
      | operator(string operator, tree* operands)
      | block(tree* statements)
@@ -87,20 +100,12 @@ tree =
      | label(ident value)
      | whilestat(tree condition, block body)
      | repeatstat(block body, tree condition)
-     | fornumu(param variable, tree initial, tree limit, tree? step,block body) #untyped version, removed during typechecking
      | fornum(allocvar variable, tree initial, tree limit, tree? step, block body)
-     | forlist(param* variables, tree iterator, block body)
      | ifstat(ifbranch* branches, block? orelse)
-     | defvar(param* variables,  boolean hasinit, tree* initializers) #removed during typechecking
-     | returnstat(tree expression)
      | defer(tree expression)
-     | luaexpression(function expression, boolean isexpression) # removed during specialization
-     
-     # introduced by specialization/typing
      | select(tree value, number index, string fieldname) # typed version, fieldname for debugging
      | globalvar(string name, GlobalVar value)
      | constant(Constant value, Type type)
-     | luaobject(any value)
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
      | debuginfo(string customfilename, number customlinenumber)
@@ -109,12 +114,11 @@ tree =
      | sizeof(Type oftype)
      | inlineasm(Type type, string asm, boolean volatile, string constraints, tree* arguments)
      | cast(Type to, tree expression, boolean explicit) # from is optional for untyped cast, will be removed eventually
-     | typedexpression(tree expression, table key)
      | allocvar(string name, Symbol symbol)
-     | setter(function setter) # temporary node introduced and removed during typechecking to handle __update
      | luafunction(cdata cb, userdata fptr)
      | structcast(allocvar structvariable, tree expression, storelocation* entries)
      | constructor(tree* expressions)
+     | returnstat(tree expression)
 ]]
 terra.irtypes = T
 
