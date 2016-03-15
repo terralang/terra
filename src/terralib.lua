@@ -1361,7 +1361,7 @@ do
         local errorresult = { "<errorresult>" }
         local key = "cached"..name
         local inside = "inget"..name
-        T.Type[key],T.Type[inside] = false,false
+        T.struct[key],T.struct[inside] = false,false
         return function(self,anchor)
             if not self[key] then
                 local diag = terra.getcompilecontext().diagnostics
@@ -1530,7 +1530,7 @@ do
 
     
 
-    T.Type.getentries = memoizeproperty{
+    T.struct.getentries = memoizeproperty{
         name = "entries";
         defaultvalue = terra.newlist();
         erroronrecursion = "recursively calling getentries on type";
@@ -1582,7 +1582,7 @@ do
             error(msg,4)
         end
     end
-    T.Type.getlayout = memoizeproperty {
+    T.struct.getlayout = memoizeproperty {
         name = "layout"; 
         defaultvalue = { entries = terra.newlist(), keytoindex = {}, invalid = true };
         erroronrecursion = "type recursively contains itself";
@@ -1653,8 +1653,7 @@ do
             return layout
         end;
     }
-    function T.Type:completefunction(anchor)
-        assert(self:isfunction())
+    function T.functype:completefunction(anchor)
         for i,p in ipairs(self.parameters) do p:complete(anchor) end
         self.returntype:complete(anchor)
         return self
