@@ -38,7 +38,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -Wall -g -fPIC
+FLAGS += -Wall -g -fPIC
 LFLAGS = -g
 
 LUAJIT_VERSION ?= LuaJIT-2.0.4

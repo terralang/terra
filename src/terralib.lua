@@ -1,5 +1,4 @@
 -- See Copyright Notice in ../LICENSE.txt
-
 local ffi = require("ffi")
 local asdl = require("asdl")
 local List = asdl.List

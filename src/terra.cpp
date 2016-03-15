@@ -246,11 +246,11 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     }
     err =    terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
           || terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_asdl,luaJIT_BC_asdl_SIZE, "asdl.lua")
-#if 1
+#ifndef TERRA_EXTERNAL_TERRALIB
           || terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
 #else
           // make it possible to quickly iterate in terralib.lua when developing
-          || luaL_loadfile(T->L,"/Users/zdevito/terra/src/terralib.lua")
+          || luaL_loadfile(T->L,TERRA_EXTERNAL_TERRALIB)
           || lua_pcall(L,0,LUA_MULTRET,0);
 #endif
     if(err) {
