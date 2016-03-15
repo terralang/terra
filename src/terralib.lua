@@ -39,7 +39,6 @@ end })
 
 local T = asdl.NewContext()
 
-T:Extern("Type", function(t) return terra.types.istype(t) end)
 T:Extern("Symbol", function(t) return terra.issymbol(t) end)
 T:Extern("GlobalVar", function(t) return terra.isglobalvar(t) end)
 T:Extern("Constant", function(t) return terra.isconstant(t) end)
@@ -60,7 +59,7 @@ param = unevaluatedparam(ident name, luaexpression? type) # removed during speci
       
 functiondefu = (param* parameters, boolean is_varargs, LuaExprOrType? returntype, block body)
 functiondef = (allocvar* parameters, boolean is_varargs, Type type, block body, table labels)
-struct = (luaexpression? metatype, structlist records)
+structdef = (luaexpression? metatype, structlist records)
 
 ifbranch = (tree condition, block body)
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
@@ -118,6 +117,17 @@ tree =
      | constructor(tree* expressions)
      | returnstat(tree expression)
      | setter(tree setter, allocvar rhs) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
+
+Type = primitive(string type, number bytes, boolean signed)
+     | pointer(Type type, number addressspace) unique
+     | vector(Type type, number N) unique
+     | array(Type type, number N) unique
+     | functype(Type* parameters, Type returntype, boolean isvararg) unique
+     | struct(string name)
+     | niltype #the type of the singleton nil (implicitly convertable to any pointer type)
+     | opaque #an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type (i.e. void*)
+     | error #used in compiler to squelch errors
+     
 ]]
 terra.irtypes = T
 
@@ -521,7 +531,7 @@ function terra.funcdefinition:peektype() --look at the type but don't compile th
 
     local params = self.untypedtree.parameters:map(function(entry) return entry.type end)
     local ret   = self.untypedtree.returntype
-    self.type = terra.types.functype(params,ret) --for future calls
+    self.type = terra.types.functype(params,ret,false) --for future calls
     
     return true, self.type
 end
@@ -1241,22 +1251,21 @@ do
     end
     
     local types = {}
-    
-    types.type = { name = false, tree = false, undefined = false, incomplete = false, convertible = false, cachedcstring = false, llvm_definingfunction = false } --all types have this as their metatable
-    types.type.__index = function(self,key)
+    local defaultproperties = { "name", "tree", "undefined", "incomplete", "convertible", "cachedcstring", "llvm_definingfunction" }
+    for i,dp in ipairs(defaultproperties) do
+        T.Type[dp] = false
+    end
+    T.Type.__index = nil -- force overrides
+    function T.Type:__index(key)
         local N = tonumber(key)
         if N then
-            return types.array(self,N) -- int[3] should create an array
+            return T.array(self,N) -- int[3] should create an array
         else
-            local m = types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
-            if m == nil then 
-                error("type has no field "..tostring(key),2) 
-            end
-            return m
+            return getmetatable(self)[key]
         end
     end
-    
-    types.type.__tostring = memoizefunction(function(self)
+    T.Type.__tostring = nil --force override to occur
+    T.Type.__tostring = memoizefunction(function(self)
         if self:isstruct() then 
             if self.metamethods.__typename then
                 local status,r = pcall(function() 
@@ -1278,69 +1287,37 @@ do
         if not self.name then error("unknown type?") end
         return self.name
     end)
-    types.type.printraw = terra.printraw
-    function types.type:isprimitive()
-        return self.kind == tokens.primitive
-    end
-    function types.type:isintegral()
-        return self.kind == tokens.primitive and self.type == tokens.integer
-    end
-    function types.type:isfloat()
-        return self.kind == tokens.primitive and self.type == tokens.float
-    end
-    function types.type:isarithmetic()
-        return self.kind == tokens.primitive and (self.type == tokens.integer or self.type == tokens.float)
-    end
-    function types.type:islogical()
-        return self.kind == tokens.primitive and self.type == tokens.logical
-    end
-    function types.type:canbeord()
-        return self:isintegral() or self:islogical()
-    end
-    function types.type:ispointer()
-        return self.kind == tokens.pointer
-    end
-    function types.type:isarray()
-        return self.kind == tokens.array
-    end
-    function types.type:isfunction()
-        return self.kind == tokens.functype
-    end
-    function types.type:isstruct()
-        return self.kind == tokens["struct"]
-    end
-    function types.type:ispointertostruct()
-        return self:ispointer() and self.type:isstruct()
-    end
-    function types.type:ispointertofunction()
-        return self:ispointer() and self.type:isfunction()
-    end
-    function types.type:isaggregate() 
-        return self:isstruct() or self:isarray()
-    end
     
-    function types.type:iscomplete()
-        return not self.incomplete
-    end
+    T.Type.printraw = terra.printraw
+    function T.Type:isprimitive() return self.kind == "primitive" end
+    function T.Type:isintegral() return self.kind == "primitive" and self.type == "integer" end
+    function T.Type:isfloat() return self.kind == "primitive" and self.type == "float" end
+    function T.Type:isarithmetic() return self.kind == "primitive" and (self.type == "integer" or self.type == "float") end
+    function T.Type:islogical() return self.kind == "primitive" and self.type == "logical" end
+    function T.Type:canbeord() return self:isintegral() or self:islogical() end
+    function T.Type:ispointer() return self.kind == "pointer" end
+    function T.Type:isarray() return self.kind == "array" end
+    function T.Type:isfunction() return self.kind == "functype" end
+    function T.Type:isstruct() return self.kind == "struct" end
+    function T.Type:ispointertostruct() return self:ispointer() and self.type:isstruct() end
+    function T.Type:ispointertofunction() return self:ispointer() and self.type:isfunction() end
+    function T.Type:isaggregate() return self:isstruct() or self:isarray() end
     
-    function types.type:isvector()
-        return self.kind == tokens.vector
-    end
+    function T.Type:iscomplete() return not self.incomplete end
     
-    function types.type:isunit()
-      return types.unit == self
-    end
+    function T.Type:isvector() return self.kind == "vector" end
+    
+    function T.Type:isunit() return types.unit == self end
     
     local applies_to_vectors = {"isprimitive","isintegral","isarithmetic","islogical", "canbeord"}
     for i,n in ipairs(applies_to_vectors) do
-        types.type[n.."orvector"] = function(self)
+        T.Type[n.."orvector"] = function(self)
             return self[n](self) or (self:isvector() and self.type[n](self.type))  
         end
     end
-    local makevalid
     
     --pretty print of layout of type
-    function types.type:printpretty()
+    function T.Type:printpretty()
         local seen = {}
         local function print(self,d)
             local function indent(l)
@@ -1384,7 +1361,7 @@ do
         local errorresult = { "<errorresult>" }
         local key = "cached"..name
         local inside = "inget"..name
-        types.type[key],types.type[inside] = false,false
+        T.Type[key],T.Type[inside] = false,false
         return function(self,anchor)
             if not self[key] then
                 local diag = terra.getcompilecontext().diagnostics
@@ -1450,7 +1427,7 @@ do
     local function uniquecname(name) --used to generate unique typedefs for C
         return uniquetypenameset(tovalididentifier(name))
     end
-    function types.type:cstring()
+    function T.Type:cstring()
         if not self.cachedcstring then
             --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
             --this makes it possible to predict the syntax of subsequent typedef operations
@@ -1531,7 +1508,7 @@ do
             end
             if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
             
-            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)            
+            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
             local ctype = ffi.typeof(self.cachedcstring)
             types.ctypetoterra[tonumber(ctype)] = self
             local rctype = ffi.typeof(self.cachedcstring.."&")
@@ -1553,7 +1530,7 @@ do
 
     
 
-    types.type.getentries = memoizeproperty{
+    T.Type.getentries = memoizeproperty{
         name = "entries";
         defaultvalue = terra.newlist();
         erroronrecursion = "recursively calling getentries on type";
@@ -1605,7 +1582,7 @@ do
             error(msg,4)
         end
     end
-    types.type.getlayout = memoizeproperty {
+    T.Type.getlayout = memoizeproperty {
         name = "layout"; 
         defaultvalue = { entries = terra.newlist(), keytoindex = {}, invalid = true };
         erroronrecursion = "type recursively contains itself";
@@ -1620,7 +1597,6 @@ do
                 entries = terra.newlist(),
                 keytoindex = {}
             }
-
             local function addentry(k,t)
                 local function ensurelayout(t)
                     if t:isstruct() then
@@ -1677,13 +1653,13 @@ do
             return layout
         end;
     }
-    function types.type:completefunction(anchor)
+    function T.Type:completefunction(anchor)
         assert(self:isfunction())
         for i,p in ipairs(self.parameters) do p:complete(anchor) end
         self.returntype:complete(anchor)
         return self
     end
-    function types.type:complete(anchor) 
+    function T.Type:complete(anchor) 
         if self.incomplete then
             if self:isarray() then
                 self.type:complete(anchor)
@@ -1718,8 +1694,7 @@ do
         end
         return fnlike
     end
-    function types.type:getmethod(methodname)
-        if not self:isstruct() then return nil, "not a struct" end
+    function T.struct:getmethod(methodname)
         local gm = (type(self.metamethods.__getmethod) == "function" and self.metamethods.__getmethod) or defaultgetmethod
         local success,result = pcall(gm,self,methodname)
         if not success then
@@ -1730,32 +1705,22 @@ do
             return result
         end
     end
-    function types.type:getfield(fieldname)
-        if not self:isstruct() then return nil, "not a struct" end
+    function T.struct:getfield(fieldname)
         local l = self:getlayout()
         local i = l.keytoindex[fieldname]
         if not i then return nil, ("field name '%s' is not a raw field of type %s"):format(tostring(self),tostring(fieldname)) end
         return l.entries[i+1]
     end
-    function types.type:getfields()
-        if not self:isstruct() then return nil, "not a struct" end
+    function T.struct:getfields()
         return self:getlayout().entries
     end
         
     function types.istype(t)
-        return getmetatable(t) == types.type
+        return T.Type:isclassof(t)
     end
     
     --map from luajit ffi ctype objects to corresponding terra type
     types.ctypetoterra = {}
-    
-    local function mktyp(v)
-        return setmetatable(v,types.type)
-    end
-    local function mkincomplete(v)
-        v.incomplete = true
-        return setmetatable(v,types.type)
-    end
     
     local function globaltype(name, typ)
         typ.name = typ.name or name
@@ -1771,60 +1736,45 @@ do
             if not s then
                 name = "u"..name
             end
-            local typ = mktyp { kind = tokens.primitive, bytes = size, type = tokens.integer, signed = s}
+            local typ = T.primitive("integer",size,s)
             globaltype(name,typ)
             typ:cstring() -- force registration of integral types so calls like terra.typeof(1LL) work
         end
     end  
     
-    globaltype("float", mktyp { kind = tokens.primitive, bytes = 4, type = tokens.float })
-    globaltype("double",mktyp { kind = tokens.primitive, bytes = 8, type = tokens.float })
-    globaltype("bool",  mktyp { kind = tokens.primitive, bytes = 1, type = tokens.logical})
+    globaltype("float", T.primitive("float",4,true))
+    globaltype("double",T.primitive("float",8,true))
+    globaltype("bool", T.primitive("logical",1,false))
     
-    types.error = mktyp { kind = tokens.error, name = "<error>" }
-    globaltype("niltype",mktyp { kind = tokens.niltype}) -- the type of the singleton nil (implicitly convertable to any pointer type)
-    globaltype("opaque", mkincomplete { kind = tokens.opaque }) -- an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type
-                                                                               -- equivalent to "void *"
-
-    local function checkistype(typ)
-        if not types.istype(typ) then 
-            error("expected a type but found "..type(typ))
+    types.error,T.error.name = T.error,"<error>"
+    
+    types.niltype = T.niltype
+    globaltype("niltype",T.niltype)
+    
+    types.opaque,T.opaque.incomplete = T.opaque,true
+    globaltype("opaque", T.opaque)
+    
+    types.array,types.vector,types.functype = T.array,T.vector,T.functype
+    
+    T.functype.incomplete = true
+    function types.pointer(t,as) return T.pointer(t,as or 0) end
+    function T.array:init()
+        self.incomplete = true
+    end
+    
+    function T.vector:init()
+        if not self.type:isprimitive() and self.type ~= T.error then
+            error("vectors must be composed of primitive types (for now...) but found type "..tostring(self.type))
         end
     end
     
-    types.pointer = memoizefunction(function(typ,as)
-        checkistype(typ)
-        if typ == types.error then return types.error end
-        return mktyp { kind = tokens.pointer, type = typ, addressspace = tonumber(as) or 0 }
-    end)
-    local function checkarraylike(typ, N_)
-        local N = tonumber(N_)
-        checkistype(typ)
-        if not N then
-            error("expected a number but found "..type(N_))
-        end
-        return N
-    end
-    
-    types.array = memoizefunction(function(typ, N_)
-        local N = checkarraylike(typ,N_)
-        if typ == types.error then return types.error end
-        return mkincomplete { kind = tokens.array, type = typ, N = N }
-    end)
-    
-    types.vector = memoizefunction(function(typ,N_)
-        local N = checkarraylike(typ,N_)
-        if typ == types.error then return types.error end
-        if not typ:isprimitive() then
-            error("vectors must be composed of primitive types (for now...) but found type "..tostring(typ))
-        end
-        return mktyp { kind = tokens.vector, type = typ, N = N }
-    end)
     types.tuple = memoizefunction(function(...)
         local args = terra.newlist {...}
         local t = types.newstruct()
         for i,e in ipairs(args) do
-            checkistype(e)
+            if not types.istype(e) then 
+                error("expected a type but found "..type(e))
+            end
             t.entries:insert {"_"..(i-1),e}
         end
         t.metamethods.__typename = function(self)
@@ -1839,23 +1789,19 @@ do
         depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
+    function T.struct:setconvertible(b)
+        assert(self.incomplete)
+        self.convertible = b
+    end
     function types.newstructwithanchor(displayname,anchor)
-        
         assert(displayname ~= "")
         local name = getuniquestructname(displayname)
-                
-        local tbl = mkincomplete { kind = tokens["struct"],
-                            name = name, 
-                            entries = terra.newlist(),
-                            methods = {},
-                            metamethods = {},
-                            anchor = anchor                  
-                          }
-        function tbl:setconvertible(b)
-            assert(self.incomplete)
-            self.convertible = b
-        end
-        
+        local tbl = T.struct(name) 
+        tbl.entries = List()
+        tbl.methods = {}
+        tbl.metamethods = {}
+        tbl.anchor = anchor
+        tbl.incomplete = true
         return tbl
     end
    
@@ -1866,18 +1812,7 @@ do
         if not types.istype(ret) and terra.israwlist(ret) then
             ret = #ret == 1 and ret[1] or types.tuple(unpack(ret))
         end
-        return types.pointer(types.functype(parameters,ret,isvararg))
-    end
-    local functypeimpl = memoizefunction(function(isvararg,ret,...)
-        local parameters = terra.newlist {...}
-        for i,t in ipairs(parameters) do
-            checkistype(t)
-        end
-        return mkincomplete { kind = tokens.functype, parameters = parameters, returntype = ret, isvararg = isvararg }
-    end)
-    function types.functype(parameters,ret,isvararg)
-        checkistype(ret)
-        return functypeimpl(not not isvararg,ret,unpack(parameters))
+        return types.pointer(types.functype(List{unpack(parameters)},ret,not not isvararg))
     end
     types.unit = types.tuple()
     globaltype("int",types.int32)
@@ -3591,7 +3526,7 @@ function terra.funcdefinition:typecheckbody()
         end
     end
     
-    local fntype = terra.types.functype(parameter_types,returntype):completefunction(ftree)
+    local fntype = terra.types.functype(parameter_types,returntype,false):completefunction(ftree)
 
     --now cast each return expression to the expected return type
     for _,stmt in ipairs(return_stmts) do

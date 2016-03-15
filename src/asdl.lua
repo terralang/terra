@@ -242,7 +242,7 @@ function Context:GetCheckForField(unique,field)
 end
 
 function Context:DeclareClass(name)
-    assert(not self.definitions[name], "class name already defined")
+    assert(not self.definitions[name], "class name already defined: "..name)
     local m = {}
     self.definitions[name] = { members = m }
     self.checks[name] = function(v) return m[getmetatable(v) or false] or false end

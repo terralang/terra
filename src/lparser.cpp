@@ -629,7 +629,7 @@ static void structconstructor(LexState * ls) {
         check_match(ls,')','(',p.linenumber);
     } else push_nil(ls);
     structbody(ls);
-    new_object(ls,"struct",2,&p);
+    new_object(ls,"structdef",2,&p);
 }
 
 struct Name {
