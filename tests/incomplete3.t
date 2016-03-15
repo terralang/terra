@@ -1,8 +1,9 @@
 
 struct A {
 	b : B -> C
-} and
-struct B and struct C
+}
+struct B
+struct C
 
 
 terra foo()

@@ -1,7 +1,7 @@
 
 
 local struct A { b : &B }
-  and struct B { a : &A }
+struct B { a : &A }
 
 struct C { a : &A, b : &B, c : &C  }
 

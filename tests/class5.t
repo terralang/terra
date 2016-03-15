@@ -5,7 +5,8 @@ local Class = require("lib/javalike")
 struct A {
   a : int;
   bb : &B
-} and struct B {
+}
+struct B {
   b : int;
   aa : &A
 } 

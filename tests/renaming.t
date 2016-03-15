@@ -11,7 +11,7 @@ end
 
 terra foo()
 end
-and terra foo(a : int)
+terra foo(a : int)
 end
 
 foo:compile()

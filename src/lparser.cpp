@@ -1645,6 +1645,14 @@ struct TDefn {
     int treeid; //-1 indicates no tree
     int islocal;
 };
+bool startsTerraStat(LexState * ls) {
+    if(ls->t.token == TK_TERRA || ls->t.token == TK_STRUCT)
+        return true;
+    if(ls->t.token == TK_LOCAL) {
+        luaX_lookahead(ls);
+        return ls->lookahead.token == TK_TERRA || ls->lookahead.token == TK_STRUCT;
+    } else return false;
+}
 
 static void terrastats(LexState * ls, bool emittedlocal) {
     Token begin = ls->t;
@@ -1686,7 +1694,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             } break;
         }
         defs.push_back(tdefn);
-        if(!testnext(ls,TK_AND))
+        if(!startsTerraStat(ls))
             break;
         islocal = testnext(ls, TK_LOCAL);
     }

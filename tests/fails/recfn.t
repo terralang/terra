@@ -1,7 +1,9 @@
 if not require("fail") then return end
 local terra foo() : {}
 	bar()
-end local
+end 
+nop = 1
+local
 terra bar() : {}
 	foo()
 end

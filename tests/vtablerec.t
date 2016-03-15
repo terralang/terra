@@ -1,7 +1,7 @@
 
 struct V {
 	entry : {&A} -> {}
-} and
+}
 struct A {
 	vtable : &V
 }

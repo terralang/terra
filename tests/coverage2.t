@@ -57,7 +57,7 @@ failit("bad argument #1",function()
 	ol("a")
 end)
 
-ol:printstats()
+--ol:printstats()
 NSE = terralib.types.newstruct()
 
 failit(erd,function()
@@ -69,7 +69,7 @@ SICS = terralib.types.newstruct()
 SICS.entries:insert { field = symbol(), type = int }
 a = 1
 SICS.metamethods.__staticinitialize = function() a = a + 1 end
-print(terralib.new(SICS,{3}))
+--print(terralib.new(SICS,{3}))
 
 NSF = terralib.types.newstruct()
 NSF.entries:insert { type = int , field = 3 }
@@ -81,7 +81,8 @@ SICS:complete()
 assert(a == 2)
 struct SF {
 	a : SF2
-} and struct SF2 {
+} 
+struct SF2 {
 	a : int
 }
 SF2.metamethods.__getentries = function(self) SF:complete() end
@@ -191,7 +192,8 @@ end)
 
 struct FA {
 	a : &FA2
-} and struct FA2 {
+}
+struct FA2 {
 	a : int
 }
 

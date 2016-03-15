@@ -1252,7 +1252,6 @@ do
         else
             local m = types.type[key]  -- int:ispointer() (which translates to int["ispointer"](self)) should look up ispointer in types.type
             if m == nil then 
-                terralib.printraw(self)
                 error("type has no field "..tostring(key),2) 
             end
             return m
@@ -1593,7 +1592,6 @@ do
                         return
                     end
                 end
-                terra.printraw(e)
                 diag:reporterror(self.anchor,"expected either a field type pair (e.g. { field = <string>, type = <type> } or {<string>,<type>} ), or a list of valid entries representing a union")
             end
             local checkedentries = terra.newlist()
@@ -2347,8 +2345,6 @@ function terra.funcdefinition:typecheckbody()
 
     local function ensurelvalue(e)
         if not e.lvalue then
-            print(e)
-            terra.printraw(e)
             diag:reporterror(e,"argument to operator must be an lvalue")
         end
         return e
@@ -2682,7 +2678,6 @@ function terra.funcdefinition:typecheckbody()
                     diag:reporterror(ee,"conditional in select is not the same shape as ",cond.type)
                 end
             elseif cond.type ~= terra.types.bool then
-                print(ee)
                 diag:reporterror(ee,"expected a boolean or vector of booleans but found ",cond.type)   
             end
         end

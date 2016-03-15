@@ -2,7 +2,8 @@ struct A {
 	a : int;
 	b : int;
 	c : &B
-} and struct B {
+}
+struct B {
 	a : &A
 }
 

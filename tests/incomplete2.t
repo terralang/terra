@@ -1,7 +1,7 @@
 
 struct A {
 	b : &B
-} and
+}
 struct B
 
 
