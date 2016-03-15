@@ -114,7 +114,6 @@ tree =
      | inlineasm(Type type, string asm, boolean volatile, string constraints, tree* arguments)
      | cast(Type to, tree expression, boolean explicit) # from is optional for untyped cast, will be removed eventually
      | allocvar(string name, Symbol symbol)
-     | luafunction(cdata cb, userdata fptr)
      | structcast(allocvar structvariable, tree expression, storelocation* entries)
      | constructor(tree* expressions)
      | returnstat(tree expression)
@@ -1541,13 +1540,10 @@ do
             if self:isstruct() then
                 local function index(obj,idx)
                     local method = self:getmethod(idx)
-                    if terra.isfunction(method) or type(method) == "function" then
-                        return method
-                    end
                     if terra.ismacro(method) then
                         error("calling a terra macro directly from Lua is not supported",2)
                     end
-                    return nil
+                    return method
                 end
                 ffi.metatype(ctype, self.metamethods.__luametatable or { __index = index })
             end
@@ -1945,8 +1941,11 @@ function terra.createterraexpression(diag,anchor,v)
         if type(mt) == "table" and mt.__toterraexpression then
             return terra.createterraexpression(diag,anchor,mt.__toterraexpression(v))
         else
-            if not (terra.isfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "function" or type(v) == "table") then
+            if not (terra.isfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "table") then
                 diag:reporterror(anchor,"lua object of type ", terra.type(v), " not understood by terra code.")
+                if type(v) == "function" then
+                    diag:reporterror(anchor, "to call a lua function from terra first use terralib.cast to cast it to a terra function type.")
+                end
             end
             return newobject(anchor,T.luaobject,v)
         end
@@ -2972,21 +2971,21 @@ function terra.funcdefinition:typecheckbody()
         assert(#fnlikelist > 0)
         
         --collect all the terra functions, stop collecting when we reach the first 
-        --alternative that is not a terra function and record it as fnlike
+        --macro and record it as themacro
         --we will first attempt to typecheck the terra functions, and if they fail,
         --we will call the macro/luafunction (these can take any argument types so they will always work)
         local terrafunctions = terra.newlist()
-        local fnlike = nil
+        local themacro = nil
         for i,fn in ipairs(fnlikelist) do
             if fn:is "luaobject" then
-                if terra.ismacro(fn.value) or type(fn.value) == "function" then
-                    fnlike = fn.value
+                if terra.ismacro(fn.value) then
+                    themacro = fn.value
                     break
                 elseif terra.types.istype(fn.value) then
                     local castmacro = terra.internalmacro(function(diag,tree,arg)
                         return createuntypedcast(arg.tree,fn.value,true)
                     end)
-                    fnlike = castmacro
+                    themacro = castmacro
                     break
                 elseif terra.isfunction(fn.value) then
                     if #fn.value:getdefinitions() == 0 then
@@ -3014,20 +3013,6 @@ function terra.funcdefinition:typecheckbody()
             callee.type.type:completefunction(anchor)
             return newobject(anchor,T.apply,callee,paramlist):withtype(callee.type.type.returntype)
         end
-
-        local function generatenativewrapper(fn)
-            local paramlist = arguments:map(removeluaobject)
-            local varargslist = paramlist:map(function(p) return "vararg" end)
-            paramlist = tryinsertcasts(anchor, terra.newlist{varargslist},castbehavior, false, false, paramlist)
-            local castedtype = terra.types.funcpointer(paramlist:map("type"),{})
-            local success, cb = pcall(function() return terra.cast(castedtype,fn) end)
-            if not success then
-                diag:reporterror(anchor, "unsupported callback function type: ", castedtype)
-                return anchor:copy {}:withtype(castedtype),paramlist
-            end
-            local fptr = cb and terra.pointertolightuserdata(cb)
-            return newobject(anchor,T.luafunction,cb,fptr):withtype(castedtype),paramlist
-        end
         
         if #terrafunctions > 0 then
             local paramlist = arguments:map(removeluaobject)
@@ -3042,35 +3027,28 @@ function terra.funcdefinition:typecheckbody()
                 return vatypes
             end
             local typelists = terrafunctions:map(getparametertypes)
-            local castedarguments,valididx = tryinsertcasts(anchor,typelists,castbehavior, fnlike ~= nil, allowambiguous, paramlist)
+            local castedarguments,valididx = tryinsertcasts(anchor,typelists,castbehavior, themacro ~= nil, allowambiguous, paramlist)
             if valididx then
                 return createcall(terrafunctions[valididx],castedarguments)
             end
         end
 
-        if fnlike then
-            if terra.ismacro(fnlike) then
-                entermacroscope()
-                
-                local quotes = arguments:map(function(a)
-                    return terra.newquote(createtypedexpression(a))
-                end)
-                local success, result = terra.invokeuserfunction(anchor, false, fnlike.run, fnlike, diag, anchor, unpack(quotes))
-                if success then
-                    local newexp = terra.createterraexpression(diag,anchor,result)
-                    result = checktree(newexp,location)
-                else
-                    result = anchor:aserror()
-                end
-                
-                leavemacroscope(anchor)
-                return result
-            elseif type(fnlike) == "function" then
-                local callee,paramlist = generatenativewrapper(fnlike)
-                return createcall(callee,paramlist)
-            else 
-                error("fnlike is not a function/macro?")
+        if themacro then
+            entermacroscope()
+
+            local quotes = arguments:map(function(a)
+                return terra.newquote(createtypedexpression(a))
+            end)
+            local success, result = terra.invokeuserfunction(anchor, false, themacro.run, themacro, diag, anchor, unpack(quotes))
+            if success then
+                local newexp = terra.createterraexpression(diag,anchor,result)
+                result = checktree(newexp,location)
+            else
+                result = anchor:aserror()
             end
+            
+            leavemacroscope(anchor)
+            return result
         end
         assert(diag:haserrors())
         return anchor:aserror()
@@ -3632,8 +3610,6 @@ function terra.funcdefinition:typecheckbody()
     unsafesymbolenv = oldsymbolenv
     return fntype
 end
---cache for lua functions called by terra, to prevent making multiple callback functions
-terra.__wrappedluafunctions = {}
 
 -- END TYPECHECKER
 
@@ -4456,20 +4432,6 @@ end
 function terra.cast(terratype,obj)
     terratype:complete()
     local ctyp = terratype:cstring()
-    if type(obj) == "function" then --functions are cached to avoid creating too many callback objects
-        local fncache = terra.__wrappedluafunctions[obj]
-
-        if not fncache then
-            fncache = {}
-            terra.__wrappedluafunctions[obj] = fncache
-        end
-        local cb = fncache[terratype]
-        if not cb then
-            cb = ffi.cast(ctyp,obj)
-            fncache[terratype] = cb
-        end
-        return cb
-    end
     return ffi.cast(ctyp,obj)
 end
 

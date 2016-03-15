@@ -44,7 +44,6 @@ _(literal,"literal") \
 _(logical,"logical") \
 _(lshift, "<<") \
 _(lt,"<") \
-_(luafunction, "luafunction") \
 _(mod, "%") \
 _(mul, "*") \
 _(ne,"~=") \

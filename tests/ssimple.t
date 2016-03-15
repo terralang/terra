@@ -312,9 +312,9 @@ end
 
 assert(foo29(3) == 1 and foo29(0) == 5)
 
-
+printdouble = terralib.cast(double -> {},print)
 terra foo30()
-	print(4)
+	printdouble(4)
 end
 
 foo30()
@@ -378,6 +378,7 @@ end
 function myvoid()
 	print("CALLED")
 end
+myvoid = terralib.cast({}->{},myvoid)
 terra testcallvoid()
 	myvoid()
 end

@@ -10,6 +10,7 @@ terra baz()
 end
 function whatwhat()
 end
+whatwhat = terralib.cast({}->{},whatwhat)
 struct A { data : int }
 terra A:moo() end
 Aptr = terralib.new(A)

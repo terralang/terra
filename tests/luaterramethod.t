@@ -10,7 +10,7 @@ terra Foo:bar()
     return self.a + self.b
 end
 
-Foo.methods.baz = function(self) print(self.a,self.b) end
+Foo.methods.baz = terralib.cast(&Foo -> {},function(self) print(self.a,self.b) end)
 Foo.methods.mac = macro(function() return `1 end)
 
 terra usemethod()

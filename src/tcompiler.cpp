@@ -1907,11 +1907,6 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("value",&value);
                 return EmitConstant(CU, &value);
             } break;
-            case T_luafunction: {
-                void * ptr = exp->ud("fptr");
-                Constant * ptrint = ConstantInt::get(CU->TT->td->getIntPtrType(*CU->TT->ctx), (intptr_t)ptr);
-                return ConstantExpr::getIntToPtr(ptrint, typeOfValue(exp)->type);
-            } break;
             case T_apply: {
                 return emitCall(exp,false);
             } break;

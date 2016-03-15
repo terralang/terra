@@ -39,11 +39,12 @@ local Vec = terralib.memoize(function(typ,N)
     return VecType
 end)
 
+printfloat = terralib.cast({float}->{},print)
 terra foo(v : Vec(float,4), w : Vec(float,4))
     var z : Vec(float,4) = 1
     var x = (v*4)+w+1
     for i = 0,4 do
-        print(x(i))
+        printfloat(x(i))
     end
     return x(2)
 end
