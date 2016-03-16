@@ -104,10 +104,11 @@ struct C {
 
 C.metamethods.__cast = function() return error("CAST ERROR") end
 
+local terra casttest
+failit(erd,function()
 local terra casttest()
 	return int(C { 3 })
 end
-failit(erd,function()
 casttest()
 end)
 

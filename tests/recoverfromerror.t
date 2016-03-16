@@ -1,11 +1,12 @@
 
 
-terra what()
-	return " " / 1
-end
 
 dostuff = macro(function()
-	pcall(what.compile,what)
+	pcall(function()
+	    terra what()
+	        return " " / 1
+        end
+    end)
 	return 4
 end)
 

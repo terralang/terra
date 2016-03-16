@@ -9,11 +9,12 @@ end
 local test = require("test")
 local erd = "Errors reported during"
 
-local terra f1()
-	return test
-end
+local terra f1
 
 failit(erd,function()
+terra f1()
+	return test
+end
 f1:compile()
 end)
 failit("referencing a function which failed to compile",function()

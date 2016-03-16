@@ -3,9 +3,6 @@ local self = 1
 local Rt = 1
 local i = 1
 local j = 1
-terra bar()
-var a = Rt.MatrixDouble{[&double](self.ptr) , i,j}
-end
 
 local r,e = terralib.loadstring[[
 	

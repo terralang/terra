@@ -57,16 +57,29 @@ local generatedtor = macro(function(self)
     return stmts
 end)
 
+local function ondemand(fn)
+    local method
+    return macro(function(self,...)
+        if not method then
+            method = fn()
+        end
+        local args = {...}
+        return `method(&self,[args])
+    end)
+end
+
 -- standard object metatype
 -- provides T.alloc(), T.salloc(), obj:destruct(), obj:delete()
 -- users should define __destruct if the object has custom destruct behavior
 -- destruct will call destruct on child nodes
 function S.Object(T)
     --fill in special methods/macros
-    terra T:delete()
-        self:destruct()
-        C.free(self)
-    end 
+    T.methods.delete = ondemand(function()
+        return terra(self : &T)
+            self:destruct()
+            C.free(self)
+        end
+    end) 
     terra T.methods.alloc()
         return [&T](C.malloc(sizeof(T)))
     end
@@ -78,9 +91,11 @@ function S.Object(T)
             &t
         end
     end)
-    terra T:destruct()
-        generatedtor(@self)
-    end
+    T.methods.destruct = ondemand(function()
+        return terra(self :&T)
+            generatedtor(@self)
+        end
+    end)
 end
 
 

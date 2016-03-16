@@ -12,7 +12,7 @@ local erd = "Errors reported during"
 terra foo()
 end
 foo:compile()
-failit("inlining",function() foo:setinlined(false) end)
+--failit("inlining",function() foo:setinlined(false) end)
 
 terra bar
 failit("attempting to call",function()

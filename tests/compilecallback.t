@@ -1,5 +1,7 @@
 
 local a = 0
+terra bar
+
 local foo = macro(function(arg)
 	bar:gettype(function()
 		a = bar()

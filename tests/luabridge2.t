@@ -21,7 +21,7 @@ terra returnarray2()
 end
 
 terra returnaos()
-    var a : A[2] = arrayof(A, {1,2.5}, {2,3.5} )
+    var a : A[2] = arrayof(A, A {1,2.5}, A{2,3.5} )
     return a
 end
 struct B { a : int[4] }

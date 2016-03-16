@@ -11,15 +11,6 @@ end
 
 function genkernel(NB, RM, RN, V,alpha)
 
-	local terra vecload(data : &double, idx : int)
-		var addr = &data[idx]
-		return @addr:as(&vector(double,V))
-	end
-	local terra vecstore(data : &double, idx : int, v : vector(double,V))
-		var addr = &data[idx]
-		@addr:as(&vector(double,V)) = v
-	end
-
 	local A,B,C,mm,nn = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn")
 	local lda,ldb,ldc = NB,NB,NB
 	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
