@@ -3260,7 +3260,7 @@ function terra.funcdefinition:typecheckbody()
     local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
     
     local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
-    local loopstmts = terra.newlist() -- stack of loopstatements (for resolving where a break goes)
+    local looppositions = List() -- stack of scopepositions that track where a break would go to
     local scopeposition = terra.newlist() --list(int), count of number of defer statements seens at each level of block scope, used for unwinding defer statements during break/goto
     
     
@@ -3270,12 +3270,10 @@ function terra.funcdefinition:typecheckbody()
         return sp
     end
     local function enterloop()
-        local bt = {position = getscopeposition()}
-        loopstmts:insert(bt)
-        return bt
+        looppositions:insert(getscopeposition())
     end
     local function leaveloop()
-        loopstmts:remove()
+        looppositions:remove()
     end
     function defersinlocalscope()
         return scopeposition[#scopeposition]
@@ -3388,24 +3386,22 @@ function terra.funcdefinition:typecheckbody()
             return ss
         elseif s:is "breakstat" then
             local ss = s:copy({})
-            if #loopstmts == 0 then
+            if #looppositions == 0 then
                 diag:reporterror(s,"break found outside a loop")
             else
-                ss.breaktable = loopstmts[#loopstmts]
-                ss.deferred = numberofdeferredpassed(s,scopeposition,ss.breaktable.position)
+                ss.deferred = numberofdeferredpassed(s,scopeposition,looppositions[#looppositions])
             end
             return ss
         elseif s:is "whilestat" then
-            local breaktable = enterloop()
+            enterloop()
             local r = checkcondbranch(s)
-            r.breaktable = breaktable --TODO: remove
             leaveloop()
             return r
         elseif s:is "fornumu" then
             local initial, limit, step = checkexp(s.initial), checkexp(s.limit), s.step and checkexp(s.step)
             local t = typemeet(initial,initial.type,limit.type) 
             t = step and typemeet(limit,t,step.type) or t
-            local breaktable = enterloop()
+            enterloop()
             symbolenv:enterblock()
             local variable = checkformalparameter(s.variable)
             variable.type = variable.type or t
@@ -3415,7 +3411,6 @@ function terra.funcdefinition:typecheckbody()
             symbolenv:leaveblock()
             leaveloop()
             local r = newobject(s,T.fornum,variable,initial,limit,step,body)
-            r.breaktable = breaktable
             return r
         elseif s:is "forlist" then
             local iterator = checkexp(s.iterator)
@@ -3458,12 +3453,11 @@ function terra.funcdefinition:typecheckbody()
             local els = (s.orelse and checkstmt(s.orelse))
             return s:copy{ branches = br, orelse = els }
         elseif s:is "repeatstat" then
-            local breaktable = enterloop()
+            enterloop()
             local stmts = s.statements:map(checkstmt)
             local e = checkcond(s.condition)
             leaveloop()
             local r = s:copy { statements = stmts, condition = e }
-            r.breaktable = breaktable
             return r
         elseif s:is "defvar" then
             local rhs = s.hasinit and checkexpressions(s.initializers)

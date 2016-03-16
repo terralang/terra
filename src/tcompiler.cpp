@@ -1229,6 +1229,7 @@ struct FunctionEmitter {
     Obj * locals;
     
     IRBuilder<> * B;
+    std::vector<BasicBlock *> breakpoints; //stack of basic blocks where a break statement should go
     
     #ifdef DEBUG_INFO_WORKING
     DIBuilder * DB;
@@ -2193,11 +2194,11 @@ if(baseT->isIntegerTy()) { \
     void setInsertBlock(BasicBlock * bb) {
         B->SetInsertPoint(bb);
     }
-    void setBreaktable(Obj * loop, BasicBlock * exit) {
-        //set the break table for this loop to point to the loop exit
-        Obj breaktable;
-        loop->obj("breaktable",&breaktable);
-        mapSymbol(locals,&breaktable,exit);
+    void pushBreakpoint(BasicBlock * exit) {
+        breakpoints.push_back(exit);
+    }
+    void popBreakpoint() {
+        breakpoints.pop_back();
     }
     BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
         BasicBlock * bb = lookupSymbol<BasicBlock>(locals, lbl);
@@ -2353,8 +2354,7 @@ if(baseT->isIntegerTy()) { \
             } break;
             case T_breakstat: {
                 Obj def;
-                stmt->obj("breaktable",&def);
-                BasicBlock * breakpoint = lookupSymbol<BasicBlock>(locals, &def);
+                BasicBlock * breakpoint = breakpoints.back();
                 assert(breakpoint);
                 emitDeferred(stmt->number("deferred"));
                 B->CreateBr(breakpoint);
@@ -2367,25 +2367,24 @@ if(baseT->isIntegerTy()) { \
                 BasicBlock * condBB = createAndInsertBB("condition");
                 
                 B->CreateBr(condBB);
-                
                 setInsertBlock(condBB);
                 
                 BasicBlock * loopBody = createAndInsertBB("whilebody");
-    
                 BasicBlock * merge = createAndInsertBB("merge");
                 
-                setBreaktable(stmt,merge);
+                pushBreakpoint(merge);
                 
                 emitBranchOnExpr(&cond, loopBody, merge);
-                
                 setInsertBlock(loopBody);
-                
                 emitStmt(&body);
+        
                 
                 B->CreateBr(condBB);
                 
                 followsBB(merge);
                 setInsertBlock(merge);
+                popBreakpoint();
+                
             } break;
             case T_fornum: {
                 Obj initial,step,limit,variable,body;
@@ -2409,7 +2408,7 @@ if(baseT->isIntegerTy()) { \
                                         B->CreateAnd(emitCompare(T_gt,t, v, limitv), emitCompare(T_le,t,stepv,zero)));
                 BasicBlock * loopBody = createAndInsertBB("forbody");
                 BasicBlock * merge = createAndInsertBB("merge");
-                setBreaktable(stmt,merge);
+                pushBreakpoint(merge);
                 B->CreateCondBr(c,loopBody,merge);
                 setInsertBlock(loopBody);
                 emitStmt(&body);
@@ -2417,6 +2416,8 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(cond);
                 followsBB(merge);
                 setInsertBlock(merge);
+                
+                popBreakpoint();
             } break;
             case T_ifstat: {
                 Obj branches;
@@ -2443,7 +2444,7 @@ if(baseT->isIntegerTy()) { \
                 BasicBlock * loopBody = createAndInsertBB("repeatbody");
                 BasicBlock * merge = createAndInsertBB("merge");
                 
-                setBreaktable(stmt,merge);
+                pushBreakpoint(merge);
                 
                 B->CreateBr(loopBody);
                 setInsertBlock(loopBody);
@@ -2460,10 +2461,11 @@ if(baseT->isIntegerTy()) { \
                     loopBody = backedge;
                 }
                 emitBranchOnExpr(&cond, merge, loopBody);
-                
                 followsBB(merge);
                 setInsertBlock(merge);
                 unwindDeferred(N);
+                
+                popBreakpoint();
             } break;
             case T_assignment: {
                 std::vector<Value *> rhsexps;
