@@ -2298,7 +2298,6 @@ function terra.funcdefinition:typecheckbody()
     local function allocvar(anchor,typ,name)
         local av = newobject(anchor,T.allocvar,name,terra.newsymbol(name)):setlvalue(true):withtype(typ:complete(anchor))
         local v = newobject(anchor,T.var,name,av.symbol):setlvalue(true):withtype(typ)
-        v.definition = av
         return av,v
     end
     
@@ -3020,7 +3019,6 @@ function terra.funcdefinition:typecheckbody()
                 end
                 assert(terra.types.istype(definition.type))
                 local r = e:copy{}:withtype(definition.type)
-                r.definition = definition -- TODO: remove and have compiler handle this stuff
                 return r
             elseif e:is "globalvar" then
                 local r = e:copy{}:withtype(e.value.type)

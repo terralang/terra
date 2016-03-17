@@ -1218,6 +1218,8 @@ static int terra_deletefunction(lua_State * L);
 
 Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc);
 
+struct Locals { Obj cur; Locals * prev; }; //stack of local environment
+
 struct FunctionEmitter {
     TerraCompilationUnit * CU;
     terra_State * T;
@@ -1226,7 +1228,8 @@ struct FunctionEmitter {
     Types * Ty;
     CCallingConv * CC;
     Module * M;
-    Obj * locals, * labels, * labeldepth;
+    Obj * labels, * labeldepth;
+    Locals * locals;
     
     IRBuilder<> * B;
     std::vector<std::pair<BasicBlock *,int> > breakpoints; //stack of basic blocks where a break statement should go
@@ -1245,7 +1248,7 @@ struct FunctionEmitter {
     Function * func;
     std::vector<BasicBlock *> deferred;
     
-    FunctionEmitter(TerraCompilationUnit * CU_, Obj * funcobj_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), funcobj(funcobj_)  {}
+    FunctionEmitter(TerraCompilationUnit * CU_, Obj * funcobj_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), locals(NULL), funcobj(funcobj_) {}
     Function * run(int prevscc) {
         func = lookupSymbol<Function>(CU->symbols,funcobj);
         if(!func) {
@@ -1340,7 +1343,8 @@ struct FunctionEmitter {
     void emitBody() {
         B = new IRBuilder<>(*CU->TT->ctx);
         Obj localtbl,labeltbl,labeldepthtbl;
-        locals = newMap(&localtbl); //local symbol table that maps things like variables or labels to values or basicblocks
+        Locals basescope;
+        enterScope(&basescope);
         labels = newMap(&labeltbl);
 
         BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",func);
@@ -1398,8 +1402,10 @@ struct FunctionEmitter {
     }
     
     AllocaInst * allocVar(Obj * v) {
+        Obj sym;
+        v->obj("symbol",&sym);
         AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->string("name"));
-        mapSymbol(locals,v,a);
+        mapSymbol(&locals->cur,&sym,a);
         return a;
     }
     
@@ -1750,17 +1756,6 @@ if(baseT->isIntegerTy()) { \
         condExp = emitCond(condExp); //convert to i1
         return B->CreateSelect(condExp, aExp, bExp);
     }
-    Value * variableFromDefinition(Obj * exp) {
-        Obj def;
-        exp->obj("definition",&def);
-        if(def.hasfield("isglobal")) {
-            return EmitGlobalVariable(CU,&def,exp->asstring("name"));
-        } else {
-            Value * v = lookupSymbol<Value>(locals,&def);
-            assert(v);
-            return v;
-        }
-    }
     Value * emitExp(Obj * exp, bool loadlvalue = true) {
         Value * raw = emitExpRaw(exp);
         if(loadlvalue && exp->boolean("lvalue")) {
@@ -1776,9 +1771,12 @@ if(baseT->isIntegerTy()) { \
         setDebugPoint(exp);
         switch(exp->kind("kind")) {
             case T_var:  {
-                Obj def;
-                exp->obj("definition",&def);
-                Value * v = lookupSymbol<Value>(locals,&def);
+                Obj sym;
+                exp->obj("symbol",&sym);
+                Value * v = NULL;
+                for(Locals * f = locals; v == NULL && f != NULL; f = f->prev) {
+                    v = lookupSymbol<Value>(&f->cur,&sym);
+                }
                 assert(v);
                 return v;
             } break;
@@ -1791,7 +1789,11 @@ if(baseT->isIntegerTy()) { \
                 return allocVar(exp);
             } break;
             case T_letin: {
-                return emitLetIn(exp);
+                Locals buf;
+                enterScope(&buf);
+                Value * v = emitLetIn(exp);
+                leaveScope();
+                return v;
             } break;
             case T_operator: {
                 
@@ -2333,16 +2335,28 @@ if(baseT->isIntegerTy()) { \
             setInsertBlock(bb);
         }
     }
+    void enterScope(Locals * buf) {
+        buf->prev = locals;
+        newMap(&buf->cur);
+        locals = buf;
+    }
+    void leaveScope() {
+        assert(locals);
+        locals = locals->prev;
+    }
     void emitStmt(Obj * stmt) {
         setDebugPoint(stmt);
         T_Kind kind = stmt->kind("kind");
         switch(kind) {
             case T_block: {
+                Locals buf;
+                enterScope(&buf);
                 size_t N = deferred.size();
                 Obj stmts;
                 stmt->obj("statements",&stmts);
                 emitStmtList(&stmts);
                 unwindDeferred(N);
+                leaveScope();
             } break;
             case T_returnstat: {
                 Obj exp;
@@ -2405,6 +2419,8 @@ if(baseT->isIntegerTy()) { \
                 
             } break;
             case T_fornum: {
+                Locals buf;
+                enterScope(&buf);
                 Obj initial,step,limit,variable,body;
                 stmt->obj("initial",&initial);
                 bool hasstep = stmt->obj("step",&step);
@@ -2436,6 +2452,7 @@ if(baseT->isIntegerTy()) { \
                 setInsertBlock(merge);
                 
                 popBreakpoint();
+                leaveScope();
             } break;
             case T_ifstat: {
                 Obj branches;
@@ -2512,6 +2529,9 @@ if(baseT->isIntegerTy()) { \
                 Obj expression;
                 stmt->obj("expression",&expression);
                 emitCall(&expression, true);
+            } break;
+            case T_letin: {
+                emitLetIn(stmt); //scope is only for expression let, statement let joins its surrounding scope
             } break;
             default: {
                 emitExp(stmt,false);
