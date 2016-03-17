@@ -169,14 +169,14 @@ endif
 
 build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC="$(CC)" STATIC_CC="$(CC) -fPIC")
 
 release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
 	cp $(LUAJIT_INCLUDE)/$*.h $@
     
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | tr ' ' '\n' | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
 	# include all luajit objects, since the entire lua interface is used in terra 
