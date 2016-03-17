@@ -1991,13 +1991,11 @@ function terra.specialize(origtree, luaenv, depth)
             return newobject(e,T.functiondefu,parameters,e.is_varargs,returntype,body)
         elseif T.fornumu:isclassof(e) then
             local initial,limit,step = translatetree(e.initial),translatetree(e.limit), e.step and translatetree(e.step)
-            env:enterblock()
             local variables = createformalparameterlist(terra.newlist { e.variable }, false)
             if #variables ~= 1 then
                 diag:reporterror(e.variable, "expected a single iteration variable but found ",#variables)
             end
             local body = translatetree(e.body)
-            env:leaveblock()
             return newobject(e,T.fornumu,variables[1],initial,limit,step,body)
         elseif T.forlist:isclassof(e) then
             local iterator = translatetree(e.iterator)
@@ -3400,13 +3398,11 @@ function terra.funcdefinition:typecheckbody()
             local t = typemeet(initial,initial.type,limit.type) 
             t = step and typemeet(limit,t,step.type) or t
             enterloop()
-            symbolenv:enterblock()
             local variable = checkformalparameter(s.variable)
             variable.type = variable.type or t
             if not variable.type:isintegral() then diag:reporterror(variable,"expected an integral type for loop initialization but found ",variable.type) end
             initial,step,limit = insertcast(initial,variable.type), step and insertcast(step,variable.type), insertcast(limit,variable.type)
             local body = checkstmt(s.body)
-            symbolenv:leaveblock()
             leaveloop()
             local r = newobject(s,T.fornum,variable,initial,limit,step,body)
             return r
@@ -3850,10 +3846,11 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit(" : %s",p.type)
         end
     end
+    local implicitblock = { repeatstat = true, fornum = true, fornumu = true}
     local emitStmt, emitExp,emitParamList,emitLetIn
     local function emitStmtList(lst) --nested Blocks (e.g. from quotes need "do" appended)
         for i,ss in ipairs(lst) do
-            if ss:is "block" and not (#ss.statements == 1 and ss.statements[1].kind == "repeatstat") then
+            if ss:is "block" and not (#ss.statements == 1 and implicitblock[ss.statements[1].kind]) then
                 begin(ss,"do\n")
                 emitStmt(ss)
                 begin(ss,"end\n")
@@ -3888,9 +3885,9 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         elseif s:is "label" then
             begin(s,"::%s::\n",IdentToString(s.label))
         elseif s:is "gotostat" then
-            begin(s,"goto %s (%s)\n",IdentToString(s.label),s.deferred or "")
+            begin(s,"goto %s\n",IdentToString(s.label))
         elseif s:is "breakstat" then
-            begin(s,"break (%s)\n",s.deferred or "")
+            begin(s,"break\n")
         elseif s:is "whilestat" then
             begin(s,"while ")
             emitExp(s.condition)

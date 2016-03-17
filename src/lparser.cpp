@@ -1467,6 +1467,9 @@ static void fornum (LexState *ls, TString *varname, Position * p) {
     definevariable(ls, varname);
   RETURNS_1(forbody(ls, p->linenumber, 1, &bl));
   new_object(ls,"fornumu",5,p);
+  int blk = new_list_before(ls);
+  add_entry(ls, blk);
+  new_object(ls, "block", 1, p);
 }
 
 

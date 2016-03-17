@@ -2419,8 +2419,6 @@ if(baseT->isIntegerTy()) { \
                 
             } break;
             case T_fornum: {
-                Locals buf;
-                enterScope(&buf);
                 Obj initial,step,limit,variable,body;
                 stmt->obj("initial",&initial);
                 bool hasstep = stmt->obj("step",&step);
@@ -2452,7 +2450,6 @@ if(baseT->isIntegerTy()) { \
                 setInsertBlock(merge);
                 
                 popBreakpoint();
-                leaveScope();
             } break;
             case T_ifstat: {
                 Obj branches;
