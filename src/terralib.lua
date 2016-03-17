@@ -58,7 +58,7 @@ param = unevaluatedparam(ident name, luaexpression? type) # removed during speci
       | concreteparam(Type? type, string name, Symbol symbol)
       
 functiondefu = (param* parameters, boolean is_varargs, LuaExprOrType? returntype, block body)
-functiondef = (allocvar* parameters, boolean is_varargs, Type type, block body, table labels)
+functiondef = (allocvar* parameters, boolean is_varargs, Type type, block body, table labeldepths)
 structdef = (luaexpression? metatype, structlist records)
 
 ifbranch = (tree condition, block body)
@@ -95,7 +95,7 @@ tree =
      | assignment(tree* lhs,tree* rhs)
      | gotostat(ident label)
      | breakstat()
-     | label(ident value)
+     | label(ident label)
      | whilestat(tree condition, block body)
      | repeatstat(tree* statements, tree condition)
      | fornum(allocvar variable, tree initial, tree limit, tree? step, block body)
@@ -127,7 +127,9 @@ Type = primitive(string type, number bytes, boolean signed)
      | niltype #the type of the singleton nil (implicitly convertable to any pointer type)
      | opaque #an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type (i.e. void*)
      | error #used in compiler to squelch errors
-     
+
+labelstate = undefinedlabel(gotostat * gotos, table* positions) #undefined label with gotos pointing to it
+           | definedlabel(table position, label label) #defined label with position and label object defining it
 ]]
 terra.irtypes = T
 
@@ -3259,15 +3261,21 @@ function terra.funcdefinition:typecheckbody()
     
     local return_stmts = terra.newlist() --keep track of return stms, these will be merged at the end, possibly inserting casts
     
-    local labels = {} --map from label name to definition (or, if undefined to the list of already seen gotos that target that label)
+    local labelstates = {} -- map from label value to labelstate object, either representing a defined or undefined label
     local looppositions = List() -- stack of scopepositions that track where a break would go to
     local scopeposition = terra.newlist() --list(int), count of number of defer statements seens at each level of block scope, used for unwinding defer statements during break/goto
-    
     
     local function getscopeposition()
         local sp = terra.newlist()
         for i,p in ipairs(scopeposition) do sp[i] = p end
         return sp
+    end
+    local function getscopedepth(position)
+        local c = 0
+        for _,d in ipairs(position) do
+            c = c + d
+        end
+        return c
     end
     local function enterloop()
         looppositions:insert(getscopeposition())
@@ -3285,25 +3293,20 @@ function terra.funcdefinition:typecheckbody()
     end
     --calculate the number of deferred statements that will fire when jumping from stack position 'from' to 'to'
     --if a goto crosses a deferred statement, we detect that and report an error
-    local function numberofdeferredpassed(anchor,from,to)
+    local function checkdeferredpassed(anchor,from,to)
         local N = math.max(#from,#to)
         for i = 1,N do
             local t,f = to[i] or 0, from[i] or 0
             if t < f then
-                local c = f - t
                 for j = i+1,N do
                     if (to[j] or 0) ~= 0 then
                         diag:reporterror(anchor,"goto crosses the scope of a deferred statement")
                     end
-                    c = c + (from[j] or 0)
                 end
-                return c
             elseif t > f then
                 diag:reporterror(anchor,"goto crosses the scope of a deferred statement")
-                return 0
             end
         end
-        return 0
     end
     local function createstatementlist(anchor,stmts)
         return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit:complete(anchor))
@@ -3357,39 +3360,36 @@ function terra.funcdefinition:typecheckbody()
             return rstmt
         elseif s:is "label" then
             local ss = s:copy {}
-            local label = ss.value.value
-            ss.position = getscopeposition()
-            local lbls = labels[label] or terra.newlist()
-            if terra.istree(lbls) then
+            local label = ss.label.value
+            local state = labelstates[label]
+            local position = getscopeposition()
+            if state and state.kind == "definedlabel" then
                 diag:reporterror(s,"label defined twice")
-                diag:reporterror(lbls,"previous definition here")
-            else
-                for _,v in ipairs(lbls) do
-                    v.definition = ss
-                    v.deferred = numberofdeferredpassed(v,v.position,ss.position)
+                diag:reporterror(state.label,"previous definition here")
+            elseif state then assert(state.kind == "undefinedlabel")
+                for i,g in ipairs(state.gotos) do
+                    checkdeferredpassed(g,state.positions[i],position)
                 end
             end
-            labels[label] = ss
+            labelstates[label] = T.definedlabel(position,ss)
             return ss
         elseif s:is "gotostat" then
             local ss = s:copy{}
             local label = ss.label.value
-            local lbls = labels[label] or terra.newlist()
-            if terra.istree(lbls) then
-                ss.definition = lbls
-                ss.deferred = numberofdeferredpassed(s,scopeposition,ss.definition.position)
-            else
-                ss.position = getscopeposition()
-                lbls:insert(ss)
+            local state = labelstates[label] or T.undefinedlabel(List(),List())
+            local position = getscopeposition()
+            if state.kind == "definedlabel" then
+                checkdeferredpassed(s,scopeposition,state.position)
+            else assert(state.kind == "undefinedlabel")
+                state.gotos:insert(ss)
+                state.positions:insert(getscopeposition())
             end
-            labels[label] = lbls
+            labelstates[label] = state
             return ss
         elseif s:is "breakstat" then
             local ss = s:copy({})
             if #looppositions == 0 then
                 diag:reporterror(s,"break found outside a loop")
-            else
-                ss.deferred = numberofdeferredpassed(s,scopeposition,looppositions[#looppositions])
             end
             return ss
         elseif s:is "whilestat" then
@@ -3501,9 +3501,12 @@ function terra.funcdefinition:typecheckbody()
     local result = checkstmt(ftree.body)
 
     --check the label table for any labels that have been referenced but not defined
-    for _,v in pairs(labels) do
-        if not terra.istree(v) then
-            diag:reporterror(v[1],"goto to undefined label")
+    local labeldepths = {}
+    for k,state in pairs(labelstates) do
+        if state.kind == "undefinedlabel" then
+            diag:reporterror(state.gotos[1],"goto to undefined label")
+        else
+            labeldepths[k] = getscopedepth(state.position)
         end
     end
     
@@ -3527,7 +3530,7 @@ function terra.funcdefinition:typecheckbody()
     end
     
     --we're done. build the typed tree for this function
-    self.typedtree = newobject(ftree,T.functiondef,typed_parameters,ftree.is_varargs,fntype, result,labels)
+    self.typedtree = newobject(ftree,T.functiondef,typed_parameters,ftree.is_varargs,fntype, result,labeldepths)
     self.type = fntype
 
     self.stats.typec = terra.currenttimeinseconds() - starttime
@@ -3885,7 +3888,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitExp(s.expression)
             emit("\n")
         elseif s:is "label" then
-            begin(s,"::%s::\n",IdentToString(s.value))
+            begin(s,"::%s::\n",IdentToString(s.label))
         elseif s:is "gotostat" then
             begin(s,"goto %s (%s)\n",IdentToString(s.label),s.deferred or "")
         elseif s:is "breakstat" then

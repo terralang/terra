@@ -1226,10 +1226,10 @@ struct FunctionEmitter {
     Types * Ty;
     CCallingConv * CC;
     Module * M;
-    Obj * locals;
+    Obj * locals, * labels, * labeldepth;
     
     IRBuilder<> * B;
-    std::vector<BasicBlock *> breakpoints; //stack of basic blocks where a break statement should go
+    std::vector<std::pair<BasicBlock *,int> > breakpoints; //stack of basic blocks where a break statement should go
     
     #ifdef DEBUG_INFO_WORKING
     DIBuilder * DB;
@@ -1332,12 +1332,16 @@ struct FunctionEmitter {
         }
         return func;
     }
+    Obj * newMap(Obj * buf) {
+        lua_newtable(L);
+        funcobj->fromStack(buf);
+        return buf;
+    }
     void emitBody() {
         B = new IRBuilder<>(*CU->TT->ctx);
-        Obj localtbl;
-        lua_newtable(L);
-        funcobj->fromStack(&localtbl);
-        locals = &localtbl; //local symbol table that maps things like variables or labels to values or basicblocks
+        Obj localtbl,labeltbl,labeldepthtbl;
+        locals = newMap(&localtbl); //local symbol table that maps things like variables or labels to values or basicblocks
+        labels = newMap(&labeltbl);
 
         BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",func);
         
@@ -1354,6 +1358,9 @@ struct FunctionEmitter {
         Obj ftype;
         funcobj->obj("type",&ftype);
         
+        typedtree.obj("labeldepths",&labeldepthtbl);
+        labeldepth = &labeldepthtbl;
+        
         std::vector<Value *> parametervars;
         emitExpressionList(&parameters, false, &parametervars);
         CC->EmitEntry(B,&ftype, func, &parametervars);
@@ -1364,6 +1371,7 @@ struct FunctionEmitter {
         //if there no terminating return statment, we need to insert one
         //if there was a Return, then this block is dead and will be cleaned up
         emitReturnUndef();
+        assert(breakpoints.size() == 0);
         
         VERBOSE_ONLY(T) {
             func->dump();
@@ -2195,17 +2203,25 @@ if(baseT->isIntegerTy()) { \
         B->SetInsertPoint(bb);
     }
     void pushBreakpoint(BasicBlock * exit) {
-        breakpoints.push_back(exit);
+        breakpoints.push_back(std::make_pair(exit,deferred.size()));
     }
     void popBreakpoint() {
         breakpoints.pop_back();
     }
-    BasicBlock * getOrCreateBlockForLabel(Obj * lbl) {
-        BasicBlock * bb = lookupSymbol<BasicBlock>(locals, lbl);
+    BasicBlock * getOrCreateBlockForLabel(Obj * stmt, int * depth) {
+        Obj ident,lbl;
+        stmt->obj("label",&ident);
+        ident.obj("value",&lbl);
+        BasicBlock * bb = lookupSymbol<BasicBlock>(labels, &lbl);
         if(!bb) {
-            bb = createAndInsertBB(lbl->asstring("value"));
-            mapSymbol(locals, lbl, bb);
+            bb = createAndInsertBB(lbl.asstring("value"));
+            mapSymbol(labels, &lbl, bb);
         }
+        labeldepth->push();
+        lbl.push();
+        lua_gettable(L,-2);
+        *depth = luaL_checknumber(L,-1);
+        lua_pop(L,2);
         return bb;
     }
     Value * emitCall(Obj * call, bool defer) {
@@ -2339,25 +2355,27 @@ if(baseT->isIntegerTy()) { \
                 startDeadCode();
             } break;
             case T_label: {
-                BasicBlock * bb = getOrCreateBlockForLabel(stmt);
+                int depth;
+                BasicBlock * bb = getOrCreateBlockForLabel(stmt,&depth);
+                assert(depth == deferred.size());
                 B->CreateBr(bb);
                 followsBB(bb);
                 setInsertBlock(bb);
             } break;
             case T_gotostat: {
-                Obj lbl;
-                stmt->obj("definition",&lbl);
-                BasicBlock * bb = getOrCreateBlockForLabel(&lbl);
-                emitDeferred(stmt->number("deferred"));
+                int depth;
+                BasicBlock * bb = getOrCreateBlockForLabel(stmt,&depth);
+                assert(deferred.size() >= depth);
+                emitDeferred(deferred.size() - depth);
                 B->CreateBr(bb);
                 startDeadCode();
             } break;
             case T_breakstat: {
                 Obj def;
-                BasicBlock * breakpoint = breakpoints.back();
-                assert(breakpoint);
-                emitDeferred(stmt->number("deferred"));
-                B->CreateBr(breakpoint);
+                auto breakpoint = breakpoints.back();
+                assert(breakpoints.size() > 0);
+                emitDeferred(deferred.size() - breakpoint.second);
+                B->CreateBr(breakpoint.first);
                 startDeadCode();
             } break;
             case T_whilestat: {
