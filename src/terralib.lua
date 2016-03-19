@@ -322,10 +322,6 @@ end
 terra.diagnostics = {}
 terra.diagnostics.__index = terra.diagnostics
 
-function terra.diagnostics:errorlist()
-    return self._errors[#self._errors]
-end
-
 local diagcache = setmetatable({},{ __mode = "v" })
 local function formaterror(anchor,...)
     if not anchor or not anchor.filename or not anchor.linenumber then
@@ -333,7 +329,8 @@ local function formaterror(anchor,...)
     end
     local errlist = List()
     errlist:insert(anchor.filename..":"..anchor.linenumber..": ")
-    errlist:insert(tostring(v))
+    for i = 1,select("#",...) do errlist:insert(tostring(select(i,...))) end
+    errlist:insert("\n")
     if not anchor.offset then 
         return errlist:concat()
     end
@@ -360,7 +357,6 @@ local function formaterror(anchor,...)
         while finish < filetext:len() and filetext:byte(finish + 1) ~= NL do
             finish = finish + 1
         end
-        local errlist = self:errorlist()
         local line = filetext:sub(begin,finish) 
         errlist:insert(line)
         errlist:insert("\n")
@@ -377,7 +373,7 @@ end
 
 terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
-    self:errorlist():insert(formaterror(anchor,...))
+    self.errors:insert(formaterror(anchor,...))
 end
 
 function terra.diagnostics:haserrors()
@@ -461,7 +457,7 @@ function T.terrafunction:setinlined(v)
 end
 function T.terrafunction:disas()
     print("definition ", self:gettype())
-    terra.disassemble(terra.jitcompilationunit:addvalue(self),self:jit())
+    terra.disassemble(terra.jitcompilationunit:addvalue(self),self:compile())
 end
 function T.terrafunction:printstats()
     print("definition ", self:gettype())
@@ -1779,6 +1775,7 @@ local function semanticcheck(diag,parameters,block)
     return labeldepths, globalsused
 end
 function typecheck(topexp,luaenv,simultaneousdefinitions)
+    print(topexp)
     local env = terra.newenvironment(luaenv or {})
     local diag = terra.newdiagnostics()
     simultaneousdefinitions = simultaneousdefinitions or {}
@@ -3103,7 +3100,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
     else 
-        result = emitExp(topexp)
+        result = checkexp(topexp)
     end
     diag:finishandabortiferrors("Errors reported during typechecking.",3)
     return result

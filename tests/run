@@ -36,6 +36,7 @@ for line in io.popen(lscmd):lines() do
         if os.execute(execstring) == 0 then
             table.insert(passed,file)
         else
+            error("fail")
             table.insert(failed,file)
         end
     end

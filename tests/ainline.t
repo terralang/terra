@@ -13,7 +13,7 @@ terra foo()
 	C.printf("hello, world\n")
 end
 
-foo:getdefinitions()[1]:setinlined(true)
+foo:setinlined(true)
 
 terra bar()
 	foo()
