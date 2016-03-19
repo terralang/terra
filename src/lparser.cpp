@@ -691,7 +691,7 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 static int vardecl(LexState *ls, int requiretype, TString ** vname) {
     Position p = getposition(ls);
     int wasstring = checksymbol(ls, vname);
-    if (ls->in_terra && ( (wasstring && requiretype) || ls->t.token == ':')) {
+    if (ls->in_terra && wasstring && (requiretype || ls->t.token == ':')) {
         checknext(ls, ':');
         RETURNS_1(terratype(ls));
     } else push_nil(ls);
@@ -979,6 +979,15 @@ static void blockescape(LexState * ls) {
     check_match(ls, TK_END, TK_ESCAPE, line);
 }
 
+static void bodyortype(LexState * ls, int ismethod) {
+    if(ls->t.token == '(') {
+        body(ls, ismethod, ls->linenumber);
+    } else {
+        checknext(ls, ':');
+        terratype(ls);
+    }
+}
+
 static void simpleexp (LexState *ls) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | primaryexp */
@@ -1052,7 +1061,7 @@ static void simpleexp (LexState *ls) {
         enterterra(ls, &tc);
         Token begin = ls->t;
         luaX_next(ls);
-        body(ls,0,ls->linenumber);
+        bodyortype(ls,0);
         luaX_patchbegin(ls,&begin);
         int id = store_value(ls);
         OutputBuffer_printf(&ls->output_buffer,"terra.anonfunction(_G.terra._trees[%d],",id);
@@ -1683,10 +1692,8 @@ static void terrastats(LexState * ls, bool emittedlocal) {
         switch(token) {
             case TK_TERRA: {
                 tdefn.kind = ismethod ? 'm' : 'f';
-                if(ls->t.token == '(') {
-                    body(ls, ismethod, ls->linenumber);
-                    tdefn.treeid = store_value(ls);
-                }
+                bodyortype(ls, ismethod);
+                tdefn.treeid = store_value(ls);
             } break;
             case TK_STRUCT: {
                 tdefn.kind = 's';

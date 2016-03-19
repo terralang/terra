@@ -30,7 +30,7 @@ _(float,"float") \
 _(fornum,"fornum") \
 _(functype,"functype") \
 _(ge,">=") \
-_(globalvar, "globalvar") \
+_(globalvarref, "globalvarref") \
 _(gotostat,"gotostat") \
 _(gt,">") \
 _(ifstat,"ifstat") \

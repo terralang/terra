@@ -1253,7 +1253,7 @@ struct FunctionEmitter {
         func = lookupSymbol<Function>(CU->symbols,funcobj);
         if(!func) {
             const char * name = funcobj->string("name");
-            bool isextern = funcobj->boolean("isextern");
+            bool isextern = funcobj->boolean("extern");
             scc = funcobj->number("scc");
             if (isextern) { //try to resolve function as imported C code
                 func = M->getFunction(name);
@@ -1354,7 +1354,7 @@ struct FunctionEmitter {
         Obj typedtree;
         Obj parameters;
         
-        funcobj->obj("typedtree",&typedtree);
+        funcobj->obj("definition",&typedtree);
         initDebug(typedtree.string("filename"),typedtree.number("linenumber"));
         setDebugPoint(&typedtree);
         typedtree.obj("parameters",&parameters);
@@ -1780,7 +1780,7 @@ if(baseT->isIntegerTy()) { \
                 assert(v);
                 return v;
             } break;
-            case T_globalvar:  {
+            case T_globalvarref:  {
                 Obj global;
                 exp->obj("value",&global);
                 return EmitGlobalVariable(CU,&global,exp->string("name"));
