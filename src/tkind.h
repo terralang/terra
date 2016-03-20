@@ -67,7 +67,9 @@ _(sub, "-") \
 _(var,"var") \
 _(vector, "vector") \
 _(vectorconstructor,"vectorconstructor") \
-_(whilestat,"whilestat")
+_(whilestat,"whilestat") \
+_(globalvariable,"globalvariable") \
+_(terrafunction,"terrafunction")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

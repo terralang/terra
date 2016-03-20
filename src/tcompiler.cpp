@@ -2050,10 +2050,7 @@ if(baseT->isIntegerTy()) { \
                     int alignment = attr.number("alignment");
                     l->setAlignment(alignment);
                 }
-                if(attr.hasfield("isvolatile")) {
-                  bool isVolatile = attr.boolean("isvolatile");
-                  l->setVolatile(isVolatile);
-                }
+                l->setVolatile(attr.boolean("isvolatile"));
                 return l;
             } break;
             case T_attrstore: {
@@ -2068,18 +2065,15 @@ if(baseT->isIntegerTy()) { \
                     int alignment = attr.number("alignment");
                     store->setAlignment(alignment);
                 }
-                if(attr.hasfield("nontemporal")) {
+                if(attr.boolean("nontemporal")) {
                     #if LLVM_VERSION <= 35
                     auto list = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1);
                     #else
                     auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1));
                     #endif
                     store->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
-                }
-                if(attr.hasfield("isvolatile")) {
-                  bool isVolatile = attr.boolean("isvolatile");
-                  store->setVolatile(isVolatile);
-                }
+                };
+                store->setVolatile(attr.boolean("isvolatile"));
                 return Constant::getNullValue(typeOfValue(exp)->type);
             } break;
             case T_debuginfo: {
@@ -2562,7 +2556,7 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
         CCallingConv CC(CU,&Ty);
         std::vector<Function *> tooptimize;
         CU->Ty = &Ty; CU->CC = &CC; CU->symbols = &globals; CU->tooptimize = &tooptimize;
-        if(value.hasfield("isglobal")) {
+        if(value.kind("kind") == T_globalvariable) {
             gv = EmitGlobalVariable(CU,&value,"anon");
         } else {
             gv = EmitFunction(CU,&value,-1);
