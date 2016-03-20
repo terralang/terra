@@ -685,7 +685,9 @@ function T.quote:asvalue()
     end
     return getvalue(self.tree)
 end
-function T.quote:init() assert(T.Type:isclassof(self.tree.type), "quote tree must have a type") end
+function T.quote:init()
+    assert(T.Type:isclassof(self.tree.type), "quote tree must have a type")
+end
 function terra.newquote(tree) return T.quote(tree) end
 -- END QUOTE
 
@@ -743,7 +745,7 @@ function terra.intrinsic(str, typ)
 end
 
 terra.asm = terra.internalmacro(function(diag,tree,returntype, asm, constraints,volatile,...)
-    local args = terra.newlist({...}):map(function(e) return e.tree end)
+    local args = List{...}
     return typecheck(newobject(tree, T.inlineasm,returntype:astype(), tostring(asm:asvalue()), not not volatile:asvalue(), tostring(constraints:asvalue()), args))
 end)
     
@@ -793,11 +795,11 @@ local function layoutstruct(st,tree,env)
     end
     diag:finishandabortiferrors("Errors reported during struct definition.",3)
 end
-local function desugarmethoddefinition(tree,receiver)
+local function desugarmethoddefinition(newtree,receiver)
     local pointerto = terra.types.pointer
-    local addressof = newobject(newtree,T.luaexpression,function() return pointerto(reciever) end,true)
+    local addressof = newobject(newtree,T.luaexpression,function() return pointerto(receiver) end,true)
     local sym = newobject(newtree,T.namedident,"self")
-    local implicitparam = newobject(newtree,T.param,sym,addressof)
+    local implicitparam = newobject(newtree,T.unevaluatedparam,sym,addressof)
     --add the implicit parameter to the parameter list
     local newparameters = List{implicitparam}
     newparameters:insertall(newtree.parameters)
@@ -861,7 +863,7 @@ function terra.defineobjects(fmt,envfn,...)
                 if not terra.types.istype(tbl) or not tbl:isstruct() then
                     error("expected a struct but found "..terra.type(tbl).. " when attempting to add method "..c.name,2)
                 end
-                c.tree = desugarmethoddefinition(tree,tbl)
+                c.tree = desugarmethoddefinition(c.tree,tbl)
                 tbl = tbl.methods
             end
             local v = paccess(c.name,3,tbl,lastname)
@@ -924,6 +926,8 @@ function terra.anonfunction(tree,envfn)
 end
 
 function terra.externfunction(name,typ,anchor)
+    assert(T.Type:isclassof(typ) and typ:isfunction() or typ:ispointertofunction(),"expected a pointer to a function")
+    if typ:ispointertofunction() then typ = typ.type end
     anchor = anchor or terra.newanchor(1)
     return T.terrafunction(nil,name,typ,true,anchor)
 end
@@ -1443,6 +1447,7 @@ do
     globaltype("bool", T.primitive("logical",1,false))
     
     types.error,T.error.name = T.error,"<error>"
+    T.luaobjecttype.name = "luaobjecttype"
     
     types.niltype = T.niltype
     globaltype("niltype",T.niltype)
@@ -1787,14 +1792,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         if type(r) == "string" then
             if not stringok then
                 diag:reporterror(e,"expected a symbol but found string")
-                return newobject(e,T.symbolident,terra.newsymbol(r))
+                return newobject(e,T.symbolident,terra.newsymbol(terra.types.error,r))
             end
             return newobject(e,T.namedident,r)
         elseif not terra.issymbol(r) then
             if success then
                 diag:reporterror(e,"expected a string or symbol but found ",terra.type(r))
             end
-            r = terra.newsymbol(nil,"error")
+            r = terra.newsymbol(terra.types.error,"error")
         end
         return newobject(e,T.symbolident,r)
     end
@@ -1906,7 +1911,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     diag:reporterror(anchor, "to call a lua function from terra first use terralib.cast to cast it to a terra function type.")
                 end
             end
-            return newobject(anchor,T.luaobject,v)
+            return newobject(anchor,T.luaobject,v):withtype(T.luaobjecttype)
         end
         if not terra.israwlist(v) then
             return createsingle(v)
@@ -1937,7 +1942,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --create a new variable allocation and a var node that refers to it, used to create temporary variables
     local function allocvar(anchor,typ,name)
-        local av = newobject(anchor,T.allocvar,name,terra.newsymbol(name)):setlvalue(true):withtype(typ:complete(anchor))
+        local av = newobject(anchor,T.allocvar,name,terra.newsymbol(typ,name)):setlvalue(true):withtype(typ:complete(anchor))
         local v = newobject(anchor,T.var,name,av.symbol):setlvalue(true):withtype(typ)
         return av,v
     end
@@ -2492,7 +2497,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     local function checkmethod(exp, location)
-        local methodname = checkident(exp.name).value
+        local methodname = checkident(exp.name,true).value
         assert(type(methodname) == "string" or terra.issymbol(methodname))
         local reciever = checkexp(exp.value)
         local arguments = checkexpressions(exp.arguments,"luavalue")
