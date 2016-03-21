@@ -1,6 +1,6 @@
 
 
-local a = symbol()
+local a = symbol(int)
 
 local q = quote 
 	var [a] = 2

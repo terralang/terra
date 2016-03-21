@@ -1,5 +1,5 @@
 
-terra mything
+terra mything : int -> int
 
 terra mybar()
 	return mything(4)
@@ -9,7 +9,7 @@ terra mything(a : int)
 	return a
 end
 
-terra mything
+terra mything : int -> int
 
 terra mybar2()
 	return mything(4)

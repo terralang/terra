@@ -20,7 +20,7 @@ local test = require("test")
 test.meq({1,2},f0())
 test.meq({1,2},f1())
 
-local c = symbol()
+local c = symbol(int)
 local b = 
 quote
 	var [c]  = 3

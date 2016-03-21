@@ -37,28 +37,17 @@ function cudalib.toptx(module,dumpmodule,version)
     dumpmodule,version = not not dumpmodule,assert(tonumber(version))
     local cu = terralib.newcompilationunit(terralib.nativetarget,false) -- TODO: add nvptx target options here
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
-    local kernelindex = {}
-
-    local function addkernel(k,v)
-        kernelindex[k] = v
-        local definitions =  v:getdefinitions()
-        if #definitions > 1 then
-            error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
-        end
-        local fn = definitions[1]
-        if fn.state == "untyped" then 
-            fn:setinlined(true) --if we need to wrap this function, make sure it is inlined
-        end
+    local function addkernel(k,fn)
+        fn:setinlined(true)
         
         local typ = fn:gettype()
-        
         if not typ.returntype:isunit() then
             error(k..": kernels must return no arguments.")
         end
 
         for _,p in ipairs(typ.parameters) do
             if p:isarray() or p:isstruct() then -- we can't pass aggregates by value through CUDA, so wrap/unwrap the kernel
-                fn = cudalib.flattenkernel(v):getdefinitions()[1]
+                fn = cudalib.flattenkernel(v)
                 break
             end
         end

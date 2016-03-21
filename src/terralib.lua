@@ -566,7 +566,7 @@ function T.terrafunction:adddefinition(functiondef)
     end
     self.definition,self.type = functiondef,functiondef.type
 end
-function T.terrafunction:isdeclaration() return not (self:isextern() or self:defined()) end
+function T.terrafunction:isdeclaration() return not (self:isextern() or self:isdefined()) end
 function terra.isfunction(obj)
     return T.terrafunction:isclassof(obj)
 end
@@ -840,7 +840,6 @@ function terra.intrinsic(str, typ)
             intrinsictype = terra.types.funcpointer(types,{})
         end
         local fn = terralib.externfunction(name,intrinsictype,e)
-        print("about to complete")
         local literal = newobject(e,T.literal,fn,terra.types.pointer(fn:gettype()))
         return typecheck(newobject(e,T.apply,literal,args))
     end
@@ -1608,7 +1607,7 @@ do
         end
         return types.pointer(types.functype(List{unpack(parameters)},ret,not not isvararg))
     end
-    types.unit = types.tuple()
+    types.unit = types.tuple():complete()
     types.placeholderfunction = types.functype(List(),types.error,false) --used as a placeholder during group definitions indicating the definition has not been processed yet
     globaltype("int",types.int32)
     globaltype("uint",types.uint32)
@@ -2690,7 +2689,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local v = env:combinedenv()[e.name]
                 if v == nil then
                     diag:reporterror(e,"variable '"..e.name.."' not found")
-                    return e
+                    return e:aserror()
                 end
                 return asterraexpression(e,v, location)
             elseif e:is "quote" then
@@ -2833,7 +2832,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return e:aserror()
                 end
                 local value = insertcast(checkexp(e.value),addr.type.type)
-                return e:copy { address = addr, value = value }:withtype(terra.types.unit:complete(e))
+                return e:copy { address = addr, value = value }:withtype(terra.types.unit)
             elseif e:is "apply" then
                 return checkapply(e,location)
             elseif e:is "method" then
@@ -2870,7 +2869,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif e:is "inlineasm" then
                 return e:copy { arguments = checkexpressions(e.arguments) }
             elseif e:is "debuginfo" then
-                return e:copy{}:withtype(terra.types.unit:complete(e))
+                return e:copy{}:withtype(terra.types.unit)
             else
                 diag:reporterror(e,"statement found where an expression is expected ", e.kind)
                 return e:aserror()
@@ -2932,7 +2931,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     local function createstatementlist(anchor,stmts)
-        return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit:complete(anchor))
+        return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit)
     end
 
     local function createassignment(anchor,lhs,rhs)
@@ -2997,7 +2996,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 t = step and typemeet(limit,t,step.type) or t
                 local variables = checkformalparameterlist(List {s.variable },false)
                 if #variables ~= 1 then
-                    diag:reporterror(e.variable, "expected a single iteration variable but found ",#variables)
+                    diag:reporterror(s.variable, "expected a single iteration variable but found ",#variables)
                 end
                 local variable = variables[1]
                 variable:settype(variable.type or t)
@@ -3165,12 +3164,13 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local body,returntype = checkreturns(checkblock(topexp.body),topexp.returntype)
         
         local fntype = terra.types.functype(parameter_types,returntype,false):completefunction(topexp)
+        diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
     else 
         result = checkexp(topexp)
     end
-    diag:finishandabortiferrors("Errors reported during typechecking.",3)
+    diag:finishandabortiferrors("Errors reported during typechecking.",2)
     return result
 end
 -- END TYPECHECKER
@@ -3353,7 +3353,7 @@ terra.select = terra.internalmacro(function(diag,tree,guard,a,b)
 end)
 terra.debuginfo = terra.internalmacro(function(diag,tree,filename,linenumber)
     local customfilename,customlinenumber = tostring(filename:asvalue()), tonumber(linenumber:asvalue())
-    return newobject(tree,T.debuginfo,customfilename,customlinenumber)
+    return newobject(tree,T.debuginfo,customfilename,customlinenumber):withtype(terra.types.unit)
 end)
 
 local function createattributetable(q)

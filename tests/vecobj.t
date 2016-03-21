@@ -7,7 +7,7 @@ local Vec = terralib.memoize(function(typ,N)
     VecType.metamethods.type, VecType.metamethods.N = typ,N
     VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
     for i, op in ipairs(ops) do
-        local i = symbol("i")
+        local i = symbol(int,"i")
         local function template(ae,be)
             return quote
                 var c : VecType

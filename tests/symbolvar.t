@@ -1,6 +1,6 @@
 
 
-local a = symbol()
+local a = symbol(int)
 
 terra foo()
 	var [a] = 3
