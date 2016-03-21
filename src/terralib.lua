@@ -418,7 +418,7 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
     if not speculate then
         local result = userfn(...)
         -- invokeuserfunction is recognized by a customtraceback and we need to prevent the tail call
-        return true, result
+        return result
     end
     local success,result = xpcall(userfn,debug.traceback,...)
     -- same here
@@ -1326,8 +1326,7 @@ do
         getvalue = function(self,anchor)
             local entries = self.entries
             if type(self.metamethods.__getentries) == "function" then
-                local success,result = invokeuserfunction(self.anchor,"invoking __getentries for struct",false,self.metamethods.__getentries,self)
-                entries = result
+                entries = invokeuserfunction(self.anchor,"invoking __getentries for struct",false,self.metamethods.__getentries,self)
             elseif self.undefined then
                 erroratlocation(anchor,"attempting to use type ",self," before it is defined.")
             end
@@ -2662,15 +2661,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
         if themacro then
             local quotes = arguments:map(terra.newquote)
-            local success, result = invokeuserfunction(anchor,"invoking macro",false, themacro.run, themacro, diag, anchor, unpack(quotes))
-            if success then
-                return asterraexpression(anchor,result,location)
-            else
-                result = anchor:aserror()
-            end
-        
-            leavemacroscope(anchor)
-            return result
+            local result = invokeuserfunction(anchor,"invoking macro",false, themacro.run, themacro, diag, anchor, unpack(quotes))
+            return asterraexpression(anchor,result,location)
         end
         assert(diag:haserrors())
         return anchor:aserror()
@@ -2728,8 +2720,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         diag:reporterror(e,"expected a table but found ", terra.type(v.value))
                         return e:aserror()
                     else
-                        local success,selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
-                        if not success or selected == nil then
+                        local selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
+                        if selected == nil then
                             diag:reporterror(e,"no field ", field," in lua object")
                             return ee
                         end
@@ -3048,11 +3040,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return terra.newquote(stats)
                 end
             
-                local success,value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
-                if success then
-                    return asterraexpression(s,value,"statement")
-                end
-                return s
+                local value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
+                return asterraexpression(s,value,"statement")
             elseif s:is "ifstat" then
                 local br = s.branches:map(checkcondbranch)
                 local els = (s.orelse and checkblock(s.orelse))
