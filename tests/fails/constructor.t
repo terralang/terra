@@ -2,7 +2,7 @@ if not require("fail") then return end
 
 local b = 1
 local dd = "d"
-local c = symbol()
+local c = label()
 
 terra foo()
 	var a = { [b], [c] = 2, [dd] = 3, r = 4}

@@ -374,7 +374,7 @@ end
 
 terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
-    erroratlocation(anchor,...) -- early error for debugging
+    --erroratlocation(anchor,...) -- early error for debugging
     self.errors:insert(formaterror(anchor,...))
 end
 
@@ -499,14 +499,14 @@ local function readytocompile(root)
             if not gv:isextern() and not gv:isdefined() then
                 erroratlocation(gv.anchor,"function "..gv:getname().." is not defined.")
             end
-            gv.type:completefunction(gv.anchor)
+            gv.type:completefunction()
             if gv.definition then
                 for i,g in ipairs(gv.definition.globalsused) do
                     visit(g)
                 end
             end
         elseif gv.kind == "glovalvariable" then
-            self.type:complete(gv.anchor)
+            self.type:complete()
         end
     end
     visit(root)
@@ -1190,13 +1190,13 @@ do
         local key = "cached"..name
         local inside = "inget"..name
         T.struct[key],T.struct[inside] = false,false
-        return function(self,anchor)
+        return function(self)
             if not self[key] then
                 if self[inside] then
                     erroratlocation(self.anchor,erroronrecursion)
                 else 
                     self[inside] = true
-                    self[key] = getvalue(self,anchor or terra.newanchor(1))
+                    self[key] = getvalue(self)
                     self[inside] = nil
                 end
             end
@@ -1337,12 +1337,12 @@ do
     T.struct.getentries = memoizeproperty{
         name = "entries";
         erroronrecursion = "recursively calling getentries on type";
-        getvalue = function(self,anchor)
+        getvalue = function(self)
             local entries = self.entries
             if type(self.metamethods.__getentries) == "function" then
                 entries = invokeuserfunction(self.anchor,"invoking __getentries for struct",false,self.metamethods.__getentries,self)
             elseif self.undefined then
-                erroratlocation(anchor,"attempting to use type ",self," before it is defined.")
+                erroratlocation(self.anchor,"attempting to use type ",self," before it is defined.")
             end
             if type(entries) ~= "table" then
                 erroratlocation(self.anchor,"computed entries are not a table")
@@ -1368,9 +1368,9 @@ do
             return checkedentries
         end
     }
-    local function reportopaque(type,anchor)
+    local function reportopaque(type)
         local msg = "attempting to use an opaque type "..tostring(type).." where the layout of the type is needed"
-        if anchor then
+        if self.anchor then
             erroratlocation(anchor,msg)
         else
             error(msg,4)
@@ -1379,9 +1379,9 @@ do
     T.struct.getlayout = memoizeproperty {
         name = "layout"; 
         erroronrecursion = "type recursively contains itself";
-        getvalue = function(self,anchor)
+        getvalue = function(self)
             local tree = self.anchor
-            local entries = self:getentries(anchor)
+            local entries = self:getentries()
             local nextallocation = 0
             local uniondepth = 0
             local unionsize = 0
@@ -1393,11 +1393,11 @@ do
             local function addentry(k,t)
                 local function ensurelayout(t)
                     if t:isstruct() then
-                        t:getlayout(anchor)
+                        t:getlayout()
                     elseif t:isarray() then
                         ensurelayout(t.type)
                     elseif t == types.opaque then
-                        reportopaque(self,tree)    
+                        reportopaque(self)    
                     end
                 end
                 ensurelayout(t)
@@ -1446,27 +1446,27 @@ do
             return layout
         end;
     }
-    function T.functype:completefunction(anchor)
-        for i,p in ipairs(self.parameters) do p:complete(anchor) end
-        self.returntype:complete(anchor)
+    function T.functype:completefunction()
+        for i,p in ipairs(self.parameters) do p:complete() end
+        self.returntype:complete()
         return self
     end
-    function T.Type:complete(anchor) 
+    function T.Type:complete() 
         if self.incomplete then
             if self:isarray() then
-                self.type:complete(anchor)
+                self.type:complete()
                 self.incomplete = self.type.incomplete
             elseif self == types.opaque or self:isfunction() then
-                reportopaque(self,anchor)
+                reportopaque(self)
             else
                 assert(self:isstruct())
-                local layout = self:getlayout(anchor)
+                local layout = self:getlayout()
                 if not layout.invalid then
                     self.incomplete = nil --static initializers run only once
                                           --if one of the members of this struct recursively
                                           --calls complete on this type, then it will return before the static initializer has run
                     for i,e in ipairs(layout.entries) do
-                        e.type:complete(anchor)
+                        e.type:complete()
                     end
                     if type(self.metamethods.__staticinitialize) == "function" then
                         invokeuserfunction(self.anchor,"invoking __staticinitialize",false,self.metamethods.__staticinitialize,self)
@@ -1475,6 +1475,12 @@ do
             end
         end
         return self
+    end
+    function T.functype:tcompletefunction(anchor)
+        return invokeuserfunction(anchor,"finalizing type",false,self.completefunction,self)
+    end
+    function T.Type:tcomplete(anchor)
+        return invokeuserfunction(anchor,"finalizing type",false,self.complete,self)
     end
     
     local function defaultgetmethod(self,methodname)
@@ -1875,7 +1881,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --tree constructors for trees created in the typechecking process
     local function createcast(exp,typ)
-        return newobject(exp,T.cast,typ,exp):withtype(typ:complete(exp))
+        return newobject(exp,T.cast,typ,exp):withtype(typ:tcomplete(exp))
     end
 
     local function createfunctionliteral(anchor,e)
@@ -1905,7 +1911,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             diag:reporterror(e,"argument of dereference is not a pointer type but ",e.type)
             ret:withtype(terra.types.error)
         else
-            ret:withtype(e.type.type:complete(e))
+            ret:withtype(e.type.type:tcomplete(e))
         end
         return ret
     end
@@ -1920,7 +1926,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return nil,false
         end
 
-        local type = layout.entries[index+1].type:complete(v)
+        local type = layout.entries[index+1].type:tcomplete(v)
         local tree = newobject(v,T.select,v,index,tostring(field)):setlvalue(v.lvalue):withtype(type)
         return tree,true
     end
@@ -2004,7 +2010,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --create a new variable allocation and a var node that refers to it, used to create temporary variables
     local function allocvar(anchor,typ,name)
-        local av = newobject(anchor,T.allocvar,name,terra.newsymbol(typ,name)):setlvalue(true):withtype(typ:complete(anchor))
+        local av = newobject(anchor,T.allocvar,name,terra.newsymbol(typ,name)):setlvalue(true):withtype(typ:tcomplete(anchor))
         local v = newobject(anchor,T.var,name,av.symbol):setlvalue(true):withtype(typ)
         return av,v
     end
@@ -2248,7 +2254,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return t:ispointer() or t:isarray()
         end
         local function ascompletepointer(exp) --convert pointer like things into pointers to _complete_ types
-            exp.type.type:complete(exp)
+            exp.type.type:tcomplete(exp)
             return (insertcast(exp,terra.types.pointer(exp.type.type))) --parens are to truncate to 1 argument
         end
         -- subtracting 2 pointers
@@ -2416,7 +2422,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         else
             r:withtype(terra.types.tuple(unpack(ne:map("type"))))
         end
-        r.type:complete(anchor)
+        r.type:tcomplete(anchor)
         return r
     end
 
@@ -2526,7 +2532,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, location)
         local objtyp
-        reciever.type:complete(anchor)
+        reciever.type:tcomplete(anchor)
         if reciever.type:isstruct() then
             objtyp = reciever.type
         elseif reciever.type:ispointertostruct() then
@@ -2629,7 +2635,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
 
         local function createcall(callee, paramlist)
-            callee.type.type:completefunction(anchor)
+            callee.type.type:tcompletefunction(anchor)
             return newobject(anchor,T.apply,callee,paramlist):withtype(callee.type.type.returntype)
         end
     
@@ -2781,7 +2787,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif e:is "cast" then
                 return e.explicit and insertexplicitcast(checkexp(e.expression),e.to) or insertcast(checkexp(e.expression),e.to)
             elseif e:is "sizeof" then
-                e.oftype:complete(e)
+                e.oftype:tcomplete(e)
                 return e:copy{}:withtype(terra.types.uint64)
             elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
                 local entries = checkexpressions(e.expressions)
@@ -2789,7 +2795,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                      
                 local typ
                 if e.oftype ~= nil then
-                    typ = e.oftype:complete(e)
+                    typ = e.oftype:tcomplete(e)
                 else
                     if N == 0 then
                         diag:reporterror(e,"cannot determine type of empty aggregate")
@@ -2865,7 +2871,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 else
                     diag:reporterror(e, "some entries in constructor are named while others are not")
                 end
-                return newobject(e,T.constructor,paramlist):withtype(typ:complete(e))
+                return newobject(e,T.constructor,paramlist):withtype(typ:tcomplete(e))
             elseif e:is "inlineasm" then
                 return e:copy { arguments = checkexpressions(e.arguments) }
             elseif e:is "debuginfo" then
@@ -2880,7 +2886,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         --freeze all types returned by the expression (or list of expressions)
         if not result:is "luaobject" and not result:is "setteru" then
             assert(terra.types.istype(result.type))
-            result.type:complete(result)
+            result.type:tcomplete(result)
         end
 
         --remove any lua objects if they are not allowed in this context
@@ -2923,7 +2929,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
             local r = newobject(p,T.allocvar,p.name,p.symbol)
             if p.type then
-                r:withtype(p.type:complete(p))
+                r:withtype(p.type:tcomplete(p))
             end
             result:insert(r)
         end
@@ -3163,7 +3169,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local parameter_types = typed_parameters:map("type")
         local body,returntype = checkreturns(checkblock(topexp.body),topexp.returntype)
         
-        local fntype = terra.types.functype(parameter_types,returntype,false):completefunction(topexp)
+        local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
