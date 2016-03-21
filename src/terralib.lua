@@ -393,6 +393,83 @@ end
 
 -- END DIAGNOSTICS
 
+-- CUSTOM TRACEBACK
+
+local TRACEBACK_LEVELS1 = 12
+local TRACEBACK_LEVELS2 = 10
+local function findfirstnilstackframe() --because stack size is not exposed we binary search for it
+    local low,high = 1,1
+    while debug.getinfo(high,"") ~= nil do
+        low,high = high,high*2
+    end --invariant: low is non-nil frame, high is nil frame, range gets smaller each iteration
+    while low + 1 ~= high do
+        local m = math.floor((low+high)/2)
+        if debug.getinfo(m,"") ~= nil then
+            low = m
+        else
+            high = m
+        end
+    end
+    return high - 1 --don't count ourselves
+end
+
+--all calls to user-defined functions from the compiler go through this wrapper
+local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
+    if not speculate then
+        local result = userfn(...)
+        -- invokeuserfunction is recognized by a customtraceback and we need to prevent the tail call
+        return true, result
+    end
+    local success,result = xpcall(userfn,debug.traceback,...)
+    -- same here
+    return success, result
+end
+
+-- override the lua traceback function to be aware of Terra compilation contexts
+function debug.traceback(msg,level)
+    level = level or 1
+    level = level + 1 -- don't count ourselves
+    local lim = TRACEBACK_LEVELS1 + 1
+    local lines = List()
+    if msg then
+        lines:insert(("%s\n"):format(msg))
+    end
+    lines:insert("stack traceback:")
+    while true do
+        local di = debug.getinfo(level,"Snlf")
+        if not di then break end
+        if di.func == invokeuserfunction then
+            local anchorname,anchor = debug.getlocal(level,1)
+            local whatname,what = debug.getlocal(level,2)
+            assert(anchorname == "anchor" and whatname == "what")
+            lines:insert("\n\t")
+            lines:insert(formaterror(anchor,"Error occured while "..what):sub(1,-2)) 
+        else
+            lines:insert(("\n\t%s:"):format(di.short_src))
+            if di.currentline and di.currentline >= 0 then
+                lines:insert(("%d:"):format(di.currentline))
+            end
+            if di.namewhat ~= "" then
+                lines:insert((" in function '%s'"):format(di.name))
+            elseif di.what == "main" then
+                lines:insert(" in main chunk")
+            elseif di.what == "C" then
+                lines:insert( (" at %s"):format(tostring(di.func)))    
+            else
+                lines:insert((" in function <%s:%d>"):format(di.short_src,di.linedefined))
+            end
+        end
+        level = level + 1
+        if level == lim then
+            if debug.getinfo(level + TRACEBACK_LEVELS2,"") ~= nil then
+                lines:insert("\n\t...")
+                level = findfirstnilstackframe() - TRACEBACK_LEVELS2
+            end
+            lim = math.huge
+        end
+    end
+    return table.concat(lines)
+end
 
 -- GLOBALVALUE
 
@@ -1249,7 +1326,7 @@ do
         getvalue = function(self,anchor)
             local entries = self.entries
             if type(self.metamethods.__getentries) == "function" then
-                local success,result = terra.invokeuserfunction(self.anchor,false,self.metamethods.__getentries,self)
+                local success,result = invokeuserfunction(self.anchor,"invoking __getentries for struct",false,self.metamethods.__getentries,self)
                 entries = result
             elseif self.undefined then
                 erroratlocation(anchor,"attempting to use type ",self," before it is defined.")
@@ -1379,7 +1456,7 @@ do
                         e.type:complete(anchor)
                     end
                     if type(self.metamethods.__staticinitialize) == "function" then
-                        terra.invokeuserfunction(self.anchor,false,self.metamethods.__staticinitialize,self)
+                        invokeuserfunction(self.anchor,"invoking __staticinitialize",false,self.metamethods.__staticinitialize,self)
                     end
                 end
             end
@@ -1573,15 +1650,6 @@ function terra.evalluaexpression(diag, env, e)
     return true,v
 end
 
---all calls to user-defined functions from the compiler go through this wrapper
-function terra.invokeuserfunction(anchor, speculate, userfn,  ...)
-    local args = {...}
-    local results = { xpcall(function() return userfn(unpack(args)) end,debug.traceback) }
-    if not speculate and not results[1] then
-        erroratlocation(anchor,"error while invoking macro or metamethod: ",results[2])
-    end
-    return unpack(results)
-end
 function evaltype(diag,env,typ)
     local success, v = terra.evalluaexpression(diag,env,typ)
     if success and terra.types.istype(v) then return v end
@@ -2020,7 +2088,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             local errormsgs = terra.newlist()
             for i,__cast in ipairs(cast_fns) do
                 local quotedexp = terra.newquote(exp)
-                local success,result = terra.invokeuserfunction(exp, true,__cast,exp.type,typ,quotedexp)
+                local success,result = invokeuserfunction(exp, "invoking __cast", true,__cast,exp.type,typ,quotedexp)
                 if success then
                     local result = asterraexpression(exp,result)
                     if result.type ~= typ then 
@@ -2594,7 +2662,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
         if themacro then
             local quotes = arguments:map(terra.newquote)
-            local success, result = terra.invokeuserfunction(anchor, false, themacro.run, themacro, diag, anchor, unpack(quotes))
+            local success, result = invokeuserfunction(anchor,"invoking macro",false, themacro.run, themacro, diag, anchor, unpack(quotes))
             if success then
                 return asterraexpression(anchor,result,location)
             else
@@ -2660,7 +2728,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         diag:reporterror(e,"expected a table but found ", terra.type(v.value))
                         return e:aserror()
                     else
-                        local success,selected = terra.invokeuserfunction(e,false,function() return v.value[field] end)
+                        local success,selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
                         if not success or selected == nil then
                             diag:reporterror(e,"no field ", field," in lua object")
                             return ee
@@ -2980,7 +3048,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return terra.newquote(stats)
                 end
             
-                local success,value = terra.invokeuserfunction(s, false ,generator,terra.newquote(iterator), bodycallback)
+                local success,value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
                 if success then
                     return asterraexpression(s,value,"statement")
                 end
