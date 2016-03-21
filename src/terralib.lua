@@ -374,7 +374,7 @@ end
 
 terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
-    --erroratlocation(anchor,...) -- early error for debugging
+    erroratlocation(anchor,...) -- early error for debugging
     self.errors:insert(formaterror(anchor,...))
 end
 
@@ -960,7 +960,7 @@ function terra.defineobjects(fmt,envfn,...)
                 tbl = tbl.methods
             end
             local v = paccess(c.name,3,tbl,lastname)
-            if c.tree == "luaexpression" then -- declaration with type
+            if c.tree.kind == "luaexpression" then -- declaration with type
                 local typ = evaltype(diag,env,c.tree)
                 if not typ:ispointertofunction() then
                     diag:reporterror(c.tree,"expected a function pointer but found",typ)
@@ -994,7 +994,7 @@ function terra.defineobjects(fmt,envfn,...)
     end
     for i,c in ipairs(cmds) do -- pass: define functions
         local decl = decls[i]
-        if "s" ~= c.c and not decl:isdefined() then -- may have already been defined as part of a previous call to typecheck in this loop
+        if "s" ~= c.c and not decl:isdefined() and c.tree.kind ~= "luaexpression" then -- may have already been defined as part of a previous call to typecheck in this loop
             simultaneousdefinitions[decl] = "inprogress" -- so that a recursive check of this fails if there is no return type
             decl:adddefinition(typecheck(c.tree,env,simultaneousdefinitions))
         end

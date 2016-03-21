@@ -984,7 +984,7 @@ static void bodyortype(LexState * ls, int ismethod) {
     if(ls->t.token == '(') {
         body(ls, ismethod, ls->linenumber);
     } else {
-        checknext(ls, ':');
+        checknext(ls, TK_DBCOLON);
         terratype(ls);
     }
 }

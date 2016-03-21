@@ -1,5 +1,5 @@
 
-terra mything : int -> int
+terra mything :: int -> int
 
 terra mybar()
 	return mything(4)
@@ -9,10 +9,15 @@ terra mything(a : int)
 	return a
 end
 
-terra mything : int -> int
+do end -- consider a duplicate definition error?
+
+terra mything :: int -> int
 
 terra mybar2()
 	return mything(4)
 end
 
-assert(mybar() == mybar2())
+
+terra mything(a : int) return a + 1 end
+
+assert(mybar() + 1 == mybar2())
