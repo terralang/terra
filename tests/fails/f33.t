@@ -4,7 +4,7 @@ terra bar()
 end
 
 bar:compile()
-local what = bar.definitions[1].fptr
+local what = bar.rawjitptr
 
 terra foo()
    var a  = what

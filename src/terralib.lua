@@ -963,7 +963,7 @@ function terra.defineobjects(fmt,envfn,...)
             if c.tree.kind == "luaexpression" then -- declaration with type
                 local typ = evaltype(diag,env,c.tree)
                 if not typ:ispointertofunction() then
-                    diag:reporterror(c.tree,"expected a function pointer but found",typ)
+                    diag:reporterror(c.tree,"expected a function pointer but found ",typ)
                 else
                     v = T.terrafunction(nil,c.name,typ.type,false,c.tree)
                 end
@@ -985,7 +985,7 @@ function terra.defineobjects(fmt,envfn,...)
             r:insert(decls[i])
         end
     end
-    diag:finishandabortiferrors("Errors during function declaration.",2)
+    diag:finishandabortiferrors("Errors reported during function declaration.",2)
     
     for i,c in ipairs(cmds) do -- pass: define structs
         if "s" == c.c and c.tree then
@@ -1336,7 +1336,7 @@ do
 
     T.struct.getentries = memoizeproperty{
         name = "entries";
-        erroronrecursion = "recursively calling getentries on type";
+        erroronrecursion = "recursively calling getentries on type, or using a type whose getentries failed";
         getvalue = function(self)
             local entries = self.entries
             if type(self.metamethods.__getentries) == "function" then
@@ -1378,7 +1378,7 @@ do
     end
     T.struct.getlayout = memoizeproperty {
         name = "layout"; 
-        erroronrecursion = "type recursively contains itself";
+        erroronrecursion = "type recursively contains itself, or using a type whose layout failed";
         getvalue = function(self)
             local tree = self.anchor
             local entries = self:getentries()
@@ -1818,6 +1818,9 @@ local function semanticcheck(diag,parameters,block)
                 enterloop()
                 visit(e.statements)
                 visitnolocaldefers(e.condition,e.condition)
+            elseif e:is "ifbranch" then
+                visitnolocaldefers(e.condition,e.condition)
+                visit(e.body)
             elseif e:is "fornum" then
                 visit(e.initial); visit(e.limit); visit(e.step)
                 visit(e.variable)
@@ -1867,7 +1870,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return newobject(e,T.namedident,r)
         elseif not terra.islabel(r) then
             diag:reporterror(e,"expected a string or label but found ",terra.type(r))
-            r = terra.newsymbol(terra.types.error,"error")
+            r = terra.newlabel("error")
         end
         return newobject(e,T.labelident,r)
     end
@@ -2721,7 +2724,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         local selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
                         if selected == nil then
                             diag:reporterror(e,"no field ", field," in lua object")
-                            return ee
+                            return e:aserror()
                         end
                         return asterraexpression(e,selected,location)
                     end
@@ -2866,7 +2869,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     typ = terra.types.newstructwithanchor("anon",e)
                     typ:setconvertible("named")
                     for i,e in ipairs(e.records) do
-                        typ.entries:insert({field = e.key.value, type = paramlist[i].type})
+                        typ.entries:insert({field = checklabel(e.key,true).value, type = paramlist[i].type})
                     end
                 else
                     diag:reporterror(e, "some entries in constructor are named while others are not")

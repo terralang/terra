@@ -3,7 +3,7 @@ local a = 0
 terra bar :: {} -> int
 
 local foo = macro(function(arg)
-	assert({} -> int == bar:gettype())
+	assert(({} -> int) == &bar:gettype())
 	a = 3
 	return 3
 end)

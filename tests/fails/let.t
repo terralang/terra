@@ -1,5 +1,5 @@
 if not require("fail") then return end
-local c = symbol()
+local c = symbol(int)
 local b = 
 quote
 	var [c]  = 3

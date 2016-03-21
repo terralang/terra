@@ -48,7 +48,7 @@ failit(df,function()
     local terra foo()
         if [quote defer up() in true end] then end
     end
-    foo()
+    foo:printpretty()
 end)
 failit(df,function()
     local terra foo()

@@ -47,7 +47,7 @@ function cudalib.toptx(module,dumpmodule,version)
 
         for _,p in ipairs(typ.parameters) do
             if p:isarray() or p:isstruct() then -- we can't pass aggregates by value through CUDA, so wrap/unwrap the kernel
-                fn = cudalib.flattenkernel(v)
+                fn = cudalib.flattenkernel(fn)
                 break
             end
         end
