@@ -9,7 +9,7 @@ terra mything(a : int)
 	return a
 end
 
-do end -- consider a duplicate definition error?
+do end -- cause an ordering problem
 
 terra mything :: int -> int
 

@@ -556,6 +556,7 @@ function T.terrafunction:printstats()
     end
 end
 function T.terrafunction:isdefined() return self.definition ~= nil end
+function T.terrafunction:isdeclaration() return not (self:isextern() or self:isdefined()) end
 
 function T.terrafunction:adddefinition(functiondef)
     if self.definition then error("terra function "..self.name.." already defined") end
@@ -566,7 +567,13 @@ function T.terrafunction:adddefinition(functiondef)
     end
     self.definition,self.type = functiondef,functiondef.type
 end
-function T.terrafunction:isdeclaration() return not (self:isextern() or self:isdefined()) end
+function T.terrafunction:gettype()
+    if self.type == terra.types.placeholderfunction then 
+        error("function being recursively referenced needs an explicit return type, function defintion at: "..formaterror(self.anchor,""),2)
+    end
+    return self.type
+end
+
 function terra.isfunction(obj)
     return T.terrafunction:isclassof(obj)
 end
@@ -947,8 +954,17 @@ function terra.defineobjects(fmt,envfn,...)
         end
     end
     local r = terralib.newlist()
-    local simultaneousdefinitions = {}
+    local simultaneousdefinitions,definedfunctions = {},{}
     local diag = terra.newdiagnostics()
+    local function checkduplicate(tbl,name,tree)
+        local fntbl = definedfunctions[tbl] or {}
+        if fntbl[name] then
+            diag:reporterror(tree,"duplicate definition of function")
+            diag:reporterror(fntbl[name],"previous definition is here")
+        end
+        fntbl[name] = tree
+        definedfunctions[tbl] = fntbl
+    end
     for i,c in ipairs(cmds) do -- pass: declare all functions, create return list
         local tbl,lastname = enclosing(c.name)
         if "s" ~= c.c then
@@ -969,6 +985,7 @@ function terra.defineobjects(fmt,envfn,...)
                 end
             else -- definition, evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
                 c.tree = evalformalparameters(diag,env,c.tree)
+                checkduplicate(tbl,lastname,c.tree)
                 if not terra.isfunction(v) or not v:isdeclaration() then
                     local typ = terra.types.placeholderfunction
                     if c.tree.returntype then
@@ -995,7 +1012,7 @@ function terra.defineobjects(fmt,envfn,...)
     for i,c in ipairs(cmds) do -- pass: define functions
         local decl = decls[i]
         if "s" ~= c.c and not decl:isdefined() and c.tree.kind ~= "luaexpression" then -- may have already been defined as part of a previous call to typecheck in this loop
-            simultaneousdefinitions[decl] = "inprogress" -- so that a recursive check of this fails if there is no return type
+            simultaneousdefinitions[decl] = nil -- so that a recursive check of this fails if there is no return type
             decl:adddefinition(typecheck(c.tree,env,simultaneousdefinitions))
         end
     end
@@ -1890,12 +1907,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local function createfunctionliteral(anchor,e)
         local fntyp = e.type
         if fntyp == terra.types.placeholderfunction then
-            local functiondef = assert(simultaneousdefinitions[e],"placeholder function does not have a definition?")
-            if functiondef == "inprogress" then
-                diag:reporterror(anchor,"recursively called function needs an explicit return type.")
-                diag:reporterror(e.anchor,"definition of recursively called function is here.")
+            local functiondef = simultaneousdefinitions[e]
+            if functiondef == nil then
+                diag:reporterror(anchor,"referenced function needs an explicit return type (it is recursively referenced or used before its own defintion).")
+                diag:reporterror(e.anchor,"definition of function is here.")
             else
-                simultaneousdefinitions[e] = "inprogress"
+                simultaneousdefinitions[e] = nil
                 local body = typecheck(functiondef,luaenv,simultaneousdefinitions) -- can throw, but we just want to pass the error through
                 e:adddefinition(body)
                 fntyp = e.type
