@@ -21,7 +21,7 @@ local function compile(code,N)
 			elseif c == "," then
 				stmt = quote data[ptr] = C.getchar() end
 			elseif c == "[" then
-				local target = { before = symbol(), after = symbol() }
+				local target = { before = label(), after = label() }
 				table.insert(jumpstack,target)
 				stmt = quote 
 					::[target.before]:: 

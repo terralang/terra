@@ -44,7 +44,7 @@ T:Extern("TypeOrLuaExpression", function(t) return T.Type:isclassof(t) or T.luae
 T:Define [[
 ident =     escapedident(luaexpression expression) # removed during specialization
           | namedident(string value)
-          | symbolident(Symbol value) 
+          | labelident(Label value)
 
 field = recfield(ident key, tree value)
       | listfield(tree value)
@@ -59,6 +59,7 @@ structdef = (luaexpression? metatype, structlist records)
 
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
+Label = (string displayname, number id)
 tree = 
      # trees that are introduced in parsing and are ...
      # removed during specialization
@@ -780,16 +781,17 @@ end
 function terra.newquote(tree) return T.quote(tree) end
 -- END QUOTE
 
+
+local identcount = 0
 -- SYMBOL
 function terra.issymbol(s)
     return T.Symbol:isclassof(s)
 end
-T.Symbol.count = 0
 
 function terra.newsymbol(typ,displayname)
-    displayname = displayname or tostring(T.Symbol.count)
-    local r = T.Symbol(typ,displayname,T.Symbol.count)
-    T.Symbol.count = T.Symbol.count + 1
+    displayname = displayname or tostring(identcount)
+    local r = T.Symbol(typ,displayname,identcount)
+    identcount = identcount + 1
     return r
 end
 
@@ -799,6 +801,17 @@ end
 function T.Symbol:tocname() return "__symbol"..tostring(self.id) end
 
 _G["symbol"] = terra.newsymbol 
+
+-- LABEL
+function terra.islabel(l) return T.Label:isclassof(l) end
+function T.Label:__tostring() return "$"..self.displayname end
+function terra.newlabel(displayname)
+    displayname = displayname or tostring(identcount)
+    local r = T.Label(displayname,identcount)
+    identcount = identcount + 1
+    return r
+end
+_G["label"] = terra.newlabel
 
 -- INTRINSIC
 local typecheck
@@ -1339,7 +1352,7 @@ do
                 if type(e) == "table" then
                     local f = e.field or e[1] 
                     local t = e.type or e[2]
-                    if terra.types.istype(t) and (type(f) == "string" or terra.issymbol(f)) then
+                    if terra.types.istype(t) and (type(f) == "string" or terra.islabel(f)) then
                         results:insert { type = t, field = f}
                         return
                     elseif terra.israwlist(e) then
@@ -1838,20 +1851,20 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local diag = terra.newdiagnostics()
     simultaneousdefinitions = simultaneousdefinitions or {}
 
-    local function checkident(e,stringok)
+    local function checklabel(e,stringok)
         if e.kind == "namedident" then return e end
         local r = evalluaexpression(env:combinedenv(),e.expression)
         if type(r) == "string" then
             if not stringok then
-                diag:reporterror(e,"expected a symbol but found string")
-                return newobject(e,T.symbolident,terra.newsymbol(terra.types.error,r))
+                diag:reporterror(e,"expected a label but found string")
+                return newobject(e,T.labelident,terra.newlabel(r))
             end
             return newobject(e,T.namedident,r)
-        elseif not terra.issymbol(r) then
-            diag:reporterror(e,"expected a string or symbol but found ",terra.type(r))
+        elseif not terra.islabel(r) then
+            diag:reporterror(e,"expected a string or label but found ",terra.type(r))
             r = terra.newsymbol(terra.types.error,"error")
         end
-        return newobject(e,T.symbolident,r)
+        return newobject(e,T.labelident,r)
     end
 
 
@@ -2547,8 +2560,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     local function checkmethod(exp, location)
-        local methodname = checkident(exp.name,true).value
-        assert(type(methodname) == "string" or terra.issymbol(methodname))
+        local methodname = checklabel(exp.name,true).value
+        assert(type(methodname) == "string" or terra.islabel(methodname))
         local reciever = checkexp(exp.value)
         local arguments = checkexpressions(exp.arguments,"luavalue")
         return checkmethodwithreciever(exp, false, methodname, reciever, arguments, location)
@@ -2684,7 +2697,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return e.tree -- already checked tree, quotes get injected directly into some untyped trees by macros
             elseif e:is "selectu" then
                 local v = checkexp(e.value,"luavalue")
-                local f = checkident(e.field,true)
+                local f = checklabel(e.field,true)
                 local field = f.value
             
                 if v:is "luaobject" then -- handle A.B where A is a luatable or type
@@ -2972,7 +2985,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "returnstat" then
                 return s:copy { expression = checkexp(s.expression)}
             elseif s:is "label" or s:is "gotostat" then    
-                local ss = checkident(s.label)
+                local ss = checklabel(s.label)
                 return copyobject(s, { label = ss })
             elseif s:is "breakstat" then
                 return s
@@ -3134,7 +3147,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 returntype = returnstats[1].expression.type
                 for i = 2,#returnstats do
                     local rs = returnstats[i]
-                    returntype = typemeet(rs.expression,returntype,rs,expression.type)
+                    returntype = typemeet(rs.expression,returntype,rs.expression.type)
                 end
             end
             assert(returntype)
@@ -3303,7 +3316,7 @@ local function createunpacks(tupleonly)
         for i = from,to do 
             local e= entries[i]
             if e.field then
-                local ident = newobject(tree,type(e.field) == "string" and T.namedident or T.symbolident,e.field)
+                local ident = newobject(tree,type(e.field) == "string" and T.namedident or T.labelident,e.field)
                 result:insert(typecheck(newobject(tree,T.selectu,obj,ident)))
             end
         end
@@ -4027,6 +4040,7 @@ function terra.type(t)
     elseif terra.issymbol(t) then return "terrasymbol"
     elseif terra.isfunction(t) then return "terrafunction"
     elseif terra.isconstant(t) then return "terraconstant"
+    elseif terra.islabel(t) then return "terralabel"
     else return type(t) end
 end
 
