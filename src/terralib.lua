@@ -373,6 +373,7 @@ end
 
 terra.diagnostics.source = {}
 function terra.diagnostics:reporterror(anchor,...)
+    --erroratlocation(anchor,...) -- early error for debugging
     self.errors:insert(formaterror(anchor,...))
 end
 
@@ -382,7 +383,7 @@ end
 
 function terra.diagnostics:finishandabortiferrors(msg,depth)
     if #self.errors > 0 then
-        error(msg..self.errors:concat(),depth+1)
+        error(msg.."\n"..self.errors:concat(),depth+1)
     end
 end
 
@@ -738,7 +739,8 @@ function terra.intrinsic(str, typ)
             intrinsictype = terra.types.funcpointer(types,{})
         end
         local fn = terralib.externfunction(name,intrinsictype,e)
-        local literal = newobject(e,T.literal,fn,fn:gettype())
+        print("about to complete")
+        local literal = newobject(e,T.literal,fn,terra.types.pointer(fn:gettype()))
         return typecheck(newobject(e,T.apply,literal,args))
     end
     return terra.internalmacro(intrinsiccall)
@@ -1723,7 +1725,7 @@ local function semanticcheck(diag,parameters,block)
                         checkdeferredpassed(g,state.positions[i],position)
                     end
                 end
-                labelstates[label] = T.definedlabel(position,ss)
+                labelstates[label] = T.definedlabel(position,e)
             elseif e:is "gotostat" then
                 local label = e.label.value
                 local state = labelstates[label] or T.undefinedlabel(List(),List())
@@ -2930,7 +2932,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "returnstat" then
                 return s:copy { expression = checkexp(s.expression)}
             elseif s:is "label" or s:is "gotostat" then    
-                local ss = checkident(label.label)
+                local ss = checkident(s.label)
                 return copyobject(s, { label = ss })
             elseif s:is "breakstat" then
                 return s
@@ -2985,10 +2987,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return s
             elseif s:is "ifstat" then
                 local br = s.branches:map(checkcondbranch)
-                local els = (s.orelse and checkstmt(s.orelse))
+                local els = (s.orelse and checkblock(s.orelse))
                 return s:copy{ branches = br, orelse = els }
             elseif s:is "repeatstat" then
-                local stmts = s.statements:map(checkstmt)
+                local stmts = checkstmts(s.statements)
                 local e = checkcond(s.condition)
                 return s:copy { statements = stmts, condition = e }
             elseif s:is "defvar" then

@@ -1180,7 +1180,7 @@ static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * gl
     global->obj("type",&t);
     Type * typ = CU->Ty->Get(&t)->type;
     
-    Constant * llvmconstant = global->boolean("isextern") ? NULL : UndefValue::get(typ);
+    Constant * llvmconstant = global->boolean("extern") ? NULL : UndefValue::get(typ);
     Obj constant;
     if(global->obj("initializer",&constant)) {
         llvmconstant = EmitConstant(CU,&constant);
@@ -1196,7 +1196,7 @@ static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * glob
     if (gv == NULL) {
         if(global->hasfield("name"))
             name = global->string("name"); //globals given name overrides the alternate name given when the global is created
-        if(global->boolean("isextern")) {
+        if(global->boolean("extern")) {
             gv = CU->M->getGlobalVariable(name);
             if(!gv) {
                 GlobalValue * externglobal = CU->TT->external->getGlobalVariable(name);
