@@ -432,6 +432,10 @@ function debug.traceback(msg,level)
     local lim = TRACEBACK_LEVELS1 + 1
     local lines = List()
     if msg then
+        local file,outsideline,insideline,rest = msg:match "^$terra$(.*)$terra$(%d+):(%d+):(.*)"
+        if file then
+            msg = ("%s:%d:%s"):format(file,outsideline+insideline-1,rest)
+        end
         lines:insert(("%s\n"):format(msg))
     end
     lines:insert("stack traceback:")
@@ -445,9 +449,16 @@ function debug.traceback(msg,level)
             lines:insert("\n\t")
             lines:insert(formaterror(anchor,"Error occured while "..what):sub(1,-2)) 
         else
-            lines:insert(("\n\t%s:"):format(di.short_src))
+            local short_src,currentline,linedefined = di.short_src,di.currentline,di.linedefined
+            local file,outsideline = di.source:match("^@$terra$(.*)$terra$(%d+)$")
+            if file then
+                short_src = file
+                currentline = currentline and (currentline + outsideline - 1)
+                linedefined = linedefined and (linedefined + outsideline - 1)
+            end
+            lines:insert(("\n\t%s:"):format(short_src))
             if di.currentline and di.currentline >= 0 then
-                lines:insert(("%d:"):format(di.currentline))
+                lines:insert(("%d:"):format(currentline))
             end
             if di.namewhat ~= "" then
                 lines:insert((" in function '%s'"):format(di.name))
@@ -456,7 +467,7 @@ function debug.traceback(msg,level)
             elseif di.what == "C" then
                 lines:insert( (" at %s"):format(tostring(di.func)))    
             else
-                lines:insert((" in function <%s:%d>"):format(di.short_src,di.linedefined))
+                lines:insert((" in function <%s:%d>"):format(short_src,linedefined))
             end
         end
         level = level + 1
@@ -829,6 +840,7 @@ terra.asm = terra.internalmacro(function(diag,tree,returntype, asm, constraints,
 end)
     
 
+local evalluaexpression
 -- CONSTRUCTORS
 local function layoutstruct(st,tree,env)
     local diag = terra.newdiagnostics()
@@ -839,7 +851,7 @@ local function layoutstruct(st,tree,env)
     st.undefined = nil
 
     local function getstructentry(v) assert(v.kind == "structentry")
-        local success,resolvedtype = terra.evalluaexpression(diag,env,v.type)
+        local success,resolvedtype = evalluaexpression(env,v.type)
         if not success then return end
         if not terra.types.istype(resolvedtype) then
             diag:reporterror(v,"lua expression is not a terra type but ", terra.type(resolvedtype))
@@ -859,7 +871,7 @@ local function layoutstruct(st,tree,env)
     end
     local success,metatype 
     if tree.metatype then
-        success,metatype = terra.evalluaexpression(diag,env,tree.metatype)
+        success,metatype = evalluaexpression(env,tree.metatype)
     end
     st.entries = getrecords(tree.records.entries)
     st.tree = tree --to track whether the struct has already beend defined
@@ -1620,16 +1632,7 @@ end
 
 
 -- TYPECHECKER
-
-function terra.evalluaexpression(diag, env, e)
-    local function parseerrormessage(startline, errmsg)
-        local line,err = errmsg:match [["$terra$"]:([0-9]+):(.*)]]
-        if line and err then
-            return startline + tonumber(line) - 1, err
-        else
-            return startline, errmsg
-        end
-    end
+function evalluaexpression(env, e)
     if not T.luaexpression:isclassof(e) then
        error("not a lua expression?") 
     end
@@ -1637,20 +1640,14 @@ function terra.evalluaexpression(diag, env, e)
     local fn = e.expression
     local oldenv = getfenv(fn)
     setfenv(fn,env)
-    local success,v = pcall(fn)
-    setfenv(fn,oldenv) --otherwise, we hold false reference to env
-    if not success then --v contains the error message
-        local oldln,ln,err = e.linenumber,parseerrormessage(e.linenumber,v)
-        e.linenumber = ln
-        diag:reporterror(e,"error evaluating lua code: ", err)
-        e.linenumber = oldln
-        return false
-    end
+    local v = invokeuserfunction(e,"evaluating Lua code from Terra",false,fn)
+    setfenv(fn,oldenv) --otherwise, we hold false reference to env, -- in the case of an error, this function will still hold a reference
+                       -- but without a good way of doing 'finally' without messing with the error trace there is no way around this
     return true,v
 end
 
 function evaltype(diag,env,typ)
-    local success, v = terra.evalluaexpression(diag,env,typ)
+    local success, v = evalluaexpression(env,typ)
     if success and terra.types.istype(v) then return v end
     if success and terra.israwlist(v) then
         for i,t in ipairs(v) do
@@ -1676,7 +1673,7 @@ function evaluateparameterlist(diag, env, paramlist, requiretypes)
                 local sym = terra.newsymbol(typ or T.error,p.name.value)
                 result:insert(newobject(p,T.concreteparam,typ,p.name.value,sym,true))
             else assert(p.name.kind == "escapedident")
-                local success, value = terra.evalluaexpression(diag,env,p.name.expression)
+                local success, value = evalluaexpression(env,p.name.expression)
                 if success then
                     if not value then
                         diag:reporterror(p,"expected a symbol or string but found nil")
@@ -1857,7 +1854,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function checkident(e,stringok)
         if e.kind == "namedident" then return e end
-        local success, r = terra.evalluaexpression(diag,env:combinedenv(),e.expression)
+        local success, r = evalluaexpression(env:combinedenv(),e.expression)
         if type(r) == "string" then
             if not stringok then
                 diag:reporterror(e,"expected a symbol but found string")
@@ -2672,12 +2669,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local function checkluaexpression(e,location)
         local value = {}
         if e.isexpression then
-            local success, returnvalue = terra.evalluaexpression(diag,env:combinedenv(),e)
+            local success, returnvalue = evalluaexpression(env:combinedenv(),e)
             if success then value = returnvalue end
         else
             env:enterblock()
             env:localenv().emit = function(arg) table.insert(value,arg) end
-            terra.evalluaexpression(diag,env:combinedenv(),e)
+            evalluaexpression(env:combinedenv(),e)
             env:leaveblock()
         end
         return asterraexpression(e, value, location)
@@ -4045,7 +4042,7 @@ function terra.type(t)
     elseif terra.istree(t) then return "terratree"
     elseif terra.islist(t) then return "list"
     elseif terra.issymbol(t) then return "terrasymbol"
-    elseif terra.isfunctiondefinition(t) then return "terrafunctiondefinition"
+    elseif terra.isfunction(t) then return "terrafunction"
     elseif terra.isconstant(t) then return "terraconstant"
     else return type(t) end
 end
