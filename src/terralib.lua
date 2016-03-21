@@ -1881,16 +1881,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function createfunctionliteral(anchor,e)
         local fntyp = e.type
-        if fntyp == terra.types.functionplaceholder then
+        if fntyp == terra.types.placeholderfunction then
             local functiondef = assert(simultaneousdefinitions[e],"placeholder function does not have a definition?")
             if functiondef == "inprogress" then
                 diag:reporterror(anchor,"recursively called function needs an explicit return type.")
                 diag:reporterror(e.anchor,"definition of recursively called function is here.")
             else
                 simultaneousdefinitions[e] = "inprogress"
-                local body = typecheck(luaenv,functiondef,simultaneousdefinitions) -- can throw, but we just want to pass the error through
+                local body = typecheck(functiondef,luaenv,simultaneousdefinitions) -- can throw, but we just want to pass the error through
                 e:adddefinition(body)
-                fntype = e.type
+                fntyp = e.type
             end
         end
         return newobject(anchor,T.literal,e,terra.types.pointer(fntyp))
@@ -2551,7 +2551,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return anchor:aserror()
         end
 
-        fnlike = asterraexpression(anchor, fnlike, "luaobject") 
+        fnlike = asterraexpression(anchor, fnlike, "luaobject")
         local fnargs = terra.newlist { reciever }
         for i,a in ipairs(arguments) do
             fnargs:insert(a)
