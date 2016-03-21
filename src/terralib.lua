@@ -425,12 +425,12 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
     -- same here
     return success, result
 end
-
+terra.fulltrace = false
 -- override the lua traceback function to be aware of Terra compilation contexts
 function debug.traceback(msg,level)
     level = level or 1
     level = level + 1 -- don't count ourselves
-    local lim = TRACEBACK_LEVELS1 + 1
+    local lim = terra.fulltrace and math.huge or TRACEBACK_LEVELS1 + 1
     local lines = List()
     if msg then
         local file,outsideline,insideline,rest = msg:match "^$terra$(.*)$terra$(%d+):(%d+):(.*)"
