@@ -18,7 +18,7 @@ if false then
     end
     local function debughook(event)
         local info = debug.getinfo(2,"Sl")
-        if info.short_src == "src/terralib.lua" then
+        if info.short_src:match("terralib%.lua") then
             linetable[info.currentline] = linetable[info.currentline] or 0
             linetable[info.currentline] = linetable[info.currentline] + 1
         end
@@ -271,9 +271,6 @@ end
 -- END TREE
 
 local function mkstring(self,begin,sep,finish)
-    if sep == nil then
-        begin,sep,finish = "",begin,""
-    end
     return begin..table.concat(self:map(tostring),sep)..finish
 end
 terra.newlist = List
@@ -2480,7 +2477,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             if #typelist ~= #paramlist then
                 if not speculate then
                     local fromt,tot = typelist:map(tostring):concat(","),paramlist:map("type"):map(tostring):concat(",")
-                    diag:reporterror(anchor,"expected ",#typelist," parameters {",fromt,"}, but found ",#paramlist, " {",tot,"}")
+                    diag:reporterror(anchor,"expected ",#typelist," parameters (",fromt,"), but found ",#paramlist, " (",tot,")")
                 end
                 return false
             end
@@ -2817,8 +2814,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     end
                 end
                 return e:copy { value = v, index = idx }:withtype(typ):setlvalue(lvalue)
-            elseif e:is "cast" then
-                return e.explicit and insertexplicitcast(checkexp(e.expression),e.to) or insertcast(checkexp(e.expression),e.to)
             elseif e:is "sizeof" then
                 e.oftype:tcomplete(e)
                 return e:copy{}:withtype(terra.types.uint64)
@@ -3540,8 +3535,6 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         elseif s:is "letin" then
             emitStmtList(s.statements)
             emitStmtList(s.expressions)
-        elseif s:is "treelist" then
-            emitStmtList(s.trees)
         elseif s:is "apply" then
             begin(s,"%s = ",UniqueName("r",s))
             emitExp(s)
@@ -3715,8 +3708,6 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             else
                 emit("%s",tostring(e.value))
             end
-        elseif e:is "luafunction" then
-            emit("<lua %s>",tostring(e.fptr))
         elseif e:is "cast" or e:is "structcast" then
             emit("[")
             emitType(e.to or e.type)
@@ -3765,8 +3756,6 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             end
         elseif e:is "letin" then
             emitLetIn(e)
-        elseif e:is "treelist" then
-            emitList(e.trees,"{",",","}",emitExp)
         elseif e:is "attrload" then
             emit("attrload(")
             emitExp(e.address)
