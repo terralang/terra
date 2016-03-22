@@ -806,6 +806,7 @@ function terra.issymbol(s)
 end
 
 function terra.newsymbol(typ,displayname)
+    if not terra.types.istype(typ) then error("symbol requires a Terra type but found "..terra.type(typ).." (use label() for goto labels,method names, and field names)") end
     displayname = displayname or tostring(identcount)
     local r = T.Symbol(typ,displayname,identcount)
     identcount = identcount + 1
