@@ -331,8 +331,10 @@ end
 foo31()
 end)
 
-local terra definedtwice(a : int) return a end
-terra definedtwice(a : int, b : int) return a + b end
+
+local terra definedtwice1(a : int) return a end
+local terra definedtwice2(a : int, b : int) return a + b end
+local definedtwice = terralib.overloadedfunction("definedtwice",{definedtwice1,definedtwice2})
 
 terra foo35()
 
@@ -371,12 +373,13 @@ struct C {
 	a : int;
 }
 
-terra B.metamethods.__add(self : &B, a : int, b : int)
+terra __add1(self : &B, a : int, b : int)
 	return self.a + a
 end
-terra B.metamethods.__add(self : &B, a : int, b : int, c : int)
+terra __add2(self : &B, a : int, b : int, c : int)
 	return self.a + a
 end
+B.metamethods.__add = terralib.overloadedfunction("__add",{__add1,__add2})
 
 
 function myvoid()

@@ -17,10 +17,11 @@ local Vec = terralib.memoize(function(typ,N)
                 return c
             end
         end
-        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
-        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
-        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
-       VecType.metamethods[op] = doop
+        
+        local terra doop1(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
+        local terra doop2(a : typ, b : VecType) [template(`a,`b.data[i])]  end
+        local terra doop3(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+        VecType.metamethods[op] = terralib.overloadedfunction("doop",{doop1,doop2,doop3})
     end
     terra VecType.methods.FromConstant(x : typ)
         var c : VecType

@@ -42,20 +42,16 @@ failit("not defined",function()
 	errored()
 end)
 
-local terra ol(a : int) return a end
-terra ol(a : int, b : int) return a + b end
+local terra ol1(a : int) return a end
+local terra ol2(a : int, b : int) return a + b end
 
-assert(ol(3) == 3)
-assert(ol(3,4) == 7)
-
-failit("bad argument #1",function()
-	ol("a")
-end)
+assert(ol1(3) == 3)
+assert(ol2(3,4) == 7)
 
 --ol:printstats()
 NSE = terralib.types.newstruct()
 
-failit(erd,function()
+failit("expected either a field type pair",function()
 	NSE.entries:insert { field = "a", type = "b" }
 	NSE:complete()
 end)
@@ -69,7 +65,7 @@ SICS.metamethods.__staticinitialize = function() a = a + 1 end
 NSF = terralib.types.newstruct()
 NSF.entries:insert { type = int , field = 3 }
 
-failit(erd,function()
+failit("expected either a field type pair",function()
 	NSF:complete()
 end)
 SICS:complete()
@@ -81,14 +77,14 @@ struct SF2 {
 	a : int
 }
 SF2.metamethods.__getentries = function(self) SF:complete() end
-failit(erd,function()
+failit("type recursively contains itself",function()
 SF:complete()
 end)
-failit("Attempting to get a property of a type that previously resulted in an error.",function()
+failit("type recursively contains itself",function()
 SF:complete()
 end)
 
-failit(erd,function()
+failit("attempting to redefine struct",function()
 	struct SF { b : int }
 end)
 
@@ -143,8 +139,8 @@ end)
 local saveit
 local foom = macro(function(arg) saveit = arg; arg:astype();  end)
 failit(erd,function()
-	local terra foo()
-		return foom(4)
+	local terra foo(a : int)
+		return foom(a)
 	end
 	foo()
 end)
@@ -153,9 +149,10 @@ failit(erd,function()
 	local terra foo()
 		return saveit
 	end
+	foo:disas()
 	foo()
 end)
-failit(erd,function()
+failit("lua expression is not a terra type but number",function()
 	local struct A {
 		a : 3
 	}

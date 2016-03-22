@@ -134,6 +134,7 @@ labelstate = undefinedlabel(gotostat * gotos, table* positions) #undefined label
 globalvalue = terrafunction(tree? definition)
             | globalvariable(Constant? initializer, number addressspace)
             attributes(string name, Type type, boolean extern, table anchor)
+overloadedterrafunction = (string name, terrafunction* definitions)
 ]]
 terra.irtypes = T
 
@@ -578,9 +579,20 @@ end
 function terra.isfunction(obj)
     return T.terrafunction:isclassof(obj)
 end
-function terra.isoverloadedfunction(t) return false end --NYI, but not completely removed from typechecker
 -- END FUNCTION
 
+function terra.isoverloadedfunction(obj) return T.overloadedterrafunction:isclassof(obj) end
+function T.overloadedterrafunction:adddefinition(d)
+    assert(T.terrafunction:isclassof(d),"expected a terra function")
+    d:setname(self.name)
+    self.definitions:insert(d)
+    return self
+end
+function T.overloadedterrafunction:getdefinitions() return self.definitions end
+function terra.overloadedfunction(name, init)
+    init = init or {}
+    return T.overloadedterrafunction(name,List{unpack(init)})
+end
 
 -- GLOBALVAR
 
@@ -2467,7 +2479,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local function trylist(typelist, speculate)
             if #typelist ~= #paramlist then
                 if not speculate then
-                    diag:reporterror(anchor,"expected "..#typelist.." parameters, but found "..#paramlist)
+                    local fromt,tot = typelist:map(tostring):concat(","),paramlist:map("type"):map(tostring):concat(",")
+                    diag:reporterror(anchor,"expected ",#typelist," parameters {",fromt,"}, but found ",#paramlist, " {",tot,"}")
                 end
                 return false
             end
@@ -2619,8 +2632,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     
         --collect all the terra functions, stop collecting when we reach the first 
         --macro and record it as themacro
-        --we will first attempt to typecheck the terra functions, and if they fail,
-        --we will call the macro/luafunction (these can take any argument types so they will always work)
         local terrafunctions = terra.newlist()
         local themacro = nil
         for i,fn in ipairs(fnlikelist) do
@@ -2636,7 +2647,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     break
                 elseif terra.isoverloadedfunction(fn.value) then
                     if #fn.value:getdefinitions() == 0 then
-                        diag:reporterror(anchor,"attempting to call undefined function")
+                        diag:reporterror(anchor,"attempting to call overloaded function without definitions")
                     end
                     for i,v in ipairs(fn.value:getdefinitions()) do
                         local fnlit = createfunctionliteral(anchor,v)
@@ -4069,6 +4080,7 @@ function terra.type(t)
     elseif terra.isfunction(t) then return "terrafunction"
     elseif terra.isconstant(t) then return "terraconstant"
     elseif terra.islabel(t) then return "terralabel"
+    elseif terra.isoverloadedfunction(t) then return "overloadedterrafunction"
     else return type(t) end
 end
 

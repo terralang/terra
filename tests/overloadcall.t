@@ -1,12 +1,12 @@
 
-
-terra foo(a : int)
+local foo = terralib.overloadedfunction("foo")
+foo:adddefinition(terra(a : int)
 	return a
-end
+end)
 
-terra foo(a : int, b : int)
+foo:adddefinition(terra(a : int, b : int)
 	return a + b
-end
+end)
 
 local test = require("test")
-test.eq(foo(1) + foo(3,4), 8)
+test.eq(foo:getdefinitions()[1](1) + foo:getdefinitions()[2](3,4), 8)

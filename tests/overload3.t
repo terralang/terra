@@ -1,11 +1,11 @@
-
-terra foo(a : {int} )
+local foo = terralib.overloadedfunction("foo")
+foo:adddefinition(terra(a : {int} )
 	return 1
-end
+end)
 
-terra foo(a : {int,int} )
+foo:adddefinition(terra(a : {int,int} )
 	return 2
-end
+end)
 
 terra doit()
 	return foo({1,2}) + foo({1,2})

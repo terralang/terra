@@ -39,14 +39,15 @@ terra foo(z : int, a : int, b : int, c : int, d : int, e : int, f : int, g : int
 	return z + a + b + c + d + e + f + g
 end
 
+local overloadit = terralib.overloadedfunction("overloadit")
 
-terra overloadit(a : int, b : int, c : int, d : int, e : int, f : int)
+overloadit:adddefinition(terra(a : int, b : int, c : int, d : int, e : int, f : int)
 	return 0
-end
+end)
 
-terra overloadit(a : double, b : int, c : int, d : int, e : int, f : int)
+overloadit:adddefinition(terra(a : double, b : int, c : int, d : int, e : int, f : int)
 	return 1
-end
+end)
 
 
 terra callit()
