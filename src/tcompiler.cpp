@@ -2529,9 +2529,6 @@ if(baseT->isIntegerTy()) { \
                 stmt->obj("expression",&expression);
                 emitCall(&expression, true);
             } break;
-            case T_letin: {
-                emitLetIn(stmt); //scope is only for expression let, statement let joins its surrounding scope
-            } break;
             default: {
                 emitExp(stmt,false);
             } break;
