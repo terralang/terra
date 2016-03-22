@@ -1,8 +1,9 @@
-function failit(fn)
-	local success,msg = pcall(fn)
+function failit(fn,match)
+	local success,msg = xpcall(fn,debug.traceback)
+	match = match or "Errors reported during"
 	if success then
 		error("failed to fail.",2)
-	elseif not string.match(msg,"Errors reported during") then
+	elseif not string.match(msg,match) then
 		error("failed wrong: "..msg,2)
 	end
 end
@@ -27,7 +28,7 @@ end
 
 
 
-sa = symbol("myname")
+sa = symbol(int,"myname")
 
 terra foo5()
 	var [sa] = 5
@@ -104,7 +105,7 @@ failit(function()
 	return `a.[1]
 end)
 
-over = symbol()
+over = label()
 
 anint = symbol(int)
 
@@ -193,7 +194,7 @@ end
 foo20()
 end)
 
-foo21s = symbol()
+foo21s = symbol(int)
 
 local terra foo21()
 	var [foo21s],b = 3,4
@@ -203,7 +204,7 @@ assert(foo21() == 7)
 
 failit(function()
 local terra foo20()
-	var ["a"] : int, ["b"] = 4,5
+	var ["a"], ["b"] = 4,5
 	return a
 end
 end)
@@ -285,12 +286,12 @@ failit(function()
 end)
 
 failit(function()
-	local terra notdefined
+	local terra notdefined :: int -> {}
 	local terra callnotdefined()
 		return notdefined(1)
 	end
 	callnotdefined()
-end)
+end,"is not defined")
 
 
 	local terra norets()
@@ -320,18 +321,21 @@ end
 foo30()
 
 
-local terra notdefined
-local terra definedtwice(a : int) return a end
-terra definedtwice(a : int, b : int) return a + b end
 
 failit(function()
+local terra notdefined ::  {} -> {}
+
 local terra foo31()
 	return (notdefined), (definedtwice)
 end
 foo31()
 end)
 
+local terra definedtwice(a : int) return a end
+terra definedtwice(a : int, b : int) return a + b end
+
 terra foo35()
+
 	return definedtwice(3) + definedtwice(3,4)
 end
 
@@ -426,7 +430,7 @@ terra foo33()
 	return (vector(3,4,5) + vectorof(double,3,4,5))[0] + sizeof(double)
 end
 
-local notinscope = symbol()
+local notinscope = symbol(int)
 
 failit(function()
 	local terra foo34()

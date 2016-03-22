@@ -20,22 +20,25 @@ terra naivel1matmul(A : &double, B : &double, C : &double, lda : int, ldb : int,
 
 end
 
-function symmat(name,I,...)
-	if not I then return symbol(name) end
+
+function symmat(typ,name,I,...)
+	if not I then return symbol(typ,name) end
 	local r = {}
 	for i = 0,I-1 do
-		r[i] = symmat(name..tostring(i),...)
+		r[i] = symmat(typ,name..tostring(i),...)
 	end
 	return r
 end
 
-
+local number = double
+    
 function genl1matmul(NB, NK, RM, RN, V,prefetch)
 	
 	assert(isinteger(NB / (RN*V)))
 	assert(isinteger(NB / RM))
 
 	local VP = &vector(double,V)
+	local VT = VP.type
 	local terra vecload(data : &double, idx : int)
 		var addr = &data[idx]
 		return @VP(addr)
@@ -44,11 +47,10 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 		var addr = &data[idx]
 		@VP(addr) = v
 	end
-
-	local A,B,C,mm,nn, alpha = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("alpha")
-	local lda,ldb,ldc = symbol("lda"),symbol("ldb"), symbol("ldc")
-	local a,b,c = symmat("a",NB/V,RM), symmat("b",NB,RN), symmat("c",RM,RN)
-	local kk = symbol("kk")
+	local A,B,C,mm,nn, alpha = symbol(&number,"A"),symbol(&number,"B"),symbol(&number,"C"),symbol(int,"mn"),symbol(int,"nn"),symbol(double,"alpha")
+	local lda,ldb,ldc = symbol(int64,"lda"),symbol(int64,"ldb"), symbol(int64,"ldc")
+	local a,b,c = symmat(VT,"a",NB/V,RM), symmat(VT,"b",NB,RN), symmat(VT,"c",RM,RN)
+	local kk = symbol(int,"kk")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
 
@@ -96,7 +98,7 @@ function genl1matmul(NB, NK, RM, RN, V,prefetch)
 		end
 	end
 
-	return terra([A] : &double, [B] : &double, [C] : &double, [lda] : int, [ldb] : int, [ldc] : int, [alpha] : double)
+	return terra([A] , [B] , [C], [lda] , [ldb] , [ldc] , [alpha])
 		for [mm] = 0, NB, RM do
 			for [nn] = 0, NB,RN*V do
 				[loadc];

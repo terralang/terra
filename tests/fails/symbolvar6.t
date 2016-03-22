@@ -1,5 +1,5 @@
 if not require("fail") then return end
-local a = symbol()
+local a = symbol(double)
 local b = {3}
 
 local c = symbol(int)

@@ -1,6 +1,6 @@
 
-local a = symbol()
-terra foo([a] : int, b : int)
+local a = symbol(int)
+terra foo([a], b : int)
 	return [a] + b
 end
 

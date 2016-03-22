@@ -9,13 +9,6 @@ terra realmain()
     main()
 end
 
-terra foo()
-end
-terra foo(a : int)
-end
-
-foo:compile()
-
 terralib.saveobj("renamed",{ main = realmain })
 
 terralib.dumpmodule()

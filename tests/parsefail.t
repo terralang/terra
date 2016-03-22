@@ -17,15 +17,16 @@ terra foo()
 	var a = { [""] = 3 }
 end
 
-local s = symbol()
+local s,l = symbol(int),label()
 
 local function getsym()
 	return s
 end
+local function getlbl() return l end
 terra foo2()
 	var [getsym()] = 3
-	var a = { [getsym()] = 4, _1 = [getsym()] }
-	return a.[getsym()] + a._1
+	var a = { [getlbl()] = 4, _1 = [getsym()] }
+	return a.[getlbl()] + a._1
 end
 
 assert(7 == foo2())

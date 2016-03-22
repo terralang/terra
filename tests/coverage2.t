@@ -1,5 +1,5 @@
 function failit(match,fn)
-	local success,msg = pcall(fn)
+	local success,msg = xpcall(fn,debug.traceback)
 	if success then
 		error("failed to fail.",2)
 	elseif not string.match(msg,match) then
@@ -9,7 +9,7 @@ end
 local test = require("test")
 local erd = "Errors reported during"
 
-failit(erd,function()
+failit("cannot define global",function()
 local aglobal = 5
 local terra foo()
 	return [ (function() aglobal = 4; return 3 end)() ]
@@ -30,20 +30,15 @@ local terra foo()
 	return 3
 end
 foo:compile()
-local a = 0
-foo:gettype(function()
-	a = a + 1
-end)
-assert(a == 1)
 
-local terra errored
+local terra errored :: int -> int
 failit(erd,function()
 	terra errored()
 		return A
 	end
 	errored:compile()
 end)
-failit("referencing a function which failed to compile",function()
+failit("not defined",function()
 	errored()
 end)
 
@@ -66,7 +61,7 @@ failit(erd,function()
 end)
 
 SICS = terralib.types.newstruct()
-SICS.entries:insert { field = symbol(), type = int }
+SICS.entries:insert { field = label(), type = int }
 a = 1
 SICS.metamethods.__staticinitialize = function() a = a + 1 end
 --print(terralib.new(SICS,{3}))
@@ -104,7 +99,7 @@ struct C {
 
 C.metamethods.__cast = function() return error("CAST ERROR") end
 
-local terra casttest
+local terra casttest :: {} -> int
 failit(erd,function()
 local terra casttest()
 	return int(C { 3 })
@@ -167,7 +162,7 @@ failit(erd,function()
 end)
 
 failit(erd,function()
-	local terra foo
+	local terra foo :: {} -> {}
 	local bar = macro(function() foo:compile() end)
 	terra foo()
 		return bar()

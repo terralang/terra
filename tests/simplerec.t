@@ -17,7 +17,7 @@ terra foo()
 	var b , a  = B{4}, A{5}
 	return 1 + b:foo()
 end
-local terra mydecl
+local terra mydecl :: {} -> {}
 struct mystructdecl
 
 print(bar())

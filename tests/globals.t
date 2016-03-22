@@ -22,5 +22,3 @@ assert(6.5 == foobar())
 print("HERE")
 assert(true == b:get())
 assert(3 == c:get()[0])
-
-print("TODO - fix handling of initializers for array-like things and literal strings")

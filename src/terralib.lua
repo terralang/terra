@@ -110,7 +110,7 @@ tree =
      | structcast(allocvar structvariable, tree expression, storelocation* entries)
      | constructor(tree* expressions)
      | returnstat(tree expression)
-     | setter(tree setter, allocvar rhs) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
+     | setter(allocvar rhs, tree setter) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
      | functiondef(allocvar* parameters, boolean is_varargs, functype type, block body, table labeldepths, globalvalue* globalsused)
      
      # special purpose nodes, they only occur in specific locations, but are considered trees because they can contain typed trees
@@ -448,7 +448,7 @@ function debug.traceback(msg,level)
             local whatname,what = debug.getlocal(level,2)
             assert(anchorname == "anchor" and whatname == "what")
             lines:insert("\n\t")
-            lines:insert(formaterror(anchor,"Error occured while "..what):sub(1,-2)) 
+            lines:insert(formaterror(anchor,"Errors reported during "..what):sub(1,-2)) 
         else
             local short_src,currentline,linedefined = di.short_src,di.currentline,di.linedefined
             local file,outsideline = di.source:match("^@$terra$(.*)$terra$(%d+)$")
@@ -505,9 +505,9 @@ local function readytocompile(root)
                     visit(g)
                 end
             end
-        elseif gv.kind == "glovalvariable" then
-            self.type:complete()
-        end
+        elseif gv.kind == "globalvariable" then
+            gv.type:complete()
+        else error("unknown gv:"..tostring(gv)) end
     end
     visit(root)
     -- if we succeeded, we can mark all the globals we visited ready, so they don't have to recompute this
@@ -567,7 +567,8 @@ function T.terrafunction:adddefinition(functiondef)
     end
     self.definition,self.type = functiondef,functiondef.type
 end
-function T.terrafunction:gettype()
+function T.terrafunction:gettype(nop)
+    assert(nop == nil, ":gettype no longer takes any callbacks for when a function is complete")
     if self.type == terra.types.placeholderfunction then 
         error("function being recursively referenced needs an explicit return type, function defintion at: "..formaterror(self.anchor,""),2)
     end
@@ -1387,8 +1388,8 @@ do
     }
     local function reportopaque(type)
         local msg = "attempting to use an opaque type "..tostring(type).." where the layout of the type is needed"
-        if self.anchor then
-            erroratlocation(anchor,msg)
+        if type.anchor then
+            erroratlocation(type.anchor,msg)
         else
             error(msg,4)
         end
@@ -1871,6 +1872,7 @@ local function semanticcheck(diag,parameters,block)
     
     return labeldepths, globalsused
 end
+
 function typecheck(topexp,luaenv,simultaneousdefinitions)
     local env = terra.newenvironment(luaenv or {})
     local diag = terra.newdiagnostics()
@@ -2986,7 +2988,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             local rhstype = rhs[i] and rhs[i].type or terra.types.error
             if v:is "setteru" then
                 local rv,r = allocvar(v,rhstype,"<rhs>")
-                lhs[i] = newobject(v,T.setter, v.setter(r), rv)
+                lhs[i] = newobject(v,T.setter, rv,v.setter(r))
             elseif v:is "allocvar" then
                 v:settype(rhstype)
             else
@@ -3191,7 +3193,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         
         local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
-        local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
+        local labeldepths,globalsused = {},List() --semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
     else 
         result = checkexp(topexp)
@@ -3668,7 +3670,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit("var ")
             emitParam(e)
         elseif e:is "setter" then
-            emit("<setter>")
+            emit("<setter:") emitExp(e.setter) emit(">")
         elseif e:is "operator" then
             local op = e.operator
             local function emitOperand(o,isrhs)

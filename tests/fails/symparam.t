@@ -1,6 +1,6 @@
 if not require("fail") then return end
 
-local a = symbol()
+local a = label()
 terra foo([a], b : int)
 	return [a] + b
 end

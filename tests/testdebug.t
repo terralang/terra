@@ -11,7 +11,7 @@ terra foo(a : int, b : int)
   return c * 2
 end
 
-local ptr = terralib.cast(rawstring,foo:getdefinitions()[1]:getpointer())
+local ptr = terralib.cast(rawstring,foo:getpointer())
 
 terra findptr(a : &opaque)
   var si : terralib.SymbolInfo

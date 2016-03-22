@@ -32,11 +32,11 @@ int CalcTime(int * times, double * start) {
 ]]
 
 
-function symmat(name,I,...)
-	if not I then return symbol(name) end
+function symmat(typ,name,I,...)
+	if not I then return symbol(typ,name) end
 	local r = {}
 	for i = 0,I-1 do
-		r[i] = symmat(name..tostring(i),...)
+		r[i] = symmat(typ,name..tostring(i),...)
 	end
 	return r
 end
@@ -62,11 +62,11 @@ terra runit(N : int, input : &float, output : &float)
 	for i = NI, N-NI,NI do
 		for j = V*NJ, N-V*NJ,V*NJ do
 			[(function()
-				local C = symmat("C",NI,NJ)
+				local C = symmat(vector(float,V),"C",NI,NJ)
 				local stmts = terralib.newlist()
 				for iii = 0,NI-1 do for jjj = 0,NJ-1 do 
 					stmts:insert(quote 
-						var [C[iii][jjj]] : vector(float,V) = 0
+						var [C[iii][jjj]] = 0
 					end) 
 				end end
 
