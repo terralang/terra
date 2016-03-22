@@ -3193,7 +3193,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         
         local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
-        local labeldepths,globalsused = {},List() --semanticcheck(diag,typed_parameters,body)
+        local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
     else 
         result = checkexp(topexp)
