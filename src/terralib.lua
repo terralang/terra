@@ -674,7 +674,7 @@ compilationunit.__index = compilationunit
 function terra.newcompilationunit(target,opt)
     assert(terra.istarget(target),"expected a target object")
     return setmetatable({ symbols = newweakkeytable(), 
-                          livefunctions = opt and newweakkeytable() or nil,
+                          collectfunctions = opt,
                           llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
@@ -687,7 +687,7 @@ function compilationunit:jitvalue(v)
     return terra.jit(self.llvm_cu,gv)
 end
 function compilationunit:free()
-    assert(not self.livefunctions, "cannot explicitly release a compilation unit with auto-delete functions")
+    assert(not self.collectfunctions, "cannot explicitly release a compilation unit with auto-delete functions")
     ffi.gc(self.llvm_cu,nil) --unregister normal destructor object
     terra.freecompilationunit(self.llvm_cu)
 end

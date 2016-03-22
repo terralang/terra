@@ -1216,7 +1216,7 @@ static GlobalVariable * EmitGlobalVariable(TerraCompilationUnit * CU, Obj * glob
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State * L);
 
-Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc);
+Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, TerraFunctionState * user);
 
 struct Locals { Obj cur; Locals * prev; }; //stack of local environment
 
@@ -1244,96 +1244,97 @@ struct FunctionEmitter {
     int customlinenumber;
     
     Obj * funcobj;
-    int scc;
-    Function * func;
+    TerraFunctionState * fstate;
     std::vector<BasicBlock *> deferred;
     
     FunctionEmitter(TerraCompilationUnit * CU_, Obj * funcobj_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), locals(NULL), funcobj(funcobj_) {}
-    Function * run(int prevscc) {
-        func = lookupSymbol<Function>(CU->symbols,funcobj);
-        if(!func) {
+    TerraFunctionState * run() {
+        fstate = lookupSymbol<TerraFunctionState>(CU->symbols,funcobj);
+        if(!fstate) {
+            fstate = (TerraFunctionState*) lua_newuserdata(L, sizeof(TerraFunctionState)); //map the declaration first so that recursive uses do not re-emit
+            memset(fstate, 0, sizeof(TerraFunctionState));
+            mapFunction(CU->symbols, funcobj);
             const char * name = funcobj->string("name");
             bool isextern = funcobj->boolean("extern");
-            scc = funcobj->number("scc");
             if (isextern) { //try to resolve function as imported C code
-                func = M->getFunction(name);
-                if(!func) {
+                fstate->func = M->getFunction(name);
+                if(!fstate->func) {
                     GlobalValue * externfunction = CU->TT->external->getFunction(name);
                     if(externfunction) {
                         llvmutil_copyfrommodule(CU->M, CU->TT->external, &externfunction, 1, AlwaysShouldCopy, NULL);
-                        func = CU->M->getFunction(name); assert(func);
+                        fstate->func = CU->M->getFunction(name); assert(fstate->func);
                     }
                 }
-                if(func) {
-                    mapSymbol(CU->symbols,funcobj,func);
-                    return func;
-                }
+                if(fstate->func)
+                    return fstate;
             }
             
             Obj ftype;
             funcobj->obj("type",&ftype);
             //function name is $+name so that it can't conflict with any symbols imported from the C namespace
-            func = CC->CreateFunction(M,&ftype, Twine(StringRef((isextern) ? "" : "$"),name));
+            fstate->func = CC->CreateFunction(M,&ftype, Twine(StringRef((isextern) ? "" : "$"),name));
             
             if(funcobj->hasfield("alwaysinline")) {
                 if(funcobj->boolean("alwaysinline")) {
-                    func->ADDFNATTR(AlwaysInline);
+                    fstate->func->ADDFNATTR(AlwaysInline);
                 } else {
-                    func->ADDFNATTR(NoInline);
+                    fstate->func->ADDFNATTR(NoInline);
                 }
             }
             
-            mapSymbol(CU->symbols,funcobj,func); //map the declaration first so that recursive uses do not re-emit
             if(!isextern) {
-                if(CU->optimize)
-                    CU->tooptimize->push_back(func);
+                if(CU->optimize) {
+                    fstate->index = CU->functioncount++;
+                    fstate->lowlink = fstate->index;
+                    fstate->onstack = true;
+                    CU->tooptimize->push_back(fstate);
+                }
                 emitBody();
-                if(CU->optimize && prevscc != scc) { //this is the end of a strongly connect component run optimizations on it
+                if(CU->optimize && fstate->lowlink == fstate->index) { //this is the end of a strongly connect component run optimizations on it
                     VERBOSE_ONLY(T) {
                         printf("optimizing scc containing: ");
                     }
-                    size_t i = CU->tooptimize->size();
-                    Function * f;
-                    do {
-                        f = (*CU->tooptimize)[--i];
-                        VERBOSE_ONLY(T) {
-                            std::string s = f->getName();
-                            printf("%s%s",s.c_str(), (func == f) ? "\n" : " ");
-                        }
-                    } while(func != f);
-                    CU->mi->run(CU->tooptimize->begin() + i, CU->tooptimize->end());
+                    TerraFunctionState * f;
+                    std::vector<Function*> scc;
                     do {
                         f = CU->tooptimize->back();
+                        CU->tooptimize->pop_back();
+                        scc.push_back(f->func);
+                        f->onstack = false;
                         VERBOSE_ONLY(T) {
-                            std::string s = f->getName();
+                            std::string s = f->func->getName();
+                            printf("%s%s",s.c_str(), (fstate == f) ? "\n" : " ");
+                        }
+                    } while(fstate != f);
+                    CU->mi->run(scc.begin(), scc.end());
+                    for(size_t i = 0; i < scc.size(); i++) {
+                        VERBOSE_ONLY(T) {
+                            std::string s = scc[i]->getName();
                             printf("optimizing %s\n",s.c_str());
                         }
-                        CU->fpm->run(*f);
+                        CU->fpm->run(*scc[i]);
                         VERBOSE_ONLY(T) {
-                            f->dump();
+                            scc[i]->dump();
                         }
-                        CU->tooptimize->pop_back();
-                    } while(func != f);
+                    }
                 }
             }
-            lua_getfield(L,COMPILATION_UNIT_POS,"livefunctions");
-            if(!lua_isnil(L,-1)) {
-                //attach a userdata object to the function that will call terra_deletefunction
-                //when the function variant is GC'd in lua
+            lua_getfield(L,COMPILATION_UNIT_POS,"collectfunctions");
+            if(lua_toboolean(L,-1)) { //set a destructor on the TerraFunctionState object to clean up this function
                 CU->nreferences++;
+                CU->symbols->push();
                 funcobj->push();
-                Function** gchandle = (Function**) lua_newuserdata(L,sizeof(Function**));
-                *gchandle = func;
-                lua_newtable(L);
+                lua_gettable(L, -2); //lookup userdata object that holds the TerraFunctionState for this function
+                lua_newtable(L); //setmetatable(ud,{ __gc = terra_deletefunction(llvm_cu) })
                 lua_getfield(L,COMPILATION_UNIT_POS,"llvm_cu");
                 lua_pushcclosure(L,terra_deletefunction,1);
                 lua_setfield(L,-2,"__gc");
                 lua_setmetatable(L,-2);
-                lua_settable(L,-3);
+                lua_pop(L, 2); //userdata object and symbols talbe
             }
             lua_pop(L,1);
         }
-        return func;
+        return fstate;
     }
     Obj * newMap(Obj * buf) {
         lua_newtable(L);
@@ -1347,7 +1348,7 @@ struct FunctionEmitter {
         enterScope(&basescope);
         labels = newMap(&labeltbl);
 
-        BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",func);
+        BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",fstate->func);
         
         B->SetInsertPoint(entry);
         
@@ -1367,7 +1368,7 @@ struct FunctionEmitter {
         
         std::vector<Value *> parametervars;
         emitExpressionList(&parameters, false, &parametervars);
-        CC->EmitEntry(B,&ftype, func, &parametervars);
+        CC->EmitEntry(B,&ftype, fstate->func, &parametervars);
          
         Obj body;
         typedtree.obj("body",&body);
@@ -1378,9 +1379,9 @@ struct FunctionEmitter {
         assert(breakpoints.size() == 0);
         
         VERBOSE_ONLY(T) {
-            func->dump();
+            fstate->func->dump();
         }
-        verifyFunction(*func);
+        verifyFunction(*fstate->func);
         
         delete B;
         endDebug();
@@ -1391,6 +1392,13 @@ struct FunctionEmitter {
     }
     void mapSymbol(Obj * tbl, Obj * k, void * v) {
         tbl->setud(k,v);
+    }
+    void mapFunction(Obj * tbl, Obj * k) { //TerraFunctionState userdata is on top of stack
+        tbl->push();
+        k->push();
+        lua_pushvalue(L,-3);
+        lua_settable(L,-3);
+        lua_pop(L,2); //table and original userdata object
     }
     TType * getType(Obj * v) {
         return Ty->Get(v);
@@ -1894,7 +1902,7 @@ if(baseT->isIntegerTy()) { \
                     if(objType.kind("kind") == T_functype) {
                         Obj func;
                         exp->obj("value",&func);
-                        Function * fn = EmitFunction(CU,&func,scc);
+                        Function * fn = EmitFunction(CU,&func,fstate);
                         //functions are represented with &int8 pointers to avoid
                         //calling convension issues, so cast the literal to this type now
                         return B->CreateBitCast(fn,t->type);
@@ -2090,7 +2098,7 @@ if(baseT->isIntegerTy()) { \
 	return 0;
     }
     BasicBlock * createAndInsertBB(StringRef name) {
-        return BasicBlock::Create(*CU->TT->ctx, name,func);
+        return BasicBlock::Create(*CU->TT->ctx, name,fstate->func);
     }
     void followsBB(BasicBlock * b) {
         b->moveAfter(B->GetInsertBlock());
@@ -2166,9 +2174,9 @@ if(baseT->isIntegerTy()) { \
                                     #else
                                     (DIDescriptor)DB->getCU(),
                                     #endif
-                                    func->getName(), func->getName(), file, lineno,
+                                    fstate->func->getName(), fstate->func->getName(), file, lineno,
                                     DB->createSubroutineType(file, TA),
-                                    false, true, 0,0, true, func);
+                                    false, true, 0,0, true, fstate->func);
             
             if(!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
@@ -2255,7 +2263,7 @@ if(baseT->isIntegerTy()) { \
     }
     
     void emitReturnUndef() {
-        Type * rt = func->getReturnType();
+        Type * rt = fstate->func->getReturnType();
         if(rt->isVoidTy()) {
             B->CreateRetVoid();
         } else {
@@ -2306,7 +2314,7 @@ if(baseT->isIntegerTy()) { \
     }
     BasicBlock * copyBlock(BasicBlock * BB) {
         ValueToValueMapTy VMap;
-        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", func);
+        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", fstate->func);
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
             RemapInstruction(II, VMap,RF_IgnoreMissingEntries);
         return NewBB;
@@ -2359,7 +2367,7 @@ if(baseT->isIntegerTy()) { \
                 Obj ftype;
                 funcobj->obj("type",&ftype);
                 emitDeferred(deferred.size());
-                CC->EmitReturn(B,&ftype,func,result);
+                CC->EmitReturn(B,&ftype,fstate->func,result);
                 startDeadCode();
             } break;
             case T_label: {
@@ -2532,9 +2540,13 @@ if(baseT->isIntegerTy()) { \
 };
 
 
-Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, int prevscc) {
+Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, TerraFunctionState * user) {
     FunctionEmitter fe(CU,funcobj);
-    return fe.run(prevscc);
+    TerraFunctionState * result = fe.run();
+    if(user && result->onstack)
+        user->lowlink = std::min(user->lowlink,result->lowlink); // Tarjan's scc algorithm
+
+    return result->func;
 }
 
 static int terra_compilationunitaddvalue(lua_State * L) { //entry point into compiler from lua code
@@ -2554,12 +2566,12 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
         
         Types Ty(CU);
         CCallingConv CC(CU,&Ty);
-        std::vector<Function *> tooptimize;
+        std::vector<TerraFunctionState *> tooptimize;
         CU->Ty = &Ty; CU->CC = &CC; CU->symbols = &globals; CU->tooptimize = &tooptimize;
         if(value.kind("kind") == T_globalvariable) {
             gv = EmitGlobalVariable(CU,&value,"anon");
         } else {
-            gv = EmitFunction(CU,&value,-1);
+            gv = EmitFunction(CU,&value,NULL);
         }
         CU->Ty = NULL; CU->CC = NULL; CU->symbols = NULL; CU->tooptimize = NULL;
         if(modulename) {
@@ -2665,9 +2677,9 @@ static int terra_jit(lua_State * L) {
 
 static int terra_deletefunction(lua_State * L) {
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,lua_upvalueindex(1));
-    Function ** fp = (Function**) lua_touserdata(L,-1);
-    assert(fp);
-    Function * func = (Function*) *fp;
+    TerraFunctionState * fstate = (TerraFunctionState*) lua_touserdata(L,-1);
+    assert(fstate);
+    Function * func = fstate->func;
     assert(func);
     VERBOSE_ONLY(CU->T) {
         printf("deleting function: %s\n",func->getName().str().c_str());
@@ -2692,7 +2704,7 @@ static int terra_deletefunction(lua_State * L) {
     VERBOSE_ONLY(CU->T) {
         printf("... finish delete.\n");
     }
-    *fp = NULL;
+    fstate->func = NULL;
     freecompilationunit(CU);
     return 0;
 }

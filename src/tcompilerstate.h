@@ -25,8 +25,14 @@ struct TerraTarget {
     size_t next_unused_id; //for creating names for dummy functions
 };
 
+struct TerraFunctionState { //compilation state
+    llvm::Function * func;
+    int index,lowlink; //for Tarjan's scc algorithm
+    bool onstack;
+};
+
 struct TerraCompilationUnit {
-    TerraCompilationUnit() : nreferences(0), optimize(false), T(NULL), C(NULL), M(NULL), mi(NULL), fpm(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL) {}
+    TerraCompilationUnit() : nreferences(0), optimize(false), T(NULL), C(NULL), M(NULL), mi(NULL), fpm(NULL), ee(NULL),jiteventlistener(NULL), Ty(NULL), CC(NULL), symbols(NULL), functioncount(0) {}
     int nreferences;
     //configuration
     bool optimize;
@@ -44,7 +50,8 @@ struct TerraCompilationUnit {
     Types * Ty;
     CCallingConv * CC;
     Obj * symbols;
-    std::vector<llvm::Function *>* tooptimize;
+    int functioncount; // for assigning unique indexes to functions;
+    std::vector<TerraFunctionState *>* tooptimize;
 };
 
 struct terra_CompilerState {
