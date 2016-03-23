@@ -564,7 +564,14 @@ end
 
 function T.terrafunction:adddefinition(functiondef)
     if self.definition then error("terra function "..self.name.." already defined") end
-    assert(T.definition:isclassof(functiondef))
+    self:resetdefinition(functiondef)
+end
+function T.terrafunction:resetdefinition(functiondef)
+    if T.terrafunction:isclassof(functiondef) and functiondef:isdefined() then 
+        functiondef = functiondef.definition
+    end
+    assert(T.definition:isclassof(functiondef), "expected a defined terra function")
+    if self.readytocompile then error("cannot reset a definition of function that has already been compiled",2) end
     if self.type ~= functiondef.type and self.type ~= terra.types.placeholderfunction then 
         error(("attempting to define terra function declaration with type %s with a terra function definition of type %s"):format(tostring(self.type),tostring(functiondef.type)))
     end
