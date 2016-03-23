@@ -1303,7 +1303,7 @@ struct FunctionEmitter {
         B->CreateRet(emitExp(exp));
         CU->fpm->run(*fstate->func);
         ReturnInst * term = cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
-        Constant * r = cast<Constant>(term->getReturnValue()); assert(r || !"constant expression was not constant");
+        Constant * r = dyn_cast<Constant>(term->getReturnValue()); assert(r || !"constant expression was not constant");
         fstate->func->eraseFromParent();
         return r;
     }
