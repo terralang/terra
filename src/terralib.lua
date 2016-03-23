@@ -1900,7 +1900,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local env = terra.newenvironment(luaenv or {})
     local diag = terra.newdiagnostics()
     simultaneousdefinitions = simultaneousdefinitions or {}
-
+    
+    local invokeuserfunction = function(...)
+        diag:finishandabortiferrors("Errors reported during typechecking.",2)
+        return invokeuserfunction(...)
+    end
+    local evalluaexpression = function(...)
+        diag:finishandabortiferrors("Errors reported during typechecking.",2)
+        return evalluaexpression(...)
+    end
+    
     local function checklabel(e,stringok)
         if e.kind == "namedident" then return e end
         local r = evalluaexpression(env:combinedenv(),e.expression)
@@ -2603,10 +2612,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
 
         fnlike = asterraexpression(anchor, fnlike, "luaobject")
-        local fnargs = terra.newlist { reciever }
-        for i,a in ipairs(arguments) do
-            fnargs:insert(a)
-        end
+        local fnargs = List { reciever, unpack(arguments) }
         return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
