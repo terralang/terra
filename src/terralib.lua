@@ -105,7 +105,7 @@ tree =
      | vectorconstructor(Type? oftype,tree* expressions)
      | sizeof(Type oftype)
      | inlineasm(Type type, string asm, boolean volatile, string constraints, tree* arguments)
-     | cast(Type to, tree expression) # from is optional for untyped cast, will be removed eventually
+     | cast(Type to, tree expression)
      | allocvar(string name, Symbol symbol)
      | structcast(allocvar structvariable, tree expression, storelocation* entries)
      | constructor(tree* expressions)
@@ -134,8 +134,9 @@ definition = functiondef(string? name, functype type, allocvar* parameters, bool
            | functionextern(string? name, functype type)
      
 globalvalue = terrafunction(definition? definition)
-            | globalvariable(Constant? initializer, number addressspace, boolean extern)
+            | globalvariable(tree? initializer, number addressspace, boolean extern, boolean constant)
             attributes(string name, Type type, table anchor)
+            
 overloadedterrafunction = (string name, terrafunction* definitions)
 ]]
 terra.irtypes = T
@@ -521,6 +522,7 @@ function T.globalvalue:checkreadytocompile()
 end
 function T.globalvalue:compile()
     if not self.rawjitptr then
+        self.stats = self.stats or {}
         self.rawjitptr,self.stats.jit = terra.jitcompilationunit:jitvalue(self)
     end
     return self.rawjitptr
@@ -534,9 +536,6 @@ function T.globalvalue:getpointer()
 end
 
 -- TERRAFUNCTION
-function T.terrafunction:init()
-    self.stats = {}
-end
 function T.terrafunction:__call(...)
     local ffiwrapper = self:getpointer()
     return ffiwrapper(...)
@@ -609,7 +608,7 @@ function terra.isglobalvar(obj)
     return T.globalvariable:isclassof(obj)
 end
 function T.globalvariable:init()
-    self.symbol,self.stats = terra.newsymbol(self.type,self.name),{}
+    self.symbol = terra.newsymbol(self.type,self.name)
     if self.initializer then --if we have an initializer we know that the type is not opaque and we can create the variable
                              --we need to call this now because it is possible for the initializer's underlying cdata object to change value
                              --in later code
@@ -618,16 +617,31 @@ function T.globalvariable:init()
 end
 function T.globalvariable:isextern() return self.extern end
 
---terra.createglobal provided by tcompiler.cpp
-function terra.global(typ,c, name, isextern, addressspace)
-    if not terra.types.istype(typ) then
-        c,name,isextern,addressspace = typ,c,name,isextern --shift arguments right
-        c = terra.constant(c)
-        typ = c.type
-    elseif c ~= nil then
-        c = terra.constant(typ,c)
+local typecheck
+local function createglobalinitializer(anchor, typ, c)
+    if not c then return nil end
+    if not T.quote:isclassof(c) then
+        local c_ = c
+        c = newobject(anchor,T.luaexpression,function() return c_ end,true)
     end
-    return T.globalvariable(c,tonumber(addressspace) or 0, isextern or false, name or "<global>", typ,terra.newanchor(2))
+    if typ then
+        c = newobject(c, T.cast, typ, c)
+    end
+    return typecheck(c) -- TODO: checkconstant
+end
+function terra.global(...)
+    local typ = select(1,...)
+    typ = terra.types.istype(typ) and typ or nil
+    local c,name,isextern,isconstant,addressspace = select(typ and 2 or 1,...)
+    local anchor = terra.newanchor(2)
+    c = createglobalinitializer(anchor,typ,c)
+    if not typ then --set type if not set
+        if not c then
+            error("type must be specified for globals without an initializer",2)
+        end
+        typ = c.type
+    end
+    return T.globalvariable(c,tonumber(addressspace) or 0, isextern or false, isconstant or false, name or "<global>", typ, anchor)
 end
 function T.globalvariable:get()
     local ptr = self:getpointer()
@@ -638,7 +652,6 @@ function T.globalvariable:set(v)
     ptr[0] = v
 end
 -- END GLOBALVAR
-
 
 -- TARGET
 local weakkeys = { __mode = "k" }
@@ -845,7 +858,6 @@ end
 _G["label"] = terra.newlabel
 
 -- INTRINSIC
-local typecheck
 
 function terra.intrinsic(str, typ)
     local typefn
@@ -2816,6 +2828,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return checkluaexpression(e,location)
             elseif e:is "operator" then
                 return checkoperator(e)
+            elseif e:is "cast" then -- inserted by global to force a cast in the initializer
+                return insertcast(checkexp(e.expression), e.to)
             elseif e:is "index" then
                 local v = checkexp(e.value)
                 local idx = checkexp(e.index)
@@ -3221,7 +3235,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,nil,fntype,typed_parameters,topexp.is_varargs, body, labeldepths, globalsused)
-    else 
+    else
         result = checkexp(topexp)
     end
     diag:finishandabortiferrors("Errors reported during typechecking.",2)

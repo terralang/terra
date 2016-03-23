@@ -319,13 +319,11 @@ int terra_initcompilationunit(lua_State * L) {
     CU->M->setDataLayout(TT->td);
     #endif
     
-    if(CU->optimize) {
-        CU->mi = new ManualInliner(TT->tm,CU->M);
-        CU->fpm = new FunctionPassManager(CU->M);
-        llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
-        llvmutil_addoptimizationpasses(CU->fpm);
-        CU->fpm->doInitialization(); 
-    }
+    CU->mi = new ManualInliner(TT->tm,CU->M);
+    CU->fpm = new FunctionPassManager(CU->M);
+    llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
+    llvmutil_addoptimizationpasses(CU->fpm);
+    CU->fpm->doInitialization(); 
     lua_pushlightuserdata(L, CU);
     return 1;
 }
@@ -405,10 +403,8 @@ int terra_freetarget(lua_State * L) {
 static void freecompilationunit(TerraCompilationUnit * CU) {
     assert(CU->nreferences > 0);
     if(0 == --CU->nreferences) {
-        if(CU->optimize) {
-            delete CU->mi;
-            delete CU->fpm;
-        }
+        delete CU->mi;
+        delete CU->fpm;
         if(CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
             delete CU->jiteventlistener;
@@ -1175,6 +1171,8 @@ static Constant * EmitConstant(TerraCompilationUnit * CU, Obj * v) {
     }
 }
 
+static Constant * EmitConstantInitializer(TerraCompilationUnit * CU, Obj * v);
+
 static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * global, const char * name) {
     Obj t;
     global->obj("type",&t);
@@ -1183,10 +1181,10 @@ static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * gl
     Constant * llvmconstant = global->boolean("extern") ? NULL : UndefValue::get(typ);
     Obj constant;
     if(global->obj("initializer",&constant)) {
-        llvmconstant = EmitConstant(CU,&constant);
+        llvmconstant = EmitConstantInitializer(CU,&constant);
     }
     int as = global->number("addressspace");
-    return new GlobalVariable(*CU->M, typ, false, GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+    return new GlobalVariable(*CU->M, typ, global->boolean("constant"), GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
 }
 
 static bool AlwaysShouldCopy(GlobalValue * G, void * data) { return true; }
@@ -1247,8 +1245,19 @@ struct FunctionEmitter {
     TerraFunctionState * fstate;
     std::vector<BasicBlock *> deferred;
     
-    FunctionEmitter(TerraCompilationUnit * CU_, Obj * funcobj_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), locals(NULL), funcobj(funcobj_) {}
-    TerraFunctionState * run() {
+    Obj labeltbl;
+    Locals basescope;
+    
+    FunctionEmitter(TerraCompilationUnit * CU_) : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(CU_->Ty), CC(CU_->CC), M(CU_->M), locals(NULL) {
+        B = new IRBuilder<>(*CU->TT->ctx);
+        enterScope(&basescope);
+        labels = newMap(&labeltbl);
+    }
+    ~FunctionEmitter() {
+        delete B;
+    }
+    TerraFunctionState * emitFunction(Obj * funcobj_) {
+        funcobj = funcobj_;
         fstate = lookupSymbol<TerraFunctionState>(CU->symbols,funcobj);
         if(!fstate) {
             fstate = (TerraFunctionState*) lua_newuserdata(L, sizeof(TerraFunctionState)); //map the declaration first so that recursive uses do not re-emit
@@ -1336,31 +1345,36 @@ struct FunctionEmitter {
         }
         return fstate;
     }
+    Constant * emitConstantExpression(Obj * exp) {
+        TerraFunctionState state;
+        fstate = &state;
+        fstate->func = Function::Create(FunctionType::get(typeOfValue(exp)->type, false), Function::ExternalLinkage, "constant", M);
+        BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",fstate->func);
+        B->SetInsertPoint(entry);
+        B->CreateRet(emitExp(exp));
+        CU->fpm->run(*fstate->func);
+        ReturnInst * term = cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
+        Constant * r = cast<Constant>(term->getReturnValue()); assert(r || !"constant expression was not constant");
+        fstate->func->eraseFromParent();
+        return r;
+    }
     Obj * newMap(Obj * buf) {
         lua_newtable(L);
-        funcobj->fromStack(buf);
+        CU->symbols->fromStack(buf);
         return buf;
     }
     void emitBody() {
-        B = new IRBuilder<>(*CU->TT->ctx);
-        Obj localtbl,labeltbl,labeldepthtbl;
-        Locals basescope;
-        enterScope(&basescope);
-        labels = newMap(&labeltbl);
 
         BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",fstate->func);
-        
         B->SetInsertPoint(entry);
         
         Obj parameters;
-        
         initDebug(funcobj->string("filename"),funcobj->number("linenumber"));
         setDebugPoint(funcobj);
         funcobj->obj("parameters",&parameters);
         
-        Obj ftype;
+        Obj ftype, labeldepthtbl;
         funcobj->obj("type",&ftype);
-        
         funcobj->obj("labeldepths",&labeldepthtbl);
         labeldepth = &labeldepthtbl;
         
@@ -1381,7 +1395,6 @@ struct FunctionEmitter {
         }
         verifyFunction(*fstate->func);
         
-        delete B;
         endDebug();
     }
     template<typename R>
@@ -2534,12 +2547,16 @@ if(baseT->isIntegerTy()) { \
     }
 };
 
+static Constant * EmitConstantInitializer(TerraCompilationUnit * CU, Obj * v) {
+    FunctionEmitter fe(CU);
+    return fe.emitConstantExpression(v);
+}
 
 Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcdecl, TerraFunctionState * user) {
     Obj funcdefn;
     funcdecl->obj("definition", &funcdefn);
-    FunctionEmitter fe(CU,&funcdefn);
-    TerraFunctionState * result = fe.run();
+    FunctionEmitter fe(CU);
+    TerraFunctionState * result = fe.emitFunction(&funcdefn);
     if(user && result->onstack)
         user->lowlink = std::min(user->lowlink,result->lowlink); // Tarjan's scc algorithm
 
