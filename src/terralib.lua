@@ -111,7 +111,6 @@ tree =
      | constructor(tree* expressions)
      | returnstat(tree expression)
      | setter(allocvar rhs, tree setter) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
-     | functiondef(allocvar* parameters, boolean is_varargs, functype type, block body, table labeldepths, globalvalue* globalsused)
      
      # special purpose nodes, they only occur in specific locations, but are considered trees because they can contain typed trees
      | ifbranch(tree condition, block body)
@@ -130,10 +129,13 @@ Type = primitive(string type, number bytes, boolean signed)
 
 labelstate = undefinedlabel(gotostat * gotos, table* positions) #undefined label with gotos pointing to it
            | definedlabel(table position, label label) #defined label with position and label object defining it
-           
-globalvalue = terrafunction(tree? definition)
-            | globalvariable(Constant? initializer, number addressspace)
-            attributes(string name, Type type, boolean extern, table anchor)
+
+definition = functiondef(string? name, functype type, allocvar* parameters, boolean is_varargs, block body, table labeldepths, globalvalue* globalsused)
+           | functionextern(string? name, functype type)
+     
+globalvalue = terrafunction(definition? definition)
+            | globalvariable(Constant? initializer, number addressspace, boolean extern)
+            attributes(string name, Type type, table anchor)
 overloadedterrafunction = (string name, terrafunction* definitions)
 ]]
 terra.irtypes = T
@@ -486,7 +488,6 @@ end
 function T.globalvalue:gettype() return self.type end
 function T.globalvalue:getname() return self.name end
 function T.globalvalue:setname(name) self.name = tostring(name) return self end
-function T.globalvalue:isextern() return self.extern end
 
 local function readytocompile(root)
     local visited = {}
@@ -494,11 +495,11 @@ local function readytocompile(root)
         if visited[gv] or gv.readytocompile then return end
         visited[gv] = true
         if gv.kind == "terrafunction" then
-            if not gv:isextern() and not gv:isdefined() then
+            if not gv:isdefined() then
                 erroratlocation(gv.anchor,"function "..gv:getname().." is not defined.")
             end
             gv.type:completefunction()
-            if gv.definition then
+            if gv.definition.kind == "functiondef" then
                 for i,g in ipairs(gv.definition.globalsused) do
                     visit(g)
                 end
@@ -553,17 +554,21 @@ function T.terrafunction:printstats()
         print("",k,v)
     end
 end
+function T.terrafunction:isextern() return self.definition and self.definition.kind == "functionextern" end
 function T.terrafunction:isdefined() return self.definition ~= nil end
-function T.terrafunction:isdeclaration() return not (self:isextern() or self:isdefined()) end
+function T.terrafunction:setname(name) 
+    self.name = tostring(name) 
+    if self.definition then self.definition.name = name end
+    return self
+end
 
 function T.terrafunction:adddefinition(functiondef)
     if self.definition then error("terra function "..self.name.." already defined") end
-    if self:isextern() then error("attemting to define an extern terra function") end
-    assert(T.functiondef:isclassof(functiondef))
+    assert(T.definition:isclassof(functiondef))
     if self.type ~= functiondef.type and self.type ~= terra.types.placeholderfunction then 
         error(("attempting to define terra function declaration with type %s with a terra function definition of type %s"):format(tostring(self.type),tostring(functiondef.type)))
     end
-    self.definition,self.type = functiondef,functiondef.type
+    self.definition,self.type,functiondef.name = functiondef,functiondef.type,assert(self.name)
 end
 function T.terrafunction:gettype(nop)
     assert(nop == nil, ":gettype no longer takes any callbacks for when a function is complete")
@@ -604,6 +609,7 @@ function T.globalvariable:init()
         self:getpointer()
     end
 end
+function T.globalvariable:isextern() return self.extern end
 
 --terra.createglobal provided by tcompiler.cpp
 function terra.global(typ,c, name, isextern, addressspace)
@@ -614,7 +620,7 @@ function terra.global(typ,c, name, isextern, addressspace)
     elseif c ~= nil then
         c = terra.constant(typ,c)
     end
-    return T.globalvariable(c,tonumber(addressspace) or 0, name or "<global>", typ, isextern or false,terra.newanchor(2))
+    return T.globalvariable(c,tonumber(addressspace) or 0, isextern or false, name or "<global>", typ,terra.newanchor(2))
 end
 function T.globalvariable:get()
     local ptr = self:getpointer()
@@ -992,17 +998,17 @@ function terra.defineobjects(fmt,envfn,...)
                 if not typ:ispointertofunction() then
                     diag:reporterror(c.tree,"expected a function pointer but found ",typ)
                 else
-                    v = T.terrafunction(nil,c.name,typ.type,false,c.tree)
+                    v = T.terrafunction(nil,c.name,typ.type,c.tree)
                 end
             else -- definition, evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
                 c.tree = evalformalparameters(diag,env,c.tree)
                 checkduplicate(tbl,lastname,c.tree)
-                if not terra.isfunction(v) or not v:isdeclaration() then
+                if not terra.isfunction(v) or v:isdefined() then
                     local typ = terra.types.placeholderfunction
                     if c.tree.returntype then
                         typ = terra.types.functype(c.tree.parameters:map("type"),c.tree.returntype,false)
                     end
-                    v = T.terrafunction(nil,c.name,typ,false,c.tree)
+                    v = T.terrafunction(nil,c.name,typ,c.tree)
                 end
                 simultaneousdefinitions[v] = c.tree
             end
@@ -1037,20 +1043,20 @@ function terra.anonstruct(tree,envfn)
 end
 
 function terra.anonfunction(tree,envfn)
-    local name = "anon ("..tree.filename..":"..tree.linenumber..")"
     local env = envfn()
     local diag = terra.newdiagnostics()
     tree = evalformalparameters(diag,env,tree)
     diag:finishandabortiferrors("Errors during function declaration.")
     tree = typecheck(tree,env)
-    return T.terrafunction(tree,name,tree.type,false,tree)
+    tree.name = "anon ("..tree.filename..":"..tree.linenumber..")"
+    return T.terrafunction(tree,tree.name,tree.type,tree)
 end
 
 function terra.externfunction(name,typ,anchor)
     assert(T.Type:isclassof(typ) and typ:isfunction() or typ:ispointertofunction(),"expected a pointer to a function")
     if typ:ispointertofunction() then typ = typ.type end
     anchor = anchor or terra.newanchor(1)
-    return T.terrafunction(nil,name,typ,true,anchor)
+    return T.terrafunction(T.functionextern(name,typ),name,typ,anchor)
 end
 
 function terra.definequote(tree,envfn)
@@ -3201,7 +3207,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
-        result = newobject(topexp,T.functiondef,typed_parameters,topexp.is_varargs, fntype, body, labeldepths, globalsused)
+        result = newobject(topexp,T.functiondef,nil,fntype,typed_parameters,topexp.is_varargs, body, labeldepths, globalsused)
     else 
         result = checkexp(topexp)
     end
@@ -3843,7 +3849,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
 end
 
 function T.terrafunction:printpretty(breaklines)
-    if not self:isdefined() then
+    if not self:isdefined() or self:isextern() then
         io.write(("terra %s : %s %s\n"):format(self.name,self.type,self:isextern() and "(extern)" or ""))
         return
     end

@@ -69,7 +69,9 @@ _(vector, "vector") \
 _(vectorconstructor,"vectorconstructor") \
 _(whilestat,"whilestat") \
 _(globalvariable,"globalvariable") \
-_(terrafunction,"terrafunction")
+_(terrafunction,"terrafunction") \
+_(functiondef, "functiondef") \
+_(functionextern, "functionextern")
 
 enum T_Kind {
     #define T_KIND_ENUM(a,str) T_##a,

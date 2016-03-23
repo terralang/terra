@@ -1255,7 +1255,7 @@ struct FunctionEmitter {
             memset(fstate, 0, sizeof(TerraFunctionState));
             mapFunction(CU->symbols, funcobj);
             const char * name = funcobj->string("name");
-            bool isextern = funcobj->boolean("extern");
+            bool isextern = T_functionextern == funcobj->kind("kind");
             if (isextern) { //try to resolve function as imported C code
                 fstate->func = M->getFunction(name);
                 if(!fstate->func) {
@@ -1352,18 +1352,16 @@ struct FunctionEmitter {
         
         B->SetInsertPoint(entry);
         
-        Obj typedtree;
         Obj parameters;
         
-        funcobj->obj("definition",&typedtree);
-        initDebug(typedtree.string("filename"),typedtree.number("linenumber"));
-        setDebugPoint(&typedtree);
-        typedtree.obj("parameters",&parameters);
+        initDebug(funcobj->string("filename"),funcobj->number("linenumber"));
+        setDebugPoint(funcobj);
+        funcobj->obj("parameters",&parameters);
         
         Obj ftype;
         funcobj->obj("type",&ftype);
         
-        typedtree.obj("labeldepths",&labeldepthtbl);
+        funcobj->obj("labeldepths",&labeldepthtbl);
         labeldepth = &labeldepthtbl;
         
         std::vector<Value *> parametervars;
@@ -1371,7 +1369,7 @@ struct FunctionEmitter {
         CC->EmitEntry(B,&ftype, fstate->func, &parametervars);
          
         Obj body;
-        typedtree.obj("body",&body);
+        funcobj->obj("body",&body);
         emitStmt(&body);
         //if there no terminating return statment, we need to insert one
         //if there was a Return, then this block is dead and will be cleaned up
@@ -2537,8 +2535,10 @@ if(baseT->isIntegerTy()) { \
 };
 
 
-Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, TerraFunctionState * user) {
-    FunctionEmitter fe(CU,funcobj);
+Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcdecl, TerraFunctionState * user) {
+    Obj funcdefn;
+    funcdecl->obj("definition", &funcdefn);
+    FunctionEmitter fe(CU,&funcdefn);
     TerraFunctionState * result = fe.run();
     if(user && result->onstack)
         user->lowlink = std::min(user->lowlink,result->lowlink); // Tarjan's scc algorithm
