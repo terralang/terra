@@ -1120,57 +1120,6 @@ struct CCallingConv {
     }
 };
 
-static Constant * EmitConstant(TerraCompilationUnit * CU, Obj * v) {
-    lua_State * L = CU->T->L;
-    Obj t;
-    v->obj("type", &t);
-    TType * typ = CU->Ty->Get(&t);
-    ConstantFolder B;
-    if(typ->type->isAggregateType()) { //if the constant is a large value, we make a single global variable that holds that value
-        Type * ptyp = PointerType::getUnqual(typ->type);
-        GlobalVariable * gv = (GlobalVariable*) CU->symbols->getud(v);
-        if(gv == NULL) {
-            v->pushfield("object");
-            const void * data = lua_topointer(L,-1);
-            assert(data);
-            lua_pop(L,1); // remove pointer
-            size_t size = CU->TT->td->getTypeAllocSize(typ->type);
-            size_t align = CU->TT->td->getPrefTypeAlignment(typ->type);
-            Constant * arr = ConstantDataArray::get(*CU->TT->ctx,ArrayRef<uint8_t>((const uint8_t*)data,size));
-            gv = new GlobalVariable(*CU->M, arr->getType(),
-                                    true, GlobalValue::ExternalLinkage,
-                                    arr, "const");
-            gv->setAlignment(align);
-            gv->setUnnamedAddr(true);
-            CU->symbols->setud(v,gv);
-        }
-        return B.CreateBitCast(gv, ptyp);
-    } else {
-        //otherwise translate the value to LLVM
-        v->pushfield("object");
-        const void * data = lua_topointer(L,-1);
-        assert(data);
-        lua_pop(L,1); // remove pointer
-        size_t size = CU->TT->td->getTypeAllocSize(typ->type);
-        if(typ->type->isIntegerTy()) {
-            uint64_t integer = 0;
-            memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
-            return ConstantInt::get(typ->type, integer);
-        } else if(typ->type->isFloatTy()) {
-            return ConstantFP::get(typ->type, *(const float*)data);
-        } else if(typ->type->isDoubleTy()) {
-            return ConstantFP::get(typ->type, *(const double*)data);
-        } else if(typ->type->isPointerTy()) {
-            Constant * ptrint = ConstantInt::get(CU->TT->td->getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
-            return ConstantExpr::getIntToPtr(ptrint, typ->type);
-        } else {
-            typ->type->dump();
-            printf("NYI - constant load\n");
-            abort();
-        }
-    }
-}
-
 static Constant * EmitConstantInitializer(TerraCompilationUnit * CU, Obj * v);
 
 static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * global, const char * name) {
@@ -1918,11 +1867,17 @@ if(baseT->isIntegerTy()) { \
                         //calling convension issues, so cast the literal to this type now
                         return B->CreateBitCast(fn,t->type);
                     } else if(t->type->getPointerElementType()->isIntegerTy(8)) {
-                        exp->pushfield("value");
-                        size_t len;
-                        const char * rawstr = lua_tolstring(L,-1,&len);
-                        Value * str = B->CreateGlobalString(StringRef(rawstr,len),"$string"); //needs a name to make mcjit work in 3.5
-                        lua_pop(L,1);
+                        Obj stringvalue;
+                        exp->obj("value",&stringvalue);
+                        Value * str = lookupSymbol<Value>(CU->symbols, &stringvalue);
+                        if(!str) {
+                            exp->pushfield("value");
+                            size_t len;
+                            const char * rawstr = lua_tolstring(L,-1,&len);
+                            str = B->CreateGlobalString(StringRef(rawstr,len),"$string"); //needs a name to make mcjit work in 3.5
+                            lua_pop(L,1);
+                            mapSymbol(CU->symbols, &stringvalue, str);
+                        }
                         return  B->CreateBitCast(str, pt);
                     } else {
                         assert(!"NYI - pointer literal");
@@ -1933,9 +1888,30 @@ if(baseT->isIntegerTy()) { \
                 }
             } break;
             case T_constant: {
+                TType * typ = typeOfValue(exp);
                 Obj value;
-                exp->obj("value",&value);
-                return EmitConstant(CU, &value);
+                exp->pushfield("value");
+                const void * data = lua_topointer(L,-1);
+                assert(data);
+                size_t size = CU->TT->td->getTypeAllocSize(typ->type);
+                Value * r;
+                if(typ->type->isIntegerTy()) {
+                    uint64_t integer = 0;
+                    memcpy(&integer,data,size); //note: assuming little endian, there is probably a better way to do this
+                    r = ConstantInt::get(typ->type, integer);
+                } else if(typ->type->isFloatTy()) {
+                    r = ConstantFP::get(typ->type, *(const float*)data);
+                } else if(typ->type->isDoubleTy()) {
+                    r = ConstantFP::get(typ->type, *(const double*)data);
+                } else if(typ->type->isPointerTy()) {
+                    Constant * ptrint = ConstantInt::get(CU->TT->td->getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
+                    r = ConstantExpr::getIntToPtr(ptrint, typ->type);
+                } else {
+                    typ->type->dump();
+                    assert(!"NYI - constant load\n");
+                }
+                lua_pop(L,1); // remove pointer
+                return r;
             } break;
             case T_apply: {
                 return emitCall(exp,false);

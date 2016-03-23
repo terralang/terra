@@ -39,7 +39,6 @@ end })
 
 local T = asdl.NewContext()
 
-T:Extern("Constant", function(t) return terra.isconstant(t) end)
 T:Extern("TypeOrLuaExpression", function(t) return T.Type:isclassof(t) or T.luaexpression:isclassof(t) end)
 T:Define [[
 ident =     escapedident(luaexpression expression) # removed during specialization
@@ -97,7 +96,7 @@ tree =
      | defer(tree expression)
      | select(tree value, number index, string fieldname) # typed version, fieldname for debugging
      | globalvarref(string name, globalvariable value)
-     | constant(Constant value, Type type)
+     | constant(cdata value, Type type)
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
      | debuginfo(string customfilename, number customlinenumber)
@@ -609,11 +608,6 @@ function terra.isglobalvar(obj)
 end
 function T.globalvariable:init()
     self.symbol = terra.newsymbol(self.type,self.name)
-    if self.initializer then --if we have an initializer we know that the type is not opaque and we can create the variable
-                             --we need to call this now because it is possible for the initializer's underlying cdata object to change value
-                             --in later code
-        self:getpointer()
-    end
 end
 function T.globalvariable:isextern() return self.extern end
 
@@ -625,7 +619,7 @@ local function createglobalinitializer(anchor, typ, c)
         c = newobject(anchor,T.luaexpression,function() return c_ end,true)
     end
     if typ then
-        c = newobject(c, T.cast, typ, c)
+        c = newobject(anchor, T.cast, typ, c)
     end
     return typecheck(c) -- TODO: checkconstant
 end
@@ -642,6 +636,10 @@ function terra.global(...)
         typ = c.type
     end
     return T.globalvariable(c,tonumber(addressspace) or 0, isextern or false, isconstant or false, name or "<global>", typ, anchor)
+end
+function T.globalvariable:setinitializer(init)
+    if self.readytocompile then error("cannot change global variable initializer after it has been compiled.",2) end
+    self.initializer = createglobalinitializer(self.anchor,self.type,init)
 end
 function T.globalvariable:get()
     local ptr = self:getpointer()
@@ -798,7 +796,7 @@ function T.quote:asvalue()
                 return e.value
             end
         elseif e:is "constant" then
-            return tonumber(e.value.object) or e.value.object
+            return e.value
         elseif e:is "constructor" then
             local t,typ = {},e.type
             for i,r in ipairs(typ:getentries()) do
@@ -2026,12 +2024,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return createsingle(terra.constant(typ,v))
             elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
                 return createsingle(terra.constant(v))
-            elseif terra.isconstant(v) then
-                if v.stringvalue then --strings are handled specially since they are a pointer type (rawstring) but the constant is actually string data, not just the pointer
-                    return newobject(anchor,T.literal,v.stringvalue,terra.types.rawstring)
-                else 
-                    return newobject(anchor,T.constant,v,v.type):setlvalue(v.type:isaggregate())
-                end
             elseif terra.isfunction(v) then
                 return createfunctionliteral(anchor,v)
             end
@@ -3784,7 +3776,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emit("}")
         elseif e:is "constant" then
             if e.type:isprimitive() then
-                emit("%s",tostring(tonumber(e.value.object)))
+                emit("%s",tostring(tonumber(e.value)))
             else
                 emit("<constant:"..tostring(e.type)..">")
             end
@@ -4032,41 +4024,12 @@ function terra.cast(terratype,obj)
     return ffi.cast(ctyp,obj)
 end
 
-terra.constantobj = {}
-terra.constantobj.__index = terra.constantobj
-
---c.object is the cdata value for this object
---string constants are handled specially since they should be treated as objects and not pointers
---in this case c.object is a string rather than a cdata object
---c.type is the terra type
-
-
-function terra.isconstant(obj)
-    return getmetatable(obj) == terra.constantobj
-end
-
-function terra.constant(a0,a1)
-    if terra.types.istype(a0) then
-        local c = setmetatable({ type = a0, object = a1 },terra.constantobj)
-        --special handling for string literals
-        if type(c.object) == "string" and c.type == terra.types.rawstring then
-            c.stringvalue = c.object --save string type for special handling in compiler
-        end
-
-        --if the  object is not already cdata, we need to convert it
-        if  type(c.object) ~= "cdata" or terra.typeof(c.object) ~= c.type then
-            local obj = c.object
-            c.object = terra.cast(c.type,obj)
-            c.origobject = type(obj) == "cdata" and obj --conversion from obj -> &obj
-                                                        --need to retain reference to obj or it can be GC'd
-        end
-        return c
-    else
-        --try to infer the type, and if successful build the constant
-        local init,typ = a0,nil
-        if terra.isconstant(init) then
-            return init --already a constant
-        elseif type(init) == "cdata" then
+function terra.constant(typ,init)
+    if typ ~= nil and not terra.types.istype(typ) then -- if typ is not a typ, shift arguments
+        typ,init = nil,typ
+    end
+    if typ == nil then --try to infer the type, and if successful build the constant
+        if type(init) == "cdata" then
             typ = terra.typeof(init)
         elseif type(init) == "number" then
             typ = (terra.isintegral(init) and terra.types.int) or terra.types.double
@@ -4074,11 +4037,32 @@ function terra.constant(a0,a1)
             typ = terra.types.bool
         elseif type(init) == "string" then
             typ = terra.types.rawstring
+        elseif T.quote:isclassof(init) then
+            typ = init:gettype()
         else
-            error("constant constructor requires explicit type for objects of type "..type(init))
+            error("constant constructor requires explicit type for objects of type "..terra.type(init))
         end
-        return terra.constant(typ,init)
     end
+    if init == nil or T.quote:isclassof(init) then -- cases: no init, quote init -> global constant
+        
+        return terra.global(typ,init,"<constant>",false,true)
+    end
+    local anchor = terra.newanchor(2)
+    if type(init) == "string" and typ == terra.types.rawstring then
+        return terra.newquote(newobject(anchor,T.literal,init,typ))
+    end
+    local orig = init -- hold anchor until we capture the value
+    if type(init) ~= "cdata" or terra.typeof(init) ~= typ then
+        init = terra.cast(typ,init)
+    end
+    if not typ:isaggregate() then
+        return terra.newquote(newobject(anchor,T.constant,init,typ))
+    end -- otherwise this is an aggregate pack it into a string literal
+    local str,ptyp = ffi.string(init,terra.sizeof(typ)),terra.types.pointer(typ)
+    local tree = newobject(anchor,T.literal,str,terra.types.rawstring) -- "literal"
+    tree = newobject(anchor,T.cast,ptyp,tree):withtype(ptyp) -- [&typ](literal)
+    tree = newobject(anchor,T.operator,"@", List { tree }):withtype(typ):setlvalue(true) -- @[&typ](literal)
+    return terra.newquote(tree)
 end
 _G["constant"] = terra.constant
 
@@ -4101,7 +4085,6 @@ function terra.type(t)
     elseif terra.islist(t) then return "list"
     elseif terra.issymbol(t) then return "terrasymbol"
     elseif terra.isfunction(t) then return "terrafunction"
-    elseif terra.isconstant(t) then return "terraconstant"
     elseif terra.islabel(t) then return "terralabel"
     elseif terra.isoverloadedfunction(t) then return "overloadedterrafunction"
     else return type(t) end
