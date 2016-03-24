@@ -95,7 +95,7 @@ tree =
      | ifstat(ifbranch* branches, block? orelse)
      | defer(tree expression)
      | select(tree value, number index, string fieldname) # typed version, fieldname for debugging
-     | globalvarref(string name, globalvariable value)
+     | globalvalueref(string name, globalvalue value)
      | constant(cdata value, Type type)
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
@@ -140,7 +140,7 @@ overloadedterrafunction = (string name, terrafunction* definitions)
 ]]
 terra.irtypes = T
 
-T.var.lvalue,T.globalvarref.lvalue = true,true
+T.var.lvalue = true
 
 function T.allocvar:settype(typ)
     assert(T.Type:isclassof(typ))
@@ -612,6 +612,11 @@ end
 function T.globalvariable:isextern() return self.extern end
 
 local typecheck
+
+local function constantcheck(exp)
+    return exp -- TODO: actually do this
+end
+
 local function createglobalinitializer(anchor, typ, c)
     if not c then return nil end
     if not T.quote:isclassof(c) then
@@ -621,7 +626,7 @@ local function createglobalinitializer(anchor, typ, c)
     if typ then
         c = newobject(anchor, T.cast, typ, c)
     end
-    return typecheck(c) -- TODO: checkconstant
+    return constantcheck(typecheck(c))
 end
 function terra.global(...)
     local typ = select(1,...)
@@ -795,6 +800,7 @@ function T.quote:asvalue()
             else
                 return e.value
             end
+        elseif e:is "globalvalueref" then return e.value
         elseif e:is "constant" then
             return e.value
         elseif e:is "constructor" then
@@ -882,8 +888,8 @@ function terra.intrinsic(str, typ)
             intrinsictype = terra.types.funcpointer(types,{})
         end
         local fn = terralib.externfunction(name,intrinsictype,e)
-        local literal = newobject(e,T.literal,fn,terra.types.pointer(fn:gettype()))
-        return typecheck(newobject(e,T.apply,literal,args))
+        local fnref = newobject(e,T.luaexpression,function() return fn end,true)
+        return typecheck(newobject(e,T.apply,fnref,args))
     end
     return terra.internalmacro(intrinsiccall)
 end
@@ -1761,7 +1767,6 @@ end
 local function semanticcheck(diag,parameters,block)
     local symbolenv = terra.newenvironment()
     
-    --TODO fix calls to asterraexpression to mark the correct location
     local labelstates = {} -- map from label value to labelstate object, either representing a defined or undefined label
     local globalsused = List() 
     
@@ -1818,7 +1823,7 @@ local function semanticcheck(diag,parameters,block)
                 if not definition then
                     diag:reporterror(e, "definition of this variable is not in scope")
                 end
-            elseif e:is "globalvarref" or e:is "literal" and T.terrafunction:isclassof(e.value) then
+            elseif e:is "globalvalueref" then
                 globalsused:insert(e.value)
             elseif e:is "allocvar" then
                 symbolenv:localenv()[e.symbol] = e
@@ -1949,7 +1954,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(exp,T.cast,typ,exp):withtype(typ:tcomplete(exp))
     end
 
-    local function createfunctionliteral(anchor,e)
+    local function createfunctionreference(anchor,e)
         local fntyp = e.type
         if fntyp == terra.types.placeholderfunction then
             local functiondef = simultaneousdefinitions[e]
@@ -1963,7 +1968,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 fntyp = e.type
             end
         end
-        return newobject(anchor,T.literal,e,terra.types.pointer(fntyp))
+        return newobject(anchor,T.globalvalueref,e.name,e):withtype(terra.types.pointer(fntyp))
     end
 
     local function insertaddressof(ee)
@@ -2009,7 +2014,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local function createsingle(v)
             if terra.isglobalvar(v) or terra.issymbol(v) then
                 local name = T.var:isclassof(anchor) and anchor.name --propage original variable name for debugging purposes
-                return newobject(anchor,terra.isglobalvar(v) and T.globalvarref or T.var,name or tostring(v),v):setlvalue(true):withtype(v.type)
+                return newobject(anchor,terra.isglobalvar(v) and T.globalvalueref or T.var,name or tostring(v),v):setlvalue(true):withtype(v.type)
             elseif terra.isquote(v) then
                 return v.tree
             elseif terra.istree(v) then
@@ -2026,7 +2031,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
                 return createsingle(terra.constant(v))
             elseif terra.isfunction(v) then
-                return createfunctionliteral(anchor,v)
+                return createfunctionreference(anchor,v)
             end
             local mt = getmetatable(v)
             if type(mt) == "table" and mt.__toterraexpression then
@@ -2203,7 +2208,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         --this would case the lua function to get a pointer if called on a pointer, and a value otherwise
         --in other cases, you would consistently get a value or a pointer regardless of receiver type
         --for consistency, we all lua methods take pointers
-        --TODO: should we also consider implicit conversions after the implicit address/dereference? or does it have to match exactly to work?
     end
 
 
@@ -2672,7 +2676,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         diag:reporterror(anchor,"attempting to call overloaded function without definitions")
                     end
                     for i,v in ipairs(fn.value:getdefinitions()) do
-                        local fnlit = createfunctionliteral(anchor,v)
+                        local fnlit = createfunctionreference(anchor,v)
                         if fnlit.type ~= terra.types.error then
                             terrafunctions:insert( fnlit )
                         end
@@ -3695,8 +3699,10 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         end
         if e:is "var" then
             emitIdent(e.name,e.symbol)
-        elseif e:is "globalvarref" then
+        elseif e:is "globalvalueref" and e.value.kind == "globalvariable" then
             emitIdent(e.name,e.value.symbol)
+        elseif e:is "globalvalueref" and e.value.kind == "terrafunction" then
+            emit(e.value.name)
         elseif e:is "allocvar" then
             emit("var ")
             emitParam(e)
@@ -3726,9 +3732,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitExp(e.index)
             emit("]")
         elseif e:is "literal" then
-            if e.type:ispointer() and e.type.type:isfunction() then
-                emit(e.value.name)
-            elseif e.type:isintegral() then
+            if e.type:isintegral() then
                 emit(e.stringvalue or "<int>")
             elseif type(e.value) == "string" then
                 emit("%q",e.value)

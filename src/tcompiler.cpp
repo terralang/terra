@@ -1748,10 +1748,16 @@ if(baseT->isIntegerTy()) { \
                 assert(v);
                 return v;
             } break;
-            case T_globalvarref:  {
+            case T_globalvalueref:  {
                 Obj global;
                 exp->obj("value",&global);
-                return EmitGlobalVariable(CU,&global,exp->string("name"));
+                if(T_globalvariable == global.kind("kind")) {
+                    return EmitGlobalVariable(CU,&global,exp->string("name"));
+                } else {
+                    //functions are represented with &int8 pointers to avoid
+                    //calling convension issues, so cast the literal to this type now
+                    return B->CreateBitCast(EmitFunction(CU, &global, fstate),typeOfValue(exp)->type);
+                }
             } break;
             case T_allocvar: {
                 return allocVar(exp);
@@ -1859,14 +1865,7 @@ if(baseT->isIntegerTy()) { \
                     
                     Obj objType;
                     type.obj("type",&objType);
-                    if(objType.kind("kind") == T_functype) {
-                        Obj func;
-                        exp->obj("value",&func);
-                        Function * fn = EmitFunction(CU,&func,fstate);
-                        //functions are represented with &int8 pointers to avoid
-                        //calling convension issues, so cast the literal to this type now
-                        return B->CreateBitCast(fn,t->type);
-                    } else if(t->type->getPointerElementType()->isIntegerTy(8)) {
+                    if(t->type->getPointerElementType()->isIntegerTy(8)) {
                         Obj stringvalue;
                         exp->obj("value",&stringvalue);
                         Value * str = lookupSymbol<Value>(CU->symbols, &stringvalue);
