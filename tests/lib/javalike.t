@@ -139,7 +139,7 @@ local function Interface(name,methodlist_)
                     local idx = T.metamethods.methodtoidx[methodname]
                     assert(idx,"method "..tostring(methodname).." not known in type "..tostring(T))
                     local method = T.metamethods.methods[idx]
-                    assert(ttype.type == method.type,("interface type %s and method type %s do not match"):format(tostring(ttype.type),tostring(method.type)))
+                    --assert(ttype.type == method.type,("interface type %s and method type %s do not match"):format(tostring(ttype.type),tostring(method.type)))
                     ctor:insert(`[entry.type](method))
                 end
             end

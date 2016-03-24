@@ -4,32 +4,31 @@ C = terralib.includec("stdio.h")
 local Class = require("lib/javalike")
 
 
-local Prints = Class.interface { print = {} -> {} }
+local Prints = Class.Interface("Prints",{ print = {} -> {} })
 
-struct Leaf {
+struct Leaf(Class(nil,Prints)) {
   data : int
 }
-Class.implements(Leaf,Prints)
-
 terra Leaf:print() : {} 
   C.printf("%d\n",self.data) 
 end
 
 
-struct Node {
+struct Node(Class(Leaf)) {
   next : &Leaf
 }
-Class.extends(Node,Leaf)
 
 terra Node:print() : {} 
   C.printf("%d\n",self.data) 
   self.next:print()
 end
 
+Prints:Define()
+
 terra test()
   var a,b = Leaf.alloc(), Node.alloc()
   a.data,b.data,b.next = 1,2,a
-  var p : &Prints = b
+  var p : &Prints.type = b
   p:print()
 end
 
