@@ -853,6 +853,7 @@ function terra.newlabel(displayname)
     identcount = identcount + 1
     return r
 end
+function T.Label:tocname() return "__label_"..tostring(self.id) end
 _G["label"] = terra.newlabel
 
 -- INTRINSIC
@@ -1267,7 +1268,7 @@ do
                 str = str .. " union { "
             end
             
-            local keystr = terra.issymbol(v.key) and v.key:tocname() or v.key
+            local keystr = terra.islabel(v.key) and v.key:tocname() or v.key
             str = str..v.type:cstring().." "..keystr.."; "
             
             if v.inunion and nextalloc ~= v.allocation then
@@ -3392,7 +3393,7 @@ local function createunpacks(tupleonly)
         for i = tonumber(from) or 1,tonumber(to) or #entries do
             local e = entries[i]
             if e.field then
-                local nm = terra.issymbol(e.field) and e.field:tocname() or e.field
+                local nm = terra.islabel(e.field) and e.field:tocname() or e.field
                 results:insert(cdata[nm])
             end
         end
@@ -4012,8 +4013,8 @@ end
 function terra.offsetof(terratype,field)
     terratype:complete()
     local typ = terratype:cstring()
-    if terra.issymbol(field) then
-        field = "__symbol"..field.id
+    if terra.islabel(field) then
+        field = field:tocname()
     end
     return ffi.offsetof(typ,field)
 end

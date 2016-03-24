@@ -1,29 +1,25 @@
-
 IO = terralib.includec("stdio.h")
 local Class = require("lib/javalike")
 
-struct A {
+struct A(Class()) {
   a : int
 }
 terra A:times2() : int
     return self.a*2
 end
    
-struct B {
+struct B(Class(A)) {
   b : int
 } 
-Class.extends(B,A)
-    
+  
 terra B:combine(a : int) : int
     return self.b + self.a + a
 end
     
 
-struct C {
+struct C(Class(B)) {
   c : double
 }
-Class.extends(C,B)
-
 terra C:combine(a : int) : int
     return self.c + self.a + self.b + a
 end
@@ -71,16 +67,13 @@ end
 
 assert(23 == foobar())
 
-Doubles = Class.interface { times2 = {} -> int } 
 
-Adds = Class.interface { add = int -> int }
+Doubles = Class.Interface("Doubles", { times2 = {} -> int }) 
+Adds = Class.Interface("Adds", { add = int -> int })
 
-struct D {
+struct D(Class(nil,Doubles,Adds)) {
   data : int
 }
-Class.implements(D,Doubles)
-Class.implements(D,Adds)
-
 
 terra D:times2() : int
     return self.data * 2
@@ -90,12 +83,14 @@ terra D:add(a : int) : int
     return self.data + a
 end
 
+Doubles:Define()
+Adds:Define()
 
-terra aDoubles(a : &Doubles)
+terra aDoubles(a : &Doubles.type)
     return a:times2()
 end
 
-terra aAdds(a : &Adds)
+terra aAdds(a : &Adds.type)
     return a:add(3)
 end
 
@@ -108,6 +103,7 @@ end
 
 assert(12 == foobar2())
 
+error("DONE")
 
 local IO = terralib.includec("stdio.h")
 struct Animal {
