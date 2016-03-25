@@ -842,7 +842,7 @@ function T.quote:asvalue()
             end
         elseif e:is "globalvalueref" then return e.value
         elseif e:is "constant" then
-            return e.value
+            return tonumber(e.value) or e.value
         elseif e:is "constructor" then
             local t,typ = {},e.type
             for i,r in ipairs(typ:getentries()) do

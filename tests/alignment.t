@@ -3,5 +3,5 @@ local aligned = terralib.aligned
 terra foobar(a : &float)
 	terralib.attrstore(a,terralib.attrload(a+3,{ align = alignment }), { align = alignment })
 end
-
+print(foobar)
 foobar:disas()
