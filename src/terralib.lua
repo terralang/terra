@@ -1025,7 +1025,7 @@ function terra.defineobjects(fmt,envfn,...)
         if "s" == c.c then
             local tbl,lastname = enclosing(c.name)
             local v = paccess(c.name,3,tbl,lastname)
-            if not terra.types.istype(v) or not v:isstruct() then
+            if not T.struct:isclassof(v) or v.tree then
                 v = terra.types.newstruct(c.name,1)
                 v.undefined = true
             end

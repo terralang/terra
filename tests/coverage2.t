@@ -84,10 +84,11 @@ failit("type recursively contains itself",function()
 SF:complete()
 end)
 
-failit("attempting to redefine struct",function()
+local oldSF = SF
 	struct SF { b : int }
-end)
 
+assert(oldSF ~= SF)
+SF = oldSF
 
 struct C {
 	a : int
