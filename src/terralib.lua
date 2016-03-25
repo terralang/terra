@@ -227,6 +227,7 @@ function terra.printraw(self)
         printElem(self,"  ")
     end
 end
+local prettystring --like printraw, but with syntax formatting rather than as raw lsits
 
 local function newobject(ref,ctor,...) -- create a new object, copying the line/file info from the reference
     assert(ref.linenumber and ref.filename, "not a anchored object?")
@@ -864,7 +865,7 @@ end
 function T.quote:init()
     assert(T.Type:isclassof(self.tree.type), "quote tree must have a type")
 end
-function terra.newquote(tree) return T.quote(tree) end
+function terra.newquote(tree) return newobject(tree,T.quote,tree) end
 -- END QUOTE
 
 
@@ -1118,8 +1119,8 @@ end
 function terra.externfunction(name,typ,anchor)
     assert(T.Type:isclassof(typ) and typ:isfunction() or typ:ispointertofunction(),"expected a pointer to a function")
     if typ:ispointertofunction() then typ = typ.type end
-    anchor = anchor or terra.newanchor(1)
-    return T.terrafunction(T.functionextern(name,typ),name,typ,anchor)
+    anchor = anchor or terra.newanchor(2)
+    return T.terrafunction(newobject(anchor,T.functionextern,name,typ),name,typ,anchor)
 end
 
 function terra.definequote(tree,envfn)
@@ -1244,41 +1245,42 @@ do
     end
     
     --pretty print of layout of type
-    function T.Type:printpretty()
+    function T.Type:layoutstring()
         local seen = {}
+        local parts = List()
         local function print(self,d)
             local function indent(l)
-                io.write("\n")
-                for i = 1,d+1+(l or 0) do 
-                    io.write("  ")
-                end
+                parts:insert("\n")
+                parts:insert(string.rep("  ",d+1+(l or 0)))
             end
-            io.write(tostring(self))
+            parts:insert(tostring(self))
             if seen[self] then return end
             seen[self] = true
             if self:isstruct() then
-                io.write(":")
+                parts:insert(":")
                 local layout = self:getlayout()
                 for i,e in ipairs(layout.entries) do
                     indent()
-                    io.write(tostring(e.key)..": ")
+                    parts:insert(tostring(e.key)..": ")
                     print(e.type,d+1)
                 end
             elseif self:isarray() or self:ispointer() then
-                io.write(" ->")
+                parts:insert(" ->")
                 indent()
                 print(self.type,d+1)
             elseif self:isfunction() then
-                io.write(": ")
-                indent() io.write("parameters: ")
+                parts:insert(": ")
+                indent() parts:insert("parameters: ")
                 print(types.tuple(unpack(self.parameters)),d+1)
-                indent() io.write("returntype:")
+                indent() parts:insert("returntype:")
                 print(self.returntype,d+1)
             end
         end
         print(self,0)
-        io.write("\n")
+        parts:insert("\n")
+        return parts:concat()
     end
+    function T.Type:printpretty() io.write(self:layoutstring()) end
     local function memoizeproperty(data)
         local name = data.name
         local erroronrecursion = data.erroronrecursion
@@ -3489,7 +3491,7 @@ end)
 
 -- DEBUG
 
-local function printpretty(breaklines,toptree,returntype,start,...)
+function prettystring(toptree,breaklines)
     breaklines = breaklines == nil or breaklines
     local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
@@ -3569,14 +3571,18 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         assert(name) assert(terra.issymbol(sym))
         emit("%s",UniqueName(name,sym))
     end
+    local luaexpression = "[ <lua exp> ]"
     local function IdentToString(ident)
-        return tostring(ident.value)
+        if ident.kind == "luaexpression" then return luaexpression
+        else return tostring(ident.value) end
     end
     local function emitParam(p)
-        assert(T.allocvar:isclassof(p) or T.concreteparam:isclassof(p))
-        emitIdent(p.name,p.symbol)
-        if p.type then 
-            emit(" : %s",p.type)
+        assert(T.allocvar:isclassof(p) or T.param:isclassof(p))
+        if T.unevaluatedparam:isclassof(p) then 
+            emit("%s%s",IdentToString(p.name),p.type and " : "..luaexpression or "")
+        else
+            emitIdent(p.name,p.symbol) 
+            if p.type then emit(" : %s",p.type) end
         end
     end
     local implicitblock = { repeatstat = true, fornum = true, fornumu = true}
@@ -3602,13 +3608,6 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitStmtList(s.statements)
             env:leaveblock()
             leaveblock()
-        elseif s:is "letin" then
-            emitStmtList(s.statements)
-            emitStmtList(s.expressions)
-        elseif s:is "apply" then
-            begin(s,"%s = ",UniqueName("r",s))
-            emitExp(s)
-            emit("\n")
         elseif s:is "returnstat" then
             begin(s,"return ")
             emitExp(s.expression)
@@ -3684,6 +3683,8 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             begin(s,"defer ")
             emitExp(s.expression)
             emit("\n")
+        elseif s:is "statlist" then
+            emitStmtList(s.statements)
         else
             begin(s,"")
             emitExp(s)
@@ -3728,7 +3729,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
         end
     end
 
-    function emitExp(e)
+    function emitExp(e,maybeastatement)
         if breaklines and differentlocation(lastanchor,e)then
             local ll = currentlinelength
             emit("\n")
@@ -3737,7 +3738,8 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             lastanchor = e
         end
         if e:is "var" then
-            emitIdent(e.name,e.symbol)
+            if e.symbol then emitIdent(e.name,e.symbol)
+            else emit("%s",e.name) end
         elseif e:is "globalvalueref" and e.value.kind == "globalvariable" then
             emitIdent(e.name,e.value.symbol)
         elseif e:is "globalvalueref" and e.value.kind == "terrafunction" then
@@ -3747,6 +3749,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             emitParam(e)
         elseif e:is "setter" then
             emit("<setter:") emitExp(e.setter) emit(">")
+        elseif e:is "setteru" then emit("<setteru>")
         elseif e:is "operator" then
             local op = e.operator
             local function emitOperand(o,isrhs)
@@ -3774,7 +3777,7 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             if e.type:isintegral() then
                 emit(e.stringvalue or "<int>")
             elseif type(e.value) == "string" then
-                emit("%q",e.value)
+                emit("%s",("%q"):format(e.value):gsub("\\\n","\\n"))
             else
                 emit("%s",tostring(e.value))
             end
@@ -3845,8 +3848,8 @@ local function printpretty(breaklines,toptree,returntype,start,...)
                 emit("[%s]",e.value)
             elseif terra.ismacro(e.value) then
                 emit("<macro>")
-            elseif terra.isfunction(e.value) then
-                emit("%s",e.value.name or e.value:getdefinitions()[1].name or "<anonfunction>")
+            elseif terra.isoverloadedfunction(e.value) then
+                emit("%s",e.name)
             else
                 emit("<lua value: %s>",tostring(e.value))
             end
@@ -3856,16 +3859,19 @@ local function printpretty(breaklines,toptree,returntype,start,...)
              emit("(")
              emitParamList(e.arguments)
              emit(")")
-        elseif e:is "typedexpression" then
-            emitExp(e.expression)
         elseif e:is "debuginfo" then
             emit("debuginfo(%q,%d)",e.customfilename,e.customlinenumber)
         elseif e:is "inlineasm" then
             emit("inlineasm(")
             emitType(e.type)
-            emit(",%s,%s,%s,",e.asm,tostring(volatile),e.constraints)
-            emitParams(e.arguments)
+            emit(",%s,%s,%s,",e.asm,tostring(e.volatile),e.constraints)
+            emitParamList(e.arguments)
             emit(")")
+        elseif e:is "quote" then
+            emitExp(e.tree)
+        elseif e:is "luaexpression" then return luaexpression
+        elseif maybeastatement then
+            emitStmt(e)
         else
             emit("<??"..e.kind.."??>")
             error("??"..tostring(e.kind))
@@ -3892,35 +3898,41 @@ local function printpretty(breaklines,toptree,returntype,start,...)
             begin(pl,"end")
             leaveblock()
         end
-    end    
-    begin(toptree,start,...)
+    end
     if T.functiondef:isclassof(toptree) or T.functiondefu:isclassof(toptree) then
-        emit("terra")
+        begin(toptree,"terra %s",toptree.name or "<anon>")
         emitList(toptree.parameters,"(",",",") ",emitParam)
-        if returntype then
+        if T.functiondef:isclassof(toptree) then
+            emit(": ") emitType(toptree.type.returntype)
+        elseif toptree.returntype then
             emit(": ")
-            emitType(returntype)
+            if T.Type:isclassof(toptree.returntype) then emitType(toptree.returntype)
+            else emitExp(toptree.returntype) end
         end
         emit("\n")
         emitStmt(toptree.body)
         begin(toptree,"end\n")
+    elseif T.functionextern:isclassof(toptree) then
+        begin(toptree,"terra %s :: %s = <extern>\n",toptree.name,toptree.type)
     else
-        emitExp(toptree)
+        emitExp(toptree,true)
         emit("\n")
     end
-    io.write(buffer:concat())
+    return buffer:concat()
 end
 
-function T.terrafunction:printpretty(breaklines)
-    if not self:isdefined() or self:isextern() then
-        io.write(("terra %s : %s %s\n"):format(self.name,self.type,self:isextern() and "(extern)" or ""))
-        return
+function T.terrafunction:prettystring(breaklines)
+    if not self:isdefined() then
+        return ("terra %s :: %s\n"):format(self.name,tostring(self.type))
     end
-    printpretty(breaklines,self.definition,self.type.returntype,"%s = ",self.name)
+    return prettystring(self.definition,breaklines)
 end
-function T.quote:printpretty(breaklines)
-    printpretty(breaklines,self.tree,nil,"")
-end
+function T.terrafunction:printpretty(bl) io.write(self:prettystring(bl)) end
+function T.terrafunction:__tostring() return self:prettystring(false) end
+function T.quote:prettystring(breaklines) return prettystring(self.tree,breaklines) end
+function T.quote:printpretty(bl) io.write(self:prettystring(bl)) end
+function T.quote:__tostring() return self:prettystring(false) end
+
 -- END DEBUG
 
 local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true, asm = true }
