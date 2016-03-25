@@ -292,13 +292,13 @@ function cudalib.wrapptx(module,ptx)
                     v = v.kernel
                 end
                 if terralib.isfunction(v) then
-                    local gbl = global(terralib.constant(C.CUfunction,nil))
+                    local gbl = global(`C.CUfunction(nil))
                     m[k] = makekernelwrapper(v:gettype(),k,gbl)
                     emit quote
                         cd("cuModuleGetFunction",[&C.CUfunction](&gbl),cudaM,k)
                     end
                 elseif cudalib.isconstant(v) or terralib.isglobalvar(v) then
-                    local gbl = global(terralib.constant(&opaque,nil))
+                    local gbl = global(`[&opaque](nil))
                     m[k] = gbl
                     emit quote
                         var bytes : uint64
