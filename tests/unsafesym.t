@@ -1,7 +1,6 @@
 
 local mymacro = macro(function(a)
-    a = a:asvalue()
-    print(a, terralib.issymbol(a), terralib.unsafetypeofsymbol(a))
+    print(a:gettype())
     return {}
 end)
 

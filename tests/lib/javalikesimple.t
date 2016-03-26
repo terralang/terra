@@ -1,112 +1,71 @@
-local std = terralib.includec("stdlib.h")
-local Class = {}
-local metadata = {}
---map from class type to metadata about it:
--- parent = the type of the parent class or nil
--- methodimpl = methodname-funcdef table of the concrete implementations for this class
--- vtable = the type of the types vtable
--- vtableglobal = the global variable that holds the data for this vtable
+local List = terralib.newlist
 
-local function getdefinitionandtype(impl)
-	local impldef = impl:getdefinitions()[1]
-	local success, typ = impldef:peektype()
-	if not success then
-		error("methods used in class system must have explicit return types")
-	end
-	return impldef,typ
+local function createvtable(T)
+    return 
 end
-
-local function issubclass(child,parent)
-	if child == parent then
-		return true
-	else
-		local md = metadata[child]
-		return md and md.parent and issubclass(md.parent,parent)
-	end
+local function getcast(fromp,top,exp)
+    if fromp:ispointer() and top:ispointer() then
+        local from,to = fromp.type,top.type
+        while from ~= to and from ~= nil do
+            from = from.metamethods.parent
+        end
+        if from ~= nil then 
+            return `[top](exp)
+        end
+    end
+    error(tostring(fromp).." is not a subtype of "..tostring(top))
 end
-
-local function createstub(methodname,typ)
-	local symbols = typ.parameters:map(symbol)
-	local obj = symbols[1]
-	local terra wrapper([symbols]) : typ.returntype
-		return obj.__vtable.[methodname]([symbols])
-	end
-	return wrapper
+local function Class(parent)
+    return function(T)
+        print("metatype init of "..tostring(T))
+        local mm = T.metamethods
+        mm.parent = parent
+        mm.methods = List()
+        mm.methodtoidx = {}
+        
+        local ne
+        if parent then
+            ne = List{unpack(parent.entries)}
+            mm.methods:insertall(parent.metamethods.methods)
+            for k,v in pairs(parent.metamethods.methodtoidx) do
+                print("importing",k,"at slot",v," in type ",tostring(T))
+                mm.methodtoidx[k] = v
+            end
+            createvtable(T)
+        else
+            ne = List{ {field = "__vtable", type = &&opaque } }
+        end
+        ne:insertall(T.entries)
+        T.entries = ne
+        
+        for name,m in pairs(T.methods) do
+            local idx = mm.methodtoidx[name]
+            if not idx then
+                idx = #mm.methods + 1
+                print("allocating slot "..tostring(idx).." to method "..name.." in type "..tostring(T))
+            else print("override slot "..tostring(idx).." with method "..name.." in type "..tostring(T)) end
+            mm.methods[idx] = m
+            mm.methodtoidx[name] = idx
+        end
+        mm.vtableptr = terralib.constant(`arrayof([&opaque],[mm.methods]))
+        
+        local stubs = {}
+        terra stubs.init(self : &T)
+            self.__vtable = mm.vtableptr
+            return self
+        end
+        for name,idx in pairs(mm.methodtoidx) do
+            print("stub "..name.." in "..tostring(T))
+            local m = mm.methods[idx]
+            local typ = m:gettype()
+            local params = typ.parameters:map(symbol)
+            stubs[name] = terra([params]) : typ.returntype
+                var fn = [&typ]([params[1]].__vtable[idx-1])
+                return fn([params])
+            end
+        end
+        T.methods = stubs
+        T.metamethods.__cast = getcast
+    end
 end
-
-local function hasbeenfrozen(self)
-	local md = metadata[self]
-	local vtbl = md.vtable:get()
-	for methodname,impl in pairs(md.methodimpl) do
-		impl:gettype(function()
-			vtbl[methodname] = impl:getpointer()  
-		end)
-	end
-end
-
-local function copyparentlayout(self,parent)
-	local md = metadata[self]
-	local pmd = metadata[parent]
-	for i,m in ipairs(pmd.vtabletype.entries) do
-		md.vtabletype.entries:insert(m)
-		md.methodimpl[m.field] = pmd.methodimpl[m.field]
-	end
-	for i = 2,#parent.entries do 
-		self.entries:insert(i,parent.entries[i])
-	end
-end
-
-local function initializevtable(self)
-	local md = metadata[self]
-	md.vtable = global(md.vtabletype)
-	terra self:init()
-		self.__vtable = &md.vtable
-	end
-end
-local function finalizelayout(self)
-	local md = metadata[self]
-	struct md.vtabletype {}
-	md.methodimpl = {}
-	self.entries:insert(1, { field = "__vtable", type = &md.vtabletype })
-	if md.parent then
-		md.parent:getentries()
-		copyparentlayout(self,md.parent)
-	end
-	for methodname,impl in pairs(self.methods) do
-		local impldef,typ = getdefinitionandtype(impl)			
-		if md.methodimpl[methodname] == nil then
-			md.vtabletype.entries:insert { field = methodname, type = &typ }
-		end
-		md.methodimpl[methodname] = impldef
-	end
-	for methodname,impl in pairs(md.methodimpl) do
-		local _,typ = impl:peektype()
-		self.methods[methodname] = createstub(methodname,typ)
-	end
-	initializevtable(self)
-	return self.entries
-end
-
-local function castoperator(from,to,exp)
-	if from:ispointer() and to:ispointer() and issubclass(from.type,to.type) then
-		return `[to](exp)
-	end
-	error("not a subtype")
-end
-
-local function registermetamethods(c)
-	if not metadata[c] then
-		metadata[c] = {}
-		c.metamethods.__getentries = finalizelayout
-		c.metamethods.__staticinitialize = hasbeenfrozen
-		c.metamethods.__cast = castoperator
-	end
-end
-
-function Class.extends(child,parent)
-	registermetamethods(parent) 
-	registermetamethods(child)
-	metadata[child].parent = parent
-end
-
 return Class

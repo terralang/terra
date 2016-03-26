@@ -1,9 +1,9 @@
 
-function symmat(name,I,...)
-	if not I then return symbol(name) end
+function symmat(typ,name,I,...)
+	if not I then return symbol(typ,name) end
 	local r = {}
 	for i = 0,I-1 do
-		r[i] = symmat(name..tostring(i),...)
+		r[i] = symmat(typ,name..tostring(i),...)
 	end
 	return r
 end
@@ -11,23 +11,15 @@ end
 
 function genkernel(NB, RM, RN, V,alpha)
 
-	local terra vecload(data : &double, idx : int)
-		var addr = &data[idx]
-		return @addr:as(&vector(double,V))
-	end
-	local terra vecstore(data : &double, idx : int, v : vector(double,V))
-		var addr = &data[idx]
-		@addr:as(&vector(double,V)) = v
-	end
-
-	local A,B,C,mm,nn = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn")
+    local VT = vector(double,V)
+	local VP = &VT
+	local A,B,C,mm,nn = symbol(&double,"A"),symbol(&double,"B"),symbol(&double,"C"),symbol(int,"mn"),symbol(int,"nn")
 	local lda,ldb,ldc = NB,NB,NB
-	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
-	local k = symbol("k")
+	local a,b,c,caddr = symmat(VT,"a",RM), symmat(VT,"b",RN), symmat(VT,"c",RM,RN), symmat(&double,"caddr",RM,RN)
+	local k = symbol(int,"k")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
-	local VT = vector(double,V)
-	local VP = &VT
+	
 	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			loadc:insert(quote
@@ -61,7 +53,7 @@ function genkernel(NB, RM, RN, V,alpha)
 	end
 	
 	
-	return terra([A] : &double, [B] : &double, [C] : &double)
+	return terra([A] , [B], [C])
 		for [mm] = 0, NB, RM do
 			for [nn] = 0, NB,RN*V do
 				[loadc];

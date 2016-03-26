@@ -8,7 +8,7 @@ function make()
   local terra b(x:int)
     return a(x)
   end
-
+  
   return b(12),leak.track(b)
 end
 nan = 0/0

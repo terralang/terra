@@ -7,7 +7,7 @@ terra foo(a : int, s : int)
     return r
 end
 
-local i = symbol()
+local i = symbol(int)
 
 terra foo2(a : int)
     var r = 0

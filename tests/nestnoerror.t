@@ -1,11 +1,10 @@
 
-
-terra haserror()
-	return (1):foo()
-end
-
 local m = macro(function()
-	local success = pcall(function() haserror:compile() end)
+	local success = pcall(function()
+	    terra haserror()
+	        return (1):foo()
+        end
+	 end)
 	assert(not success)
 	return 1
 end)

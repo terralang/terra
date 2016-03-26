@@ -142,10 +142,10 @@ int terra_lualoadstring(lua_State * L) {
     return 1;
 }
 
-//defines terralib bytecodes
+//defines bytecodes for included lua source
 #include "terralib.h"
-//defines strict.lua bytecodes
 #include "strict.h"
+#include "asdl.h"
 
 int terra_loadandrunbytecodes(lua_State * L, const unsigned char * bytecodes, size_t size, const char * name) {
   return luaL_loadbuffer(L, (const char *)bytecodes, size, name) 
@@ -245,8 +245,14 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
         return err;
     }
     err =    terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_strict,luaJIT_BC_strict_SIZE, "strict.lua")
+          || terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_asdl,luaJIT_BC_asdl_SIZE, "asdl.lua")
+#ifndef TERRA_EXTERNAL_TERRALIB
           || terra_loadandrunbytecodes(T->L,(const unsigned char*)luaJIT_BC_terralib,luaJIT_BC_terralib_SIZE, "terralib.lua");
-              
+#else
+          // make it possible to quickly iterate in terralib.lua when developing
+          || luaL_loadfile(T->L,TERRA_EXTERNAL_TERRALIB)
+          || lua_pcall(L,0,LUA_MULTRET,0);
+#endif
     if(err) {
         return err;
     }

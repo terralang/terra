@@ -12,7 +12,6 @@ function A.metamethods.__staticinitialize()
 	print("STATIC INIT A")
 	local terra what(b : B)
 	end
-	what:gettype(true)
 end
 
 function B.metamethods.__staticinitialize()

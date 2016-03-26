@@ -20,15 +20,10 @@ void terra_kindsinit(terra_State * T) {
     lua_State * L = T->L;
     lua_getfield(L,LUA_GLOBALSINDEX,"terra");
     lua_newtable(L);
-    lua_setfield(L,-2,"kinds");
-    lua_getfield(L,-1,"kinds");
-    int kinds = lua_gettop(L);
     for(int i = 0; i < T_NUM_KINDS; i++) {
-        lua_pushstring(L,tkindtostr((T_Kind) i));
-        lua_rawseti(L,kinds,i);
-        lua_pushinteger(L,i);
-        lua_setfield(L,kinds,tkindtostr((T_Kind) i));
+        lua_pushnumber(L,i);
+        lua_setfield(L,-2,tkindtostr((T_Kind) i));
     }
-    assert(lua_gettop(L) == kinds);
-    lua_pop(L,2); //kinds and terra object
+    lua_setfield(L,-2,"kinds");
+    lua_pop(L,1); //terra object
 }

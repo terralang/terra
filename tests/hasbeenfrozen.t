@@ -2,18 +2,14 @@ struct A {
 	a : int;
 	b : int;
 	c : &B
-} and struct B {
+}
+struct B {
 	a : &A
 }
 
 local a = global(A)
 
-
-terra foo()
-	var b : B
-	return a.a + a.b
-end
-
+terra foo :: {} -> int
 function A.metamethods.__staticinitialize(self)
 	print("A")
 	assert(A:iscomplete())
@@ -24,10 +20,12 @@ function B.metamethods.__staticinitialize(self)
 	print("B")
 	assert(B:iscomplete())
 	a:get().b = 3
-	foo:gettype(function()
-		assert(foo() == 7)
-		a:get().a = a:get().a + 1
-	end)
+	a:get().a = a:get().a + 1
+end
+
+terra foo()
+	var b : B
+	return a.a + a.b
 end
 
 assert(foo() == 8)

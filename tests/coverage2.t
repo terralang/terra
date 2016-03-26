@@ -1,5 +1,5 @@
 function failit(match,fn)
-	local success,msg = pcall(fn)
+	local success,msg = xpcall(fn,debug.traceback)
 	if success then
 		error("failed to fail.",2)
 	elseif not string.match(msg,match) then
@@ -9,7 +9,7 @@ end
 local test = require("test")
 local erd = "Errors reported during"
 
-failit(erd,function()
+failit("cannot define global",function()
 local aglobal = 5
 local terra foo()
 	return [ (function() aglobal = 4; return 3 end)() ]
@@ -30,72 +30,65 @@ local terra foo()
 	return 3
 end
 foo:compile()
-local a = 0
-foo:gettype(function()
-	a = a + 1
-end)
-assert(a == 1)
 
-local terra errored
+local terra errored :: int -> int
 failit(erd,function()
 	terra errored()
 		return A
 	end
 	errored:compile()
 end)
-failit("referencing a function which failed to compile",function()
+failit("not defined",function()
 	errored()
 end)
 
-local terra ol(a : int) return a end
-terra ol(a : int, b : int) return a + b end
+local terra ol1(a : int) return a end
+local terra ol2(a : int, b : int) return a + b end
 
-assert(ol(3) == 3)
-assert(ol(3,4) == 7)
+assert(ol1(3) == 3)
+assert(ol2(3,4) == 7)
 
-failit("bad argument #1",function()
-	ol("a")
-end)
-
-ol:printstats()
+--ol:printstats()
 NSE = terralib.types.newstruct()
 
-failit(erd,function()
+failit("expected either a field type pair",function()
 	NSE.entries:insert { field = "a", type = "b" }
 	NSE:complete()
 end)
 
 SICS = terralib.types.newstruct()
-SICS.entries:insert { field = symbol(), type = int }
+SICS.entries:insert { field = label(), type = int }
 a = 1
 SICS.metamethods.__staticinitialize = function() a = a + 1 end
-print(terralib.new(SICS,{3}))
+--print(terralib.new(SICS,{3}))
 
 NSF = terralib.types.newstruct()
 NSF.entries:insert { type = int , field = 3 }
 
-failit(erd,function()
+failit("expected either a field type pair",function()
 	NSF:complete()
 end)
 SICS:complete()
 assert(a == 2)
 struct SF {
 	a : SF2
-} and struct SF2 {
+} 
+struct SF2 {
 	a : int
 }
 SF2.metamethods.__getentries = function(self) SF:complete() end
-failit(erd,function()
+failit("type recursively contains itself",function()
 SF:complete()
 end)
-failit("Attempting to get a property of a type that previously resulted in an error.",function()
+failit("type recursively contains itself",function()
 SF:complete()
 end)
 
-failit(erd,function()
+local oldSF = SF
 	struct SF { b : int }
-end)
 
+assert(oldSF ~= SF)
+SF = oldSF
 
 struct C {
 	a : int
@@ -103,10 +96,11 @@ struct C {
 
 C.metamethods.__cast = function() return error("CAST ERROR") end
 
+local terra casttest :: {} -> int
+failit(erd,function()
 local terra casttest()
 	return int(C { 3 })
 end
-failit(erd,function()
 casttest()
 end)
 
@@ -146,8 +140,8 @@ end)
 local saveit
 local foom = macro(function(arg) saveit = arg; arg:astype();  end)
 failit(erd,function()
-	local terra foo()
-		return foom(4)
+	local terra foo(a : int)
+		return foom(a)
 	end
 	foo()
 end)
@@ -156,16 +150,17 @@ failit(erd,function()
 	local terra foo()
 		return saveit
 	end
+	foo:disas()
 	foo()
 end)
-failit(erd,function()
+failit("lua expression is not a terra type but number",function()
 	local struct A {
 		a : 3
 	}
 end)
 
 failit(erd,function()
-	local terra foo
+	local terra foo :: {} -> {}
 	local bar = macro(function() foo:compile() end)
 	terra foo()
 		return bar()
@@ -191,7 +186,8 @@ end)
 
 struct FA {
 	a : &FA2
-} and struct FA2 {
+}
+struct FA2 {
 	a : int
 }
 

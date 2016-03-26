@@ -1,8 +1,8 @@
 if not require("fail") then return end
 
 struct Range {}
-Range.metamethods.__for = function(a,b,c)
-    return 1,2,3
+Range.metamethods.__for = function(iter,body)
+    return body
 end
 
 terra foo()

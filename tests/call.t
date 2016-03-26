@@ -9,7 +9,7 @@ end
 terra baz(a : int, b : int) : int
     var f,c,d = 4,baz2(a,b)
     return f + c + d
-end and
+end 
 terra baz2(a : int, b : int) : {int, int}
     return a + 1, b + 2
 end

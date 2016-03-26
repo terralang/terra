@@ -57,16 +57,29 @@ local generatedtor = macro(function(self)
     return stmts
 end)
 
+local function ondemand(fn)
+    local method
+    return macro(function(self,...)
+        if not method then
+            method = fn()
+        end
+        local args = {...}
+        return `method(&self,[args])
+    end)
+end
+
 -- standard object metatype
 -- provides T.alloc(), T.salloc(), obj:destruct(), obj:delete()
 -- users should define __destruct if the object has custom destruct behavior
 -- destruct will call destruct on child nodes
 function S.Object(T)
     --fill in special methods/macros
-    terra T:delete()
-        self:destruct()
-        C.free(self)
-    end 
+    T.methods.delete = ondemand(function()
+        return terra(self : &T)
+            self:destruct()
+            C.free(self)
+        end
+    end) 
     terra T.methods.alloc()
         return [&T](C.malloc(sizeof(T)))
     end
@@ -78,9 +91,11 @@ function S.Object(T)
             &t
         end
     end)
-    terra T:destruct()
-        generatedtor(@self)
-    end
+    T.methods.destruct = ondemand(function()
+        return terra(self :&T)
+            generatedtor(@self)
+        end
+    end)
 end
 
 
@@ -92,15 +107,6 @@ function S.Vector(T,debug)
     }
     function Vector.metamethods.__typename() return ("Vector(%s)"):format(tostring(T)) end
     local assert = debug and S.assert or macro(function() return quote end end)
-    terra Vector:init() : &Vector
-        self._data,self._size,self._capacity = nil,0,0
-        return self
-    end
-    terra Vector:init(cap : uint64) : &Vector
-        self:init()
-        self:reserve(cap)
-        return self
-    end
     terra Vector:reserve(cap : uint64)
         if cap > 0 and cap > self._capacity then
             var oc = self._capacity
@@ -113,6 +119,16 @@ function S.Vector(T,debug)
             self._data = [&T](S.realloc(self._data,sizeof(T)*self._capacity))
         end
     end
+    Vector.methods.init = terralib.overloadedfunction("init")
+    Vector.methods.init:adddefinition(terra(self : &Vector) : &Vector
+        self._data,self._size,self._capacity = nil,0,0
+        return self
+    end)
+    Vector.methods.init:adddefinition(terra(self : &Vector, cap : uint64) : &Vector
+        self:init()
+        self:reserve(cap)
+        return self
+    end)
     terra Vector:__destruct()
         assert(self._capacity >= self._size)
         for i = 0ULL,self._size do
@@ -133,7 +149,7 @@ function S.Vector(T,debug)
         return `@self:get(idx)
     end)
     
-    terra Vector:insert(idx : uint64, N : uint64, v : T) : {}
+    terra Vector:insert0(idx : uint64, N : uint64, v : T) : {}
         assert(idx <= self._size)
         self._size = self._size + N
         self:reserve(self._size)
@@ -150,18 +166,26 @@ function S.Vector(T,debug)
             self._data[idx + i] = v
         end
     end
-    terra Vector:insert(idx : uint64, v : T) : {}
-        return self:insert(idx,1,v)
+    terra Vector:insert1(idx : uint64, v : T) : {}
+        return self:insert0(idx,1,v)
     end
-    terra Vector:insert(v : T) : {}
-        return self:insert(self._size,1,v)
+    terra Vector:insert2(v : T) : {}
+        return self:insert0(self._size,1,v)
     end
-    terra Vector:insert() : &T
+    terra Vector:insert3() : &T
         self._size = self._size + 1
         self:reserve(self._size)
         return self:get(self._size - 1)
     end
-    terra Vector:remove(idx : uint64) : T
+    Vector.methods.insert = terralib.overloadedfunction("insert")
+    for i = 0,3 do
+        local n = "insert"..tostring(i)
+        Vector.methods.insert:adddefinition(Vector.methods[n])
+        Vector.methods[n] = nil
+    end
+    
+    Vector.methods.remove = terralib.overloadedfunction("remove")
+    Vector.methods.remove:adddefinition(terra(self : &Vector, idx : uint64) : T
         assert(idx < self._size)
         var v = self._data[idx]
         self._size = self._size - 1
@@ -169,11 +193,11 @@ function S.Vector(T,debug)
             self._data[i] = self._data[i + 1]
         end
         return v
-    end
-    terra Vector:remove() : T
+    end)
+     Vector.methods.remove:adddefinition(terra(self : &Vector) : T
         assert(self._size > 0)
         return self:remove(self._size - 1)
-    end
+    end)
     
     return Vector
 end

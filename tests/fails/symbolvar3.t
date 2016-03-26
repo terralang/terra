@@ -1,7 +1,7 @@
 if not require("fail") then return end
 
 
-local a = symbol()
+local a = symbol(int)
 
 local q = quote 
 	var [a] = 2

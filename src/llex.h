@@ -168,11 +168,10 @@ l_noret luaX_reporterror(LexState * ls, const char * err);
 enum TA_Globals {
     TA_TERRA_OBJECT = 1,
     TA_FUNCTION_TABLE,
-    TA_TREE_METATABLE,
-    TA_LIST_METATABLE,
-    TA_KINDS_TABLE,
+    TA_NEWLIST,
     TA_ENTRY_POINT_TABLE,
     TA_LANGUAGES_TABLE,
+    TA_TYPE_TABLE,
     TA_LAST_GLOBAL
 };
 //accessors for lua state assocated with the Terra lexer

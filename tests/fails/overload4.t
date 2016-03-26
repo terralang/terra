@@ -8,7 +8,7 @@ end
 
 
 terra doit()
-	var a = foo
+	var a = foo(3)
 end
 
 doit()

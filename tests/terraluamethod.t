@@ -1,14 +1,16 @@
 struct A { a : int }
 
-A.methods.up = function(self,b)
+local up = function(self,b)
 	self.a = self.a + 1 + (b or 0)
 end
+A.methods.up0 = terralib.cast(&A -> {},up)
+A.methods.up1 = terralib.cast({&A,int} -> {}, up)
 
 terra foo()
 	var a = A { 1 }
-	a:up()
+	a:up0()
 	var b = &a
-	b:up(4)
+	b:up1(4)
 	return a.a
 end
 

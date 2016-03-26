@@ -6,6 +6,7 @@ function luafn(a)
 	a.value = a.value + 1
 	terrafn(a)
 end
+luafn = terralib.cast( &Count -> {},luafn)
 terra terrafn(a : &Count)
 	io.printf("terra: %d\n",a.value)
 	if a.value < 100 then

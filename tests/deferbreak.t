@@ -1,11 +1,11 @@
 C = terralib.includec("stdio.h")
 
 cur = global(int)
-
+errint = terralib.cast(int -> {},error)
 terra d(a : int)
     if cur ~= a then
         C.printf("found %d while expecting %d\n",a,cur)
-        error(cur)
+        errint(cur)
     end
     cur = cur + 1
     C.printf("d%d\n",a)

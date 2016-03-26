@@ -10,7 +10,7 @@ function Tree:new(P,kind)
     return setmetatable({kind = kind, offset = P:cur().offset, linenumber = P:cur().linenumber, filename = P.source},Tree)
 end
 function Tree:dump()
-    terralib.tree.printraw(self)
+    terralib.printraw(self)
 end
 function Tree:copy(nt)
     for k,v in pairs(self) do

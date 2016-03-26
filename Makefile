@@ -38,7 +38,7 @@ UNAME := $(shell uname)
 
 AR = ar
 LD = ld
-FLAGS = -Wall -g -fPIC
+FLAGS += -Wall -g -fPIC
 LFLAGS = -g
 
 LUAJIT_VERSION ?= LuaJIT-2.0.4
@@ -116,7 +116,7 @@ FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
 LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o lj_strscan.o
-LIBLUA = terralib.lua strict.lua cudalib.lua
+LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua
 
 EXEOBJS = main.o linenoise.o
 
@@ -218,7 +218,7 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
-build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua
+build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t
 	$(LUAJIT) src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
 
 clean:

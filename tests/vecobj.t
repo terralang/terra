@@ -7,7 +7,7 @@ local Vec = terralib.memoize(function(typ,N)
     VecType.metamethods.type, VecType.metamethods.N = typ,N
     VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
     for i, op in ipairs(ops) do
-        local i = symbol("i")
+        local i = symbol(int,"i")
         local function template(ae,be)
             return quote
                 var c : VecType
@@ -17,10 +17,11 @@ local Vec = terralib.memoize(function(typ,N)
                 return c
             end
         end
-        local terra doop(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
-        terra doop(a : typ, b : VecType) [template(`a,`b.data[i])]  end
-        terra doop(a : VecType, b : typ) [template(`a.data[i],`b)]  end
-       VecType.metamethods[op] = doop
+        
+        local terra doop1(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
+        local terra doop2(a : typ, b : VecType) [template(`a,`b.data[i])]  end
+        local terra doop3(a : VecType, b : typ) [template(`a.data[i],`b)]  end
+        VecType.metamethods[op] = terralib.overloadedfunction("doop",{doop1,doop2,doop3})
     end
     terra VecType.methods.FromConstant(x : typ)
         var c : VecType
@@ -39,11 +40,12 @@ local Vec = terralib.memoize(function(typ,N)
     return VecType
 end)
 
+printfloat = terralib.cast({float}->{},print)
 terra foo(v : Vec(float,4), w : Vec(float,4))
     var z : Vec(float,4) = 1
     var x = (v*4)+w+1
     for i = 0,4 do
-        print(x(i))
+        printfloat(x(i))
     end
     return x(2)
 end

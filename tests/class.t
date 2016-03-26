@@ -1,29 +1,25 @@
-
 IO = terralib.includec("stdio.h")
 local Class = require("lib/javalike")
 
-struct A {
+struct A(Class()) {
   a : int
 }
 terra A:times2() : int
     return self.a*2
 end
    
-struct B {
+struct B(Class(A)) {
   b : int
 } 
-Class.extends(B,A)
-    
+  
 terra B:combine(a : int) : int
     return self.b + self.a + a
 end
     
 
-struct C {
+struct C(Class(B)) {
   c : double
 }
-Class.extends(C,B)
-
 terra C:combine(a : int) : int
     return self.c + self.a + self.b + a
 end
@@ -71,16 +67,13 @@ end
 
 assert(23 == foobar())
 
-Doubles = Class.interface { times2 = {} -> int } 
 
-Adds = Class.interface { add = int -> int }
+Doubles = Class.Interface("Doubles", { times2 = {} -> int }) 
+Adds = Class.Interface("Adds", { add = int -> int })
 
-struct D {
+struct D(Class(nil,Doubles,Adds)) {
   data : int
 }
-Class.implements(D,Doubles)
-Class.implements(D,Adds)
-
 
 terra D:times2() : int
     return self.data * 2
@@ -90,12 +83,14 @@ terra D:add(a : int) : int
     return self.data + a
 end
 
+Doubles:Define()
+Adds:Define()
 
-terra aDoubles(a : &Doubles)
+terra aDoubles(a : &Doubles.type)
     return a:times2()
 end
 
-terra aAdds(a : &Adds)
+terra aAdds(a : &Adds.type)
     return a:add(3)
 end
 
@@ -110,25 +105,21 @@ assert(12 == foobar2())
 
 
 local IO = terralib.includec("stdio.h")
-struct Animal {
+struct Animal(Class()) {
   data : int
 }
 terra Animal:speak() : {}
     IO.printf("... %d\n",self.data)
 end
 
-struct Dog {
+struct Dog(Class(Animal)) {
 }
-Class.extends(Dog,Animal)
 terra Dog:speak() : {}
     IO.printf("woof! %d\n",self.data)
 end
 
-struct Cat {
+struct Cat(Class(Animal)) {
 }
-
-Class.extends(Cat,Animal)
-
 terra Cat:speak() : {}
     IO.printf("meow! %d\n",self.data)
 end
@@ -150,20 +141,17 @@ end
 barnyard()
 
 
-local Add = Class.interface { add = int -> int }
+local Add = Class.Interface("Add", { add = int -> int })
 
-local Sub = Class.interface { sub = int -> int }
+local Sub = Class.Interface("Sub", { sub = int -> int })
 
-local struct P {
+local struct P(Class(nil,Add)) {
    data : int
 }
-Class.implements(P,Add)
 
-local struct C {
+local struct C(Class(P,Sub)) {
   data2 : int
 }
-Class.extends(C,P)
-Class.implements(C,Sub)
 
 terra P:add(b : int) : int
    self.data = self.data + b
@@ -174,7 +162,10 @@ terra C:sub(b : int) : int
     return self.data2 - b
 end
 
-terra doadd(a : &Add)
+Add:Define()
+Sub:Define()
+
+terra doadd(a : &Add.type)
     return a:add(1)
 end
 
@@ -182,7 +173,7 @@ terra dopstuff(p : &P)
     return p:add(2) + doadd(p) 
 end
 
-terra dosubstuff(s : &Sub)
+terra dosubstuff(s : &Sub.type)
     return s:sub(1)
 end
 

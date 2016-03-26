@@ -1,6 +1,6 @@
 
-local begin = symbol()
-local theend = symbol()
+local begin = label()
+local theend = label()
 
 terra foo()
 	var a = 0

@@ -26,9 +26,9 @@
 //#include "lstate.h"
 #include "lstring.h"
 //#include "ltable.h"
-#include "tkind.h"
 #include <vector>
 #include <set>
+#include <sstream>
 #include "llvm/ADT/SmallSet.h"
 #include "treadnumber.h"
 
@@ -87,13 +87,25 @@ static int new_table(LexState * ls) {
 }
 static int new_list(LexState * ls) {
     if(ls->in_terra) {
-        int t = new_table(ls); //printf("(new table)\n");
-        luaX_globalpush(ls,TA_LIST_METATABLE);
-        lua_setmetatable(ls->L,-2);
-        return t;
+        luaX_globalpush(ls,TA_NEWLIST);
+        lua_call(ls->L,0,1);
+        return lua_gettop(ls->L);
     } else return 0;
 }
 
+static int new_list_before(LexState * ls) {
+    if(ls->in_terra) {
+        int t = new_list(ls);
+        lua_insert(ls->L,-2);
+        return t - 1;
+    } else return 0;
+}
+static void push_string_before(LexState * ls, const char * str) {
+    if(ls->in_terra) {
+        lua_pushstring(ls->L,str);
+        lua_insert(ls->L,-2);
+    }
+}
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
     if(ls->in_terra) {
@@ -109,63 +121,49 @@ static void push_string(LexState * ls, const char * str) {
         lua_pushstring(ls->L,str);
     }
 }
-static void push_kind(LexState * ls, const char * str) {
-    if(ls->in_terra) {
-        lua_pushstring(ls->L,str);
-        luaX_globalgettable(ls,TA_KINDS_TABLE);
-        assert(!lua_isnil(ls->L,-1));
-    }
+
+struct Position {
+    int linenumber;
+    int offset;
+};
+
+static Position getposition(LexState * ls) {
+    Position p = { ls->linenumber, ls->currentoffset - 1 };
+    return p;
 }
-static void table_setposition(LexState * ls, int t, int line, int offset) {
-    lua_pushinteger(ls->L,line);
+
+static void table_setposition(LexState * ls, int t, Position p) {
+    lua_pushinteger(ls->L,p.linenumber);
     lua_setfield(ls->L,t,"linenumber");
-    
-    lua_pushinteger(ls->L,offset);
+    lua_pushinteger(ls->L,p.offset);
     lua_setfield(ls->L,t,"offset");
-    
     lua_pushstring(ls->L, getstr(ls->source));
     lua_setfield(ls->L,t, "filename");
-    
 }
-static int new_table(LexState * ls, T_Kind k) {
-    if(ls->in_terra) {
-        //printf("push %s ",str);
-        int t = new_table(ls);
-        lua_pushinteger(ls->L,k);
-        add_field(ls, t,"kind");
-        luaX_globalpush(ls, TA_TREE_METATABLE);
-        lua_setmetatable(ls->L,-2);
-        table_setposition(ls,t,ls->linenumber, ls->currentoffset - 1);
-        return t;
-    } else return 0;
+
+static int newobjecterror(lua_State *L) {
+    printf("newobjecterror: %s\n",lua_tostring(L,-1));
+    exit(1);
 }
-static int new_table_before(LexState * ls, T_Kind k, bool infix = false) {
-    lua_State * L = ls->L;
+
+static int new_object(LexState * ls, const char * k, int N, Position * p) {
     if(ls->in_terra) {
-        int t = new_table(ls,k);
-        //check if the thing on the top of the stack has line number and offset info, if it does then propagate it to this entry
-        if(!infix && lua_istable(L, -2)) {
-            lua_getfield(L, -2, "linenumber");
-            lua_getfield(L, -3, "offset");
-            if(lua_isnumber(L, -1) && lua_isnumber(L,-2)) {
-                int offset = lua_tointeger(L, -1);
-                int linenumber = lua_tointeger(L, -2);
-                table_setposition(ls,t,linenumber,offset);
-            }
-            lua_pop(L,2);
-        }
-        lua_insert(L,-2);
-        return t - 1;
+        luaX_globalgetfield(ls, TA_TYPE_TABLE, k);
+        lua_insert(ls->L,-(N+1));
+        
+        lua_pushcfunction(ls->L,newobjecterror);
+        lua_insert(ls->L,-(N+2));
+        
+        lua_pcall(ls->L,N,1,-(N+2));
+        
+        table_setposition(ls, lua_gettop(ls->L) , *p);
+        
+        lua_remove(ls->L,-2);
+        
+        return lua_gettop(ls->L);
     } else return 0;
 }
 
-static int new_list_before(LexState * ls) {
-    if(ls->in_terra) {
-        int t = new_list(ls);
-        lua_insert(ls->L,-2);
-        return t - 1;
-    } else return 0;
-}
 static void add_index(LexState * ls, int table, int n) {
     if(ls->in_terra) {
         //printf("consume index\n");
@@ -305,24 +303,23 @@ static TString *str_checkname (LexState *ls) {
   return ts;
 }
 
-static TString * singlevar (LexState *ls) {
-  int tbl = new_table(ls,T_var); 
-  TString *varname = str_checkname(ls);
+static void singlevar (LexState *ls) {
+  Position p = getposition(ls);
+  TString * varname = str_checkname(ls);
   push_string(ls,varname);
-  add_field(ls,tbl,"name");
+  new_object(ls,"var", 1,&p);
   refvariable(ls, varname);
-  return varname;
 }
 
 //tries to parse a symbol "NAME | '['' lua expression '']'"
 //returns true if a name was parsed and sets str to that name
 //otherwise, str is not modified
 static bool checksymbol(LexState * ls, TString ** str) {
-  int tbl = new_table(ls,T_symbol);
+  Position p = getposition(ls);
   int line = ls->linenumber;
   if(ls->in_terra && testnext(ls,'[')) {
     RETURNS_1(luaexpr(ls));
-    add_field(ls, tbl, "expression");
+    new_object(ls,"escapedident",1,&p);
     check_match(ls, ']', '[', line);
     return false;
   }
@@ -330,7 +327,7 @@ static bool checksymbol(LexState * ls, TString ** str) {
   if(str)
     *str = nm;
   push_string(ls,nm);
-  add_field(ls,tbl,"name");
+  new_object(ls,"namedident",1,&p);
   return true;
 }
 
@@ -424,7 +421,6 @@ static void dump_stack(lua_State * L, int elem) {
     lua_pop(L,3);
 }
 
-
 /*============================================================*/
 /* GRAMMAR RULES */
 /*============================================================*/
@@ -474,10 +470,9 @@ static void push_type(LexState * ls, const char * typ) {
 
 static void push_literal(LexState * ls, const char * typ) {
     if(ls->in_terra) {
-        int lit = new_table_before(ls,T_literal);
-        add_field(ls,lit,"value");
         push_type(ls,typ);
-        add_field(ls,lit,"type");
+        Position p = getposition(ls);
+        new_object(ls,"literal",2,&p);
     }
 }
 static void push_double(LexState * ls, double d) {
@@ -491,6 +486,10 @@ static void push_integer(LexState * ls, int64_t i) {
         void * data = lua_newuserdata(ls->L,sizeof(int64_t));
         *(int64_t*)data = i;
     }
+}
+static void push_nil(LexState * ls) { 
+    if(ls->in_terra)
+        lua_pushnil(ls->L);
 }
 
 static void yindex (LexState *ls) {
@@ -519,48 +518,40 @@ struct ConsControl {
 static void recfield (LexState *ls, struct ConsControl *cc) {
   /* recfield -> (NAME | `['exp1`]') = exp1 */
   FuncState *fs = ls->fs;
-  int tbl = new_table(ls,T_recfield);
+  Position pos = getposition(ls);
   if (ls->t.token == TK_NAME) {
     checklimit(fs, cc->nh, MAX_INT, "items in a constructor");
     RETURNS_1(checksymbol(ls, NULL));
-  }
-  else  { /* ls->t.token == '[' */
+  } else  { /* ls->t.token == '[' */
     if(!ls->in_terra) {
       yindex(ls);
     } else {
       RETURNS_1(expr(ls));
       if(ls->t.token == '=') {
         lua_getfield(ls->L,-1, "kind");
-        int kind = lua_tointeger(ls->L, -1);
-        lua_pop(ls->L,1); /* the kind */
-        if(kind != T_luaexpression)
+        lua_pushstring(ls->L,"luaexpression");
+        if(!lua_equal(ls->L,-1,-2))
             luaX_syntaxerror(ls, "unexpected symbol");
-        int sym = new_table_before(ls, T_symbol);
-        add_field(ls, sym, "expression");
-        
+        lua_pop(ls->L,2); //kind and luaexpression
+        new_object(ls,"escapedident",1,&pos);
       } else {
-        /* oops! this wasn't a recfield, but a listfield with an antiquote
-           this is a somewhat unfortunate corner case of terra's parsing rules: we need to fix the AST now */
-        add_field(ls,tbl,"value");
-        //replace T_recfield with T_listfield
-        push_double(ls,T_listfield);
-        add_field(ls,tbl,"kind");
+        /* oops! this wasn't a recfield, but a listfield with an escape */
+        new_object(ls,"listfield",1,&pos);
         return;        
       }
     }
   }
-  add_field(ls,tbl,"key");
   cc->nh++;
   checknext(ls, '=');
   RETURNS_1(expr(ls));
-  add_field(ls,tbl,"value");
+  new_object(ls,"recfield",2,&pos);
 }
 
 static void listfield (LexState *ls, struct ConsControl *cc) {
   /* listfield -> exp */
-  int tbl = new_table(ls,T_listfield);
+  Position pos = getposition(ls);
   RETURNS_1(expr(ls));
-  add_field(ls,tbl,"value");
+  new_object(ls,"listfield",1,&pos);
   checklimit(ls->fs, cc->na, MAX_INT, "items in a constructor");
   cc->na++;
 }
@@ -594,7 +585,7 @@ static void constructor (LexState *ls) {
   int line = ls->linenumber;
   struct ConsControl cc;
   cc.na = cc.nh = 0;
-  int tbl = new_table(ls,T_constructor);
+  Position pos = getposition(ls);
   int records = new_list(ls);
   checknext(ls, '{');
   do {
@@ -603,20 +594,19 @@ static void constructor (LexState *ls) {
     add_entry(ls,records);
   } while (testnext(ls, ',') || testnext(ls, ';'));
   check_match(ls, '}', '{', line);
-  add_field(ls,tbl,"records");
+  new_object(ls,"constructoru",1,&pos);
 }
 
 static void structfield (LexState *ls) {
-  int tbl = new_table(ls,T_structentry);
+  Position p = getposition(ls);
   push_string(ls,str_checkname(ls));
-  add_field(ls,tbl,"key");
   checknext(ls, ':');
   RETURNS_1(terratype(ls));
-  add_field(ls,tbl,"type");
+  new_object(ls,"structentry",2,&p);
 }
 
 static void structbody(LexState * ls) {
-    int line = ls->linenumber;
+    Position p = getposition(ls);
     int records = new_list(ls);
     checknext(ls,'{');
     while(ls->t.token != '}') {
@@ -628,20 +618,19 @@ static void structbody(LexState * ls) {
        if(ls->t.token == ',' || ls->t.token == ';')
          luaX_next(ls);
     }
-    check_match(ls,'}','{',line);
+    check_match(ls,'}','{',p.linenumber);
+    new_object(ls,"structlist",1,&p);
 }
 static void structconstructor(LexState * ls) {
     // already parsed 'struct' or 'struct' name.
     //starting at '{' or '('
-    int tbl = new_table(ls,T_struct);
-    int line = ls->linenumber;
+    Position p = getposition(ls);
     if(testnext(ls,'(')) {
         RETURNS_1(luaexpr(ls));
-        add_field(ls,tbl,"metatype");
-        check_match(ls,')','(',line);
-    }
+        check_match(ls,')','(',p.linenumber);
+    } else push_nil(ls);
     structbody(ls);
-    add_field(ls,tbl,"records");
+    new_object(ls,"structdef",2,&p);
 }
 
 struct Name {
@@ -662,6 +651,13 @@ static void Name_print(Name * name, LexState * ls) {
 }
 
 static void print_captured_locals(LexState * ls, TerraCnt * tc);
+
+static void print_stack(lua_State * L, int idx) {
+    lua_pushvalue(L,idx);
+    lua_getfield(L,LUA_GLOBALSINDEX,"print");
+    lua_insert(L,-2);
+    lua_call(L,1,0);
+}
 
 //store the lua object on the top of the stack to to the _G.terra._trees table, returning its index in the table
 static int store_value(LexState * ls) {
@@ -694,14 +690,13 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 /* }====================================================================== */
 
 static int vardecl(LexState *ls, int requiretype, TString ** vname) {
-    int entry = new_table(ls,T_entry);
+    Position p = getposition(ls);
     int wasstring = checksymbol(ls, vname);
-    add_field(ls, entry, "name");
-    if (ls->in_terra && ( (wasstring && requiretype) || ls->t.token == ':')) {
+    if (ls->in_terra && wasstring && (requiretype || ls->t.token == ':')) {
         checknext(ls, ':');
         RETURNS_1(terratype(ls));
-        add_field(ls,entry,"type");
-    }
+    } else push_nil(ls);
+    new_object(ls,"unevaluatedparam",2,&p);
     return wasstring;
 }
 
@@ -742,27 +737,22 @@ static void body (LexState *ls, int ismethod, int line) {
   BlockCnt bl;
   open_func(ls, &new_fs, &bl);
   new_fs.f.linedefined = line;
+  Position p = getposition(ls);
   checknext(ls, '(');
-  int tbl = new_table(ls,T_function);
   RETURNS_1(parlist(ls));
   if (ismethod) {
     definevariable(ls, luaS_new(ls->LP,"self"));
   }
-  add_field(ls,tbl,"parameters");
   push_boolean(ls,new_fs.f.is_vararg);
-  add_field(ls,tbl,"is_varargs");
   checknext(ls, ')');
   if(ls->in_terra && testnext(ls,':')) {
     RETURNS_1(terratype(ls));
-    add_field(ls,tbl,"returntype");
-  }
+  } else push_nil(ls);
   RETURNS_1(block(ls));
-  add_field(ls,tbl,"body");
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);
-  //codeclosure(ls, new_fs.f, e);
-  
   close_func(ls);
+  new_object(ls,"functiondefu",4,&p);
 }
 
 static int explist (LexState *ls) {
@@ -838,7 +828,6 @@ static void prefixexp (LexState *ls) {
       luaX_next(ls);
       RETURNS_1(expr(ls));
       check_match(ls, ')', '(', line);
-      //luaK_dischargevars(ls->fs, v);
       return;
     }
     case '[': {
@@ -873,37 +862,27 @@ static void primaryexp (LexState *ls) {
         prefixexp { `.' NAME | `[' exp `]' | `:' NAME funcargs | funcargs } */
   int line = ls->linenumber;
   RETURNS_1(prefixexp(ls));
+  Position p = getposition(ls);
   for (;;) {
     switch (ls->t.token) {
       case '.': {  /* fieldsel */
         luaX_next(ls);
-        int tbl = new_table_before(ls,T_select, true);
-        add_field(ls,tbl,"value");
         checksymbol(ls,NULL);
-        add_field(ls,tbl,"field");
+        new_object(ls,"selectu",2,&p);
         break;
       }
       case '[': {  /* `[' exp1 `]' */
         if(issplitprimary(ls))
             return;
-        //luaK_exp2anyregup(fs, v);
-        
-        int tbl = new_table_before(ls,T_index,true);
-        add_field(ls,tbl,"value");
         RETURNS_1(yindex(ls));
-        add_field(ls,tbl,"index");
-        //luaK_indexed(fs, v, &key);
+        new_object(ls,"index",2,&p);
         break;
       }
       case ':': {  /* `:' NAME funcargs */
         luaX_next(ls);
-        int tbl = new_table_before(ls,T_method,true);
-        add_field(ls,tbl,"value");
         RETURNS_1(checksymbol(ls,NULL));
-        add_field(ls,tbl,"name");
         RETURNS_1(funcargs(ls, line));
-        add_field(ls,tbl,"arguments");
-        
+        new_object(ls,"method",3,&p);
         break;
       }
       case '(': case '`': case TK_QUOTE: /* funcargs */
@@ -911,11 +890,8 @@ static void primaryexp (LexState *ls) {
             return;
         /* fallthrough */
       case TK_STRING: case '{': {
-        //luaK_exp2nextreg(fs, v);
-        int tbl = new_table_before(ls,T_apply,true);
-        add_field(ls,tbl,"value");
         RETURNS_1(funcargs(ls, line));
-        add_field(ls,tbl,"arguments");
+        new_object(ls,"apply",2,&p);
         break;
       }
       default: return;
@@ -960,18 +936,18 @@ static void doquote(LexState * ls, int isexp) {
         FuncState * fs = ls->fs;
         BlockCnt bc;
         enterblock(fs, &bc, 0);
-        int let = new_table(ls, T_treelist);
+        Position p = getposition(ls);
         RETURNS_1(statlist(ls));
-        add_field(ls, let, "statements");
         if(isfullquote && testnext(ls, TK_IN)) {
             RETURNS_1(explist(ls));
         } else {
             new_list(ls);
         }
-         add_field(ls, let, "expressions");
+        push_boolean(ls, true);
         if(isfullquote)
             check_match(ls, TK_END, TK_QUOTE, line);
         leaveblock(fs);
+        new_object(ls,"letin",3,&p);
     }
     
     luaX_patchbegin(ls,&begin);
@@ -1004,6 +980,15 @@ static void blockescape(LexState * ls) {
     check_match(ls, TK_END, TK_ESCAPE, line);
 }
 
+static void bodyortype(LexState * ls, int ismethod) {
+    if(ls->t.token == '(') {
+        body(ls, ismethod, ls->linenumber);
+    } else {
+        checknext(ls, TK_DBCOLON);
+        terratype(ls);
+    }
+}
+
 static void simpleexp (LexState *ls) {
   /* simpleexp -> NUMBER | STRING | NIL | TRUE | FALSE | ... |
                   constructor | FUNCTION body | primaryexp */
@@ -1017,7 +1002,8 @@ static void simpleexp (LexState *ls) {
         push_literal(ls,buf);
         sprintf(buf,"%" PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
-        add_field(ls,lua_gettop(ls->L) - 1,"stringvalue");
+        add_field(ls,-2,"stringvalue");
+        
       } else {
         push_double(ls,ls->t.seminfo.r);
         push_literal(ls, buf);
@@ -1050,7 +1036,6 @@ static void simpleexp (LexState *ls) {
       FuncState *fs = ls->fs;
       check_condition(ls, fs->f.is_vararg,
                       "cannot use " LUA_QL("...") " outside a vararg function");
-      //init_exp(v, VVARARG, 0 /*luaK_codeABC(fs, OP_VARARG, 0, 1, 0)*/);
       break;
     }
     case '{': {  /* constructor */
@@ -1077,7 +1062,7 @@ static void simpleexp (LexState *ls) {
         enterterra(ls, &tc);
         Token begin = ls->t;
         luaX_next(ls);
-        body(ls,0,ls->linenumber);
+        bodyortype(ls,0);
         luaX_patchbegin(ls,&begin);
         int id = store_value(ls);
         OutputBuffer_printf(&ls->output_buffer,"terra.anonfunction(_G.terra._trees[%d],",id);
@@ -1217,15 +1202,13 @@ static BinOpr subexpr (LexState *ls, int limit) {
   Token begintoken = ls->t;
   
   if (uop != OPR_NOUNOPR) {
-    int tbl = new_table(ls,T_operator);
-    push_kind(ls,luaX_token2rawstr(ls,ls->t.token));
-    add_field(ls,tbl,"operator");
+    Position p = getposition(ls);
+    push_string(ls,luaX_token2rawstr(ls,ls->t.token));
     luaX_next(ls);
     Token beginexp = ls->t;
     int exps = new_list(ls);
     RETURNS_1(subexpr(ls, UNARY_PRIORITY));
     add_entry(ls,exps);
-    add_field(ls,tbl,"operands");
     
     if(uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
         const char * expstring = luaX_saveoutput(ls, &beginexp);
@@ -1233,7 +1216,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
         OutputBuffer_printf(&ls->output_buffer,"terra.types.pointer(%s)", expstring);
         luaX_patchend(ls, &begintoken);
     }
-    
+    new_object(ls, "operator", 2, &p);
   }
   else RETURNS_1(simpleexp(ls));
   /* expand while operators have priorities higher than `limit' */
@@ -1248,8 +1231,8 @@ static BinOpr subexpr (LexState *ls, int limit) {
     BinOpr nextop;
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
-    int tbl = new_table_before(ls,T_operator,true); //need to create this before we call next to ensure we record the right position
-    exps++; //we just put a table before it, so it is one higher on the stack
+    Position pos = getposition(ls);
+    
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
     Token beginrhs = ls->t;
@@ -1265,10 +1248,10 @@ static BinOpr subexpr (LexState *ls, int limit) {
     }
     add_entry(ls,exps);
     
-   
-    add_field(ls,tbl,"operands");
-    push_kind(ls,token);
-    add_field(ls,tbl,"operator");
+    push_string_before(ls,token);
+    
+    new_object(ls,"operator",2,&pos);
+    
     op = nextop;
   }
   leavelevel(ls);
@@ -1310,7 +1293,7 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
     //terra types are lua expressions.
     //to resolve them we stop processing terra code and start processing lua code
     //we capture the string of lua code and then evaluate it later to get the actual type
-    int tbl = new_table(ls, T_luaexpression);
+    Position pos = getposition(ls);
     Token begintoken = ls->t;
     int in_terra = ls->in_terra;
     
@@ -1331,8 +1314,9 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
     ExprReaderData data;
     data.step = (isexp || isterra) ? 0 : 1; //is the string we captured an expression? it is if we captured a quote (terra.definequote(...)) or a lua expression
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
-    
-    if(lua_load(ls->L, expr_reader, &data, "$terra$") != 0) {
+    std::stringstream ss;
+    ss << "@$terra$" << getstr(ls->source) << "$terra$" << begintoken.seminfo.linebegin;
+    if(lua_load(ls->L, expr_reader, &data, ss.str().c_str()) != 0) {
         //we already parsed this buffer, so this should rarely cause an error
         //we need to find the line number in the error string, add it to where we began this line,
         //and then report the error with the correct line number
@@ -1345,9 +1329,8 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
         luaX_reporterror(ls, luaS_cstringf(ls->LP,"%s:%d: %s\n",getstr(ls->source),begintoken.seminfo.linebegin + lineoffset - 1,aftererror+1));
     }
     
-    add_field(ls, tbl, "expression");
     push_boolean(ls, isexp);
-    add_field(ls, tbl, "isexpression");
+    new_object(ls,"luaexpression",2,&pos);
 }
 
 static void luaexpr(LexState * ls) {
@@ -1373,13 +1356,13 @@ static void block (LexState *ls) {
   /* block -> statlist */
   FuncState *fs = ls->fs;
   BlockCnt bl;
-  int blk = new_table(ls,T_block);
-  int treelist = new_table(ls,T_treelist);
+  Position p = getposition(ls);
+  
   enterblock(fs, &bl, 0);
   RETURNS_1(statlist(ls));
   leaveblock(fs);
-  add_field(ls,treelist,"statements");
-  add_field(ls,blk,"body");
+  
+  new_object(ls,"block",1,&p);
 }
 
 static void lhsexp(LexState * ls) {
@@ -1391,25 +1374,17 @@ static void lhsexp(LexState * ls) {
 }
 
 static void assignment (LexState *ls, int nvars, int lhs) {
-  //TODO: audit, make sure this check still happens
-  //check_condition(ls, vkisvar(lh->v.k), "syntax error");
   if (testnext(ls, ',')) {  /* assignment -> `,' primaryexp assignment */
     RETURNS_1(lhsexp(ls));
-    //if(ls->in_terra)
-    //  lua_pop(ls->L,1);
     add_entry(ls,lhs);
-    checklimit(ls->fs, nvars + ls->LP->nCcalls, LUAI_MAXCCALLS,
-                    "C levels");
+    checklimit(ls->fs, nvars + ls->LP->nCcalls, LUAI_MAXCCALLS, "C levels");
     RETURNS_0(assignment(ls, nvars+1,lhs));
-  }
-  else {  /* assignment -> `=' explist */
+  } else {  /* assignment -> `=' explist */
     checknext(ls, '=');
-    int tbl = new_table_before(ls,T_assignment, true);
-    add_field(ls,tbl,"lhs");
+    Position pos = getposition(ls);
     RETURNS_1(explist(ls));
-    add_field(ls,tbl,"rhs");
+    new_object(ls,"assignment",2,&pos);
   }
-  //init_exp(&e, VNONRELOC, ls->fs->freereg-1);  /* default assignment */
 }
 
 
@@ -1420,14 +1395,12 @@ static void cond (LexState *ls) {
 
 
 static void gotostat (LexState *ls) {
+  Position pos = getposition(ls);
   if (testnext(ls, TK_GOTO)) {
-    int tbl = new_table(ls,T_goto);
-    
     checksymbol(ls,NULL);
-    add_field(ls,tbl,"label");
-
+    new_object(ls,"gotostat",1,&pos);
   } else {
-    new_table(ls,T_break);
+    new_object(ls,"breakstat",0,&pos);
     luaX_next(ls);  /* skip break */
   }
 
@@ -1436,30 +1409,26 @@ static void gotostat (LexState *ls) {
 static void labelstat (LexState *ls) {
   check_terra(ls,"goto labels");
   /* label -> '::' NAME '::' */
-  int tbl = new_table(ls,T_label);
+  Position pos = getposition(ls);
   RETURNS_1(checksymbol(ls,NULL));
   checknext(ls, TK_DBCOLON);  /* skip double colon */
-  /* create new entry for this label */
-  /* skip other no-op statements */
-  add_field(ls,tbl,"value");
+  new_object(ls,"label",1,&pos);
 }
 
 
 static void whilestat (LexState *ls, int line) {
   /* whilestat -> WHILE cond DO block END */
   FuncState *fs = ls->fs;
-  //int whileinit;
-  int tbl = new_table(ls,T_while);
+  Position pos = getposition(ls);
   BlockCnt bl;
   luaX_next(ls);  /* skip WHILE */
   RETURNS_1(cond(ls));
-  add_field(ls,tbl,"condition");
   enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
   RETURNS_1(block(ls));
-  add_field(ls,tbl,"body");
   check_match(ls, TK_END, TK_WHILE, line);
   leaveblock(fs);
+  new_object(ls,"whilestat",2,&pos);
 }
 
 
@@ -1470,19 +1439,18 @@ static void repeatstat (LexState *ls, int line) {
   enterblock(fs, &bl1, 1);  /* loop block */
   enterblock(fs, &bl2, 0);  /* scope block */
   luaX_next(ls);  /* skip REPEAT */
-  int blk = new_table(ls,T_block);
-  int tbl = new_table(ls,T_repeat);
-  int treelist = new_table(ls,T_treelist);
+  int stmts = new_list(ls);
+  Position pos = getposition(ls);
+  
   RETURNS_1(statlist(ls));
-  add_field(ls,treelist,"statements");
-  add_field(ls,tbl,"body");
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   RETURNS_1(cond(ls));
-  add_field(ls,tbl,"condition");
-  add_field(ls,blk,"body"); //assign body of block to repeat
+  
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
-  //repeat is translated into { kind = block; body = { kind = repeat; body = { kind = treelist, statements = <bodystmts>}; cond = <cond> } }
+  new_object(ls,"repeatstat",2,&pos);
+  add_entry(ls, stmts);
+  new_object(ls,"block",1,&pos);
 }
 
 static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
@@ -1494,31 +1462,30 @@ static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
   leaveblock(fs);  /* end of scope for declared variables */
 }
 
-static void fornum (LexState *ls, TString *varname, int line) {
+static void fornum (LexState *ls, TString *varname, Position * p) {
   /* fornum -> NAME = exp1,exp1[,exp1] forbody */
-  int tbl = new_table_before(ls,T_fornum);
-  add_field(ls,tbl,"variable");
   checknext(ls, '=');
   RETURNS_1(expr(ls));  /* initial value */
-  add_field(ls,tbl,"initial");
   checknext(ls, ',');
   RETURNS_1(expr(ls));  /* limit */
-  add_field(ls,tbl,"limit");
   if (testnext(ls, ',')) {
     RETURNS_1(expr(ls));  /* optional step */
-    add_field(ls,tbl,"step");
+  } else {
+    push_nil(ls);
   }
   BlockCnt bl;
   if(varname)
     definevariable(ls, varname);
-  RETURNS_1(forbody(ls, line, 1, &bl));
-  add_field(ls,tbl,"body");
+  RETURNS_1(forbody(ls, p->linenumber, 1, &bl));
+  new_object(ls,"fornumu",5,p);
+  int blk = new_list_before(ls);
+  add_entry(ls, blk);
+  new_object(ls, "block", 1, p);
 }
 
 
-static void forlist (LexState *ls, TString *indexname) {
+static void forlist (LexState *ls, TString *indexname, Position * p) {
   /* forlist -> NAME {,NAME} IN explist forbody */
-  int tbl = new_table_before(ls,T_forlist);
   int vars = new_list_before(ls);
   add_entry(ls,vars);
   /* create declared variables */
@@ -1532,19 +1499,17 @@ static void forlist (LexState *ls, TString *indexname) {
       definevariable(ls,name);
     add_entry(ls,vars);
   }
-  add_field(ls,tbl,"variables");
   checknext(ls, TK_IN);
   int line = ls->linenumber;
   if(ls->in_terra)
     RETURNS_1(expr(ls));
   else
     RETURNS_1(explist(ls));
-  add_field(ls,tbl,"iterator");
   RETURNS_1(forbody(ls, line, 0, &bl));
-  add_field(ls,tbl,"body");
+  new_object(ls,"forlist",3,p);
 }
 
-static void forstat (LexState *ls, int line) {
+static void forstat (LexState *ls, Position * p) {
   /* forstat -> FOR (fornum | forlist) END */
   FuncState *fs = ls->fs;
   TString *varname = NULL;
@@ -1555,11 +1520,11 @@ static void forstat (LexState *ls, int line) {
   vardecl(ls, 0, &varname);
   
   switch (ls->t.token) {
-    case '=': RETURNS_0(fornum(ls, varname, line)); break;
-    case ',': case TK_IN: RETURNS_0(forlist(ls, varname)); break;
+    case '=': RETURNS_0(fornum(ls, varname, p)); break;
+    case ',': case TK_IN: RETURNS_0(forlist(ls, varname,p)); break;
     default: luaX_syntaxerror(ls, LUA_QL("=") " or " LUA_QL("in") " expected");
   }
-  check_match(ls, TK_END, TK_FOR, line);
+  check_match(ls, TK_END, TK_FOR, p->linenumber);
   leaveblock(fs);  /* loop scope (`break' jumps to this point) */
 }
 
@@ -1567,17 +1532,16 @@ static void test_then_block (LexState *ls) {
   /* test_then_block -> [IF | ELSEIF] cond THEN block */
   BlockCnt bl;
   luaX_next(ls);  /* skip IF or ELSEIF */
-  int tbl = new_table(ls,T_ifbranch);
+  Position p = getposition(ls);
   RETURNS_1(cond(ls));  /* read condition */
-  add_field(ls,tbl,"condition");
   checknext(ls, TK_THEN);
   RETURNS_1(block(ls));
-  add_field(ls,tbl,"body");
+  new_object(ls,"ifbranch",2,&p);
 }
 
 static void ifstat (LexState *ls, int line) {
   /* ifstat -> IF cond THEN block {ELSEIF cond THEN block} [ELSE block] END */
-  int tbl = new_table(ls,T_if);
+  Position p = getposition(ls);
   int branches = new_list(ls);
   RETURNS_1(test_then_block(ls));  /* IF cond THEN block */
   add_entry(ls,branches);
@@ -1585,12 +1549,11 @@ static void ifstat (LexState *ls, int line) {
     RETURNS_1(test_then_block(ls));  /* ELSEIF cond THEN block */
     add_entry(ls,branches);
   }
-  add_field(ls,tbl,"branches");
   if (testnext(ls, TK_ELSE)) {
-    RETURNS_1(block(ls));  /* `else' part */
-    add_field(ls,tbl,"orelse"); 
-  }
+    RETURNS_1(block(ls));  /* `else' part */ 
+  } else push_nil(ls);
   check_match(ls, TK_END, TK_IF, line);
+  new_object(ls,"ifstat",2,&p);
 }
 
 static void localfunc (LexState *ls) {
@@ -1611,7 +1574,7 @@ void print_name_list(LexState * ls, std::vector<Name> * definednames) {
 
 static void localstat (LexState *ls) {
   /* stat -> LOCAL NAME {`,' NAME} [`=' explist] */
-  int tbl = new_table(ls,T_defvar);
+  Position p = getposition(ls);
   int vars = new_list(ls);
   std::vector<TString *> declarednames;
   do {
@@ -1620,15 +1583,17 @@ static void localstat (LexState *ls) {
       declarednames.push_back(vname);
     add_entry(ls,vars);
   } while (testnext(ls, ','));
-  add_field(ls,tbl,"variables");
   if (testnext(ls, '=')) {
+    push_boolean(ls,true);
     RETURNS_1(explist(ls));
-    add_field(ls,tbl,"initializers");
+  } else {
+    push_boolean(ls,false);
+    new_list(ls);
   }
   for(size_t i = 0; i < declarednames.size(); i++) {
     definevariable(ls, declarednames[i]);
   }
-  
+  new_object(ls,"defvar",3,&p);
 }
 
 static int funcname (LexState *ls) {
@@ -1694,6 +1659,14 @@ struct TDefn {
     int treeid; //-1 indicates no tree
     int islocal;
 };
+bool startsTerraStat(LexState * ls) {
+    if(ls->t.token == TK_TERRA || ls->t.token == TK_STRUCT)
+        return true;
+    if(ls->t.token == TK_LOCAL) {
+        luaX_lookahead(ls);
+        return ls->lookahead.token == TK_TERRA || ls->lookahead.token == TK_STRUCT;
+    } else return false;
+}
 
 static void terrastats(LexState * ls, bool emittedlocal) {
     Token begin = ls->t;
@@ -1721,10 +1694,8 @@ static void terrastats(LexState * ls, bool emittedlocal) {
         switch(token) {
             case TK_TERRA: {
                 tdefn.kind = ismethod ? 'm' : 'f';
-                if(ls->t.token == '(') {
-                    body(ls, ismethod, ls->linenumber);
-                    tdefn.treeid = store_value(ls);
-                }
+                bodyortype(ls, ismethod);
+                tdefn.treeid = store_value(ls);
             } break;
             case TK_STRUCT: {
                 tdefn.kind = 's';
@@ -1735,7 +1706,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             } break;
         }
         defs.push_back(tdefn);
-        if(!testnext(ls,TK_AND))
+        if(!startsTerraStat(ls))
             break;
         islocal = testnext(ls, TK_LOCAL);
     }
@@ -1801,19 +1772,23 @@ static void exprstat (LexState *ls) {
 
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
-  int tbl = new_table(ls,T_return);
+  Position p = getposition(ls);
+  new_list(ls); //empty statements
   if (block_follow(ls, 1) || ls->t.token == ';') {
     new_list(ls);
   } else {
     RETURNS_1(explist(ls));  /* optional return values */
   }
-  add_field(ls,tbl,"expressions");
+  push_boolean(ls, false); //has statements
   testnext(ls, ';');  /* skip optional semicolon */
+  new_object(ls, "letin", 3, &p);
+  new_object(ls,"returnstat",1,&p);
 }
 
 
 static void statement (LexState *ls) {
-  int line = ls->linenumber;  /* may be needed for error messages */
+  Position p = getposition(ls);
+  int line = p.linenumber;  /* may be needed for error messages */
 
   enterlevel(ls);
   
@@ -1834,7 +1809,7 @@ static void statement (LexState *ls) {
     }
     case TK_FOR: {  /* stat -> forstat */
       //TODO: AST
-      RETURNS_1(forstat(ls, line));
+      RETURNS_1(forstat(ls, &p));
       break;
     }
     case TK_REPEAT: {  /* stat -> repeatstat */
@@ -1913,10 +1888,10 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_DEFER: {
-        int tbl = new_table(ls, T_defer);
+        Position p = getposition(ls);
         luaX_next(ls);
         expr(ls);
-        add_field(ls, tbl, "expression");
+        new_object(ls,"defer",1,&p);
         break;
     }
     case TK_ESCAPE: {
@@ -1958,19 +1933,19 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         if(!iskeyword) {
             lua_setfield(ls->L,-2,"value");
-            lua_pushinteger(ls->L,T_nametoken);
+            lua_pushstring(ls->L,"<name>");
         }
         lua_setfield(ls->L,-2,"type");
     } break;
     case TK_STRING:
-        lua_pushinteger(ls->L,T_stringtoken);
+        lua_pushstring(ls->L,"<string>");
         lua_setfield(ls->L,-2,"type");
         lua_pushstring(ls->L,getstr(t->seminfo.ts));
         lua_setfield(ls->L,-2,"value");
         break;
     case TK_NUMBER: {
         char buf[128];
-        lua_pushinteger(ls->L,T_numbertoken);
+        lua_pushstring(ls->L,"<number>");
         lua_setfield(ls->L,-2,"type");
         int flags = t->seminfo.flags;
         number_type(ls, flags, &buf[0]);
@@ -1989,7 +1964,7 @@ static void converttokentolua(LexState * ls, Token * t) {
         lua_setfield(ls->L,-2,"type");
         break;
     case TK_EOS:
-        lua_pushnumber(ls->L,T_eostoken);
+        lua_pushstring(ls->L,"<eos>");
         lua_setfield(ls->L,-2,"type");
         break;
     default:
@@ -2002,7 +1977,8 @@ static void converttokentolua(LexState * ls, Token * t) {
 static int le_cur(lua_State * L) {
     LexState * ls = const_cast<LexState*>((const LexState *) lua_topointer(L,lua_upvalueindex(1)));
     converttokentolua(ls, &ls->t);
-    table_setposition(ls, lua_gettop(ls->L), ls->linenumber, ls->currentoffset - 1);
+    Position p = getposition(ls);
+    table_setposition(ls, lua_gettop(ls->L), p);
     return 1;
 }
 static int le_lookahead(lua_State * L) {
@@ -2194,15 +2170,11 @@ int luaY_parser (terra_State *T, ZIO *z,
   luaX_globalset(&lexstate, TA_FUNCTION_TABLE);
   
   
-  lua_getfield(L,to,"tree");
-  luaX_globalset(&lexstate, TA_TREE_METATABLE);
+  lua_getfield(L,to,"irtypes");
+  luaX_globalset(&lexstate, TA_TYPE_TABLE);
   
-  lua_getfield(L,to,"list");
-  luaX_globalset(&lexstate, TA_LIST_METATABLE);
-  
-  lua_getfield(L,to,"kinds");
-  luaX_globalset(&lexstate, TA_KINDS_TABLE);
-  
+  lua_getfield(L,to,"newlist");
+  luaX_globalset(&lexstate, TA_NEWLIST);
   
   lua_newtable(L);
   luaX_globalset(&lexstate, TA_ENTRY_POINT_TABLE);
@@ -2246,6 +2218,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   
   int err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);
   cleanup(&lexstate);
+  
   return err;
 }
 

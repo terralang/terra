@@ -1,18 +1,20 @@
 J = require("lib/javalike")
 
-struct Shape {
+
+Drawable = J.Interface("Drawable", { draw = {} -> {} })
+
+struct Shape(J()) {
 	foo : int
 }
 
-Drawable = J.interface { draw = {} -> {} }
 
-struct Square {
+struct Square(J(Shape,Drawable)) {
 	length : int 
 }
-J.extends(Square,Shape)
-J.implements(Square,Drawable)
 
 terra Square:draw() : {}  end
+
+Drawable:Define()
 
 terra bar()
  var a : &Square = Square.alloc()

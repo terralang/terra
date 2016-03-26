@@ -1,8 +1,8 @@
-function symmat(name,I,...)
-	if not I then return symbol(name) end
+function symmat(typ,name,I,...)
+	if not I then return symbol(typ,name) end
 	local r = {}
 	for i = 1,I do
-		r[i] = symmat(name..tostring(i),...)
+		r[i] = symmat(typ,name..tostring(i),...)
 	end
 	return r
 end
@@ -12,7 +12,7 @@ terra min(a : int, b : int)
 end
 
 function blockedloop(bounds,sizes,bodyfn)
-	local indexes = symmat("i",#sizes,#bounds)
+	local indexes = symmat(int,"i",#sizes,#bounds)
 	--local makeloop --bug local function doesn't add to set of live variables...
 	local function makeloop(s,b)
 			if s > #sizes then

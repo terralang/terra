@@ -1,8 +1,8 @@
-local a = symbol()
+local a = symbol(double)
 local b = { symbol(int), symbol(int) }
 
 local c = symbol(int)
-local d = { symbol(), symbol() }
+local d = { symbol(double), symbol(double) }
 
 
 terra foo()

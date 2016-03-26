@@ -1,5 +1,5 @@
 function failit(match,fn)
-	local success,msg = pcall(fn)
+	local success,msg = xpcall(fn,debug.traceback)
 	if success then
 		error("failed to fail.",2)
 	elseif not string.match(msg,match) then
@@ -12,10 +12,10 @@ local erd = "Errors reported during"
 terra foo()
 end
 foo:compile()
-failit("inlining",function() foo:setinlined(false) end)
+--failit("inlining",function() foo:setinlined(false) end)
 
-terra bar
-failit("attempting to call",function()
+terra bar :: int -> int
+failit("is not defined",function()
 bar:compile() end)
 
 failit("expected a name",function()
@@ -87,9 +87,9 @@ end
 aloads:compile()
 end)
 
-terra f() end
-terra f(a:int) end
-failit("overloaded", function()
+local f = terralib.overloadedfunction("f")
+
+failit("expected terra global", function()
 terralib.saveobj("err.o", { f = f})
 end)
 

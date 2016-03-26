@@ -1,11 +1,10 @@
-
-terra foo(a : int)
+local foo = terralib.overloadedfunction("foo")
+foo:adddefinition(terra(a : int)
 	return 1
-end
-
-terra foo(a : &int8)
+end)
+foo:adddefinition(terra(a : &int8)
 	return 2
-end
+end)
 
 print(#foo.definitions)
 

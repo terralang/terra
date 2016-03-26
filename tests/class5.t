@@ -2,14 +2,14 @@
 IO = terralib.includec("stdio.h")
 local Class = require("lib/javalike")
 
-struct A {
+struct A(Class()) {
   a : int;
   bb : &B
-} and struct B {
+}
+struct B(Class(A)) {
   b : int;
   aa : &A
 } 
-Class.extends(B,A)
 
 
 terra A:times2() : int
@@ -21,10 +21,9 @@ terra B:combine(a : int) : int
 end
     
 
-struct C {
+struct C(Class(B)) {
   c : double
 }
-Class.extends(C,B)
 
 terra C:combine(a : int) : int
     return self.c + self.a + self.b + a

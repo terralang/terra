@@ -2,11 +2,11 @@ local number = double
 local alignment = 8
 local dotune = false
 
-function symmat(name,I,...)
-	if not I then return symbol(name) end
+function symmat(typ,name,I,...)
+	if not I then return symbol(typ,name) end
 	local r = {}
 	for i = 0,I-1 do
-		r[i] = symmat(name..tostring(i),...)
+		r[i] = symmat(typ,name..tostring(i),...)
 	end
 	return r
 end
@@ -34,14 +34,16 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 		M,N,K = NB,NB,NB
 	end
 
-	local A,B,C,mm,nn,ld = symbol("A"),symbol("B"),symbol("C"),symbol("mn"),symbol("nn"),symbol("ld")
-	local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
-	local a,b,c,caddr = symmat("a",RM), symmat("b",RN), symmat("c",RM,RN), symmat("caddr",RM,RN)
-	local k = symbol("k")
+    local VT = vector(number,V)
+	local VP = &VT
+	
+	local A,B,C,mm,nn = symbol(&number,"A"),symbol(&number,"B"),symbol(&number,"C"),symbol(int,"mm"),symbol(int,"nn")
+	local lda,ldb,ldc = symbol(int64,"lda"),symbol(int64,"ldb"),symbol(int64,"ldc")
+	local a,b,c,caddr = symmat(VT,"a",RM), symmat(VT,"b",RN), symmat(VT,"c",RM,RN), symmat(&number,"caddr",RM,RN)
+	local k = symbol(int,"k")
 	
 	local loadc,storec = terralib.newlist(),terralib.newlist()
-	local VT = vector(number,V)
-	local VP = &VT
+	
 	for m = 0, RM-1 do
 		for n = 0, RN-1 do
 			loadc:insert(quote
@@ -74,7 +76,7 @@ function genkernel(NB, RM, RN, V,alpha,boundary)
 		end
 	end
 	
-	local result = terra([A] : &number, [B] : &number, [C] : &number, [lda] : int64,[ldb] : int64,[ldc] : int64,[boundaryargs])
+	local result = terra([A], [B], [C], [lda],[ldb],[ldc],[boundaryargs])
 		for [mm] = 0, M, RM do
 			for [nn] = 0, N,RN*V do
 				[loadc];

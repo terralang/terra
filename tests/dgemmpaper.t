@@ -1,9 +1,9 @@
 
-function symmat(name,I,...)
-  if not I then return symbol(name) end
+function symmat(typ,name,I,...)
+  if not I then return symbol(typ,name) end
   local r = {}
   for i = 0,I-1 do
-    r[i] = symmat(name..tostring(i),...)
+    r[i] = symmat(typ,name..tostring(i),...)
   end
   return r
 end
@@ -11,15 +11,15 @@ prefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
 
 
 function genkernel(NB, RM, RN, V,alpha)
-  local A,B,C = symbol("A"),symbol("B"),symbol("C")
-  local mm,nn = symbol("mn"),symbol("nn")
-  local lda,ldb,ldc = symbol("lda"),symbol("ldb"),symbol("ldc")
-  local a,b = symmat("a",RM), symmat("b",RN)
-  local c,caddr = symmat("c",RM,RN), symmat("caddr",RM,RN)
-  local k = symbol("k")
-  local loadc,storec = terralib.newlist(),terralib.newlist()
   local VT = vector(double,V)
   local VP = &VT
+  local A,B,C = symbol(VP,"A"),symbol(VP,"B"),symbol(VP,"C")
+  local mm,nn = symbol(int,"mn"),symbol(int,"nn")
+  local lda,ldb,ldc = symbol(int,"lda"),symbol(int,"ldb"),symbol(int,"ldc")
+  local a,b = symmat(VT,"a",RM), symmat(VT,"b",RN)
+  local c,caddr = symmat(VT,"c",RM,RN), symmat(VP,"caddr",RM,RN)
+  local k = symbol(int,"k")
+  local loadc,storec = terralib.newlist(),terralib.newlist()
   for m = 0, RM-1 do for n = 0, RN-1 do
       loadc:insert(quote
         var [caddr[m][n]] = C + m*ldc + n*V
@@ -46,8 +46,8 @@ function genkernel(NB, RM, RN, V,alpha)
         [c[m][n]] = [c[m][n]] + [a[m]] * [b[n]]
       end) 
   end end
-  return terra([A] : &double, [B] : &double, [C] : &double,
-               [lda] : int64,[ldb] : int64,[ldc] : int64)
+  return terra([A] , [B] , [C] ,
+               [lda],[ldb] ,[ldc])
     for [mm] = 0, NB, RM do
       for [nn] = 0, NB, RN*V do
         [loadc];

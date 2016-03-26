@@ -1,12 +1,14 @@
 
-struct A { a : int }
-terra A:foo(a : int)
-	return self.a + a
-end
 
-terra A:foo(a : &int8) 
+struct A { a : int }
+A.methods.foo = terralib.overloadedfunction("foo")
+A.methods.foo:adddefinition(terra (self : &A, a : int)
+	return self.a + a
+end)
+
+A.methods.foo:adddefinition(terra (self : &A, a : &int8) 
 	return self.a
-end
+end)
 
 
 terra doit()

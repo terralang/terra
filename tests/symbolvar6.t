@@ -1,4 +1,4 @@
-local a = symbol()
+local a = symbol(double)
 local b = {}
 
 local c = symbol(int)

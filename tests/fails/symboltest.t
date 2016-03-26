@@ -1,16 +1,16 @@
 if not require("fail") then return end
 
 
-local e = symbol()
+local e = label()
 A = terralib.types.newstruct("A")
 A.entries:insert({ field = "a", type = int})
 A.entries:insert({ field = e, type = int })
 
 
-local b =  symbol()
+local b =  label()
 A.methods[b] = terra(self : &A) return 3 end
 
-local f = symbol()
+local f = label()
 
 terra foo()
 	var a : A

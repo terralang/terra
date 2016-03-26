@@ -2,11 +2,11 @@ struct Range {
     a : int;
     b : int;
 }
-Range.metamethods.__for = function(syms,iter,body)
-    return syms, quote
+Range.metamethods.__for = function(iter,body)
+    return quote
         var it = iter
-        for [syms[1]] = it.a,it.b do
-            body
+        for i = it.a,it.b do
+            [ body(i) ]
         end
     end
 end

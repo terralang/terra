@@ -4,12 +4,13 @@ struct A {
 	a : int
 }
 
-terra A:foo(a : int, b : uint8)
+A.methods.foo = terralib.overloadedfunction("foo")
+A.methods.foo:adddefinition(terra(self :&A, a : int, b : uint8)
 	return 1
-end
-terra A:foo(a : double, b : uint8)
+end)
+A.methods.foo:adddefinition(terra(self : &A, a : double, b : uint8)
 	return 2
-end
+end)
 
 terra useit()
 	var a = A { 3 }

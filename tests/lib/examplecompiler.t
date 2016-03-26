@@ -72,6 +72,7 @@ eg = {}
 --A basic type object. 
 eg.type = {}
 eg.type.__index = eg.type
+function eg.type:__tostring() return self.kind end
 
 function eg.istype(a)
 	return getmetatable(a) == eg.type
@@ -533,7 +534,6 @@ function typecheck(untypedtree,luaenv)
 	--now we begin the overall typechecking procedure
 
 	--like environments, diagnostics are scoped, so we begin a new diagnostic scope here
-	diag:begin()
 	--and enter the block for the entire function
 	env:enterblock()
 	
@@ -574,7 +574,7 @@ function compile(typedcode)
 	local function gettype(egtype)
 		if egtype == eg.number then
 			return double
-		elseif egtype == eg.functype then
+		elseif egtype == eg.funcpointer then
 			return double -> double
 		end
 	end

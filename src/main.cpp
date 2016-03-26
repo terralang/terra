@@ -68,11 +68,16 @@ void setupcrashsignal(lua_State * L) {
     lua_pop(L,2);
 }
 
+static int luapanic (lua_State * L) { //so that we can set a debugger breakpoint and catch the error
+    printf("PANIC: unprotected error in call to Lua API (%s)\n",lua_tostring(L,-1));
+    exit(1);
+}
+
 int main(int argc, char ** argv) {
     progname = argv[0];
     lua_State * L = luaL_newstate();
     luaL_openlibs(L);
-    
+    lua_atpanic(L,luapanic);
     terra_Options options;
     memset(&options, 0, sizeof(terra_Options));
     
@@ -289,7 +294,6 @@ static int traceback (lua_State *L) {
   lua_call(L, 2, 1);  /* call debug.traceback */
   return 1;
 }
-
 
 static lua_State *globalL = NULL;
 

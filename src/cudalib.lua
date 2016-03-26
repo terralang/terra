@@ -37,28 +37,17 @@ function cudalib.toptx(module,dumpmodule,version)
     dumpmodule,version = not not dumpmodule,assert(tonumber(version))
     local cu = terralib.newcompilationunit(terralib.nativetarget,false) -- TODO: add nvptx target options here
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
-    local kernelindex = {}
-
-    local function addkernel(k,v)
-        kernelindex[k] = v
-        local definitions =  v:getdefinitions()
-        if #definitions > 1 then
-            error("cuda kernels cannot be polymorphic, but found polymorphic function "..k)
-        end
-        local fn = definitions[1]
-        if fn.state == "untyped" then 
-            fn:setinlined(true) --if we need to wrap this function, make sure it is inlined
-        end
+    local function addkernel(k,fn)
+        fn:setinlined(true)
         
         local typ = fn:gettype()
-        
         if not typ.returntype:isunit() then
             error(k..": kernels must return no arguments.")
         end
 
         for _,p in ipairs(typ.parameters) do
             if p:isarray() or p:isstruct() then -- we can't pass aggregates by value through CUDA, so wrap/unwrap the kernel
-                fn = cudalib.flattenkernel(v):getdefinitions()[1]
+                fn = cudalib.flattenkernel(fn)
                 break
             end
         end
@@ -303,13 +292,13 @@ function cudalib.wrapptx(module,ptx)
                     v = v.kernel
                 end
                 if terralib.isfunction(v) then
-                    local gbl = global(terralib.constant(C.CUfunction,nil))
+                    local gbl = global(`C.CUfunction(nil))
                     m[k] = makekernelwrapper(v:gettype(),k,gbl)
                     emit quote
                         cd("cuModuleGetFunction",[&C.CUfunction](&gbl),cudaM,k)
                     end
                 elseif cudalib.isconstant(v) or terralib.isglobalvar(v) then
-                    local gbl = global(terralib.constant(&opaque,nil))
+                    local gbl = global(`[&opaque](nil))
                     m[k] = gbl
                     emit quote
                         var bytes : uint64
@@ -350,7 +339,7 @@ function cudalib.compile(module,dumpmodule,version,jitload)
 end
 
 function cudalib.sharedmemory(typ,N)
-    local gv = terralib.global(typ[N],nil,nil,N == 0,3)
+    local gv = terralib.global(typ[N],nil,nil,N == 0,false,3)
     return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
 end
 local constant = {
@@ -362,7 +351,7 @@ function cudalib.isconstant(c)
     return getmetatable(c) == constant
 end
 function cudalib.constantmemory(typ,N)
-    local c = { type = typ, global = terralib.global(typ[N],nil,nil,false,4) }
+    local c = { type = typ, global = terralib.global(typ[N],nil,nil,false,false,4) }
     return setmetatable(c,constant)
 end
 ]]

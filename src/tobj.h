@@ -133,9 +133,12 @@ struct Obj {
     }
     T_Kind kind(const char * field) {
         push();
-        lua_getfield(L,-1,field);
+        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getfield(L,-1,"kinds");
+        lua_getfield(L,-3,field);
+        lua_gettable(L,-2);
         int k = luaL_checkint(L,-1);
-        pop(2);
+        pop(4);
         return (T_Kind) k;
     }
     void setfield(const char * key) { //sets field to value on top of the stack and pops it off
@@ -174,22 +177,17 @@ struct Obj {
         return r;
     }
     void dump() {
-        printf("object is:\n");
-        
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");
-        lua_getfield(L,-1,"tree");
-        
         lua_getfield(L,-1,"printraw");
         push();
         lua_call(L, 1, 0);
         
-        lua_pop(L,2);
-        
-        printf("stack is:\n");
-        int n = lua_gettop(L);
-        for (int i = 1; i <= n; i++) {
-            printf("%d: (%s) %s\n",i,lua_typename(L,lua_type(L,i)),lua_tostring(L, i));
-        }
+        lua_pop(L,1);
+    }
+    void print() {
+        lua_getfield(L,LUA_GLOBALSINDEX,"print");
+        push();
+        lua_call(L,1,0);
     }
     void newlist(Obj * lst) {
         lua_getfield(L,LUA_GLOBALSINDEX,"terra");

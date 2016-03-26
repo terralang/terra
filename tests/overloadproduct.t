@@ -18,24 +18,24 @@ local ans = {
 }
 function create(foo,a,b,c,d)
 	if a then
-		terra foo(a : int, b : int)
+		foo:adddefinition(terra(a : int, b : int)
 			return 1
-		end
+		end)
 	end
 	if b then
-		terra foo(a : int, b : double)
+		foo:adddefinition(terra(a : int, b : double)
 			return 2
-		end
+		end)
 	end
 	if c then
-		terra foo(a : double, b : int)
+		foo:adddefinition(terra(a : double, b : int)
 			return 3
-		end
+		end)
 	end
 	if d then
-		terra foo(a : double, b : double)
+		foo:adddefinition(terra(a : double, b : double)
 			return 4
-		end
+		end)
 	end
 end
 
@@ -44,7 +44,7 @@ local function bitset(i,b)
 end
 
 for i = 1,15 do
-	local terra foo
+	local foo = terralib.overloadedfunction("foo")
 	local a,b,c,d = bitset(i,0),bitset(i,1),bitset(i,2),bitset(i,3)
 	create(foo, a,b,c,d)
 	local function trycall(arg1,arg2)
