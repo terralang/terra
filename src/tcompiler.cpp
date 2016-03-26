@@ -1299,8 +1299,11 @@ struct FunctionEmitter {
         fstate = &state;
         fstate->func = Function::Create(FunctionType::get(typeOfValue(exp)->type, false), Function::ExternalLinkage, "constant", M);
         BasicBlock * entry = BasicBlock::Create(*CU->TT->ctx,"entry",fstate->func);
+        initDebug(exp->string("filename"),exp->number("linenumber"));
+        setDebugPoint(exp);
         B->SetInsertPoint(entry);
         B->CreateRet(emitExp(exp));
+        endDebug();
         CU->fpm->run(*fstate->func);
         ReturnInst * term = cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
         Constant * r = dyn_cast<Constant>(term->getReturnValue()); assert(r || !"constant expression was not constant");
