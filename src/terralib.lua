@@ -1655,6 +1655,9 @@ do
     types.array,types.vector,types.functype = T.array,T.vector,T.functype
     
     T.functype.incomplete = true
+    function T.functype:init()
+        if self.isvararg and #self.parameters == 0 then error("vararg functions must have at least one concrete parameter") end
+    end
     function types.pointer(t,as) return T.pointer(t,as or 0) end
     function T.array:init()
         self.incomplete = true
