@@ -611,6 +611,7 @@ function T.globalvariable:init()
     self.symbol = terra.newsymbol(self.type,self.name)
 end
 function T.globalvariable:isextern() return self.extern end
+function T.globalvariable:isconstant() return self.constant end
 
 local typecheck
 local function constantcheck(e,checklvalue)
@@ -693,6 +694,15 @@ end
 function T.globalvariable:set(v)
     local ptr = self:getpointer()
     ptr[0] = v
+end
+function T.globalvariable:__tostring()
+    local kind = self:isconstant() and "constant" or "global"
+    local extern = self:isextern() and "extern " or ""
+    local r = ("%s%s %s : %s"):format(extern,kind,self.name,tostring(self.type))
+    if self.initializer then
+        r = ("%s = %s"):format(r,prettystring(self.initializer,false))
+    end
+    return r
 end
 -- END GLOBALVAR
 
@@ -4103,7 +4113,6 @@ function terra.constant(typ,init)
         end
     end
     if init == nil or T.quote:isclassof(init) then -- cases: no init, quote init -> global constant
-        
         return terra.global(typ,init,"<constant>",false,true)
     end
     local anchor = terra.newanchor(2)
@@ -4122,6 +4131,11 @@ function terra.constant(typ,init)
     tree = newobject(anchor,T.cast,ptyp,tree):withtype(ptyp) -- [&typ](literal)
     tree = newobject(anchor,T.operator,"@", List { tree }):withtype(typ):setlvalue(true) -- @[&typ](literal)
     return terra.newquote(tree)
+end
+function terra.isconstant(obj)
+    if T.globalvariable:isclassof(obj) then return obj:isconstant()
+    elseif T.quote:isclassof(obj) then return obj.tree.kind == "literal" or obj.tree.kind == "constant"
+    else return false end
 end
 _G["constant"] = terra.constant
 
