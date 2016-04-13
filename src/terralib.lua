@@ -617,8 +617,8 @@ local typecheck
 local function constantcheck(e,checklvalue)
     local kind = e.kind
     if "literal" == kind or "constant" == kind or "sizeof" == kind then -- trivially ok
-    elseif "index" == kind then
-        constantcheck(e.value,checklvalue)
+    elseif "index" == kind and checklvalue then
+        constantcheck(e.value,true)
         constantcheck(e.index)
     elseif "operator" == kind then
         local op = e.operator
@@ -635,7 +635,7 @@ local function constantcheck(e,checklvalue)
     elseif "select" == kind then
         constantcheck(e.value,checklvalue)
     elseif "globalvalueref" == kind then
-        if e.value.kind == "globalvariable" and not checklvalue then
+        if e.value.kind == "globalvariable" and not (e.value:isconstant() or checklvalue) then
             erroratlocation(e,"non-constant use of global variable used as a constant initializer")
         end
     elseif "arrayconstructor" == kind or "vectorconstructor" == kind then

@@ -66,9 +66,17 @@ local v10 = constant(`vector(2,4,5,6))
 
 local v11 = constant( `&@&globalc )
 
+local v12 = constant(`{ a = 4 })
+local v13 = constant(`v12.a)
+assert(v13:get() == 4)
 
 failit("constant initializer",function()
 constant(`@&globalc)
+end)
+
+constant(`&(&globalc)[0]):get()
+failit("constant initializer",function()
+constant(`(&globalc)[0])
 end)
 
 terra usethem()
