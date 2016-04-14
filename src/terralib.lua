@@ -3116,6 +3116,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local variables = checkformalparameterlist(List {s.variable },false)
                 if #variables ~= 1 then
                     diag:reporterror(s.variable, "expected a single iteration variable but found ",#variables)
+                    return s
                 end
                 local variable = variables[1]
                 variable:settype(variable.type or t)
