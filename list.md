@@ -5,4 +5,6 @@ title: Mailing List
 Mailing List
 ============
 The terralang mailing list is for general discussion and announcements about Terra. 
-You can subscribe at <https://mailman.stanford.edu/mailman/listinfo/terralang>
+
+<form action="https://mailman.stanford.edu/mailman/subscribe/terralang" method="POST">
+E-mail: <input name="email" /><input type="submit" value="Sign Me Up!" />
