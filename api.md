@@ -681,7 +681,7 @@ When a method is called `myobj:mymethod(arg0,...,argN)` and `__getmethod` is not
 
     __entrymissing(entryname,myobj)
     
-If `myobj` does not contain the filed `entryname`, then `__entrymissing` will be called whenever the typechecker sees the expression `myobj.entryname`. It should return a Terra [quote](#quote) to use in place of the field.
+If `myobj` does not contain the filed `entryname`, then `__entrymissing` will be called whenever the typechecker sees the expression `myobj.entryname`. It must be a macro and should return a Terra [quote](#quote) to use in place of the field.
 
 Custom operators:
 
