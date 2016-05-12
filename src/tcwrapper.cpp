@@ -760,7 +760,6 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
 }
 #if LLVM_VERSION >= 33
 static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * II, MacroDirective * MD, Obj * table) {
-
     if(!II->hasMacroDefinition())
         return;
     MacroInfo * MI = MD->getMacroInfo();
@@ -870,6 +869,9 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     CreateTableWithName(result, "macros", &macros);
     #if LLVM_VERSION >= 33
     Preprocessor & PP = TheCompInst.getPreprocessor();
+    //adjust PP so that it no longer reports errors, which could happen while trying to parse numbers here
+    PP.getDiagnostics().setClient(new IgnoringDiagConsumer(), true);
+
     for(Preprocessor::macro_iterator it = PP.macro_begin(false),end = PP.macro_end(false); it != end; ++it) {
         const IdentifierInfo * II = it->first;
         #if LLVM_VERSION <= 36
