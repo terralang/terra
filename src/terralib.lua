@@ -3995,8 +3995,23 @@ function terra.saveobj(filename,filekind,env,arguments,target)
     return r
 end
 
+
 -- configure path variables
 terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
+terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"}; 
+                       Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"}; 
+                       Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[ffi.os]
+for name,path in pairs(terra.cudalibpaths) do
+	path = path:gsub("%$CUDA_HOME",terra.cudahome)
+	if path:match("%*") and ffi.os == "Windows" then
+		local F = io.popen(('dir /b /s "%s" 2> nul'):format(path))
+		if F then
+			path = F:read("*line") or path
+			F:close()
+		end
+	end
+	terra.cudalibpaths[name] = path
+end                       
 
 if ffi.os == "Windows" then
     -- this is the reason we can't have nice things

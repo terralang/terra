@@ -35,14 +35,6 @@ extern "C" {
 
 #define CUDA_DO(err) CUDA_DO2(err,"%s","")
 
-#ifdef __linux__
-static const char * libnvvm = "/nvvm/lib64/libnvvm.so";
-#elif _WIN32
-static const char * libnvvm= "\\nvvm\\bin\\nvvm64_30_0.dll";
-#else
-static const char * libnvvm = "/nvvm/lib/libnvvm.dylib";
-#endif
-
 #define CUDA_SYM(_) \
     _(nvvmAddModuleToProgram) \
     _(nvvmCompileProgram) \
@@ -216,25 +208,17 @@ int terra_toptx(lua_State * L) {
 
 int terra_cudainit(struct terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    lua_getfield(T->L,-1,"cudahome");
-    const char * cudahome = lua_tostring(T->L,-1);
-    lua_pop(T->L,1);
-    
-    if(!cudahome) {
-        lua_pushstring(T->L,"cuda home not set");
-        lua_setfield(T->L,-2,"cudaloaderror");
-        return 0; //any early return disables cuda
-    }
-    //dynamically load libnvvm libraries, the other libraries are loaded from the cudalib library only when needed
-	llvm::SmallString<256> libnvvmpath;
-	libnvvmpath.append(cudahome);
-	libnvvmpath.append(libnvvm);
-	if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(libnvvmpath.c_str())) {
+    lua_getfield(T->L,-1,"cudalibpaths");
+    lua_getfield(T->L,-1,"nvvm");
+    const char * libnvvmpath = lua_tostring(T->L,-1);
+    lua_pop(T->L,2); //path and cudalibpaths
+    if(llvm::sys::DynamicLibrary::LoadLibraryPermanently(libnvvmpath)) {
 		llvm::SmallString<256> err;
         err.append("failed to load libnvvm at: ");
         err.append(libnvvmpath);
         lua_pushstring(T->L,err.c_str());
         lua_setfield(T->L,-2,"cudaloaderror");
+        lua_pop(T->L,1); //terralib
         return 0; //couldn't find the libnvvm library, do not load cudalib.lua
     }
     T->cuda = (terra_CUDAState*) malloc(sizeof(terra_CUDAState));
@@ -244,7 +228,7 @@ int terra_cudainit(struct terra_State * T) {
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,terra_toptx,1);
     lua_setfield(T->L,-2,"toptximpl");
-
+    lua_pop(T->L,1); //terralib
     int err = terra_loadandrunbytecodes(T->L, (const unsigned char *)luaJIT_BC_cudalib,luaJIT_BC_cudalib_SIZE, "cudalib.lua");
     if(err) {
         return err;

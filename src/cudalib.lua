@@ -8,18 +8,11 @@ end
 
 local ffi = require('ffi')
 
-local cudapaths = { OSX = {"/usr/local/cuda/lib/libcuda.dylib", "$CUDA_HOME/lib/libcudart.dylib"}; 
-                    Linux =  {"libcuda.so", "$CUDA_HOME/lib64/libcudart.so"}; 
-                    Windows = {"nvcuda.dll", "$CUDA_HOME\\bin\\cudart64_70.dll"}; }
 local cudaruntimelinked = false
 function cudalib.linkruntime(cudahome)
     if cudaruntimelinked then return end
-    cudahome = cudahome or terralib.cudahome
-    local paths = assert(cudapaths[ffi.os],"unknown OS?")
-    for i,p in ipairs(paths) do
-        local pr = p:gsub("%$CUDA_HOME",cudahome)
-        terralib.linklibrary(pr)
-    end
+    terralib.linklibrary(terralib.cudalibpaths.driver)
+    terralib.linklibrary(terralib.cudalibpaths.runtime)
     cudaruntimelinked = true
 end
 
