@@ -1334,7 +1334,12 @@ do
             
         end
         str = str .. "};"
-        ffi.cdef(str)
+        local status,err = pcall(ffi.cdef,str)
+        if not status then 
+            if err:match("attempt to redefine") then
+                print(("warning: attempting to define a C struct %s that has already been defined by the luajit ffi, assuming the Terra type matches it."):format(nm))
+            else error(err) end
+        end
     end
     local uniquetypenameset = uniquenameset("_")
     local function uniquecname(name) --used to generate unique typedefs for C
