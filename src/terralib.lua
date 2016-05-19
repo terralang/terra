@@ -3364,6 +3364,10 @@ function terra.includecstring(code,cargs,target)
         args:insert("-internal-isystem")
         args:insert(clangresourcedirectory.."/include")
     end
+    for _,path in ipairs(terra.systemincludes) do
+    	args:insert("-internal-isystem")
+    	args:insert(path)
+    end
     
     if cargs then
         args:insertall(cargs)
@@ -4018,25 +4022,30 @@ for name,path in pairs(terra.cudalibpaths) do
 	terra.cudalibpaths[name] = path
 end                       
 
+terra.systemincludes = List()
 if ffi.os == "Windows" then
     -- this is the reason we can't have nice things
-    terra.vchome = os.getenv("VCINSTALLDIR")
-    if not terra.vchome then --vsvarsall.bat has not been run guess defaults
-        local ct = os.getenv("VS120COMNTOOLS")
-        if ct then
-            terra.vchome = ct..[[..\..\VC\]]
-        else
-            terra.vchome = [[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]]
-        end
-    else
-        --assume vsvarsall.bat was run and get lib/path
-        terra.vcpath = os.getenv("Path")
-        terra.vclib = os.getenv("LIB")
-    end
+    local function registrystring(key,value,default)
+    	local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
+		local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
+		return result or default
+	end
+	terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
+	local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
+
+	terra.systemincludes:insertall {
+		("%sVC/INCLUDE"):format(terra.vshome),
+		("%sVC/ATLMFC/INCLUDE"):format(terra.vshome),
+		("%sinclude/shared"):format(windowsdk),
+		("%sinclude/um"):format(windowsdk),
+		("%sinclude/winrt"):format(windowsdk),
+		("%s/include"):format(terra.cudahome)
+	}
+
     function terra.getvclinker() --get the linker, and guess the needed environment variables for Windows if they are not set ...
-        local linker = terra.vchome..[[BIN\x86_amd64\link.exe]]
-        local vclib = terra.vclib or string.gsub([[%LIB\amd64;%ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vchome)
-        local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vchome..[[BIN;]]
+        local linker = terra.vshome..[[VC\BIN\x86_amd64\link.exe]]
+        local vclib = terra.vclib or string.gsub([[%VC\LIB\amd64;%VC\ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vshome)
+        local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[VC\BIN;]]
         vclib,vcpath = "LIB="..vclib,"Path="..vcpath
         return linker,vclib,vcpath
     end

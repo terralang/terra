@@ -75,6 +75,7 @@ $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(
 	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
 	$(LUAJIT) -bg $(SRC)\strict.lua $(BUILD)\strict.h
 	$(LUAJIT) -bg $(SRC)\cudalib.lua $(BUILD)\cudalib.h
+	$(LUAJIT) -bg $(SRC)\asdl.lua $(BUILD)\asdl.h
 
 $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
 	cd $(TERRA_DIR)
