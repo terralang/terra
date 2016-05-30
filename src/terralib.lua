@@ -1120,7 +1120,7 @@ function terra.anonfunction(tree,envfn)
     local env = envfn()
     local diag = terra.newdiagnostics()
     tree = evalformalparameters(diag,env,tree)
-    diag:finishandabortiferrors("Errors during function declaration.")
+    diag:finishandabortiferrors("Errors during function declaration.",2)
     tree = typecheck(tree,env)
     tree.name = "anon ("..tree.filename..":"..tree.linenumber..")"
     return T.terrafunction(tree,tree.name,tree.type,tree)
