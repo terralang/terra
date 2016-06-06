@@ -2865,8 +2865,10 @@ static int terra_saveobjimpl(lua_State * L) {
             }
         } else {
             SmallVector<char,256> mem;
-            raw_svector_ostream dest(mem);
-            result = SaveObject(CU,CU->M,filekind,dest);
+            { //ensure stream is finished before we add the memory to lua
+                raw_svector_ostream dest(mem);
+                result = SaveObject(CU,CU->M,filekind,dest);
+            }
             N = 1;
             lua_pushlstring(L,&mem[0],mem.size());
         }
@@ -2912,7 +2914,9 @@ static int terra_linkllvmimpl(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
     std::string Err;
     TerraTarget * TT = (TerraTarget*) terra_tocdatapointer(L,1);
-    const char * filename = luaL_checkstring(L,2);
+    size_t length;
+    const char * filename = lua_tolstring(L,2,&length);
+    bool fromstring = lua_toboolean(L, 3);
 #if LLVM_VERSION <= 34
     OwningPtr<MemoryBuffer> mb;
     error_code ec = MemoryBuffer::getFile(filename,mb);
@@ -2922,7 +2926,13 @@ static int terra_linkllvmimpl(lua_State * L) {
     if(!m)
         terra_reporterror(CU->T, "llvm: %s\n", Err.c_str());
 #else
-    ErrorOr<std::unique_ptr<MemoryBuffer> > mb = MemoryBuffer::getFile(filename);
+    ErrorOr<std::unique_ptr<MemoryBuffer> > mb = std::error_code();
+    if(fromstring) {
+        std::unique_ptr<MemoryBuffer> mbcontents(MemoryBuffer::getMemBuffer(StringRef(filename,length),"",false));
+        mb = std::move(mbcontents);
+    } else {
+        mb = MemoryBuffer::getFile(filename);
+    }
     if(!mb)
         terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
     #if LLVM_VERSION == 36

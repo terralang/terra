@@ -4197,12 +4197,13 @@ function terra.linklibrary(filename)
     assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
     terra.linklibraryimpl(filename)
 end
-function terra.linkllvm(filename,target)
+function terra.linkllvm(filename,target,fromstring)
     target = target or terra.nativetarget
     assert(terra.istarget(target),"expected a target or nil to specify native target")
-    terra.linkllvmimpl(target.llvm_target,filename)
+    terra.linkllvmimpl(target.llvm_target,filename, fromstring)
     return { extern = function(self,name,typ) return terra.externfunction(name,typ) end }
 end
+function terra.linkllvmstring(str,target) return terra.linkllvm(str,target,true) end
 
 terra.languageextension = {
     tokentype = {}; --metatable for tokentype objects
