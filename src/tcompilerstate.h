@@ -15,11 +15,10 @@ struct TerraFunctionInfo {
 class Types; struct CCallingConv; struct Obj;
 
 struct TerraTarget {
-    TerraTarget() : nreferences(0), tm(NULL), td(NULL), ctx(NULL), external(NULL), next_unused_id(0) {}
+    TerraTarget() : nreferences(0), tm(NULL), ctx(NULL), external(NULL), next_unused_id(0) {}
     int nreferences;
     std::string Triple,CPU,Features;
     llvm::TargetMachine * tm;
-    const llvm::DataLayout * td;
     llvm::LLVMContext * ctx;
     llvm::Module * external; //module that holds IR for externally included things (from includec or linkllvm)
     size_t next_unused_id; //for creating names for dummy functions
@@ -52,6 +51,13 @@ struct TerraCompilationUnit {
     Obj * symbols;
     int functioncount; // for assigning unique indexes to functions;
     std::vector<TerraFunctionState *>* tooptimize;
+    const llvm::DataLayout & getDataLayout() {
+        #if LLVM_VERSION <= 35
+        return *M->getDataLayout();
+        #else
+        return M->getDataLayout();
+        #endif
+    }
 };
 
 struct terra_CompilerState {

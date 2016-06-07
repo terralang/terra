@@ -94,7 +94,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         it->setAttributes(llvm::AttributeSet()); //remove annotations because syntax doesn't match
         RemoveAttr A;
-        A.visit(it); //remove annotations on CallInsts as well.
+        A.visit(&*it); //remove annotations on CallInsts as well.
     }
     int nmajor,nminor;
     CUDA_DO(T->cuda->nvvmVersion(&nmajor,&nminor));

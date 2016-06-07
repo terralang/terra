@@ -53,6 +53,8 @@
 #include "llvmheaders_36.h"
 #elif LLVM_VERSION == 37
 #include "llvmheaders_37.h"
+#elif LLVM_VERSION == 38
+#include "llvmheaders_38.h"
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
@@ -66,12 +68,6 @@
 
 #if LLVM_VERSION <= 35
 #define TERRA_CAN_USE_OLD_JIT
-#endif
-
-#if LLVM_VERSION == 36
-static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getSubtargetImpl()->getDataLayout(); }
-#else
-static inline const llvm::DataLayout * GetDataLayout(llvm::TargetMachine * TM) { return TM->getDataLayout(); }
 #endif
 
 #if LLVM_VERSION >= 36
@@ -99,6 +95,15 @@ using llvm::PassManager;
 using llvm::FunctionPassManager;
 typedef llvm::raw_ostream emitobjfile_t;
 typedef llvm::DIFile DIFileP;
+#endif
+
+#if LLVM_VERSION >= 38
+inline void LLVMDisposeMessage(char *Message) { free(Message); }
+typedef llvm::legacy::PassManager PassManagerT;
+typedef llvm::legacy::FunctionPassManager FunctionPassManagerT;
+#else
+typedef PassManager PassManagerT;
+typedef FunctionPassManager FunctionPassManagerT;
 #endif
 
 #endif

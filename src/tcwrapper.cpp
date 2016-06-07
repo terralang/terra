@@ -608,7 +608,9 @@ public:
   }
 #endif
   virtual std::error_code close() override { return std::error_code(); }
+#if LLVM_VERSION <= 37
   virtual void setName(StringRef Name_) override { Name = Name_; }
+#endif
 };
 
 static llvm::sys::TimeValue ZeroTime() {
@@ -654,7 +656,11 @@ public:
         *contents = StringRef(data,size);
         lua_pop(L,2); //pop contents, size
     }
-    *status = clang::vfs::Status(Path.str(), "", clang::vfs::getNextVirtualUniqueID(), ZeroTime(), 0, 0, size, filetype, llvm::sys::fs::all_all);
+    *status = clang::vfs::Status(Path.str(),
+    #if LLVM_VERSION <= 37
+    "",
+    #endif
+    clang::vfs::getNextVirtualUniqueID(), ZeroTime(), 0, 0, size, filetype, llvm::sys::fs::all_all);
     lua_pop(L, 2); //pop table, kind
     return true;
   }
@@ -704,6 +710,10 @@ public:
         printf("BUGBUG: unexpected call to directory iterator in C header include. report this a bug on github.com/zdevito/terra"); //as far as I can tell this isn't used by the things we are using, so I am leaving it unfinished until this changes.
         return RFS->dir_begin(Dir,EC);
   }
+  #if LLVM_VERSION >= 38
+  llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override { return std::string("cwd"); }
+  std::error_code setCurrentWorkingDirectory(const Twine &Path) override { return std::error_code(); }
+  #endif
 };
 
 
@@ -754,9 +764,13 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
 #endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
     Preprocessor &PP = TheCompInst->getPreprocessor();
+    #if LLVM_VERSION <= 37
     PP.getBuiltinInfo().InitializeBuiltins(PP.getIdentifierTable(),
                                            PP.getLangOpts());
-    
+    #else
+    PP.getBuiltinInfo().initializeBuiltins(PP.getIdentifierTable(),
+                                           PP.getLangOpts());
+    #endif
 }
 #if LLVM_VERSION >= 33
 static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * II, MacroDirective * MD, Obj * table) {
@@ -814,7 +828,7 @@ static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
     for(llvm::Module::iterator it = M->begin(), end = M->end();
         it != end;
         ++it) {
-        llvm::Function * fn = it;
+        llvm::Function * fn = &*it;
         if(fn->hasAvailableExternallyLinkage()) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
         }
@@ -860,13 +874,20 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     ss << TT->next_unused_id++;
     std::string livenessfunction = ss.str();
 
-    CodeGenProxy proxy(codegen,result,livenessfunction);
-    ParseAST(TheCompInst.getPreprocessor(),
-            &proxy,
-            TheCompInst.getASTContext());
+    #if LLVM_VERSION < 37
+    //CodeGenProxy codegenproxy(codegen,result,livenessfunction);
+    TheCompInst.setASTConsumer(new CodeGenProxy(codegen,result,livenessfunction));
+    #else
+    TheCompInst.setASTConsumer(std::unique_ptr<ASTConsumer>(new CodeGenProxy(codegen,result,livenessfunction)));
+    #endif
+    
+    TheCompInst.createSema(clang::TU_Complete,NULL);
+    
+    ParseAST(TheCompInst.getSema(),false,false);
     
     Obj macros;
     CreateTableWithName(result, "macros", &macros);
+    
     #if LLVM_VERSION >= 33
     Preprocessor & PP = TheCompInst.getPreprocessor();
     //adjust PP so that it no longer reports errors, which could happen while trying to parse numbers here

@@ -292,7 +292,6 @@ int terra_inittarget(lua_State * L) {
         luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",TT->Triple.c_str(),err.c_str());
     }
     TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,Reloc::PIC_,CodeModel::Default,CodeGenOpt::Aggressive);
-    TT->td = GetDataLayout(TT->tm);
     TT->external = new Module("external",*TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -313,14 +312,16 @@ int terra_initcompilationunit(lua_State * L) {
     
     CU->M = new Module("terra",*TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
-    #if LLVM_VERSION >= 37
-    CU->M->setDataLayout(*TT->td);
+    #if LLVM_VERSION >= 38
+    CU->M->setDataLayout(TT->tm->createDataLayout());
+    #elif LLVM_VERSION == 37
+    CU->M->setDataLayout(*TT->tm->getDataLayout());
     #else
-    CU->M->setDataLayout(TT->td);
+    CU->M->setDataLayout(TT->tm->getDataLayout());
     #endif
     
     CU->mi = new ManualInliner(TT->tm,CU->M);
-    CU->fpm = new FunctionPassManager(CU->M);
+    CU->fpm = new FunctionPassManagerT(CU->M);
     llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
     llvmutil_addoptimizationpasses(CU->fpm);
     CU->fpm->doInitialization(); 
@@ -584,13 +585,13 @@ class Types {
             Type * fieldtype = Get(&vt)->type;
             bool inunion = v.boolean("inunion");
             if(inunion) {
-                unsigned align = CU->TT->td->getABITypeAlignment(fieldtype);
+                unsigned align = CU->getDataLayout().getABITypeAlignment(fieldtype);
                 if(align >= unionAlign) { // orequal is to make sure we have a non-null type even if it is a 0-sized struct
                     unionAlign = align;
                     unionType = fieldtype;
-                    unionAlignSz = CU->TT->td->getTypeAllocSize(fieldtype);
+                    unionAlignSz = CU->getDataLayout().getTypeAllocSize(fieldtype);
                 }
-                size_t allocSize = CU->TT->td->getTypeAllocSize(fieldtype);
+                size_t allocSize = CU->getDataLayout().getTypeAllocSize(fieldtype);
                 if(allocSize > unionSz)
                     unionSz = allocSize;
                 
@@ -751,7 +752,7 @@ struct CCallingConv {
         else if(t->isStructTy()) {
             StructType * st = cast<StructType>(Ty->Get(type)->type);
             assert(!st->isOpaque());
-            const StructLayout * sl = CU->TT->td->getStructLayout(st);
+            const StructLayout * sl = CU->getDataLayout().getStructLayout(st);
             Obj layout;
             GetStructEntries(type,&layout);
             int N = layout.size();
@@ -766,7 +767,7 @@ struct CCallingConv {
             }
         } else if(t->isArrayTy()) {
             ArrayType * at = cast<ArrayType>(Ty->Get(type)->type);
-            size_t elemsize = CU->TT->td->getTypeAllocSize(at->getElementType());
+            size_t elemsize = CU->getDataLayout().getTypeAllocSize(at->getElementType());
             size_t sz = at->getNumElements();
             Obj elemtype;
             type->obj("type", &elemtype);
@@ -817,7 +818,7 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE,t,usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
         
-        int sz = CU->TT->td->getTypeAllocSize(t->type);
+        int sz = CU->getDataLayout().getTypeAllocSize(t->type);
         if(!ValidAggregateSize(sz)) {
             return Argument(C_AGGREGATE_MEM,t);
         }
@@ -973,20 +974,20 @@ struct CCallingConv {
             Value * v = (*variables)[i];
             switch(p->kind) {
                 case C_PRIMITIVE: {
-                    Value * a = ConvertPrimitive(B,ai,p->type->type,p->type->issigned);
+                    Value * a = ConvertPrimitive(B,&*ai,p->type->type,p->type->issigned);
                     B->CreateStore(a,v);
                     ++ai;
                 } break;
                 case C_AGGREGATE_MEM:
                     //TODO: check that LLVM optimizes this copy away
-                    B->CreateStore(B->CreateLoad(ai),v);
+                    B->CreateStore(B->CreateLoad(&*ai),v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
                     Value * dest = B->CreateBitCast(v,Ptr(p->cctype));
                     int N = p->GetNumberOfTypesInParamList();
                     for(int j = 0; j < N; j++) {
-                        B->CreateStore(ai,CreateConstGEP2_32(B,dest, 0, j));
+                        B->CreateStore(&*ai,CreateConstGEP2_32(B,dest, 0, j));
                         ++ai;
                     }
                 } break;
@@ -1002,7 +1003,7 @@ struct CCallingConv {
         } else if(C_PRIMITIVE == kind) {
             B->CreateRet(ConvertPrimitive(B,result,info->returntype.cctype,info->returntype.type->issigned));
         } else if(C_AGGREGATE_MEM == kind) {
-            B->CreateStore(result,function->arg_begin());
+            B->CreateStore(result,&*function->arg_begin());
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
             Value * dest = CreateAlloca(B,info->returntype.type->type);
@@ -1895,7 +1896,7 @@ if(baseT->isIntegerTy()) { \
                 exp->pushfield("value");
                 const void * data = lua_topointer(L,-1);
                 assert(data);
-                size_t size = CU->TT->td->getTypeAllocSize(typ->type);
+                size_t size = CU->getDataLayout().getTypeAllocSize(typ->type);
                 Value * r;
                 if(typ->type->isIntegerTy()) {
                     uint64_t integer = 0;
@@ -1906,7 +1907,7 @@ if(baseT->isIntegerTy()) { \
                 } else if(typ->type->isDoubleTy()) {
                     r = ConstantFP::get(typ->type, *(const double*)data);
                 } else if(typ->type->isPointerTy()) {
-                    Constant * ptrint = ConstantInt::get(CU->TT->td->getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
+                    Constant * ptrint = ConstantInt::get(CU->getDataLayout().getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
                     r = ConstantExpr::getIntToPtr(ptrint, typ->type);
                 } else {
                     typ->type->dump();
@@ -1985,7 +1986,7 @@ if(baseT->isIntegerTy()) { \
                 Obj typ;
                 exp->obj("oftype",&typ);
                 TType * tt = getType(&typ);
-                return ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),CU->TT->td->getTypeAllocSize(tt->type));
+                return ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),CU->getDataLayout().getTypeAllocSize(tt->type));
             } break;   
             case T_select: {
                 Obj obj,typ;
@@ -2305,7 +2306,7 @@ if(baseT->isIntegerTy()) { \
         ValueToValueMapTy VMap;
         BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", fstate->func);
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
-            RemapInstruction(II, VMap,RF_IgnoreMissingEntries);
+            RemapInstruction(&*II, VMap,RF_IgnoreMissingEntries);
         return NewBB;
     }
     //emit an exit path that includes the most recent num deferred statements
@@ -2597,7 +2598,7 @@ static int terra_llvmsizeof(lua_State * L) {
         CU->symbols = NULL;
     }
     lobj_removereftable(T->L, ref_table);
-    lua_pushnumber(T->L,CU->TT->td->getTypeAllocSize(llvmtyp->type));
+    lua_pushnumber(T->L,CU->getDataLayout().getTypeAllocSize(llvmtyp->type));
     return 1;
 }
 

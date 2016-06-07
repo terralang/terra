@@ -36,8 +36,9 @@ void llvmutil_addtargetspecificpasses(PassManagerBase * fpm, TargetMachine * TM)
     TargetLibraryInfo * TLI = new TargetLibraryInfo(Triple(TM->getTargetTriple()));
     fpm->add(TLI);
 #endif
-    DataLayout * TD = new DataLayout(*GetDataLayout(TM));
-    (void) TD;
+#if LLVM_VERSION <= 35
+    DataLayout * TD = new DataLayout(*TM->getDataLayout());
+#endif
 #if LLVM_VERSION <= 34
     fpm->add(TD);
 #elif LLVM_VERSION == 35
@@ -173,7 +174,7 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, emitobjfile_t & dest) {
 
-    PassManager pass;
+    PassManagerT pass;
     llvmutil_addtargetspecificpasses(&pass, TM);
     
     TargetMachine::CodeGenFileType ft = outputobjectfile? TargetMachine::CGFT_ObjectFile : TargetMachine::CGFT_AssemblyFile;
@@ -212,7 +213,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
         }
         return false;
     }
+    #if LLVM_VERSION >= 38
+    virtual Value * materializeDeclFor(Value * V) {
+    #else
     virtual Value * materializeValueFor(Value * V) {
+    #endif
         if(Function * fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);
             Function * newfn = dest->getFunction(fn->getName());
@@ -223,7 +228,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             if(!fn->isDeclaration() && newfn->isDeclaration() && copyGlobal(fn,data)) {
                 for(Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(), E = fn->arg_end(); I != E; ++I, ++II) {
                     II->setName(I->getName());
-                    VMap[I] = II;
+                    VMap[&*I] = &*II;
                 }
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst*,8> Returns;
@@ -338,7 +343,7 @@ void llvmutil_copyfrommodule(llvm::Module * Dest, llvm::Module * Src, llvm::Glob
 
 
 void llvmutil_optimizemodule(Module * M, TargetMachine * TM) {
-    PassManager MPM;
+    PassManagerT MPM;
     llvmutil_addtargetspecificpasses(&MPM, TM);
 
     MPM.add(createVerifierPass()); //make sure we haven't messed stuff up yet
