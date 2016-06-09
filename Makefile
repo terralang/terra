@@ -111,7 +111,7 @@ CUDA_INCLUDES = -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm
 FLAGS += $(CUDA_INCLUDES)
 endif
 
-ifeq (,$(findstring Asserts, $(shell $(LLVM_CONFIG) --build-mode)))
+ifeq (OFF,$(shell $(LLVM_CONFIG) --assertion-mode))
 FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
