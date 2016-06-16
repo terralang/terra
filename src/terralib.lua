@@ -541,7 +541,8 @@ function T.terrafunction:__call(...)
     return ffiwrapper(...)
 end
 function T.terrafunction:setinlined(v)
-    self.alwaysinline = not not v
+    assert(self:isdefined(), "attempting to set the inlining state of an undefined function")
+    self.definition.alwaysinline = not not v
 end
 function T.terrafunction:disas()
     print("definition ", self:gettype())
