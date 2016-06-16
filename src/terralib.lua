@@ -771,6 +771,7 @@ function compilationunit:free()
     ffi.gc(self.llvm_cu,nil) --unregister normal destructor object
     terra.freecompilationunit(self.llvm_cu)
 end
+function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
 terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
