@@ -8,12 +8,13 @@
 
 local getinfo, error, rawset, rawget = debug.getinfo, error, rawset, rawget
 
-local mt = getmetatable(_G)
-if mt == nil then
-  mt = { strict = true }
-  Strict = mt
-  setmetatable(_G, mt)
+if getmetatable(_G) ~= nil then -- if another package has already altered the global environment then don't try to install the strict module
+    return
 end
+
+local mt = { strict = true }
+Strict = mt
+setmetatable(_G, mt)
 
 mt.__declared = {}
 
@@ -25,7 +26,7 @@ end
 mt.__newindex = function (t, n, v)
   if not mt.__declared[n] then
     local w = what()
-    if w ~= "main" and w ~= "C" then
+    if mt.strict and w ~= "main" and w ~= "C" then
       error("Attempting to assign to previously undeclared global variable '"..n.."' from inside a function. If this variable is local to the function, it needs to be tagged with the 'local' keyword. If it is a global variable, it needs to be defined at the global scope before being used in a function.", 2)
     end
     mt.__declared[n] = true
