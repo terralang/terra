@@ -41,13 +41,20 @@ LD = ld
 FLAGS += -Wall -g -fPIC
 LFLAGS = -g
 
-LUAJIT_VERSION ?= LuaJIT-2.0.4
+# Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
+#LUAJIT_VERSION_BASE =2.1
+#LUAJIT_VERSION_EXTRA =.0-beta2
+
+LUAJIT_VERSION_BASE ?= 2.0
+LUAJIT_VERSION_EXTRA ?= .4
+LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
+LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
 LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
-LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-2.0/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-2.0/lua.h))
-LUAJIT ?= $(LUAJIT_PREFIX)/bin/luajit
+LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
+LUAJIT ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
 
 FLAGS += -I build -I $(LUAJIT_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
