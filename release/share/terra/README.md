@@ -106,7 +106,7 @@ For instructions on installing Terra in Windows see this [readme](https://github
 
 ### Linux/OSX ###
 
-The easiest way to get a working LLVM/Clang install is to download the download the _Clang Binaries_ (which also include LLVM binaries) from the
+The easiest way to get a working LLVM/Clang install is to download the _Clang Binaries_ (which also include LLVM binaries) from the
 [LLVM download](http://llvm.org/releases/download.html) page, and unzip this package.
 
 Now get the Terra sources:
