@@ -46,7 +46,7 @@ You can also run it on already written files:
     $ ./terra tests/hello.t
     hello, world
     
-Terra can also be used as a library from C by linking against `libterra.so` (windows:  `libterra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra.a` (windows:  `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
     //simple.cpp
@@ -68,12 +68,12 @@ A simple example initializes Terra and then runs code from the file specified in
 This program can then be compiled by linking against the Terra library
 
     # Linux
-    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
-    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder>
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/terra/include \
+    -L<path-to-terra-folder>/lib -lterra -ldl -pthread
     
     # OSX
-    c++ simple.cpp -o simple -I<path-to-terra-folder>/include \
-    -L<path-to-terra-folder> -lterra -Wl,-rpath,<path-to-terra-folder> \
+    c++ simple.cpp -o simple -I<path-to-terra-folder>/terra/include \
+    -L<path-to-terra-folder>/lib -lterra \
     -pagezero_size 10000 -image_base 100000000
     
 Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
