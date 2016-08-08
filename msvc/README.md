@@ -2,7 +2,7 @@
 Building Terra on Windows using Visual Studio 2013
 ==================================================
 
-1. To build Terra you need to download, build, and install Clang+LLVM 3.5. You shoul end up with a diretory with "bin/" "lib/" and "include/" directories with the clang+llvm binaries and library files. You also need to download LuaJIT-2.0.3 and unzip it somewhere.
+1. To build Terra you need to download, build, and install Clang+LLVM 3.5. You should end up with a diretory with "bin/" "lib/" and "include/" directories with the clang+llvm binaries and library files. You also need to download LuaJIT-2.0.3 and unzip it somewhere.
 
 2. Edit msvc/Makefile to point to the dependencies (details are in the Makefile)
 
