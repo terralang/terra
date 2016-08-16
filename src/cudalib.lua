@@ -79,6 +79,8 @@ function cudalib.toptx(module,dumpmodule,version)
     return r
 end
 
+cudalib.useculink = false
+
 -- we need to use terra to write the function that JITs the right wrapper functions forCUDA kernels
 -- since this file is loaded as Lua, we use terra.loadstring to inject some terra code
 -- this this is only needed for cuda compilation, we load this library lazily below
@@ -231,8 +233,9 @@ local return1 = macro(function(x)
     end
 end)
 
+
 local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
-                       linker : {C.CUlinkState,rawstring,uint64} -> int,
+                       useculink : bool, linker : {C.CUlinkState,rawstring,uint64} -> int,
                        module : {&opaque,uint64} -> {},
                        [error_str],[error_sz])
     if error_sz > 0 then error_str[0] = 0 end
@@ -242,7 +245,7 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     
     return1(initcuda(&CX,&D,&version,error_str,error_sz))
     
-    if linker ~= nil then
+    if useculink or linker ~= nil then
         var linkState : C.CUlinkState
         var cubin : &opaque
         var cubinSize : uint64
@@ -254,9 +257,10 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
         cd("cuLinkCreate_v2",terralib.select(error_str == nil,1,3),options,option_values,&linkState)
         cd("cuLinkAddData_v2",linkState,C.CU_JIT_INPUT_PTX,ptx,ptx_sz,nil,0,nil,nil)
 
-    
-        return1(linker(linkState,error_str,error_sz))
-
+        if linker ~= nil then
+            return1(linker(linkState,error_str,error_sz))
+        end
+        
         cd("cuLinkComplete",linkState,&cubin,&cubinSize)
 
         if module ~= nil then
@@ -277,7 +281,7 @@ function cudalib.wrapptx(module,ptx)
                        [error_str],[error_sz])
         if error_sz > 0 then error_str[0] = 0 end
         var cudaM : C.CUmodule
-        return1(loadmodule(&cudaM,ptxc,[ptx:len() + 1],linker,module_fn,error_str,error_sz))
+        return1(loadmodule(&cudaM,ptxc,[ptx:len() + 1],cudalib.useculink,linker,module_fn,error_str,error_sz))
         escape
             for k,v in pairs(module) do
                 
