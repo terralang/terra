@@ -1882,7 +1882,7 @@ local function semanticcheck(diag,parameters,block)
             if e:is "var" then
                 local definition = symbolenv:localenv()[e.symbol]
                 if not definition then
-                    diag:reporterror(e, "definition of this variable is not in scope")
+                    diag:reporterror(e, "definition of variable with symbol ",e.symbol, " is not in scope in this context")
                 end
             elseif e:is "globalvalueref" then
                 globalsused:insert(e.value)
