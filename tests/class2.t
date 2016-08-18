@@ -1,3 +1,4 @@
+local S = require("std")
 local Interface = require("lib/golike")
 
 local I = Interface.create {
@@ -43,3 +44,7 @@ end
 
 local test = require("test")
 test.eq(foo(),9)
+
+terralib.saveobj("class2", "executable", {
+	main = terra() S.printf("foo() = %d\n", foo()) end,
+})
