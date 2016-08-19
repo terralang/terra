@@ -38,14 +38,14 @@ end
 
 local Context = {}
 function Context:__index(idx)
-    local d = self.definitions[idx]
+    local d = self.definitions[idx] or self.namespaces[idx]
     if d ~= nil then return d end
     return getmetatable(self)[idx]
 end
 
 -- prepare lexer stuff
-local tokens = "=|?*,()"
-local keywords = { attributes = true, unique = true }
+local tokens = "=|?*,(){}."
+local keywords = { attributes = true, unique = true, module = true }
 for i = 1,#tokens do
     local t = tokens:sub(i,i)
     keywords[t] = true
@@ -81,6 +81,7 @@ local function parseAll(text)
         end
         local ident = text:match("^[%a_][%a_%d]*",pos)
         if not ident then
+            value = text:sub(pos,pos)
             err("valid token")
         end
         cur,value = keywords[ident] and ident or "Ident", ident
@@ -97,9 +98,19 @@ local function parseAll(text)
         next()
         return v
     end
+    
+    local namespace = ""
+    local function parseDefinedName()
+        return namespace..expect("Ident")
+    end
+    
     local function parseField()
         local  f = {}
         f.type = expect("Ident")
+        while nextif(".") do
+            f.type = f.type .. "." .. expect("Ident")
+        end
+        f.namespace = namespace -- for resolving the symbol later
         if nextif("?") then
             f.optional = true
         elseif nextif("*") then
@@ -125,7 +136,7 @@ local function parseAll(text)
         return p
     end
     local function parseConstructor()
-        local c = { name = expect("Ident") }
+        local c = { name = parseDefinedName() }
         if cur == "(" then
             c.fields = parseFields()
         end
@@ -156,20 +167,35 @@ local function parseAll(text)
             return parseSum()
         end
     end
-    local function parseDefinitions()
-        local ds = List()
-        while cur ~= "EOF" do
-            local d = { name = expect("Ident") }
-            expect("=")
-            d.type = parseType()
-            ds:insert(d)
+    local definitions = List()
+    local parseDefinitions
+    local function parseModule()
+        expect("module")
+        local name = expect("Ident")
+        expect("{")
+        local oldnamespace = namespace
+        namespace = namespace..name.."."
+        parseDefinitions()
+        expect("}")
+        namespace = oldnamespace
+    end
+    local function parseDefinition()
+        local d = { name = parseDefinedName() }
+        expect("=")
+        d.type = parseType()
+        d.namespace = namespace
+        definitions:insert(d)
+    end
+    function parseDefinitions()
+        while cur ~= "EOF" and cur ~= "}" do
+            if cur == "module" then parseModule()
+            else parseDefinition() end
         end
-        return ds
     end
     next()
-    local defs = parseDefinitions()
+    parseDefinitions()
     expect("EOF")
-    return defs
+    return definitions
 end
 
 local function checkbuiltin(t)
@@ -220,7 +246,7 @@ end
 defaultchecks["any"] = function() return true end
 
 local function NewContext()
-    return setmetatable({ checks = setmetatable({},{__index = defaultchecks}), members = {}, list = {}, uniquelist = {}, listcache = {}, optional = {}, definitions = {} },Context)
+    return setmetatable({ checks = setmetatable({},{__index = defaultchecks}), members = {}, list = {}, uniquelist = {}, listcache = {}, optional = {}, definitions = {}, namespaces = {}},Context)
 end
 
 function Context:GetCheckForField(unique,field)
@@ -240,11 +266,22 @@ function Context:GetCheckForField(unique,field)
     end
     return check
 end
-
+local function basename(name)
+    return name:match("([^.]*)$")
+end
+function Context:_SetDefinition(name,value)
+    local ctx = self.namespaces
+    for part in name:gmatch("([^.]*)%.") do
+        ctx[part] = ctx[part] or {}
+        ctx = ctx[part]
+    end
+    local base = basename(name)
+    ctx[base],self.definitions[name] = value,value
+end
 function Context:DeclareClass(name)
     assert(not self.definitions[name], "class name already defined")
     local m = {}
-    self.definitions[name] = { members = m }
+    self:_SetDefinition(name,{ members = m })
     self.checks[name] = function(v) return m[getmetatable(v) or false] or false end
 end
 local function reporterr(i,name,tn,v,ii)
@@ -264,6 +301,15 @@ function Context:DefineClass(name,unique,fields)
     local class = self.definitions[name]
     
     if fields then
+        for _,f in ipairs(fields) do 
+            if f.namespace then -- resolve field type to fully qualified name
+                local fullname = f.namespace..f.type
+                if self.definitions[fullname] then
+                    f.type = fullname
+                end
+                f.namespace = nil 
+            end
+        end
         class.__fields = fields -- for reflection in user-defined behavior
         local names = List()
         local checks = List()
@@ -378,9 +424,9 @@ function Context:Define(text)
             for i,c in ipairs(d.type.constructors) do
                 local child = self:DefineClass(c.name,c.unique,c.fields)
                 parent.members[child] = true --mark that any subclass is a member of its parent 
-                child.kind = c.name
+                child.kind = basename(c.name)
                 if not c.fields then --single value, just create it
-                    self.definitions[c.name] = setmetatable({},child)
+                    self:_SetDefinition(c.name, setmetatable({},child))
                 end
             end
         else
