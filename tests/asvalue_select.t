@@ -1,0 +1,13 @@
+local s = `terralib.select(0 > 0, 0, 1 + 1)
+assert(s:asvalue() == 2)
+local s = `terralib.select(0 >= -1, 0, 1)
+assert(s:asvalue() == 0)
+local s = `terralib.select(false and false, 0, 1 - 2)
+assert(s:asvalue() == -1)
+local s = `terralib.select(false or true, 0, 1)
+assert(s:asvalue() == 0)
+local foo = terra(i : int) return i > 0 end
+local s = `terralib.select(foo(123) or true, 0, 1)
+assert(s:asvalue() == 0)
+local s = `terralib.select(foo(123) and false, 0, 1)
+assert(s:asvalue() == 1)
