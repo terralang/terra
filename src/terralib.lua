@@ -864,12 +864,16 @@ function T.quote:asvalue()
                 t[key] = v
             end
             return t
-        elseif e:is "operator" and e.operator == tokens["-"] and #e.operands == 1 then
-            local v,er = getvalue(e.operands[1])
-            return type(v) == "number" and -v, er
         elseif e:is "var" then return e.symbol
         else
-            return nil, "not a constant value (note: :asvalue() isn't implement for all constants yet)"
+            local runconstantprop = function()
+                return terra.constant(self):get()
+            end
+            local status,value  = pcall(runconstantprop)
+            if not status then
+                return nil, "not a constant value (note: :asvalue() isn't implement for all constants yet), error propagating constant was: "..tostring(value)
+            end
+            return value
         end
     end
     return getvalue(self.tree)
