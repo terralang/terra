@@ -137,7 +137,7 @@ struct DisassembleFunctionListener : public JITEventListener {
         for(auto & S : size_map) {
             object::SymbolRef sym = S.first;
 #if LLVM_VERSION < 39
-            InitializeDebugData(sym.getName().get(),type,S.second);
+            InitializeDebugData(sym.getName().get(),sym.getType(),S.second);
 #else
             auto name = sym.getName();
             auto type = sym.getType();
