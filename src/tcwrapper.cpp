@@ -910,13 +910,19 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
         terra_reporterror(T,"compilation of included c code failed\n");
     }
     optimizemodule(TT,M);
-
+#if LLVM_VERSION < 39
     char * err;
     if(LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource, &err)) {
         terra_pusherror(T, "linker reported error: %s",err);
         LLVMDisposeMessage(err);
         lua_error(T->L);
     }
+#else
+    if(LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
+        terra_pusherror(T, "linker reported error");
+        lua_error(T->L);
+    }
+#endif
     return 0;
 }
 

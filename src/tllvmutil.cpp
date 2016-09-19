@@ -10,7 +10,11 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #endif
 #include "llvm/MC/MCAsmInfo.h"
+#if LLVM_VERSION < 39
 #include "llvm/MC/MCDisassembler.h"
+#else
+#include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#endif
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -208,15 +212,23 @@ struct CopyConnectedComponent : public ValueMaterializer {
     CopyConnectedComponent(Module * dest_, Module * src_, llvmutil_Property copyGlobal_, void * data_, ValueToValueMapTy & VMap_)
     : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_) {}
     bool needsFreshlyNamedConstant(GlobalVariable * GV, GlobalVariable * newGV) {
-        if(GV->isConstant() && GV->hasPrivateLinkage() && GV->hasUnnamedAddr()) { //this is a candidate constant
+        if(GV->isConstant() && GV->hasPrivateLinkage() &&
+#if LLVM_VERSION < 39
+           GV->hasUnnamedAddr()
+#else
+           GV->hasAtLeastLocalUnnamedAddr()
+#endif
+           ) { //this is a candidate constant
             return !newGV->isConstant() || newGV->getInitializer() != GV->getInitializer(); //it is not equal to its target
         }
         return false;
     }
-    #if LLVM_VERSION >= 38
+    #if LLVM_VERSION == 38
     virtual Value * materializeDeclFor(Value * V) {
-    #else
+    #elif LLVM_VERSION < 38
     virtual Value * materializeValueFor(Value * V) {
+    #else
+    virtual Value * materialize(Value * V) {
     #endif
         if(Function * fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);

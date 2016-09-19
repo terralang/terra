@@ -55,11 +55,13 @@
 #include "llvmheaders_37.h"
 #elif LLVM_VERSION == 38
 #include "llvmheaders_38.h"
+#elif LLVM_VERSION == 39
+#include "llvmheaders_39.h"
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
-#define LLVM_VERSION 38
-#include "llvmheaders_38.h"
+#define LLVM_VERSION 39
+#include "llvmheaders_39.h"
 #endif
 
 #if LLVM_VERSION >= 34
@@ -105,5 +107,6 @@ typedef llvm::legacy::FunctionPassManager FunctionPassManagerT;
 typedef PassManager PassManagerT;
 typedef FunctionPassManager FunctionPassManagerT;
 #endif
+
 
 #endif

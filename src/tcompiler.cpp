@@ -136,7 +136,14 @@ struct DisassembleFunctionListener : public JITEventListener {
         auto size_map = llvm::object::computeSymbolSizes(Obj);
         for(auto & S : size_map) {
             object::SymbolRef sym = S.first;
-            InitializeDebugData(sym.getName().get(), sym.getType(),S.second);
+#if LLVM_VERSION < 39
+            InitializeDebugData(sym.getName().get(),type,S.second);
+#else
+            auto name = sym.getName();
+            auto type = sym.getType();
+            if(name && type)
+                InitializeDebugData(name.get(),type.get(),S.second);
+#endif
         }
     }
 #endif
@@ -2306,7 +2313,13 @@ if(baseT->isIntegerTy()) { \
         ValueToValueMapTy VMap;
         BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", fstate->func);
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
-            RemapInstruction(&*II, VMap,RF_IgnoreMissingEntries);
+            RemapInstruction(&*II, VMap,
+#if LLVM_VERSION < 39
+                             RF_IgnoreMissingEntries
+#else
+                             RF_IgnoreMissingLocals
+#endif
+                            );
         return NewBB;
     }
     //emit an exit path that includes the most recent num deferred statements
@@ -2946,18 +2959,25 @@ static int terra_linkllvmimpl(lua_State * L) {
     if(!mm)
         terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
     #if LLVM_VERSION >= 37
-    Module * M = mm.get().get();
+    Module * M = mm.get().release();
     #else
     Module * M = mm.get();
     #endif
 #endif
     M->setTargetTriple(TT->Triple);
+#if LLVM_VERSION < 39
     char * err;
     if(LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource, &err)) {
         terra_pusherror(T, "linker reported error: %s",err);
         LLVMDisposeMessage(err);
         lua_error(T->L);
     }
+#else
+    if(LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
+        terra_pusherror(T, "linker reported error");
+        lua_error(T->L);
+    }
+#endif
     return 0;
 }
 
