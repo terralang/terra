@@ -34,7 +34,7 @@ for line in io.popen(lscmd):lines() do
         print(file .. ":")
         local execstring = getcommand(file) .. " " .. file
         local result = os.execute(execstring)
-        if type(result) == "number" and result == 0 or result then
+        if type(result) == "number" and result == 0 or result == true then
             table.insert(passed,file)
         else
             --error("fail")
