@@ -4,13 +4,11 @@ terra foo(a : int, b : int)
     return a + b
 end
 
-local ffi =  require 'ffi'
-
-local name = (ffi.os == "Windows" and "foo.dll" or "foo.so")
+local name = (terralib.os == "Windows" and "foo.dll" or "foo.so")
 
 local args = {}
 
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
 	args = {"/IMPLIB:foo.lib","/EXPORT:foo" }
 end
 

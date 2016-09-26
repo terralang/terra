@@ -27,7 +27,7 @@ terra main(argc : int, argv : &rawstring)
     return 0;
 end
 
-if ffi.os ~= "Windows" then
+if terralib.os ~= "Windows" then
     print(libpath)
     local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so"}
     if require("ffi").os == "OSX" then

@@ -3321,7 +3321,7 @@ terra.includepath = os.getenv("INCLUDE_PATH") or "."
 
 local internalizedfiles = {}
 local function fileparts(path)
-    local fileseparators = ffi.os == "Windows" and "\\/" or "/"
+    local fileseparators = terra.os == "Windows" and "\\/" or "/"
     local pattern = "[%s]([^%s]*)"
     return path:gmatch(pattern:format(fileseparators,fileseparators))
 end
@@ -3366,7 +3366,7 @@ function terra.includecstring(code,cargs,target)
     local args = terra.newlist {"-O3","-Wno-deprecated","-resource-dir",clangresourcedirectory}
     target = target or terra.nativetarget
 
-    if (target == terra.nativetarget and ffi.os == "Linux") or (target.Triple and target.Triple:match("linux")) then
+    if (target == terra.nativetarget and terra.os == "Linux") or (target.Triple and target.Triple:match("linux")) then
         args:insert("-internal-isystem")
         args:insert(clangresourcedirectory.."/include")
     end
@@ -4012,13 +4012,13 @@ end
 
 
 -- configure path variables
-terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
+terra.cudahome = os.getenv("CUDA_HOME") or (terra.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
 terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"}; 
                        Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"}; 
-                       Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[ffi.os]
+                       Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[terra.os]
 for name,path in pairs(terra.cudalibpaths) do
 	path = path:gsub("%$CUDA_HOME",terra.cudahome)
-	if path:match("%*") and ffi.os == "Windows" then
+	if path:match("%*") and terra.os == "Windows" then
 		local F = io.popen(('dir /b /s "%s" 2> nul'):format(path))
 		if F then
 			path = F:read("*line") or path
@@ -4029,7 +4029,7 @@ for name,path in pairs(terra.cudalibpaths) do
 end                       
 
 terra.systemincludes = List()
-if ffi.os == "Windows" then
+if terra.os == "Windows" then
     -- this is the reason we can't have nice things
     local function registrystring(key,value,default)
     	local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
@@ -4057,11 +4057,10 @@ if ffi.os == "Windows" then
     end
 end
 
-
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
-local defaultterrahome = ffi.os == "Windows" and "C:\\Program Files\\terra" or "/usr/local"
+local defaultterrahome = terra.os == "Windows" and "C:\\Program Files\\terra" or "/usr/local"
 terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or defaultterrahome
-local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
+local terradefaultpath =  terra.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
                           or ";./?.t;"..terra.terrahome.."/share/terra/?.t;"
 
 package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)

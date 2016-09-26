@@ -1,5 +1,4 @@
-local ffi = require("ffi")
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
   return
 end
 
@@ -9,5 +8,4 @@ terra dostat()
 	C.stat("stattest.t",&s)
 	return s.st_size
 end
-
-assert(dostat() == 210)
+assert(dostat() == 187)

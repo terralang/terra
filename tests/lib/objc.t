@@ -1,5 +1,4 @@
-local ffi = require("ffi")
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
 	return
 end
 

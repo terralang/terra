@@ -7,8 +7,7 @@ terra foo()
 end
 
 local test = require("test")
-local ffi = require("ffi")
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
 	test.eq(foo(),0)
 else
 	test.eq(foo(),10)

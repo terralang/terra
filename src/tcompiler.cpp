@@ -366,6 +366,16 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
 }
 
+#if defined(_WIN32)
+#define TERRA_OS "Windows"
+#elif defined(__linux__)
+#define TERRA_OS "Linux"
+#elif defined(__MACH__) && defined(__APPLE__)
+#define TERRA_OS "OSX"
+#else
+#define TERRA_OS "Other"
+#endif
+
 int terra_compilerinit(struct terra_State * T) {
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
@@ -377,7 +387,8 @@ int terra_compilerinit(struct terra_State * T) {
 
     lua_pushnumber(T->L,LLVM_VERSION);
     lua_setfield(T->L,-2, "llvmversion");
-    
+    lua_pushstring(T->L,TERRA_OS);
+    lua_setfield(T->L,-2, "os");
     lua_pop(T->L,1); //remove terra from stack
     
     T->C = new terra_CompilerState();

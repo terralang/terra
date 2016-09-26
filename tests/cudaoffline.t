@@ -51,15 +51,14 @@ terra main() : int
 end
 
 
-local ffi = require 'ffi'
-local path = ({ OSX = "/lib", Linux = "/lib64", Windows = "\\lib\\x64" })[ffi.os]
+local path = ({ OSX = "/lib", Linux = "/lib64", Windows = "\\lib\\x64" })[terralib.os]
 path = terralib.cudahome..path
 
 
-local args = ffi.os == "Windows" and {path.."\\cuda.lib", path.."\\cudart.lib"} 
+local args = terralib.os == "Windows" and {path.."\\cuda.lib", path.."\\cudart.lib"} 
                                  or {"-L"..path, "-Wl,-rpath,"..path, "-lcuda", "-lcudart"}
 
-local name = ffi.os == "Windows" and ".\\cudaoffline.exe" or "./cudaoffline"
+local name = terralib.os == "Windows" and ".\\cudaoffline.exe" or "./cudaoffline"
 terralib.saveobj(name,{ main = main },args)
 assert(os.execute(name) == 0)
 

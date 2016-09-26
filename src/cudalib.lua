@@ -91,7 +91,7 @@ local struct CUctx_st
 local struct CUfunc_st
 local struct CUlinkState_st
 local struct CUmod_st
-local snprintf = ffi.os == "Windows" and "_snprintf" or "snprintf"
+local snprintf = terralib.os == "Windows" and "_snprintf" or "snprintf"
 -- import all CUDA state that we need, we avoid includec because it is slow
 local C = {
     CU_JIT_ERROR_LOG_BUFFER = 5;
@@ -316,7 +316,7 @@ local function dumpsass(data,sz)
     local f = io.open("dump.sass","wb")
     f:write(data)
     f:close()
-    local nvdisasm = terralib.cudahome..(ffi.os == "Windows" and "\\bin\\nvdisasm.exe" or "/bin/nvdisasm")
+    local nvdisasm = terralib.cudahome..(terralib.os == "Windows" and "\\bin\\nvdisasm.exe" or "/bin/nvdisasm")
     os.execute(string.format("%q --print-life-ranges dump.sass",nvdisasm))
 end
 dumpsass = terralib.cast({&opaque,uint64} -> {},dumpsass)

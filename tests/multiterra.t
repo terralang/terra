@@ -17,7 +17,7 @@ int terra_loadstring(lua_State *L, const char *s);
 double luaL_checknumber(lua_State * L,int);
 ]]
 
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
   -- fake it on windows
   C.pthread_t = int
   C.pthread_create = terra(t : &int, stuff : &opaque,fn : &opaque -> &opaque, data : &opaque)
