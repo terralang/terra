@@ -83,7 +83,7 @@ $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
 
 $(BUILD)\internalizedfiles.h:	$(LUAJIT)  $(SRC)\geninternalizedfiles.lua
 	cd $(TERRA_DIR)
-	$(LUAJIT) src\geninternalizedfiles.lua Windows build\internalizedfiles.h $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" $(TERRA_DIR)\lib "%.t$$" 
+	$(LUAJIT) src\geninternalizedfiles.lua Windows $(CLANG_RESOURCE_DIRECTORY) build\internalizedfiles.h 
 
 EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /EXPORT:terra_loadfile /EXPORT:terra_loadbuffer /EXPORT:terra_loadstring /EXPORT:terra_llvmshutdown
 

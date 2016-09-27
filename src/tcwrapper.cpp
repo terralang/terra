@@ -981,5 +981,5 @@ void terra_cwrapperinit(terra_State * T) {
     lua_pushcclosure(T->L,include_c,1);
     lua_setfield(T->L,-2,"registercfile");
     
-    lua_pop(T->L,-1); //terra object
+    lua_pop(T->L,1); //terra object
 }

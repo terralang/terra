@@ -127,7 +127,7 @@ LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua
 
 EXEOBJS = main.o linenoise.o
 
-EMBEDDEDLUA = $(addprefix build/,$(LIBLUA:.lua=.h))
+EMBEDDEDLUA = $(addprefix build/,$(LIBLUA:.lua=.bc))
 GENERATEDHEADERS = $(EMBEDDEDLUA) build/clangpaths.h build/internalizedfiles.h
 
 LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
@@ -216,8 +216,8 @@ $(BIN2C):	src/bin2c.c
 
 #rule for packaging lua code into a header file
 # fix narrowing warnings by using unsigned char
-build/%.h:	src/%.lua $(PACKAGE_DEPS)
-	$(LUAJIT) -bg $< -t h - | sed "s/char/unsigned char/" > $@
+build/%.bc:	src/%.lua $(PACKAGE_DEPS)
+	$(LUAJIT) -b -g $< $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
@@ -225,8 +225,8 @@ build/%.h:	src/%.lua $(PACKAGE_DEPS)
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
-build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t
-	$(LUAJIT) src/geninternalizedfiles.lua POSIX $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
+build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t $(EMBEDDEDLUA)
+	$(LUAJIT) src/geninternalizedfiles.lua POSIX $(CLANG_RESOURCE_DIRECTORY) $@
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
