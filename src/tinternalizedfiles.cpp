@@ -18,6 +18,8 @@ int terra_loadbytecodes(lua_State * L, const unsigned char * bytecodes, size_t s
 }
 
 int terra_registerinternalizedfiles(lua_State * L, int terratable) {
+    
+#ifndef TERRA_EXTERNAL_TERRALIB
     for(int i = 0; luafile_indices[i] != -1; i++) {
         int idx = luafile_indices[i];
         std::string name = headerfile_names[idx];
@@ -25,6 +27,16 @@ int terra_registerinternalizedfiles(lua_State * L, int terratable) {
         if(err)
             return err;
     }
+#else
+    lua_getglobal(L,"package");
+    lua_getfield(L,-1,"path");
+    lua_pushstring(L,";");
+    lua_pushstring(L,TERRA_EXTERNAL_TERRALIB);
+    lua_concat(L,3);
+    lua_setfield(L,-2,"path");
+    lua_pop(L,1);
+#endif
+    
     lua_getglobal(L,"require");
     lua_pushstring(L,"terralib");
     int err = lua_pcall(L,1,0,0);

@@ -65,6 +65,11 @@ LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
+
+#set TERRA_EXTERNAL_TERRALIB=1 to use the on-disk lua files like terralib.lua, useful for faster iteration when debugging terra itself.
+ifneq ($(TERRA_EXTERNAL_TERRALIB),)
+FLAGS += -DTERRA_EXTERNAL_TERRALIB="\"$(realpath src)/?.lua\""
+endif
 ifneq ($(LLVM_VERSION), 32)
 CPPFLAGS += -std=c++11
 endif
@@ -141,7 +146,6 @@ LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 DYNLIBRARY = release/lib/terra.so
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
-BIN2C = build/bin2c
 
 #put any install-specific stuff in here
 -include Makefile.inc
@@ -210,12 +214,7 @@ $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
-$(BIN2C):	src/bin2c.c
-	$(CC) -O3 -o $@ $<
-
-
-#rule for packaging lua code into a header file
-# fix narrowing warnings by using unsigned char
+#rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS)
 	$(LUAJIT) -b -g $< $@
 
