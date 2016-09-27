@@ -1,3 +1,6 @@
+############################
+# Configurable options
+############################
 
 # If the defaults for LLVM_CONFIG are not right for your installation
 # create a Makefile.inc file and point LLVM_CONFIG at the llvm-config binary for your llvm distribution
@@ -18,6 +21,54 @@ CLANG ?= $(shell which clang-3.5 clang | head -1)
 CXX ?= $(CLANG)++
 CC ?= $(CLANG)
 
+# top-level build rule, must be first
+EXECUTABLE = release/bin/terra
+DYNLIBRARY = release/lib/terra.so
+.PHONY:	all clean purge test release install
+all:	$(EXECUTABLE) $(DYNLIBRARY)
+
+UNAME := $(shell uname)
+ifeq ($(UNAME), Darwin)
+WGET = curl -o
+else
+WGET = wget -O
+endif
+
+############################
+# Rules for building LuaJIT
+############################
+
+# Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
+#LUAJIT_VERSION_BASE =2.1
+#LUAJIT_VERSION_EXTRA =.0-beta2
+
+LUAJIT_VERSION_BASE ?= 2.0
+LUAJIT_VERSION_EXTRA ?= .4
+LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
+LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
+LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
+LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
+LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
+LUA_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
+LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
+LUA ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
+
+build/$(LUAJIT_TAR):
+	$(WGET) build/$(LUAJIT_TAR) $(LUAJIT_URL)
+
+build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
+	(cd build; tar -xf $(LUAJIT_TAR))
+	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+
+#rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
+build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
+	$(LUA) -b -g $< $@
+
+	
+###########################
+# Rules for building Terra
+###########################
+
 LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 
 #if clang is not installed in the same prefix as llvm
@@ -33,7 +84,6 @@ ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 
 .SUFFIXES:
 .SECONDARY:
-UNAME := $(shell uname)
 
 
 AR = ar
@@ -41,22 +91,7 @@ LD = ld
 FLAGS += -Wall -g -fPIC
 LFLAGS = -g
 
-# Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
-#LUAJIT_VERSION_BASE =2.1
-#LUAJIT_VERSION_EXTRA =.0-beta2
-
-LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .4
-LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
-LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
-LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
-LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
-LUAJIT ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
-
-FLAGS += -I build -I $(LUAJIT_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
+FLAGS += -I build -I $(LUA_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-common -Wcast-qual
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
@@ -83,7 +118,7 @@ DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.so"
 TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
-LLVM_LIBRARY_FLAGS += $(LUAJIT_LIB)
+LLVM_LIBRARY_FLAGS += $(LUA_LIB)
 LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
 LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
                       -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
@@ -109,7 +144,7 @@ ifeq ($(UNAME), Linux)
 SUPPORT_LIBRARY_FLAGS += -ldl -pthread
 endif
 
-PACKAGE_DEPS += $(LUAJIT_LIB)
+PACKAGE_DEPS += $(LUA_LIB)
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
@@ -139,19 +174,11 @@ LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 
 OBJS = $(LIBOBJS) $(EXEOBJS)
 
-EXECUTABLE = release/bin/terra
 LIBRARY = release/lib/libterra.a
 LIBRARY_NOLUA = release/lib/libterra_nolua.a
 LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
-DYNLIBRARY = release/lib/terra.so
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
-
-#put any install-specific stuff in here
--include Makefile.inc
-
-.PHONY:	all clean purge test release install
-all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	$(EXECUTABLE)
 	(cd tests; ./run)
@@ -164,31 +191,21 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
 
-build/$(LUAJIT_TAR):
-ifeq ($(UNAME), Darwin)
-	curl $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
-else
-	wget $(LUAJIT_URL) -O build/$(LUAJIT_TAR)
-endif
 
-build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
-	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
-
-release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
-	cp $(LUAJIT_INCLUDE)/$*.h $@
+release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
+	cp $(LUA_INCLUDE)/$*.h $@
     
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
-	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
+	< build/llvm_objects/llvm_list $(LUA) src/unpacklibraries.lua build/llvm_objects
 	# include all luajit objects, since the entire lua interface is used in terra 
 
 
-build/lua_objects/lj_obj.o:    $(LUAJIT_LIB)
+build/lua_objects/lj_obj.o:    $(LUA_LIB)
 	mkdir -p build/lua_objects
-	cd build/lua_objects; ar x $(realpath $(LUAJIT_LIB))
+	cd build/lua_objects; ar x $(realpath $(LUA_LIB))
 
 $(LIBRARY):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
 	mkdir -p release/lib
@@ -214,18 +231,14 @@ $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
-#rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
-build/%.bc:	src/%.lua $(PACKAGE_DEPS)
-	$(LUAJIT) -b -g $< $@
-
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
 #to configure the paths	
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
+	$(LUA) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t $(EMBEDDEDLUA)
-	$(LUAJIT) src/geninternalizedfiles.lua POSIX $(CLANG_RESOURCE_DIRECTORY) $@
+	$(LUA) src/geninternalizedfiles.lua POSIX $(CLANG_RESOURCE_DIRECTORY) $@
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
