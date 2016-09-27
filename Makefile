@@ -30,13 +30,39 @@ all:	$(EXECUTABLE) $(DYNLIBRARY)
 UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 WGET = curl -o
+LUA_TARGET = macosx
 else
 WGET = wget -O
+LUA_TARGET = linux
 endif
 
 ############################
-# Rules for building LuaJIT
+# Rules for building Lua/JIT
 ############################
+
+ifneq ($(TERRA_USE_PUC_LUA),)
+
+LUA_VERSION=lua-5.1.5
+LUA_TAR = $(LUA_VERSION).tar.gz
+LUA_URL = https://www.lua.org/ftp/$(LUA_TAR)
+LUA_DIR = build/$(LUA_VERSION)
+LUA_LIB = $(LUA_DIR)/lib/liblua.a
+LUA_INCLUDE = $(LUA_DIR)/include
+LUA = $(LUA_DIR)/bin/lua
+
+build/$(LUA_TAR):
+	$(WGET) build/$(LUA_TAR) $(LUA_URL)
+
+$(LUA_LIB): build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); make $(LUA_TARGET) && make local)
+
+#rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
+build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
+	$(LUA_DIR)/bin/luac -o $@ $<
+
+
+else
 
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
 #LUAJIT_VERSION_BASE =2.1
@@ -63,8 +89,8 @@ build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
 	$(LUA) -b -g $< $@
+endif
 
-	
 ###########################
 # Rules for building Terra
 ###########################
@@ -190,7 +216,6 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
-
 
 release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
 	cp $(LUA_INCLUDE)/$*.h $@
