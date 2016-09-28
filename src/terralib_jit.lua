@@ -156,6 +156,11 @@ for _,typ in ipairs(terra.types.integraltypes) do
     typ:cstring() --pre-register with LuaJIT FFI to make typeof work for 1ULL, etc.
 end
 
+function T.terrafunction:__call(...)
+    local ffiwrapper = self:getpointer()
+    return ffiwrapper(...)
+end
+
 -- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
 function terra.typeof(obj)
     if type(obj) ~= "cdata" then

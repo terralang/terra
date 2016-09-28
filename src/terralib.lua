@@ -513,10 +513,6 @@ function T.globalvalue:getpointer()
 end
 
 -- TERRAFUNCTION
-function T.terrafunction:__call(...)
-    local ffiwrapper = self:getpointer()
-    return ffiwrapper(...)
-end
 function T.terrafunction:setinlined(v)
     assert(self:isdefined(), "attempting to set the inlining state of an undefined function")
     self.definition.alwaysinline = not not v
