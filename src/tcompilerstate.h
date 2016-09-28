@@ -66,4 +66,17 @@ struct terra_CompilerState {
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
 };
 
+static inline TerraCompilationUnit * terra_tocompilationunit(lua_State * L, int idx) {
+    void * blockaddr = lua_touserdata(L,idx);
+    if(!blockaddr)
+        return NULL;
+    return *(TerraCompilationUnit**)blockaddr;
+}
+static inline TerraTarget * terra_totarget(lua_State * L, int idx) {
+    void * blockaddr = lua_touserdata(L,idx);
+    if(!blockaddr)
+        return NULL;
+    return *(TerraTarget**)blockaddr;
+}
+
 #endif

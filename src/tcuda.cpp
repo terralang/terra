@@ -168,7 +168,7 @@ int terra_toptx(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     initializeNVVMState(T);
     lua_getfield(L,1,"llvm_cu");
-    TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,-1);
+    TerraCompilationUnit * CU = terra_tocompilationunit(L,-1);
     llvm::Module * M = CU->M;
     int annotations = 2;
     int dumpmodule = lua_toboolean(L,3);

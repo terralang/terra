@@ -929,7 +929,7 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
 int include_c(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void) T;
     lua_getfield(L, TARGET_POS, "llvm_target");
-    TerraTarget * TT = (TerraTarget*)terra_tocdatapointer(L,-1);
+    TerraTarget * TT = terra_totarget(L,-1);
     const char * code = luaL_checkstring(L, 2);
     int N = lua_objlen(L, 3);
     std::vector<const char *> args;

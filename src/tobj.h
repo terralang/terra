@@ -8,16 +8,6 @@ extern "C" {
 }
 #include "tkind.h"
 
-//helper function to handle cdata objects passed to C using legacy API
-static inline void * terra_tocdatapointer(lua_State * L, int idx) {
-    if(10 != lua_type(L,idx)) return NULL; //not a cdata, 10 is from LuaJIT sources since it is not exposed in the normal API
-    //argument is a 'cdata'.
-    //calling topointer on it will return a pointer to the cdata payload
-    void * const * cdata = (void * const *) lua_topointer(L,idx);
-    if(!cdata) return NULL;
-    return *cdata;
-}
-
 //object to hold reference to lua object and help extract information
 struct Obj {
     Obj() {
@@ -104,13 +94,6 @@ struct Obj {
         push();
         lua_getfield(L,-1,field);
         void * u = lua_touserdata(L,-1);
-        pop(2);
-        return u;
-    }
-    void * cd(const char * field) {
-        push();
-        lua_getfield(L,-1,field);
-        void * u = terra_tocdatapointer(L,-1);
         pop(2);
         return u;
     }
