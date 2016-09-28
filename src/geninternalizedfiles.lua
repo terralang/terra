@@ -1,6 +1,5 @@
 local os, CLANG_RESOURCE_DIRECTORY,outputfilename = arg[1],arg[2],arg[3]
 
-local ffi = require("ffi")
 local findcmd = os == "Windows" and "cmd /c dir /b /s \"%s\"" or "find %q"
 
 

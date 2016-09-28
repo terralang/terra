@@ -10,7 +10,7 @@ terra foo(L : &C.lua_State) : int
     C.lua_getfield(L,1,"a")
     return 1
 end
-local foob = terralib.bindtoluaapi(foo:getpointer())
+local foob = terralib.bindtoluaapi(foo:compile())
 
 assert(type(foob) == "function")
 

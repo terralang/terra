@@ -1,9 +1,22 @@
 -- See Copyright Notice in ../LICENSE.txt
 require("strict")
 local asdl = require("asdl")
-
-local ffi = require("ffi")
 local List = asdl.List
+
+local function isluajit()
+    return type(rawget(_G,"jit")) == "table"
+end
+local ffi
+if isluajit() then
+    ffi = require("ffi")
+else
+    ffi = setmetatable({},{
+        __index = function(self,idx)
+            print()
+            error("ffi."..tostring(idx).." accessed:\n"..debug.traceback())
+        end
+    })
+end
 
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
@@ -26,6 +39,7 @@ if false then
         end
     end
     debug.sethook(debughook,"l")
+    assert(isluajit(),"coverage requires luajit")
     -- make a fake ffi object that causes dumplineinfo to be called when
     -- the lua state is removed
     ffi.cdef [[
@@ -166,10 +180,12 @@ local function dbprintraw(level,obj)
 end
 
 --debug wrapper around cdef function to print out all the things being defined
-local oldcdef = ffi.cdef
-ffi.cdef = function(...)
-    dbprint(2,...)
-    return oldcdef(...)
+if isluajit() then
+    local oldcdef = ffi.cdef
+    ffi.cdef = function(...)
+        dbprint(2,...)
+        return oldcdef(...)
+    end
 end
 
 -- TREE
@@ -1348,6 +1364,10 @@ do
         return uniquetypenameset(tovalididentifier(name))
     end
     function T.Type:cstring()
+        if not isluajit() then
+            print("WARNING: NYI - cstring, returning nil ...")
+            return
+        end
         if not self.cachedcstring then
             --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
             --this makes it possible to predict the syntax of subsequent typedef operations
@@ -3322,6 +3342,10 @@ local function fileparts(path)
     return path:gmatch(pattern:format(fileseparators,fileseparators))
 end
 function terra.registerinternalizedfiles(names,contents,sizes)
+    if not isluajit() then
+        print("WARNING: NYI - internalized files views from lua or C")
+        return
+    end
     names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
     for i = 0,math.huge do
         if names[i] == nil then break end
@@ -4456,6 +4480,10 @@ _G["operator"] = terra.internalmacro(function(diag,anchor,op,...)
 end)
 --called by tcompiler.cpp to convert userdata pointer to stacktrace function to the right type;
 function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
+    if not isluajit() then
+        print("NYI - debug functions, returning ...")
+        return
+    end
     local P,FP = terra.types.pointer, terra.types.funcpointer
     local po = P(terra.types.opaque)
     local ppo = P(po)

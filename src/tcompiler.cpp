@@ -2930,11 +2930,12 @@ static int terra_pointertolightuserdata(lua_State * L) {
 static int terra_bindtoluaapi(lua_State * L) {
     int N = lua_gettop(L);
     assert(N >= 1);
-    void * const * fn = (void * const *) lua_topointer(L,1);
+    void * fn = lua_touserdata(L,1);
     assert(fn);
-    lua_pushcclosure(L, (lua_CFunction) *fn, N - 1);
+    lua_pushcclosure(L, (lua_CFunction) fn, N - 1);
     return 1;
 }
+
 #ifdef _WIN32
 #define ISFINITE(v) _finite(v)
 #else
