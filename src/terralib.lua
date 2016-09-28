@@ -2,21 +2,7 @@
 require("strict")
 local asdl = require("asdl")
 local List = asdl.List
-
-local function isluajit()
-    return type(rawget(_G,"jit")) == "table"
-end
-local ffi
-if isluajit() then
-    ffi = require("ffi")
-else
-    ffi = setmetatable({},{
-        __index = function(self,idx)
-            print()
-            error("ffi."..tostring(idx).." accessed:\n"..debug.traceback())
-        end
-    })
-end
+local util = require("util")
 
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
@@ -39,7 +25,8 @@ if false then
         end
     end
     debug.sethook(debughook,"l")
-    assert(isluajit(),"coverage requires luajit")
+    assert(util.isluajit(),"coverage requires luajit")
+    local ffi = require("ffi")
     -- make a fake ffi object that causes dumplineinfo to be called when
     -- the lua state is removed
     ffi.cdef [[
@@ -163,31 +150,6 @@ function T.allocvar:settype(typ)
     self.type, self.symbol.type = typ,typ
 end
 
--- temporary until we replace with asdl
-local tokens = setmetatable({},{__index = function(self,idx) return idx end })
-
-terra.isverbose = 0 --set by C api
-
-local function dbprint(level,...) 
-    if terra.isverbose >= level then
-        print(...)
-    end
-end
-local function dbprintraw(level,obj)
-    if terra.isverbose >= level then
-        terra.printraw(obj)
-    end
-end
-
---debug wrapper around cdef function to print out all the things being defined
-if isluajit() then
-    local oldcdef = ffi.cdef
-    ffi.cdef = function(...)
-        dbprint(2,...)
-        return oldcdef(...)
-    end
-end
-
 -- TREE
 function T.tree:is(value)
     return self.kind == value
@@ -291,9 +253,6 @@ end
 
 -- END TREE
 
-local function mkstring(self,begin,sep,finish)
-    return begin..table.concat(self:map(tostring),sep)..finish
-end
 terra.newlist = List
 function terra.islist(l) return List:isclassof(l) end
 
@@ -548,7 +507,7 @@ end
 function T.globalvalue:getpointer()
     if not self.ffiwrapper then
         local rawptr = self:compile()
-        self.ffiwrapper = ffi.cast(terra.types.pointer(self.type):cstring(),rawptr)
+        self.ffiwrapper = terra.cast(terra.types.pointer(self.type),rawptr)
     end
     return self.ffiwrapper
 end
@@ -860,6 +819,8 @@ function T.quote:asvalue()
     local function getvalue(e)
         if e:is "literal" then
             if type(e.value) == "userdata" then
+                -- TODO: no-puc lua, and this does not handle signs correctly anyway
+                local ffi = require("ffi")
                 return tonumber(ffi.cast("uint64_t *",e.value)[0])
             else
                 return e.value
@@ -1160,27 +1121,6 @@ end
 -- TYPE
 
 do 
-
-    --returns a function string -> string that makes names unique by appending numbers
-    local function uniquenameset(sep)
-        local cache = {}
-        local function get(name)
-            local count = cache[name]
-            if not count then
-                cache[name] = 1
-                return name
-            end
-            local rename = name .. sep .. tostring(count)
-            cache[name] = count + 1
-            return get(rename) -- the string name<sep><count> might itself be a type name already
-        end
-        return get
-    end
-    --sanitize a string, making it a valid lua/C identifier
-    local function tovalididentifier(name)
-        return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1"):gsub("^$","_") --sanitize input to be valid identifier
-    end
-    
     local function memoizefunction(fn)
         local info = debug.getinfo(fn,'u')
         local nparams = not info.isvararg and info.nparams
@@ -1232,7 +1172,7 @@ do
             return self.name
         elseif self:ispointer() then return "&"..tostring(self.type)
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
-        elseif self:isfunction() then return mkstring(self.parameters,"{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
+        elseif self:isfunction() then return util.mkstring(self.parameters,"{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
         elseif self:isarray() then
             local t = tostring(self.type)
             if self.type:ispointer() then
@@ -1330,146 +1270,7 @@ do
             return self[key]
         end
     end
-
-    local function definecstruct(nm,layout)
-        local str = "struct "..nm.." { "
-        local entries = layout.entries
-        for i,v in ipairs(entries) do
-        
-            local prevalloc = entries[i-1] and entries[i-1].allocation
-            local nextalloc = entries[i+1] and entries[i+1].allocation
     
-            if v.inunion and prevalloc ~= v.allocation then
-                str = str .. " union { "
-            end
-            
-            local keystr = terra.islabel(v.key) and v.key:tocname() or v.key
-            str = str..v.type:cstring().." "..keystr.."; "
-            
-            if v.inunion and nextalloc ~= v.allocation then
-                str = str .. " }; "
-            end
-            
-        end
-        str = str .. "};"
-        local status,err = pcall(ffi.cdef,str)
-        if not status then 
-            if err:match("attempt to redefine") then
-                print(("warning: attempting to define a C struct %s that has already been defined by the luajit ffi, assuming the Terra type matches it."):format(nm))
-            else error(err) end
-        end
-    end
-    local uniquetypenameset = uniquenameset("_")
-    local function uniquecname(name) --used to generate unique typedefs for C
-        return uniquetypenameset(tovalididentifier(name))
-    end
-    function T.Type:cstring()
-        if not isluajit() then
-            print("WARNING: NYI - cstring, returning nil ...")
-            return
-        end
-        if not self.cachedcstring then
-            --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
-            --this makes it possible to predict the syntax of subsequent typedef operations
-            if self:isintegral() then
-                self.cachedcstring = tostring(self).."_t"
-            elseif self:isfloat() then
-                self.cachedcstring = tostring(self)
-            elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
-                local ftype = self.type
-                local rt = (ftype.returntype:isunit() and "void") or ftype.returntype:cstring()
-                local function getcstring(t)
-                    if t == types.rawstring then
-                        --hack to make it possible to pass strings to terra functions
-                        --this breaks some lesser used functionality (e.g. passing and mutating &int8 pointers)
-                        --so it should be removed when we have a better solution
-                        return "const char *"
-                    else
-                        return t:cstring()
-                    end
-                end
-                local pa = ftype.parameters:map(getcstring)
-                if not self.cachedcstring then
-                    pa = mkstring(pa,"(",",","")
-                    if ftype.isvararg then
-                        pa = pa .. ",...)"
-                    else
-                        pa = pa .. ")"
-                    end
-                    local ntyp = uniquecname("function")
-                    local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
-                    ffi.cdef(cdef)
-                    self.cachedcstring = ntyp
-                end
-            elseif self:isfunction() then
-                error("asking for the cstring for a function?",2)
-            elseif self:ispointer() then
-                local value = self.type:cstring()
-                if not self.cachedcstring then
-                    local nm = uniquecname("ptr_"..value)
-                    ffi.cdef("typedef "..value.."* "..nm..";")
-                    self.cachedcstring = nm
-                end
-            elseif self:islogical() then
-                self.cachedcstring = "bool"
-            elseif self:isstruct() then
-                local nm = uniquecname(tostring(self))
-                ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
-                                                              --when the struct is 
-                self.cachedcstring = nm
-                if self.cachedlayout then
-                    definecstruct(nm,self.cachedlayout)
-                end
-            elseif self:isarray() then
-                local value = self.type:cstring()
-                if not self.cachedcstring then
-                    local nm = uniquecname(value.."_arr")
-                    ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
-                    self.cachedcstring = nm
-                end
-            elseif self:isvector() then
-                local value = self.type:cstring()
-                local elemSz = ffi.sizeof(value)
-                local nm = uniquecname(value.."_vec")
-                local pow2 = 1 --round N to next power of 2
-                while pow2 < self.N do pow2 = 2*pow2 end
-                ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
-                self.cachedcstring = nm 
-            elseif self == types.niltype then
-                local nilname = uniquecname("niltype")
-                ffi.cdef("typedef void * "..nilname..";")
-                self.cachedcstring = nilname
-            elseif self == types.opaque then
-                self.cachedcstring = "void"
-            elseif self == types.error then
-                self.cachedcstring = "int"
-            else
-                error("NYI - cstring")
-            end
-            if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
-            
-            --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
-            local ctype = ffi.typeof(self.cachedcstring)
-            types.ctypetoterra[tonumber(ctype)] = self
-            local rctype = ffi.typeof(self.cachedcstring.."&")
-            types.ctypetoterra[tonumber(rctype)] = self
-            
-            if self:isstruct() then
-                local function index(obj,idx)
-                    local method = self:getmethod(idx)
-                    if terra.ismacro(method) then
-                        error("calling a terra macro directly from Lua is not supported",2)
-                    end
-                    return method
-                end
-                ffi.metatype(ctype, self.metamethods.__luametatable or { __index = index })
-            end
-        end
-        return self.cachedcstring
-    end
-
-    
-
     T.struct.getentries = memoizeproperty{
         name = "entries";
         erroronrecursion = "recursively calling getentries on type, or using a type whose getentries failed";
@@ -1574,10 +1375,13 @@ do
             end
             addentrylist(entries)
             
-            dbprint(2,"Resolved Named Struct To:")
-            dbprintraw(2,self)
-            if self.cachedcstring then
-                definecstruct(self.cachedcstring,layout)
+            util.dbprint(2,"Resolved Named Struct To:")
+            util.dbprintraw(2,self)
+            -- if this type was previously registered with luajit ffi as opaque
+            -- we have to also provide a definition to luajit since it thinks it already
+            -- knows about it
+            if self.cachedcstring then 
+                self:definecstruct(layout)
             end
             return layout
         end;
@@ -1653,8 +1457,6 @@ do
         return T.Type:isclassof(t)
     end
     
-    --map from luajit ffi ctype objects to corresponding terra type
-    types.ctypetoterra = {}
     
     local function globaltype(name, typ)
         typ.name = typ.name or name
@@ -1664,6 +1466,7 @@ do
     
     --initialize integral types
     local integer_sizes = {1,2,4,8}
+    types.integraltypes = List()
     for _,size in ipairs(integer_sizes) do
         for _,s in ipairs{true,false} do
             local name = "int"..tostring(size * 8)
@@ -1672,7 +1475,7 @@ do
             end
             local typ = T.primitive("integer",size,s)
             globaltype(name,typ)
-            typ:cstring() -- force registration of integral types so calls like terra.typeof(1LL) work
+            types.integraltypes:insert(typ) -- luajit ffi will need to pre-register these to make typeof work
         end
     end  
     
@@ -1716,12 +1519,12 @@ do
             t.entries:insert {"_"..(i-1),e}
         end
         t.metamethods.__typename = function(self)
-            return mkstring(args,"{",",","}")
+            return util.mkstring(args,"{",",","}")
         end
         t:setconvertible("tuple")
         return t
     end)
-    local getuniquestructname = uniquenameset("$")
+    local getuniquestructname = util.uniquenameset("$")
     function types.newstruct(displayname,depth)
         displayname = displayname or "anon"
         depth = depth or 1
@@ -2302,7 +2105,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return terra.types.error
         elseif a == b then
             return a
-        elseif a.kind == tokens.primitive and b.kind == tokens.primitive then
+        elseif a.kind == "primitive" and b.kind == "primitive" then
             if a:isintegral() and b:isintegral() then
                 if a.bytes < b.bytes then
                     return b
@@ -2402,7 +2205,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return (insertcast(exp,terra.types.pointer(exp.type.type))) --parens are to truncate to 1 argument
         end
         -- subtracting 2 pointers
-        if  pointerlike(l.type) and pointerlike(r.type) and l.type.type == r.type.type and e.operator == tokens["-"] then
+        if  pointerlike(l.type) and pointerlike(r.type) and l.type.type == r.type.type and e.operator == "-" then
             return e:copy { operands = List {ascompletepointer(l),ascompletepointer(r)} }:withtype(terra.types.ptrdiff)
         elseif pointerlike(l.type) and r.type:isintegral() then -- adding or subtracting a int to a pointer
             return e:copy {operands = List {ascompletepointer(l),r} }:withtype(terra.types.pointer(l.type.type))
@@ -2656,14 +2459,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if not speculate then
                     diag:reporterror(anchor,"call to overloaded function does not apply to any arguments")
                     for i,typelist in ipairs(typelists) do
-                        diag:reporterror(anchor,"option ",i," with type ",mkstring(typelist,"(",",",")"))
+                        diag:reporterror(anchor,"option ",i," with type ",util.mkstring(typelist,"(",",",")"))
                         trylist(typelist,false)
                     end
                 end
                 return paramlist,nil
             else
                 if #results > 1 and not allowambiguous then
-                    local strings = results:map(function(x) return mkstring(typelists[x.idx],"type list (",",",") ") end)
+                    local strings = results:map(function(x) return util.mkstring(typelists[x.idx],"type list (",",",") ") end)
                     diag:reporterror(anchor,"call to overloaded function is ambiguous. can apply to ",unpack(strings))
                 end 
                 return results[1].expressions, results[1].idx
@@ -3341,26 +3144,17 @@ local function fileparts(path)
     local pattern = "[%s]([^%s]*)"
     return path:gmatch(pattern:format(fileseparators,fileseparators))
 end
-function terra.registerinternalizedfiles(names,contents,sizes)
-    if not isluajit() then
-        print("WARNING: NYI - internalized files views from lua or C")
-        return
-    end
-    names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
-    for i = 0,math.huge do
-        if names[i] == nil then break end
-        local name,content,size = ffi.string(names[i]),contents[i],sizes[i]
-        local cur = internalizedfiles
-        for segment in fileparts(name) do
-            cur.children = cur.children or {}
-            cur.kind = "directory"
-            if not cur.children[segment] then
-                cur.children[segment] = {} 
-            end
-            cur = cur.children[segment]
+function terra.registerinternalizedfile(name,content,size)
+    local cur = internalizedfiles
+    for segment in fileparts(name) do
+        cur.children = cur.children or {}
+        cur.kind = "directory"
+        if not cur.children[segment] then
+            cur.children[segment] = {} 
         end
-        cur.contents,cur.size,cur.kind =  terra.pointertolightuserdata(content), size, "file"
+        cur = cur.children[segment]
     end
+    cur.contents,cur.size,cur.kind =  content, size, "file"
 end
 
 local function getinternalizedfile(path)
@@ -4105,7 +3899,7 @@ local function terraloader(name)
     file = ("/?.t"):gsub("%?",fname)
     local internal = getinternalizedfile(file)
     if internal and internal.kind == "file" then
-        local str,done = ffi.string(ffi.cast("const char *",internal.contents)),false
+        local str,done = terra.string(internal.contents),false
         local fn,err = terra.load(function()
             if not done then
                 done = true
@@ -4126,26 +3920,6 @@ function terra.makeenv(env,defined,g)
         elseif getmetatable(g) == Strict then return rawget(g,idx) else return g[idx] end
     end }
     return setmetatable(env,mt)
-end
-
-function terra.new(terratype,...)
-    terratype:complete()
-    local typ = terratype:cstring()
-    return ffi.new(typ,...)
-end
-function terra.offsetof(terratype,field)
-    terratype:complete()
-    local typ = terratype:cstring()
-    if terra.islabel(field) then
-        field = field:tocname()
-    end
-    return ffi.offsetof(typ,field)
-end
-
-function terra.cast(terratype,obj)
-    terratype:complete()
-    local ctyp = terratype:cstring()
-    return ffi.cast(ctyp,obj)
 end
 
 function terra.constant(typ,init)
@@ -4181,7 +3955,7 @@ function terra.constant(typ,init)
     if not typ:isaggregate() then
         return terra.newquote(newobject(anchor,T.constant,init,typ))
     end -- otherwise this is an aggregate pack it into a string literal
-    local str,ptyp = ffi.string(init,terra.sizeof(typ)),terra.types.pointer(typ)
+    local str,ptyp = terra.string(init,terra.sizeof(typ)),terra.types.pointer(typ)
     local tree = newobject(anchor,T.literal,str,terra.types.rawstring) -- "literal"
     tree = newobject(anchor,T.cast,ptyp,tree):withtype(ptyp) -- [&typ](literal)
     tree = newobject(anchor,T.operator,"@", List { tree }):withtype(typ):setlvalue(true) -- @[&typ](literal)
@@ -4194,13 +3968,6 @@ function terra.isconstant(obj)
 end
 _G["constant"] = terra.constant
 
--- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
-function terra.typeof(obj)
-    if type(obj) ~= "cdata" then
-        error("cannot get the type of a non cdata object")
-    end
-    return terra.types.ctypetoterra[tonumber(ffi.typeof(obj))]
-end
 
 --equivalent to Lua's type function, but knows about concepts in Terra to improve error reporting
 function terra.type(t)
@@ -4480,7 +4247,7 @@ _G["operator"] = terra.internalmacro(function(diag,anchor,op,...)
 end)
 --called by tcompiler.cpp to convert userdata pointer to stacktrace function to the right type;
 function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
-    if not isluajit() then
+    if not util.isluajit() then
         print("NYI - debug functions, returning ...")
         return
     end
@@ -4501,3 +4268,9 @@ function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
 end
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
+
+if util.isluajit() then
+    require("terralib_jit")
+else
+    require("terralib_puc")
+end
