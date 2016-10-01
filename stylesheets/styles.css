@@ -58,15 +58,25 @@ a:hover small {
 }
 .title {
   width: 188px;
+  padding-right: 70px;
   margin: 0 auto;
 }
 .links {
-    max-width: 705px;
-    margin: 0 auto;
+    max-width: 758px;
+    margin: 1em auto;
 }
 .links a {
-    padding-right: 1.5em;
+    padding: 4px;
+    margin-right: .7em;
+    margin-left: .7em;
 }
+.current {
+    background: #f8f8f8;
+    padding: 3px;
+    border-radius:5px;
+    border:1px solid #e5e5e5;
+}
+
 header p {
     margin: 0px;
 }

@@ -2,7 +2,8 @@
 layout: post
 title: Getting Started
 ---
-<h1>Getting Started</h1>
+
+---
 
 * auto-gen TOC:
 {:toc}

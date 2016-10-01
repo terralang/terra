@@ -2,7 +2,8 @@
 layout: post
 title: Terra API Reference
 ---
-<h1>Terra API Reference</h1>
+
+---
 
 * auto-gen TOC:
 {:toc}

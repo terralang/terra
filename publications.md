@@ -2,9 +2,6 @@
 layout: post
 title: About Us
 ---
-Publications
-============
-
 
 **[Terra: A Multi-Stage Language for High-Performance Computing](pldi071-devito.pdf)** <br/>
 _Zachary DeVito, James Hegarty, Alex Aiken, Pat Hanrahan, and Jan Vitek_<br/>
