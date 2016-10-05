@@ -1,5 +1,5 @@
-local F = io.open("TerraForCPP.txt")
-local O = io.open("TerraForCPP.html","w")
+local F = io.open("_terraforcpp.txt")
+local O = io.open("terraforcpp.html","w")
 local cur
 local function next()
     cur = F:read("*line")

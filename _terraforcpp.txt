@@ -64,7 +64,6 @@ Using multiple files.
     #include "myfile.h"
     
     
-    
     void f() {
         myfunction();
     }
@@ -145,76 +144,166 @@ Conditional Compilation
     [ "hello".."world" ] -- escape to Lua and concat the strings there
     true, false
 
-# Declarations/Type Constructors
+# Declarations and Type Constructors
 
-
-    int x;
-    int x = 255;
-    auto x = 255;
+Declaring variables
+    void f() {
+        int x;
+        int y = 255;
+        auto z = 255;
+    }
+    ###
+    terra f() {
+        var x
+        var y : int = 255
+        var z = 255
+    end
+    ###
+    x = symbol(int)
+    y = symbol(int)
+    z = symbol(int)
+    local zdeclare = quote 
+      var [z] = 255
+    end
+    terra f() 
+        var [x]
+        var [y]
+        [zdeclare]
+        return x + y + z
+    end
+    
+Sizing integer types
     short s; long l;
+    ###
+    var s : int16, l : int64
+Non-integer primitive types
     char c = 'a'; 
     float f; double d; 
     bool b;
-    int a,b,c; //multiple declarations
-    int a[10];
-    int a[]={0,1,2};
-    float a[]={0,1,2};
-    int a[2][3]={ {1,2,3},{4,5,6} }; 
-    int* p; 
-    char * s ="hello";
-    void* p = NULL;
-    int&r = x; //doesn't exist
-    typedef String char*;
-    enum weekend {SAT,SUN}; //doesn't exist use meta-programming
-    const int c = 3; //doesn't exist (C++ doesn't actually enforce this safely anyway)
     ###
-    var x
-    var x  : int = 255
-    var x = 255
-    var s : int16, l : int65
     var c : int8 = ('a')[0] 
     var f :float, d : double 
     var b : bool
-    var a : int,b : int ,c : int -- also multiple assignments on RHS like Lua
+Multiple Declarations
+    int a = 1,b = 2,c = 3;
+    ###
+    var a : int,b : int,c : int = 1,2,3
+Arrays
+    int a[10];
+    int a[]={0,1,2};
+    
+    
+    float a[]={0,1,2};
+    
+    
+    int a[2][3]={ {1,2,3},{4,5,6} }; 
+    ###
     var a : int[10];
-    var a : int[3] = array(0,1,2) -- 'array' is an expression, not an initializer like C++
-    var a = arrayof([float],0,1,2) -- use arrayof to specify a type different from the expressions used to initialize it
+    var a : int[3] = array(0,1,2)
+    -- 'array' is an expression
+    -- not an initializer like C++
+    var a = arrayof([float],0,1,2) 
+    -- use arrayof to specify a type different
+    -- from the expressions used to initialize it
     var a : (int[3])[2] = array(array(1,2,3),array(4,5,6)); 
-    var p : &int -- read & as 'address of', so &int is an 'address of int'
-    var s : rawstring = "hello" -- rawstring == &int8 
-    var p : &opaque = nil -- opaque replaces void in pointers
-    -- references do not exist, instead operators like p.foo work on pointers
-    local String = &int8 -- typedefs are just assignments in Lua
-    enum weekend {SAT,SUN}; //doesn't exist use meta-programming
-    const int c = 3; //doesn't exist (C++ doesn't actually enforce this safely anyway)
+Pointers
+    int* p; 
     
+    char * s ="hello";
     
+    void* p = NULL;
+    ###
+    var p : &int 
+    -- read & as 'address of', so &int is an 'address of int'
+    var s : rawstring = "hello" 
+    -- rawstring == &int8 
+    var p : &opaque = nil
+    -- opaque replaces void in pointers
 
-# Global Variables/Constants
+    Vec3& r = v;
+    
+    r.x
+    ###
+    var r : &Vec3 = &v
+    -- references do not exist
+    r.x
+    -- instead '.' works like -> on pointers
+
+Typedefs
+    typedef String char*;
+    ###
+    local String = &int8 
+    -- typedefs are just assignments in Lua
+    -- because Terra types are Lua values
+
+Const
+    const int c = 3;
+    ###
+    var c = 3
+    -- const doesn't exist for variables
+
+Enum
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    enum weekend {SAT,SUN};
+    weekend f() {
+        return SAT
+    }
+    ###
+    -- doesn't exist, replicate it with meta-programming
+    local function Enum(...)
+        local t = { type = int }
+        for i,name in ipairs({...}) do
+             -- make 0-based to match C++
+            t[name] = i - 1
+        end
+        return t
+    end
+    weekend = Enum("SAT","SUN")
+    terra f() : weekend.type
+        return weekend.SAT
+    end
+
+# Globals
+    
+    
     int x = 3;
     const int x = 3;
     int x[] = { 3,4, 5};
     const int x[] = { 3,4,5};
+    void f() {
+    }
     ###
+    -- Lua functions construct
+    -- Terra constants
     x = global(int)
     x = constant(int,3)
     x = global(int,`array(3,4,5))
     x = constant(int,`array(3,4,5))
+    terra f()
+    end
     ###
     -- you can create tables of constants
-    -- using metaprogramming
     sin_values = {}
     N = 32
     for i = 1,N do
-        sin_values[i] = math.sin( 2 * math.pi * (i-1)/N))
+        sin_values[i] = 
+            math.sin( 2 * math.pi * (i-1)/N))
     end
     -- constant table of sin values embedded in code
     sin_table = constant(`arrayof(float,sin_values))
 
 
 # Storage Classes
-
-
+    
+    
     int x;
     static int y;
     
@@ -222,7 +311,7 @@ Conditional Compilation
         return x + y;
     }
     void f() {
-        static int z; // no terra equivalent
+        static int z = 0;
         return g();
     }
     extern int w;
@@ -231,103 +320,238 @@ Conditional Compilation
     -- by the 'saveobj' call
     x = global(int)
     y = global(int)
+    
     terra g() 
         return x + y
     end
     terra f()
         return g()
     end
-    
     -- only x and f are exposed as symbols
     -- but y and g will be included internally 
     -- since they are used
     terralib.saveobj("out.o", { x = x, f = f}) 
+
+    
+    
+    
+    
+    
+    
+    void f() {
+        static int z = 0;
+        return z;
+    }
+    ###
+    -- no direct 'static' equivalent
+    -- for function variables
+    -- but you can control the
+    -- lexical scope of globals
+    -- using Lua 'do' and 'end'
+    do
+        local z = global(int,0)
+        terra f()
+            return z
+        end
+    end
+    
     
 
 # Statements
-
+Assignments
     x = y;
-    x += y; // not an expression in Terra
+    x += y;
+    ###
+    x = y
+    x = x + y -- no += like Lua
+Declarations
     int x;
+    ###
+    var x : int
+Semi-Colons
     
-    {
-        int x;
+    x = y; y = z;
+    ###
+    -- Optional for clarity
+    x = y; y = z;
+    
+Blocks
+    void f() {
+        {
+            printf("hi\n");
+            printf("hi\n");
+            printf("hi\n");
+        }
     }
-    
-    if (x) a;
-    else if (y) b;
-    else c;
-    
-    while(x) a;
-    
-    for(x; y; z;) a;
-    for(int i = 0; i < 100; i++) b;
-    do a; while(b);
-    
+    ###
+    terra f()
+        do
+            C.printf("hi\n")
+            C.printf("hi\n")
+            C.printf("hi\n")
+        end
+    end
+    ###
+    local stats = { 
+        `C.printf("hi\n"),
+        `C.printf("hi\n"),
+        `C.printf("hi\n")
+    }
+    terra f()
+        do
+            [stats]
+        end
+    end
+Conditionals
+    if (x) { <statements> }
+    else if (y) { <statements> }
+    else { <statement> }
+    ###
+    if x then <statements> 
+    elseif y then <statements>
+    else <statements> end
+Loops
+    while(x) {
+        <statements>
+    }
+    ###
+    while x do 
+        <statements>
+    end
+
+    for(x; y; z;) { 
+        <statements>
+    }
+    ###
+    x; 
+    while y do 
+        <statements>
+        z; 
+    end
+
+    for(int i = 0; i < 100; i++) {
+        <statements>
+    }
+    ###
+    for i = 0,100 do 
+        -- note [0,100) bounds
+        <statements>
+    end 
+
+    do { 
+        <statements>
+    } while(b);
+    ###
+    repeat 
+        <statements>
+    until ~b
+Switch
     //NYI, use if statements
     switch(x) {
         case X1: a;
         case X2 : b;
         default: c;
     }
-    
-    break;
-    return;
-    try { x; } //no exceptions, avoiding complexity
     ###
-    -- these occur in a a Terra context
-    x = y
-    x = x + y -- no += like Lua
-    var x : int
-    
-    do
-        var x : int -- scoped to block
-    end
-    
-    if x then a 
-    elseif y then b
-    else c end
-    
-    while x do a end
-    
-    x; while y do a; z; end
-    for i = 0,100 do b end -- note [0,100) bounds
-    repeat a until ~b 
-    
     -- no switch statements yet, use if
     if x == X1 then a
     elseif x == X2 then b
     else c
     end
-    
-    break -- not break/return must end the block
-    return --  use 'do return end' for debugging
-    -- no exceptions, avoiding complexity
+Control Flow
+    break;
+    return;
+    ###
+    break
+    return
+    -- note: break/return must
+    -- end the block
+Exceptions
+    try { x; }
+    ###
+    -- no exceptions, avoiding complexity    
 
 # Functions
-
-    int f(int x, int);
-    int f(int x, int y) { return x + y; }
-    void f(); // no returns
+Defining functions
+    int f(int x, int y) { 
     
-    inline void f(); // :setinlined(true), actually equivalent to __alwaysinline__
     
-    T operator+(T x, T y) //operators are always associated with structs
-
-    int max(int a, int b) { return (a < b) ? a : b; }
-    float max(float a, float b) { return (a < b) ? a : b; }
+        return x + y; 
+    }
     ###
-    terra f :: {int,int} -> int -- '{int,int} -> int' is type of the function f 
-    terra f(x : int, y : int): int return x + y end
-    terra f :: {} -> {} -- '{}' is the empty tuple, which is equivalent to void, 
-                        -- useful in making  wrappers around functions
-    void f(); // no returns
+    terra f(x : int, y : int): int 
+        -- :int return is optional
+        -- for non-recursive functions
+        return x + y 
+    end
+    ###
+    local args = {symbol(int),symbol(int)}
+    terra f([args])
+        var s = 0
+        escape
+          for _,a in ipairs(args) do
+            emit quote
+              s = s + a
+            end
+          end
+        end
+        return s
+    end
+
+    void f() {
+    } // no returns
+    ###
+    terra f() : {} -- empty tuple means void
+    end
+Declaring functions
+    int f(int x, int y);
+    
+    void g();
+    ###
+    terra f :: {int,int} -> int
+    --         ~~~~~~~~~~~~~~~~ function type
+    terra g :: {} -> {}
+               ~~    ~~ empty tuple for void/no-args
+    ###
+    local args = {int,int}
+    local ret = int
+    local type = args -> reg
+    local void = {} -> {}
+    terra f :: type
+    terra g :: void
+Inlining
+    inline void f();
+    ###
     f :: {} -> {}
-    f:setinlined(true) -- actually equivalent to __alwaysinline__
-    terra T.metamethods.__add(x : T, y : T) ... end -- operators always associated with a struct 'T'
+    f:setinlined(true) 
+    -- actually equivalent to __alwaysinline__
+
+Operators
+    struct T {};
+    T operator+(T x, T y) {
+    }
+    ###
+    struct T {}
+    terra T.metamethods.__add(x : T, y : T)
+    end 
+    -- always associated with a lhs type
+    -- 'T'
+Overloading
+    
+    int max(int a, int b) {
+        return (a < b) ? a : b;
+    }
+    float max(float a, float b) {
+        return (a < b) ? a : b;
+    }
+    ###
     max = terralib.overloadedfunction("max" { 
-        terra(a : int, b : int) return terralib.select( a < b, a, b) end,
-        terra(a : float, b : float) return terralib.select( a < b, a, b) end 
+        terra(a : int, b : int) 
+            return terralib.select( a < b, a, b) 
+        end,
+        terra(a : float, b : float) 
+            return terralib.select( a < b, a, b)
+        end
     })
 
 # Expressions
@@ -336,60 +560,138 @@ Conditional Compilation
 Basically same semantics as C++: From the Quick Reference "Operators are grouped by precedence, highest first. Unary operators and assignment evaluate right to left. All
 others are left to right. Precedence does not affect order of evaluation, which is undefined. There are no run time checks for arrays out of bounds, invalid pointers, etc. "
 
-## Accessing Variables
 
-Lua tables hold Terra Values
+Working with namespaces
 
-    T::X // Name X defined in class T
-    N::X // Name X defined in namespace N
+    namespace N {
+        void f() {}
+    }
+    void g() {
+        N::f()
+    }
     ###
-    T::X // Name X defined in class T
-    N::X // Name X defined in namespace N
-
+    local N = {}
+    N.f = terra() end
+    
+    terra g()
+        N.f()
+    end
+    -- when N is just a Lua table
+    -- N.f is replaced with the value
+    -- N["f"] in the terra code
 
 Pointers and members
-
     &x
     *p
     t.x
+    
     p->x
     ###
-    t.x
-    p->x
     &x
-    *p
-    ###
+    @p
     t.x
-    p->x
-    &x
-    *p
-
-Other stuff 
-
-    a[i]
-    f(x,y)
-    T(x,y)
+    
+    p.x -- '.' works like ->
     ###
-    a[i]
-    f(x,y)
-    T(x,y)
+    &[<luaexp>]
+    @[<luaexp>]
+    t.[("xyz"):sub(1,1)]
+    --~~~~~~~~~~~~~~~~~ any lua exp resulting in a string
+    p.["x"]
+    --~~~~~ same here
+
+Array index and function calls
+
+    void g(int* a, int i, T t) {
+        a[i]
+        f(x,y)
+        t(x,y)
+    }
     ###
-    a[i]
-    f(x,y)
-    T(x,y)
+    terra g(a : &int, i : int, t : T)
+        a[i]
+        f(a,i)
+        t(a,i)
+    end
+    ###
+    local 
+    terra g(a : &int, i : int, t : T)
+        a[i]
+        escape
+          local args = { a, i }
+          emit quote
+            f([args])
+            t([args])
+          end
+        end
+    end
 
 Updates
 
     x++,++x
     x--,--x
-
+    ###
+    -- Do not exist
+    -- use statements
+    x = x + 1
 
 RTTI
 
-    typeid(x) // no built-in equivalents, you can build one for your objects if you want
-    dynamic_cast<T>(x) // "
+    typeid(x)
+    dynamic_cast<T>(x)
     ###
-    -- build your own
+    -- no build-in equivalents, you can build your own:
+    local nextid = 0
+    local function addtypeid(T)
+        T.entries:insert(1,{"_typeid",int})
+        T.metamethods._typeid = nextid
+        terra T:init()
+            self._typeid = nextid
+        end
+        nextid = nextid + 1
+    end
+    terra typeid(v : &opaque)
+        -- extract first member
+        var typeid = @[&int](v)
+        return typeid
+    end
+    local function dynamic_cast(T)
+        local tid = T.metamethods._typeid
+        return terra(v : &opaque)
+            var id = typeid(v)
+            if id == tid then
+                return [&T](v)
+            end
+            return nil
+        end
+    end
+    dynamic_cast = terralib.memoize(dynamic_cast)
+    struct A { 
+        a : int
+    }
+    struct B {
+        a : float
+    }
+    addtypeid(A)
+    addtypeid(B)
+    C = terralib.includec("stdio.h")
+    terra f(v : &opaque)
+        var a = [dynamic_cast(A)](v)
+        var b = [dynamic_cast(B)](v)
+        if a ~= nil then
+            C.printf("A\n")
+        elseif b ~= nil then
+            C.printf("B\n")
+        end
+    end
+    terra g()
+        var a : A
+        var b : B
+        a:init()
+        b:init()
+        f(&a)
+        f(&b)
+    end
     
 Casts
 

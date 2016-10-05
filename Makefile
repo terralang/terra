@@ -1,3 +1,3 @@
 
-TerraForCPP.html:   TerraForCPP.txt gen.lua
-	~/terra-jit/terra gen.lua
+terraforcpp.html:   _terraforcpp.txt _gen.lua
+	~/terra-jit/terra _gen.lua
