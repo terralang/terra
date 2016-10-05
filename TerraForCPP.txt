@@ -1,0 +1,586 @@
+Terra-Lua Equivalents for C/C++ Programmers
+
+The semantics of Terra are very close to C/C++, but because of its close integration with Lua, the same things might be written a different way. This quick reference sheet shows C++ snippets with equivalent Lua-Terra snippets to make it easier to learn how to program in Terra. A third column shows how to meta-program constructs when applicable.
+
+Content based on <a href="http://www.pa.msu.edu/~duxbury/courses/phy480/Cpp_refcard.pdf">C++ Quick Reference</a>
+Add a pull request want an additional example that isn't shown here.
+
+# Contexts
+
+    // function/global declaration context:
+    typedef int MyInt;
+    MyInt x;
+    
+    int f() {
+        // C++ code context:
+        MyInt bar = x + 1;
+    //  ~~~~~ C++ type context
+    
+        return bar;
+    }
+    
+    struct S {
+        // struct definition context:
+        int a;
+     // ~~~ type context
+        float b;
+    };
+    ###
+    -- Lua context (any Lua code here)
+    MyInt = int -- assignment to Lua variable 'MyInt'
+    x = global(MyInt)
+    
+    terra f()
+        -- Terra context
+        var bar : MyInt = x + 1
+        --        ~~~~~ _Lua_ context, any Lua can go here,
+        --  but it needs to evaluate to a Terra type
+        return bar
+    end
+    
+    struct S {
+        a : int
+        --  ~~~ _Lua_ context, evaluates to a Terra type
+        b : float
+    }
+    
+    -- Meta-programming Lua-Terra creates additional places
+    -- where the context changes.
+    
+    function g() return `4+5 end
+    --                  ~~~~ Terra context, a quote creates a 
+    --                       Terra expression from Lua
+    
+    terra h()
+        var baz = [ g() ]
+        --        ~~~~~~~ Lua context, an escape breaks
+        --  into Lua and evaluates to a Terra expression
+    end
+    
+# Preprocessor
+
+Using multiple files.
+
+    #include "myfile.h"
+    
+    
+    
+    void f() {
+        myfunction();
+    }
+    ###
+    local myfile = require("myfile")
+    -- use Lua's require to load another Lua file
+    -- Terra functions can be stored in a table myfiles
+    terra f()
+        myfile.myfunction()
+    end
+
+Using C functions
+
+    #include <stdio.h>
+    #include <malloc.h>
+    int main() {
+        printf("hello, world\n");
+    }
+    ###
+    local C = terralib.includecstring [[
+        #include<stdio.h>
+        #include<malloc.h
+    ]]
+    -- can also use terralib.includec("stdio.h") for single file
+    -- C is a table of functions (C.printf) and types (C.FILE)
+    ...
+    terra hello()
+        C.printf("hello, world\n")
+    end
+    
+Preprocessor Macro Equivalents
+
+    #define X (3+3)
+    ###
+    local X = `3+3
+    -- Lua variables can hold values that get substituted into Terra functions
+    -- the quotation (`) creates a Terra expression directly from Lua
+
+Macro functions
+
+    #define F(a,b) a + b
+    ###
+    local F = macro(function(a,b)
+        return `a + b
+    end)
+
+Conditional Compilation
+
+    // Use #ifdef to control how functions are defined
+    #ifdef __WIN32
+        char * getOS() { return "Windows"; }
+    #else
+        char * getOS() { return "Linux"; }
+    #endif
+    ###
+    -- use Lua to control how a Terra function is defined
+    if terralib.os == "Windows" then
+        terra getOS() return "Windows" end
+    else
+        terra getOS() return "Linux" end
+    end
+
+# Literals
+
+    255, 0377, 0xff
+    2147483647LL, 0x7ffffffful
+    123.0, 1.23e2
+    "strings\n"
+    'a'
+    "hello" "world"
+    true, false // booleans
+    ###
+    255, 0377, 0xff
+    2147483647LL, 0x7fffffffULL -- these match LuaJIT literals for long numbers
+    123.0, 1.23e2 
+    "strings\n" or 'strings\n' or [[strings\n]] -- match Lua strings
+    ("a")[0] -- no built in literal for char, so index a string (or make a function that )
+    [ "hello".."world" ] -- escape to Lua and concat the strings there
+    true, false
+
+# Declarations/Type Constructors
+
+
+    int x;
+    int x = 255;
+    auto x = 255;
+    short s; long l;
+    char c = 'a'; 
+    float f; double d; 
+    bool b;
+    int a,b,c; //multiple declarations
+    int a[10];
+    int a[]={0,1,2};
+    float a[]={0,1,2};
+    int a[2][3]={ {1,2,3},{4,5,6} }; 
+    int* p; 
+    char * s ="hello";
+    void* p = NULL;
+    int&r = x; //doesn't exist
+    typedef String char*;
+    enum weekend {SAT,SUN}; //doesn't exist use meta-programming
+    const int c = 3; //doesn't exist (C++ doesn't actually enforce this safely anyway)
+    ###
+    var x
+    var x  : int = 255
+    var x = 255
+    var s : int16, l : int65
+    var c : int8 = ('a')[0] 
+    var f :float, d : double 
+    var b : bool
+    var a : int,b : int ,c : int -- also multiple assignments on RHS like Lua
+    var a : int[10];
+    var a : int[3] = array(0,1,2) -- 'array' is an expression, not an initializer like C++
+    var a = arrayof([float],0,1,2) -- use arrayof to specify a type different from the expressions used to initialize it
+    var a : (int[3])[2] = array(array(1,2,3),array(4,5,6)); 
+    var p : &int -- read & as 'address of', so &int is an 'address of int'
+    var s : rawstring = "hello" -- rawstring == &int8 
+    var p : &opaque = nil -- opaque replaces void in pointers
+    -- references do not exist, instead operators like p.foo work on pointers
+    local String = &int8 -- typedefs are just assignments in Lua
+    enum weekend {SAT,SUN}; //doesn't exist use meta-programming
+    const int c = 3; //doesn't exist (C++ doesn't actually enforce this safely anyway)
+    
+    
+
+# Global Variables/Constants
+    int x = 3;
+    const int x = 3;
+    int x[] = { 3,4, 5};
+    const int x[] = { 3,4,5};
+    ###
+    x = global(int)
+    x = constant(int,3)
+    x = global(int,`array(3,4,5))
+    x = constant(int,`array(3,4,5))
+    ###
+    -- you can create tables of constants
+    -- using metaprogramming
+    sin_values = {}
+    N = 32
+    for i = 1,N do
+        sin_values[i] = math.sin( 2 * math.pi * (i-1)/N))
+    end
+    -- constant table of sin values embedded in code
+    sin_table = constant(`arrayof(float,sin_values))
+
+
+# Storage Classes
+
+
+    int x;
+    static int y;
+    
+    static void g() {
+        return x + y;
+    }
+    void f() {
+        static int z; // no terra equivalent
+        return g();
+    }
+    extern int w;
+    ###
+    -- exposed/private symbols are specified 
+    -- by the 'saveobj' call
+    x = global(int)
+    y = global(int)
+    terra g() 
+        return x + y
+    end
+    terra f()
+        return g()
+    end
+    
+    -- only x and f are exposed as symbols
+    -- but y and g will be included internally 
+    -- since they are used
+    terralib.saveobj("out.o", { x = x, f = f}) 
+    
+
+# Statements
+
+    x = y;
+    x += y; // not an expression in Terra
+    int x;
+    
+    {
+        int x;
+    }
+    
+    if (x) a;
+    else if (y) b;
+    else c;
+    
+    while(x) a;
+    
+    for(x; y; z;) a;
+    for(int i = 0; i < 100; i++) b;
+    do a; while(b);
+    
+    //NYI, use if statements
+    switch(x) {
+        case X1: a;
+        case X2 : b;
+        default: c;
+    }
+    
+    break;
+    return;
+    try { x; } //no exceptions, avoiding complexity
+    ###
+    -- these occur in a a Terra context
+    x = y
+    x = x + y -- no += like Lua
+    var x : int
+    
+    do
+        var x : int -- scoped to block
+    end
+    
+    if x then a 
+    elseif y then b
+    else c end
+    
+    while x do a end
+    
+    x; while y do a; z; end
+    for i = 0,100 do b end -- note [0,100) bounds
+    repeat a until ~b 
+    
+    -- no switch statements yet, use if
+    if x == X1 then a
+    elseif x == X2 then b
+    else c
+    end
+    
+    break -- not break/return must end the block
+    return --  use 'do return end' for debugging
+    -- no exceptions, avoiding complexity
+
+# Functions
+
+    int f(int x, int);
+    int f(int x, int y) { return x + y; }
+    void f(); // no returns
+    
+    inline void f(); // :setinlined(true), actually equivalent to __alwaysinline__
+    
+    T operator+(T x, T y) //operators are always associated with structs
+
+    int max(int a, int b) { return (a < b) ? a : b; }
+    float max(float a, float b) { return (a < b) ? a : b; }
+    ###
+    terra f :: {int,int} -> int -- '{int,int} -> int' is type of the function f 
+    terra f(x : int, y : int): int return x + y end
+    terra f :: {} -> {} -- '{}' is the empty tuple, which is equivalent to void, 
+                        -- useful in making  wrappers around functions
+    void f(); // no returns
+    f :: {} -> {}
+    f:setinlined(true) -- actually equivalent to __alwaysinline__
+    terra T.metamethods.__add(x : T, y : T) ... end -- operators always associated with a struct 'T'
+    max = terralib.overloadedfunction("max" { 
+        terra(a : int, b : int) return terralib.select( a < b, a, b) end,
+        terra(a : float, b : float) return terralib.select( a < b, a, b) end 
+    })
+
+# Expressions
+
+
+Basically same semantics as C++: From the Quick Reference "Operators are grouped by precedence, highest first. Unary operators and assignment evaluate right to left. All
+others are left to right. Precedence does not affect order of evaluation, which is undefined. There are no run time checks for arrays out of bounds, invalid pointers, etc. "
+
+## Accessing Variables
+
+Lua tables hold Terra Values
+
+    T::X // Name X defined in class T
+    N::X // Name X defined in namespace N
+    ###
+    T::X // Name X defined in class T
+    N::X // Name X defined in namespace N
+
+
+Pointers and members
+
+    &x
+    *p
+    t.x
+    p->x
+    ###
+    t.x
+    p->x
+    &x
+    *p
+    ###
+    t.x
+    p->x
+    &x
+    *p
+
+Other stuff 
+
+    a[i]
+    f(x,y)
+    T(x,y)
+    ###
+    a[i]
+    f(x,y)
+    T(x,y)
+    ###
+    a[i]
+    f(x,y)
+    T(x,y)
+
+Updates
+
+    x++,++x
+    x--,--x
+
+
+RTTI
+
+    typeid(x) // no built-in equivalents, you can build one for your objects if you want
+    dynamic_cast<T>(x) // "
+    ###
+    -- build your own
+    
+Casts
+
+    (T) x
+    static_cast<T>(x) // []() syntax
+    reinterpret_cast<T>(x) // punning
+    const_cast<T>(x) // no const
+
+
+    sizeof(x)
+    sizeof(T)
+    ###
+    sizeof(x)
+    sizeof(T)
+
+
+
+Allocation
+
+    new T //malloc, use a std.t metatype, or build your own
+    new T(x,y)
+    new T[x]
+    delete p
+    delete [] p
+    ###
+    new T //malloc, use a std.t metatype, or build your own
+    new T(x,y)
+    new T[x]
+    delete p
+    delete [] p
+
+Arithmetic
+
+    -x
+    +x //DNE
+    x * y
+    x / y
+    x % y
+    x + y //including pointers
+    x - y
+    ###
+    -x
+    +x //DNE
+    x * y
+    x / y
+    x % y
+    x + y //including pointers
+    x - y
+
+Comparisons
+    x < y
+    x <= y
+    x > y
+    x >= y
+    x == y
+    x != y
+    ###
+    x < y
+    x <= y
+    x > y
+    x >= y
+    x == y
+    x != y
+
+Logical and Bitwise Operators
+
+    ~x
+    x << y
+    x >> y
+    !x    
+    x & y
+    x ^ y
+    x | y
+    x && y
+    x || y
+    ###
+    ~x
+    x << y
+    x >> y
+    !x    
+    x & y
+    x ^ y
+    x | y
+    x && y
+    x || y
+
+
+Other Stuff
+
+    x ? y : z // select
+    throw x; // no exceptions, consider using longjmp,setjmp
+    x, y;
+
+
+
+# Object-Oriented Programming/Encapsulation
+
+
+    class T { // A new type
+
+    // these don't exist, can be accomplished by hiding symbols,
+    private: 
+    protected: 
+    public:
+    friend void i(); // Global function i() has private access
+    friend class U; // Members of class U have private access
+ 
+    class Z {}; // Nested class T::Z, does not exist
+ 
+     int x;
+     void f(); 
+     void g() {return;} // Inline member function
+     void h() const; // Does not modify any data members
+     int operator+(int y); // t+y means t.operator+(y)
+     int operator-(); // -t means t.operator-()
+ 
+     T(): x(1) {} // Constructor with initialization list
+     T(const T& t): x(t.x) {} // Copy constructor
+     T& operator=(const T& t) {x=t.x; return *this; } // Assignment operator
+     ~T(); // Destructor (automatic cleanup routine) (defer operator here)
+ 
+     explicit T(int a); // Allow t=T(3) but not t=3
+     operator int() const {return x;} // Allows int(t)
+ 
+     static int y; // Data shared by all T objects
+     static void l(); // Shared code. May access y but not x
+     typedef int V; // T::V means int
+    };
+
+    void T::f() { // Code for member function f of class T
+     this->x = x;
+    } // this is address of self (means x=x;)
+    int T::y = 2; // Initialization of static member (required)
+    T::l(); // Call to static member
+
+    //None of this exists, but you can implement it if you want
+    class T { 
+     virtual void f(); // May be overridden at run time by derived
+    class
+     virtual void g()=0; }; // Must be overridden (pure virtual)
+    class U: public T {}; // Derived class U inherits all members of base
+    T
+    class V: private T {}; // Inherited members of T become private
+    class W: public T, public U {}; // Multiple inheritance
+    class X: public virtual T {}; // Classes derived from X have base T
+    directly
+
+
+Copy/Assignment/Destructor: Terra does not do RAII, assignment is not overloadable, so no copy constructors exist.
+
+# Templates
+
+    template <class T> T f(T t); // Overload f for all types
+    template <class T> class X { // Class with type parameter T
+     X(T t); }; // A constructor
+    template <class T> X<T>::X(T t) {} // Definition of constructor
+    X<int> x(3); // An object of type "X of int"
+    template <class T, class U=T, int n=0> // Template with default
+    parameters
+
+    //become Lua function calls, use terralib.memoize to make it only execute the first time it is called
+
+# Namespaces
+
+
+    namespace N {class T {};} // Hide name T
+    N::T t; // Use name T in namespace N
+    using namespace N; // Make T visible without N::
+
+
+# Terra-specific Meta-Programming
+
+    `e
+    quote s in e end
+    [e]
+    escape --implicitly defines local emit function
+        ...
+        emit()
+    end
+    struct Foo(Decorator) {
+    }
+
+# Library Usage
+
+    printf,malloc,free,etc.
+    dlopen
+
+
+# Compiler Usage
+
+    gcc compile
+    gcc link
+    gcc sharedobj
+

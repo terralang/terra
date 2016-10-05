@@ -4,18 +4,18 @@
 body {
   margin: 0px;
   padding:50px;
-  font:14px/1.5 "Ubuntu", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font:16px/1.5 "Ubuntu", "Helvetica Neue", Helvetica, Arial, sans-serif;
   color:#000;
   font-weight: 300;
 }
 
 h1, h2, h3, h4, h5, h6 {
-  margin: 10px;
+  margin: 10px 0;
   color: #444;
 }
 
-p, ul, ol, table, pre, dl {
-  margin: 10px;
+p, ul, ol, table, dl {
+  margin: 10px 0;
 }
 
 h1, h2, h3 {
@@ -76,7 +76,9 @@ a:hover small {
     border-radius:5px;
     border:1px solid #e5e5e5;
 }
-
+header {
+    font-size: 14px;
+}
 header p {
     margin: 0px;
 }
@@ -89,6 +91,8 @@ blockquote {
 }
 
 pre {
+  margin: 0;
+  width: max-content;
   padding:8px 15px;
   background: #f8f8f8;  
   border-radius:5px;

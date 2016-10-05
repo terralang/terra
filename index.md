@@ -11,24 +11,22 @@ __Terra__ is a low-level system programming language that is embedded in and met
     end
     printhello()
 
-    -- Terra is backwards compatible with C
-    -- we'll use C's io library in our example.
+    -- Terra is backwards compatible with C, we'll use C's io library in our example.
     C = terralib.includec("stdio.h")
     
-    -- The keyword 'terra' introduces
-    -- a new Terra function.
+    -- The keyword 'terra' introduces a new Terra function.
     terra hello(argc : int, argv : &rawstring)
         -- Here we call a C function from Terra
         C.printf("Hello, Terra!\n")
         return 0
     end
     
-    -- You can call Terra functions directly from Lua,
-    -- they are JIT compiled using LLVM to machine code
+    -- You can call Terra functions directly from Lua, they are JIT compiled 
+    -- using LLVM to create machine code
     hello(0,nil)
 
-    -- Terra functions are first-class values in Lua, and can be 
-    --- introspected and meta-programmed using it
+    -- Terra functions are first-class values in Lua, and can be introspected 
+    -- and meta-programmed using it
     hello:disas()
     --[[ output:
         assembly for function at address 0x60e6010
@@ -41,8 +39,8 @@ __Terra__ is a low-level system programming language that is embedded in and met
         0x60e602a(+26):		ret
     ]]
     
-    -- You can save Terra code as executables, object files, 
-    -- or shared libraries and link them into existing programs
+    -- You can save Terra code as executables, object files, or shared libraries 
+    -- and link them into existing programs
     terralib.saveobj("helloterra",{ main = hello })
 
 Like C/C++, Terra is a  **statically-typed**, **compiled language** with manual memory management. 
