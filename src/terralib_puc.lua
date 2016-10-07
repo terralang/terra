@@ -19,6 +19,22 @@ function terra.cast(terratype,obj)
     error("NYI - cast")
 end
 
+--[[
+
+### Rules for converting Terra values to Lua objects, adapted from LuaJIT FFI:
+
+integers that can fit in a double  --> "number"
+boolean -> "boolean"
+
+everything becomes "terradata", which as a "userdata" with sizeof(T) whose payload
+is the Terra value, the metatable is per-type and defines standard operations for that type in Lua
+
+### 
+]]
+
+
+
+
 function T.terrafunction:__call(...)
     if not self.ffiwrapper then
         local terraffi = require("terraffi")
