@@ -61,6 +61,11 @@ static void dump_stack(lua_State * L, int elem);
 
 typedef llvm::SmallSet<TString*,16> StringSet;
 
+struct LuaTypeAnnotation {
+    const char * annotation;
+    const char * variable;
+};
+
 /*
 ** nodes for block list (list of active blocks)
 */
@@ -69,6 +74,8 @@ typedef struct BlockCnt {
   StringSet defined;
   int isterra; /* does this scope describe a terra scope or a lua scope?*/
   int languageextensionsdefined;
+  
+  std::vector<LuaTypeAnnotation> annotations;
 } BlockCnt;
 
 struct TerraCnt {
@@ -689,13 +696,29 @@ static void printtreesandnames(LexState * ls, std::vector<int> * trees, std::vec
 
 /* }====================================================================== */
 
-static int vardecl(LexState *ls, int requiretype, TString ** vname) {
+static int vardecl(LexState *ls, int functionparam, TString ** vname) {
     Position p = getposition(ls);
     int wasstring = checksymbol(ls, vname);
-    if (ls->in_terra && wasstring && (requiretype || ls->t.token == ':')) {
-        checknext(ls, ':');
-        RETURNS_1(terratype(ls));
-    } else push_nil(ls);
+    if (ls->in_terra) {
+        if(wasstring && (functionparam || ls->t.token == ':')) {
+            checknext(ls, ':');
+            RETURNS_1(terratype(ls));
+        } else {
+            push_nil(ls);
+        }
+    } else if(functionparam && ls->t.token == ':') {
+        //checkdynamic lua annotation
+        Token begin = ls->t;
+        luaX_next(ls); // skip ':'
+        Token beginexp = ls->t;
+        expr(ls);
+        const char * varname = getstr((*vname));
+        LuaTypeAnnotation a = { luaX_saveoutput(ls, &beginexp), varname };
+        ls->fs->bl->annotations.push_back(a);
+        // clear annotation from text here
+        luaX_patchbegin(ls, &begin);
+        luaX_patchend(ls, &begin);
+    }
     new_object(ls,"unevaluatedparam",2,&p);
     return wasstring;
 }
@@ -748,6 +771,14 @@ static void body (LexState *ls, int ismethod, int line) {
   if(ls->in_terra && testnext(ls,':')) {
     RETURNS_1(terratype(ls));
   } else push_nil(ls);
+  if(ls->fs->bl->annotations.size() > 0) {
+    luaX_patchbegin(ls,&ls->t);
+    for(int i = 0; i < ls->fs->bl->annotations.size(); i++) {
+      LuaTypeAnnotation & a = ls->fs->bl->annotations[i];
+      OutputBuffer_printf(&ls->output_buffer, " %s = _G.__argcheck(%s,%s,%d) ",a.variable,a.annotation,a.variable,i+1);
+    }
+    luaX_patchend(ls, &ls->t);
+  }
   RETURNS_1(block(ls));
   new_fs.f.lastlinedefined = ls->linenumber;
   check_match(ls, TK_END, TK_FUNCTION, line);

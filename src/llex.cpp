@@ -243,7 +243,11 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
 
     //reset the output buffer to the beginning of the begin_token
     ob->N = begin_token->seminfo.buffer_begin;
+    
     //retain the tokens leading whitespace for sanity...
+    //unless we are patching at the very end of the stream
+    if(begin_token == &ls->t)
+        return;
     while(1) {
         switch(ob->data[ob->N]) {
         case '\n': case '\r':
