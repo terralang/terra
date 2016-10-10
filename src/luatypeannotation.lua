@@ -1,5 +1,5 @@
 local util = require("util")
-local List = require("list")
+local List = require("terralist")
 
 local function expectedtype(typeobj,value)
     local err = ("expected '%s' but found '%s'"):format(tostring(typeobj),type(value))

@@ -1,4 +1,4 @@
-local List = require("list")
+local List = require("terralist")
 function failit(match : "string",fn : "function")
 	local success,msg = xpcall(fn,debug.traceback)
 	if success then

@@ -1,4 +1,4 @@
-local List = require("List")
+local List = require("terralist")
 
 
 local a = List { 2,3,4 }
