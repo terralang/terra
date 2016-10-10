@@ -1118,30 +1118,6 @@ end
 -- TYPE
 
 do 
-    local function memoizefunction(fn)
-        local info = debug.getinfo(fn,'u')
-        local nparams = not info.isvararg and info.nparams
-        local cachekey = {}
-        local values = {}
-        local nilkey = {} --key to use in place of nil when a nil value is seen
-        return function(...)
-            local key = cachekey
-            for i = 1,nparams or select('#',...) do
-                local e = select(i,...)
-                if e == nil then e = nilkey end
-                local n = key[e]
-                if not n then
-                    n = {}; key[e] = n
-                end
-                key = n
-            end
-            local v = values[key]
-            if not v then
-                v = fn(...); values[key] = v
-            end
-            return v
-        end
-    end
     
     local types = {}
     local defaultproperties = { "name", "tree", "undefined", "incomplete", "convertible", "cachedcstring", "llvm_definingfunction" }
@@ -1158,7 +1134,7 @@ do
         end
     end
     T.Type.__tostring = nil --force override to occur
-    T.Type.__tostring = memoizefunction(function(self)
+    T.Type.__tostring = util.memoize(function(self)
         if self:isstruct() then 
             if self.metamethods.__typename then
                 local status,r = pcall(function() 
@@ -1506,7 +1482,7 @@ do
         end
     end
     
-    types.tuple = memoizefunction(function(...)
+    types.tuple = util.memoize(function(...)
         local args = terra.newlist {...}
         local t = types.newstruct()
         for i,e in ipairs(args) do
@@ -1561,7 +1537,7 @@ do
     globaltype("ptrdiff",types.int64)
     globaltype("rawstring",types.pointer(types.int8))
     terra.types = types
-    terra.memoize = memoizefunction
+    terra.memoize = util.memoize
 end
 
 function T.tree:setlvalue(v)

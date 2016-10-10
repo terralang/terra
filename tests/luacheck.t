@@ -1,3 +1,4 @@
+local List = require("list")
 function failit(match : "string",fn : "function")
 	local success,msg = xpcall(fn,debug.traceback)
 	if success then
@@ -73,3 +74,26 @@ end
 two("hi",true)
 failit("bad value being returned #1 to '%?' expected 'string' but found 'number'",function() two(1,2) end)
 failit("bad value being returned #2 to '%?' expected 'boolean' but found 'number'",function() two("hi",2) end)
+
+function what(a : ListOf("int")) : ListOf("bool")
+    return a:map(function(x) return x > 4 end)
+end
+
+failit("bad argument #1 to 'what' expected 'int' but found 'number' as first element of ListOf%(int%)",function()what(List {1,2,5,6})end)
+function what(a : ListOf("number")) : ListOf("boolean")
+    return a:map(function(x) return x > 4 end)
+end
+failit("bad argument #1 to 'what' expected 'List' but found 'number'",function()what(4)end)
+what(List{1,2,3})
+what(List{})
+function what2(a : ListOf(ListOf("number"))) return 4 end
+what2(List{List{3}})
+failit("bad argument #1 to 'what2' expected 'number' but found 'string' .* as first element of ListOf%(number%) as first element of ListOf%(ListOf%(number%)%)",
+    function() what2(List{List{""}}) end)
+    
+function op(a : OptionOf("number")) : OptionOf("boolean")
+    if a and a > 3 then return true end
+end
+op(nil)
+op(3)
+failit("bad argument #1 to 'op' expected 'number' but found 'string'",function() op("") end)

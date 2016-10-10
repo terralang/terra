@@ -36,5 +36,29 @@ end
 function util.mkstring(self,begin,sep,finish)
     return begin..table.concat(self:map(tostring),sep)..finish
 end
-
+function util.memoize(fn)
+    local info = debug.getinfo(fn,'u')
+    local nparams = not info.isvararg and info.nparams
+    local cachekey = {}
+    local values = {}
+    local nilkey = {} --key to use in place of nil when a nil value is seen
+    return function(...)
+        local key = cachekey
+        for i = 1,nparams or select('#',...) do
+            local e = select(i,...)
+            if e == nil then e = nilkey end
+            local n = key[e]
+            if not n then
+                n = {}; key[e] = n
+            end
+            key = n
+        end
+        local v = values[key]
+        if not v then
+            v = fn(...); values[key] = v
+        end
+        return v
+    end
+end
+    
 return util

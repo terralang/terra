@@ -1,34 +1,50 @@
-local function reporterr(depth,what,idx,expectedtypename,value)
-    local fmt = "bad %s #%d to '%s' expected '%s' but found '%s'"
-    local funcname = debug.getinfo(depth,"n").name or "?"
-    local err = fmt:format(what,idx,funcname,expectedtypename,type(value))
+local util = require("util")
+local List = require("list")
+
+local function expectedtype(typeobj,value)
+    local err = ("expected '%s' but found '%s'"):format(tostring(typeobj),type(value))
     local mt = getmetatable(value)
     if mt then
         err = ("%s (metatable = %s)"):format(err,tostring(mt))
     end
+    return err
+end
+
+local function reporterr(depth,what,idx,msg)
+    local fmt = "bad %s #%d to '%s' %s"
+    local funcname = debug.getinfo(depth,"n").name or "?"
+    local err = fmt:format(what,idx,funcname,msg)
     error(err,depth)
 end
 
-local function check(depth,typ,what,idx,value)
+local function istype(typ,value)
     local typekind = type(typ)
     if typekind == "string" then
-        if type(value) ~= typ then
-            reporterr(depth+1,what,idx,typ,value)
+        if type(value) == typ then
+            return true
+        else
+            return false, expectedtype(typ,value)
         end
-        return value
     elseif typekind == "table" then
         local isclassof = typ.isclassof
         if isclassof then
-            if not isclassof(typ,value) then
-                reporterr(depth+1,what,idx,typ,value)
+            local valid, msg = isclassof(typ,value)
+            if valid then
+                return true
+            else
+                return false,msg or expectedtype(typ,value)
             end
-            return value
         end
-        -- fallthrough
     end
-    local funcname = debug.getinfo(depth,"n").name
-    error(("bad type annotation for %s #%d to '%s', expected string or table with :isclassof method but found '%s'")
-        :format(what,idx,funcname,typekind),depth ) 
+    return false, ("because it has a bad type annotation, expected string or table with :isclassof method but found '%s'"):format(typekind)
+end
+
+local function check(depth,typ,what,idx,value)
+    local valid,msg = istype(typ,value)
+    if valid then
+        return value
+    end
+    reporterr(depth+1,what,idx,msg)
 end
 
 function __argcheck(typ,idx,value)
@@ -54,3 +70,43 @@ function __retcheck(types,...)
     end
     return doretcheck(expected,types,1,...)
 end
+
+-- Type constructors for common checks
+local ListOfType = {}
+ListOfType.__index = ListOfType
+function ListOfType:isclassof(value)
+    if not List:isclassof(value) then
+        return false, expectedtype("List",value)
+    end
+    if #value > 0 then
+        local first = value[1]
+        local valid,msg = istype(self.element,first)
+        if not valid then
+            return false, ("%s as first element of %s"):format(msg,tostring(self))
+        end
+    end
+    return true
+end
+function ListOfType:__tostring() 
+    return ("ListOf(%s)"):format(tostring(self.element))
+end
+function ListOf(type)
+    return setmetatable({ element = type },ListOfType)
+end
+ListOf = util.memoize(ListOf)
+
+local OptionOfType = {}
+OptionOfType.__index = OptionOfType
+function OptionOfType:isclassof(value)
+    if value == nil then
+        return true
+    end
+    return istype(self.element,value)
+end
+function OptionOfType:__tostring() 
+    return ("OptionOf(%s)"):format(tostring(self.element))
+end
+function OptionOf(type)
+    return setmetatable({ element = type },OptionOfType)
+end
+OptionOf = util.memoize(OptionOf)
