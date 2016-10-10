@@ -397,6 +397,7 @@ static void open_func (LexState *ls, FuncState *fs, BlockCnt *bl) {
   fs->f.linedefined = 0;
   fs->f.is_vararg = 0;
   fs->f.source = ls->source;
+  fs->return_annotation = NULL;
   enterblock(fs, bl, 0);
 }
 
@@ -449,13 +450,15 @@ static int block_follow (LexState *ls, int withuntil) {
 }
 
 
-static void statlist (LexState *ls) {
+static void statlist (LexState *ls, bool * has_return) {
   /* statlist -> { stat [`;'] } */
   int tbl = new_list(ls);
   while (!block_follow(ls, 1)) {
     if (ls->t.token == TK_RETURN) {
       statement(ls);
       add_entry(ls,tbl);
+      if(has_return)
+        *has_return = true;
       return;  /* 'return' must be last statement */
     }
     if (ls->t.token == ';') {
@@ -465,6 +468,8 @@ static void statlist (LexState *ls) {
       add_entry(ls,tbl);
     }
   }
+  if(has_return)
+    *has_return = false;
 }
 
 static void push_type(LexState * ls, const char * typ) {
@@ -752,7 +757,7 @@ static void parlist (LexState *ls) {
   for(size_t i = 0; i < vnames.size(); i++)
     definevariable(ls, vnames[i]);
 }
-static void block (LexState *ls);
+static void block (LexState *ls, bool * has_return);
 
 static void body (LexState *ls, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
@@ -768,19 +773,34 @@ static void body (LexState *ls, int ismethod, int line) {
   }
   push_boolean(ls,new_fs.f.is_vararg);
   checknext(ls, ')');
-  if(ls->in_terra && testnext(ls,':')) {
-    RETURNS_1(terratype(ls));
+  Token begin_return_annotation = ls->t;
+  if(testnext(ls,':')) {
+    if(ls->in_terra) {
+      RETURNS_1(terratype(ls));
+    } else {
+      Token begin = ls->t;
+      expr(ls);
+      ls->fs->return_annotation = luaX_saveoutput(ls, &begin);
+      luaX_patchbegin(ls, &begin_return_annotation);
+      luaX_patchend(ls,&begin_return_annotation);
+    }
   } else push_nil(ls);
   if(ls->fs->bl->annotations.size() > 0) {
     luaX_patchbegin(ls,&ls->t);
     for(int i = 0; i < ls->fs->bl->annotations.size(); i++) {
       LuaTypeAnnotation & a = ls->fs->bl->annotations[i];
-      OutputBuffer_printf(&ls->output_buffer, " %s = _G.__argcheck(%s,%s,%d) ",a.variable,a.annotation,a.variable,i+1);
+      OutputBuffer_printf(&ls->output_buffer, " %s = _G.__argcheck(%s,%d,%s) ",a.variable,a.annotation,i+1,a.variable);
     }
     luaX_patchend(ls, &ls->t);
   }
-  RETURNS_1(block(ls));
+  bool has_return;
+  RETURNS_1(block(ls,&has_return));
   new_fs.f.lastlinedefined = ls->linenumber;
+  if(!has_return && ls->fs->return_annotation != NULL) {
+    luaX_patchbegin(ls, &ls->t);
+    OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return') ",ls->fs->return_annotation);
+    luaX_patchend(ls, &ls->t);
+  }
   check_match(ls, TK_END, TK_FUNCTION, line);
   close_func(ls);
   new_object(ls,"functiondefu",4,&p);
@@ -968,7 +988,7 @@ static void doquote(LexState * ls, int isexp) {
         BlockCnt bc;
         enterblock(fs, &bc, 0);
         Position p = getposition(ls);
-        RETURNS_1(statlist(ls));
+        RETURNS_1(statlist(ls,NULL));
         if(isfullquote && testnext(ls, TK_IN)) {
             RETURNS_1(explist(ls));
         } else {
@@ -1338,7 +1358,7 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
     } else if(isexp)
         expr(ls);
     else
-        statlist(ls);
+        statlist(ls,NULL);
     leaveblock(fs);
     ls->in_terra = in_terra;
     
@@ -1383,14 +1403,14 @@ static void terratype(LexState * ls) {
 */
 
 
-static void block (LexState *ls) {
+static void block (LexState *ls, bool * has_return) {
   /* block -> statlist */
   FuncState *fs = ls->fs;
   BlockCnt bl;
   Position p = getposition(ls);
   
   enterblock(fs, &bl, 0);
-  RETURNS_1(statlist(ls));
+  RETURNS_1(statlist(ls,has_return));
   leaveblock(fs);
   
   new_object(ls,"block",1,&p);
@@ -1456,7 +1476,7 @@ static void whilestat (LexState *ls, int line) {
   RETURNS_1(cond(ls));
   enterblock(fs, &bl, 1);
   checknext(ls, TK_DO);
-  RETURNS_1(block(ls));
+  RETURNS_1(block(ls,NULL));
   check_match(ls, TK_END, TK_WHILE, line);
   leaveblock(fs);
   new_object(ls,"whilestat",2,&pos);
@@ -1473,7 +1493,7 @@ static void repeatstat (LexState *ls, int line) {
   int stmts = new_list(ls);
   Position pos = getposition(ls);
   
-  RETURNS_1(statlist(ls));
+  RETURNS_1(statlist(ls,NULL));
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   RETURNS_1(cond(ls));
   
@@ -1489,7 +1509,7 @@ static void forbody (LexState *ls, int line, int isnum, BlockCnt * bl) {
   FuncState *fs = ls->fs;
   checknext(ls, TK_DO);
   enterblock(fs, bl, 0);  /* scope for declared variables */
-  RETURNS_1(block(ls));
+  RETURNS_1(block(ls,NULL));
   leaveblock(fs);  /* end of scope for declared variables */
 }
 
@@ -1566,7 +1586,7 @@ static void test_then_block (LexState *ls) {
   Position p = getposition(ls);
   RETURNS_1(cond(ls));  /* read condition */
   checknext(ls, TK_THEN);
-  RETURNS_1(block(ls));
+  RETURNS_1(block(ls,NULL));
   new_object(ls,"ifbranch",2,&p);
 }
 
@@ -1581,7 +1601,7 @@ static void ifstat (LexState *ls, int line) {
     add_entry(ls,branches);
   }
   if (testnext(ls, TK_ELSE)) {
-    RETURNS_1(block(ls));  /* `else' part */ 
+    RETURNS_1(block(ls,NULL));  /* `else' part */
   } else push_nil(ls);
   check_match(ls, TK_END, TK_IF, line);
   new_object(ls,"ifstat",2,&p);
@@ -1803,14 +1823,31 @@ static void exprstat (LexState *ls) {
 
 static void retstat (LexState *ls) {
   /* stat -> RETURN [explist] [';'] */
+  Token begin = ls->t;
+  luaX_next(ls); // skip return
+  Token begin_exp = ls->t;
   Position p = getposition(ls);
+  bool empty;
   new_list(ls); //empty statements
   if (block_follow(ls, 1) || ls->t.token == ';') {
+    empty = true;
     new_list(ls);
   } else {
+    empty = false;
     RETURNS_1(explist(ls));  /* optional return values */
   }
   push_boolean(ls, false); //has statements
+  if(ls->fs->return_annotation != NULL) {
+    assert(!ls->in_terra);
+    const char * exps = luaX_saveoutput(ls, &begin_exp);
+    luaX_patchbegin(ls, &begin);
+    if(empty) {
+      OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return') ",ls->fs->return_annotation);
+    } else {
+      OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return',%s) ",ls->fs->return_annotation,exps);
+    }
+    luaX_patchend(ls, &begin);
+  }
   testnext(ls, ';');  /* skip optional semicolon */
   new_object(ls, "letin", 3, &p);
   new_object(ls,"returnstat",1,&p);
@@ -1834,7 +1871,7 @@ static void statement (LexState *ls) {
     }
     case TK_DO: {  /* stat -> DO block END */
       luaX_next(ls);  /* skip DO */
-      RETURNS_1(block(ls));
+      RETURNS_1(block(ls,NULL));
       check_match(ls, TK_END, TK_DO, line);
       break;
     }
@@ -1887,7 +1924,6 @@ static void statement (LexState *ls) {
       break;
     }
     case TK_RETURN: {  /* stat -> retstat */
-      luaX_next(ls);  /* skip RETURN */
       RETURNS_1(retstat(ls));
       break;
     }
@@ -2220,7 +2256,7 @@ int luaY_parser (terra_State *T, ZIO *z,
     luaX_setinput(T, &lexstate, z, tname, firstchar);
     open_mainfunc(&lexstate, &funcstate, &bl);
     luaX_next(&lexstate);  /* read first token */
-    statlist(&lexstate);  /* main body */
+    statlist(&lexstate,NULL);  /* main body */
     check(&lexstate, TK_EOS);
     close_func(&lexstate);
     assert(!funcstate.prev && !lexstate.fs);

@@ -31,6 +31,7 @@ typedef struct FuncState {
   struct FuncState *prev;  /* enclosing function */
   struct LexState *ls;  /* lexical state */
   struct BlockCnt *bl;  /* chain of current blocks */
+  const char * return_annotation; /* optional expression used in argcheck of return statements for this function */
 } FuncState;
 
 
