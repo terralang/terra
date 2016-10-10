@@ -352,7 +352,7 @@ function Context:DefineClass(name,unique,fields)
     else
         function class:__tostring() return name end
     end
-    function mt:__tostring() return string.format("Class(%s)",name) end
+    function mt:__tostring() return name end
     function mt:__newindex(k,v)
         for c,_ in pairs(self.members) do
             rawset(c,k,v)

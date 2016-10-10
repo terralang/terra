@@ -1,5 +1,6 @@
 -- See Copyright Notice in ../LICENSE.txt
 require("strict")
+require("luatypeannotation")
 local asdl = require("asdl")
 local List = asdl.List
 local util = require("util")

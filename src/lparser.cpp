@@ -758,7 +758,7 @@ static void parlist (LexState *ls) {
     definevariable(ls, vnames[i]);
 }
 static void block (LexState *ls, bool * has_return);
-
+static int explist (LexState *ls);
 static void body (LexState *ls, int ismethod, int line) {
   /* body ->  `(' parlist `)' block END */
   FuncState new_fs;
@@ -779,7 +779,7 @@ static void body (LexState *ls, int ismethod, int line) {
       RETURNS_1(terratype(ls));
     } else {
       Token begin = ls->t;
-      expr(ls);
+      explist(ls);
       ls->fs->return_annotation = luaX_saveoutput(ls, &begin);
       luaX_patchbegin(ls, &begin_return_annotation);
       luaX_patchend(ls,&begin_return_annotation);
@@ -798,7 +798,7 @@ static void body (LexState *ls, int ismethod, int line) {
   new_fs.f.lastlinedefined = ls->linenumber;
   if(!has_return && ls->fs->return_annotation != NULL) {
     luaX_patchbegin(ls, &ls->t);
-    OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return') ",ls->fs->return_annotation);
+    OutputBuffer_printf(&ls->output_buffer, " return _G.__retcheck({%s}) ",ls->fs->return_annotation);
     luaX_patchend(ls, &ls->t);
   }
   check_match(ls, TK_END, TK_FUNCTION, line);
@@ -1842,9 +1842,9 @@ static void retstat (LexState *ls) {
     const char * exps = luaX_saveoutput(ls, &begin_exp);
     luaX_patchbegin(ls, &begin);
     if(empty) {
-      OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return') ",ls->fs->return_annotation);
+      OutputBuffer_printf(&ls->output_buffer, " return _G.__retcheck({%s}) ",ls->fs->return_annotation);
     } else {
-      OutputBuffer_printf(&ls->output_buffer, " return _G.__argcheck(%s,'return',%s) ",ls->fs->return_annotation,exps);
+      OutputBuffer_printf(&ls->output_buffer, " return _G.__retcheck({%s},%s) ",ls->fs->return_annotation,exps);
     }
     luaX_patchend(ls, &begin);
   }
