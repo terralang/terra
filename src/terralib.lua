@@ -413,6 +413,9 @@ function debug.traceback(msg,level)
     local lines = List()
     if msg then
         local file,outsideline,insideline,rest = msg:match "^$terra$(.*)$terra$(%d+):(%d+):(.*)"
+        if not file then
+            file,outsideline,insideline,rest = msg:match "^(%.%.%..*)$terra$(%d+):(%d+):(.*)"
+        end
         if file then
             msg = ("%s:%d:%s"):format(file,outsideline+insideline-1,rest)
         end
@@ -4239,6 +4242,8 @@ function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
     terra.lookupline   = terra.cast(FP({po,po,P(terra.LineInfo)},{terra.types.bool}),lookupline)
     terra.disas = terra.cast(FP({po,terra.types.uint64,terra.types.uint64},{}),disas)
 end
+-- to make debugging simpler, include printf extern as part of library
+terra.printf = terra.externfunction("printf", terra.types.funcpointer(terra.types.rawstring,terra.types.int,true))
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
 

@@ -1,5 +1,16 @@
 local util = require("util")
 local T = terralib.irtypes
+
+T:Define [[
+    TerraData = (Type type) unique
+]]
+
+function T.TerraData:init()
+    function self.__tostring()
+        return ("terradata<%s>"):format(tostring(self.type))
+    end
+end
+
 -- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
 function terra.typeof(obj)
     error("NYI - typeof")
@@ -33,13 +44,10 @@ is the Terra value, the metatable is per-type and defines standard operations fo
 ]]
 
 
-
-
 function T.terrafunction:__call(...)
     if not self.ffiwrapper then
         local terraffi = require("terraffi")
-        local wrapped = terraffi.wrap(self)
-        self.ffiwrapper = terralib.bindtoluaapi(wrapped:compile())
+        self.ffiwrapper = terraffi.wrap(self) 
     end
     return self.ffiwrapper(...)
 end
