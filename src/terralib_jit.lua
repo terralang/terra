@@ -168,9 +168,10 @@ function terra.typeof(obj)
     end
     return ctypetoterra[tonumber(ffi.typeof(obj))]
 end
-function terra.string(ptr,len)
-    return ffi.string(ptr,len)
-end
+
+--overwrite terra.string with ffi version
+terra.string = ffi.string
+
 function terra.new(terratype,...)
     terratype:complete()
     local typ = terratype:cstring()

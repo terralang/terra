@@ -45,9 +45,11 @@ using namespace llvm;
     _(freecompilationunit,0) \
     _(jit,1) /*entry point from lua into compiler to actually invoke the JIT by calling getPointerToFunction*/\
     _(llvmsizeof,1) \
+    _(llvmoffsetof,1) \
     _(disassemble,1) \
     _(pointertolightuserdata,0) /*because luajit ffi doesn't do this...*/\
     _(bindtoluaapi,0) \
+    _(stringraw,0) \
     _(gcdebug,0) \
     _(saveobjimpl,1) \
     _(linklibraryimpl,1) \
@@ -2616,10 +2618,9 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
     return 1;
 }
 
-static int terra_llvmsizeof(lua_State * L) {
+static void RetrieveCUAndType(lua_State * L, TerraCompilationUnit ** CUp, TType ** llvmtypp) {
     terra_State * T = terra_getstate(L, 1);
     int ref_table = lobj_newreftable(L);
-    TType * llvmtyp; TerraCompilationUnit * CU;
     {
         Obj cu,typ,globals;
         lua_pushvalue(L,1);
@@ -2628,14 +2629,30 @@ static int terra_llvmsizeof(lua_State * L) {
         typ.initFromStack(L,ref_table);
         cu.obj("symbols",&globals);
         cu.pushfield("llvm_cu");
-        CU = terra_tocompilationunit(L, -1);
+        (*CUp) = terra_tocompilationunit(L, -1);
         lua_pop(L,1);
-        CU->symbols = &globals;
-        llvmtyp = Types(CU).Get(&typ);
-        CU->symbols = NULL;
+        (*CUp)->symbols = &globals;
+        *llvmtypp = Types(*CUp).Get(&typ);
+        (*CUp)->symbols = NULL;
     }
     lobj_removereftable(T->L, ref_table);
-    lua_pushnumber(T->L,CU->getDataLayout().getTypeAllocSize(llvmtyp->type));
+}
+
+static int terra_llvmsizeof(lua_State * L) {
+    TerraCompilationUnit * CU;
+    TType * llvmtyp;
+    RetrieveCUAndType(L, &CU, &llvmtyp);
+    lua_pushnumber(L,CU->getDataLayout().getTypeAllocSize(llvmtyp->type));
+    return 1;
+}
+static int terra_llvmoffsetof(lua_State * L) {
+    TerraCompilationUnit * CU;
+    TType * llvmtyp;
+    RetrieveCUAndType(L, &CU, &llvmtyp);
+    int fieldoffset = luaL_checkinteger(L, 3);
+    Value * zero = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 0);
+    Value * field = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), fieldoffset);
+    lua_pushnumber(L,CU->getDataLayout().getIndexedOffsetInType(llvmtyp->type, {zero,field}));
     return 1;
 }
 
@@ -2933,6 +2950,20 @@ static int terra_bindtoluaapi(lua_State * L) {
     void * fn = lua_touserdata(L,1);
     assert(fn);
     lua_pushcclosure(L, (lua_CFunction) fn, N - 1);
+    return 1;
+}
+
+// used in terralib_puc.lua to implement terra.string
+static int terra_stringraw(lua_State * L) {
+    const char ** strp = (const char **) lua_touserdata(L,1);
+    assert(strp);
+    size_t len;
+    if (!lua_isnil(L,2)) {
+        len = luaL_checkinteger(L,2);
+    } else {
+        len = strlen(*strp);
+    }
+    lua_pushlstring(L, *strp, len);
     return 1;
 }
 
