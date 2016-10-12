@@ -1,4 +1,4 @@
-local util = require("util")
+local util = require("terrautil")
 local T = terralib.irtypes
 -- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
 function terra.typeof(obj)

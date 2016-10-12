@@ -1,4 +1,4 @@
-local util = require("util")
+local util = require("terrautil")
 local List = require("terralist")
 
 local function expectedtype(typeobj,value)
