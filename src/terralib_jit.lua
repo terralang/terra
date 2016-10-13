@@ -1,4 +1,4 @@
-local util = require("util")
+local util = require("terrautil")
 --debug wrapper around cdef function to print out all the things being defined
 local ffi = require("ffi")
 local T = terra.irtypes

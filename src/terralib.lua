@@ -3,7 +3,7 @@ require("strict")
 require("luatypeannotation")
 local asdl = require("asdl")
 local List = asdl.List
-local util = require("util")
+local util = require("terrautil")
 
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then

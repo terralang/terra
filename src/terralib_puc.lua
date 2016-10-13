@@ -1,4 +1,4 @@
-local util = require("util")
+local util = require("terrautil")
 local T = terralib.irtypes
 
 T:Define [[

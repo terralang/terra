@@ -243,7 +243,7 @@ int terra_cudainit(struct terra_State * T) {
     lua_pop(T->L,1); //terralib
     lua_getglobal(T->L,"require");
     lua_pushstring(T->L,"cudalib");
-    int err = lua_pcall(L,1,1,0);
+    int err = lua_pcall(T->L,1,1,0);
     if(err) {
         return err;
     }
