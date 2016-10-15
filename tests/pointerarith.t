@@ -27,5 +27,5 @@ terra bar2(a : int)
 end
 
 local test = require("test")
-test.eq(bar(),10)
+test.eq(tonumber(bar()),10)
 test.eq(bar2(42),42)

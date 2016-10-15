@@ -3,4 +3,5 @@ C = terralib.includecstring [[
     PROC what() { return 0; }
 ]]
 
-assert(C.what() == nil)
+assert(C.what() == nil or -- for puc lua
+tonumber(C.what()) == 0)

@@ -6,7 +6,7 @@ terra foo(a : &A)
 	return a
 end
 
-assert(nil == foo(nil))
+assert(nil == foo(nil) or 0 == tonumber(foo(nil)))
 assert(false == A:iscomplete())
 
 

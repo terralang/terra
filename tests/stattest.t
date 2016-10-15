@@ -8,4 +8,4 @@ terra dostat()
 	C.stat("stattest.t",&s)
 	return s.st_size
 end
-assert(dostat() == 187)
+assert(tonumber(dostat()) == 197)

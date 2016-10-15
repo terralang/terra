@@ -3875,7 +3875,7 @@ local function terraloader(name)
     file = ("/?.t"):gsub("%?",fname)
     local internal = getinternalizedfile(file)
     if internal and internal.kind == "file" then
-        local str,done = terra.string(internal.contents),false
+        local str,done = terra.string(terra.cast(rawstring,internal.contents)),false
         local fn,err = terra.load(function()
             if not done then
                 done = true

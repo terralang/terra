@@ -49,7 +49,7 @@ end)
 
 local seven = 7
 local nineteen = constant(`3 + 4 + 1 + seven + sizeof(int))
-assert(19 == nineteen:get())
+assert(19 == tonumber(nineteen:get()))
 local v8 = nineteen
 
 failit("constant initializer",function()
@@ -85,4 +85,4 @@ terra usethem()
     v6;
     return v0.b + v1 + v2 + (@v4)[0] + @v5 + v7 + v8 +  v9[0] + v10[1] + @v11
 end
-assert(18 + 7 + 3 + 19 + 2  + 4 + 4 == usethem())
+assert(18 + 7 + 3 + 19 + 2  + 4 + 4 == tonumber(usethem()))

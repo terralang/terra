@@ -20,5 +20,5 @@ terra baz(a : int64)
 end
 
 local test = require("test")
-test.eq(baz(1),4)
-test.eq(baz(3),5)
+test.eq(tonumber(baz(1)),4)
+test.eq(tonumber(baz(3)),5)
