@@ -56,7 +56,8 @@ using namespace llvm;
     _(linkllvmimpl,1) \
     _(currenttimeinseconds,0) \
     _(isintegral,0) \
-    _(dumpmodule,1)
+    _(dumpmodule,1) \
+    _(xpcallwithargs,0)
 
 
 #define DEF_LIBFUNCTION(nm,isclo) static int terra_##nm(lua_State * L);
@@ -171,6 +172,17 @@ static int terra_currenttimeinseconds(lua_State * L) {
     lua_pushnumber(L, CurrentTimeInSeconds());
     return 1;
 }
+
+static const void * tocdata(lua_State * L, int idx) {
+#ifdef TERRA_USE_PUC_LUA
+    // libffi uses a 32 byte header for each cdata object,
+    // which we have to skip here
+    return ((char*)lua_topointer(L,idx) + 32);
+#else
+    return lua_topointer(L,idx);
+#endif
+}
+
 
 static void AddLLVMOptions(int N,...) {
     va_list ap;
@@ -1195,6 +1207,7 @@ static int terra_deletefunction(lua_State * L);
 
 Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, TerraFunctionState * user);
 
+
 struct Locals { Obj cur; Locals * prev; }; //stack of local environment
 
 struct FunctionEmitter {
@@ -1923,7 +1936,7 @@ if(baseT->isIntegerTy()) { \
                 TType * typ = typeOfValue(exp);
                 Obj value;
                 exp->pushfield("value");
-                const void * data = lua_topointer(L,-1);
+                const void * data = tocdata(L,-1);
                 assert(data);
                 size_t size = CU->getDataLayout().getTypeAllocSize(typ->type);
                 Value * r;
@@ -3049,4 +3062,24 @@ static int terra_dumpmodule(lua_State * L) {
     if(CU)
         CU->M->dump();
     return 0;
+}
+
+// args are [func][debugfn][args...]
+static int terra_xpcallwithargs(lua_State * L) {
+    luaL_checkany(L,2);
+    int N = lua_gettop(L) - 2;
+    if(N < 0) {
+        lua_settop(L,2);
+        N = 0;
+    }
+    // swap func and debugfn
+    lua_pushvalue(L, 1);
+    lua_pushvalue(L, 2);
+    lua_replace(L, 1);
+    lua_replace(L, 2);
+    
+    int status = lua_pcall(L, N, LUA_MULTRET, 1);
+    lua_pushboolean(L, status == 0);
+    lua_replace(L, 1); //replace debugfn with error code
+    return lua_gettop(L);
 }

@@ -400,7 +400,7 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
         -- invokeuserfunction is recognized by a customtraceback and we need to prevent the tail call
         return result
     end
-    local success,result = xpcall(userfn,debug.traceback,...)
+    local success,result = terralib.xpcallwithargs(userfn,debug.traceback,...)
     -- same here
     return success, result
 end

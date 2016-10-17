@@ -49,6 +49,7 @@ LUA_DIR = build/$(LUA_VERSION)
 LUA_LIB = $(LUA_DIR)/lib/liblua.a
 LUA_INCLUDE = $(LUA_DIR)/include
 LUA = $(LUA_DIR)/bin/lua
+FLAGS += -DTERRA_USE_PUC_LUA
 
 build/$(LUA_TAR):
 	$(WGET) build/$(LUA_TAR) $(LUA_URL)
