@@ -9,7 +9,7 @@ end
 luafn = terralib.cast( &Count -> {},luafn)
 terra terrafn(a : &Count)
 	io.printf("terra: %d\n",a.value)
-	if a.value < 100 then
+	if a.value < 50 then
 		luafn(a)
 	end
 	return a.value
@@ -21,4 +21,4 @@ terra begin()
 end
 
 local test = require("test")
-test.eq(begin(),100)
+test.eq(begin(),50)

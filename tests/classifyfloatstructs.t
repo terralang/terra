@@ -87,7 +87,7 @@ if terralib.lookupsymbol and require("ffi").os ~= "Windows" then
      terralib.lookupsymbol(add4_val_val,&si)
      return si.size
     end
-    assert(sizecheck() < 16)
+    assert(tonumber(sizecheck()) < 16)
 end
 --------------------------------------------------------------------------------
  

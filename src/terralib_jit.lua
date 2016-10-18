@@ -35,7 +35,7 @@ function T.struct:definecstruct(layout)
     str = str .. "};"
     local status,err = pcall(ffi.cdef,str)
     if not status then 
-        if err:match("attempt to redefine") then
+        if err:match("redefin") then
             print(("warning: attempting to define a C struct %s that has already been defined by the luajit ffi, assuming the Terra type matches it."):format(nm))
         else error(err) end
     end
@@ -49,6 +49,9 @@ end
 local function uniquecname(name) --used to generate unique typedefs for C
     return uniquetypenameset(tovalididentifier(name))
 end
+
+local ctypetokey = ffi.key or tonumber
+
  --map from luajit ffi ctype objects to corresponding terra type
 local ctypetoterra = {}
    
@@ -135,9 +138,9 @@ function T.Type:cstring()
         
         --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
         local ctype = ffi.typeof(self.cachedcstring)
-        ctypetoterra[tonumber(ctype)] = self
+        ctypetoterra[ctypetokey(ctype)] = self
         local rctype = ffi.typeof(self.cachedcstring.."&")
-        ctypetoterra[tonumber(rctype)] = self
+        ctypetoterra[ctypetokey(rctype)] = self
         
         if self:isstruct() then
             local function index(obj,idx)
@@ -166,7 +169,7 @@ function terra.typeof(obj)
     if type(obj) ~= "cdata" then
         error("cannot get the type of a non cdata object")
     end
-    return ctypetoterra[tonumber(ffi.typeof(obj))]
+    return ctypetoterra[ctypetokey(ffi.typeof(obj))]
 end
 
 --overwrite terra.string with ffi version
