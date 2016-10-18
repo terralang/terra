@@ -2,7 +2,9 @@ local F = io.open("_terraforcpp.txt")
 local O = io.open("terraforcpp.html","w")
 local cur
 local function next()
-    cur = F:read("*line")
+    repeat
+        cur = F:read("*line")
+    until cur == nil or cur:sub(1,2) ~= "//"
 end
 
 next()

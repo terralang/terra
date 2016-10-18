@@ -716,183 +716,180 @@ Sizeof
     sizeof(T)
     sizeof([(`t):gettype()])
 
-    
-
-
-Allocation
-
-    new T //malloc, use a std.t metatype, or build your own
-    new T(x,y)
-    new T[x]
-    delete p
-    delete [] p
-    ###
-    new T //malloc, use a std.t metatype, or build your own
-    new T(x,y)
-    new T[x]
-    delete p
-    delete [] p
-
-Arithmetic
-
-    -x
-    +x //DNE
-    x * y
-    x / y
-    x % y
-    x + y //including pointers
-    x - y
-    ###
-    -x
-    +x //DNE
-    x * y
-    x / y
-    x % y
-    x + y //including pointers
-    x - y
-
-Comparisons
-    x < y
-    x <= y
-    x > y
-    x >= y
-    x == y
-    x != y
-    ###
-    x < y
-    x <= y
-    x > y
-    x >= y
-    x == y
-    x != y
-
-Logical and Bitwise Operators
-
-    ~x
-    x << y
-    x >> y
-    !x    
-    x & y
-    x ^ y
-    x | y
-    x && y
-    x || y
-    ###
-    ~x
-    x << y
-    x >> y
-    !x    
-    x & y
-    x ^ y
-    x | y
-    x && y
-    x || y
-
-
-Other Stuff
-
-    x ? y : z // select
-    throw x; // no exceptions, consider using longjmp,setjmp
-    x, y;
-
-
-
-# Object-Oriented Programming/Encapsulation
-
-
-    class T { // A new type
-
-    // these don't exist, can be accomplished by hiding symbols,
-    private: 
-    protected: 
-    public:
-    friend void i(); // Global function i() has private access
-    friend class U; // Members of class U have private access
- 
-    class Z {}; // Nested class T::Z, does not exist
- 
-     int x;
-     void f(); 
-     void g() {return;} // Inline member function
-     void h() const; // Does not modify any data members
-     int operator+(int y); // t+y means t.operator+(y)
-     int operator-(); // -t means t.operator-()
- 
-     T(): x(1) {} // Constructor with initialization list
-     T(const T& t): x(t.x) {} // Copy constructor
-     T& operator=(const T& t) {x=t.x; return *this; } // Assignment operator
-     ~T(); // Destructor (automatic cleanup routine) (defer operator here)
- 
-     explicit T(int a); // Allow t=T(3) but not t=3
-     operator int() const {return x;} // Allows int(t)
- 
-     static int y; // Data shared by all T objects
-     static void l(); // Shared code. May access y but not x
-     typedef int V; // T::V means int
-    };
-
-    void T::f() { // Code for member function f of class T
-     this->x = x;
-    } // this is address of self (means x=x;)
-    int T::y = 2; // Initialization of static member (required)
-    T::l(); // Call to static member
-
-    //None of this exists, but you can implement it if you want
-    class T { 
-     virtual void f(); // May be overridden at run time by derived
-    class
-     virtual void g()=0; }; // Must be overridden (pure virtual)
-    class U: public T {}; // Derived class U inherits all members of base
-    T
-    class V: private T {}; // Inherited members of T become private
-    class W: public T, public U {}; // Multiple inheritance
-    class X: public virtual T {}; // Classes derived from X have base T
-    directly
-
-
-Copy/Assignment/Destructor: Terra does not do RAII, assignment is not overloadable, so no copy constructors exist.
-
-# Templates
-
-    template <class T> T f(T t); // Overload f for all types
-    template <class T> class X { // Class with type parameter T
-     X(T t); }; // A constructor
-    template <class T> X<T>::X(T t) {} // Definition of constructor
-    X<int> x(3); // An object of type "X of int"
-    template <class T, class U=T, int n=0> // Template with default
-    parameters
-
-    //become Lua function calls, use terralib.memoize to make it only execute the first time it is called
-
-# Namespaces
-
-
-    namespace N {class T {};} // Hide name T
-    N::T t; // Use name T in namespace N
-    using namespace N; // Make T visible without N::
-
-
-# Terra-specific Meta-Programming
-
-    `e
-    quote s in e end
-    [e]
-    escape --implicitly defines local emit function
-        ...
-        emit()
-    end
-    struct Foo(Decorator) {
-    }
-
-# Library Usage
-
-    printf,malloc,free,etc.
-    dlopen
-
-
-# Compiler Usage
-
-    gcc compile
-    gcc link
-    gcc sharedobj
+//Allocation
+//
+//    new T //malloc, use a std.t metatype, or build your own
+//    new T(x,y)
+//    new T[x]
+//    delete p
+//    delete [] p
+//    ###
+//    new T //malloc, use a std.t metatype, or build your own
+//    new T(x,y)
+//    new T[x]
+//    delete p
+//    delete [] p
+//
+//Arithmetic
+//
+//    -x
+//    +x //DNE
+//    x * y
+//    x / y
+//    x % y
+//    x + y //including pointers
+//    x - y
+//    ###
+//    -x
+//    +x //DNE
+//    x * y
+//    x / y
+//    x % y
+//    x + y //including pointers
+//    x - y
+//
+//Comparisons
+//    x < y
+//    x <= y
+//    x > y
+//    x >= y
+//    x == y
+//    x != y
+//    ###
+//    x < y
+//    x <= y
+//    x > y
+//    x >= y
+//    x == y
+//    x != y
+//
+//Logical and Bitwise Operators
+//
+//    ~x
+//    x << y
+//    x >> y
+//    !x    
+//    x & y
+//    x ^ y
+//    x | y
+//    x && y
+//    x || y
+//    ###
+//    ~x
+//    x << y
+//    x >> y
+//    !x    
+//    x & y
+//    x ^ y
+//    x | y
+//    x && y
+//    x || y
+//
+//
+//Other Stuff
+//
+//    x ? y : z // select
+//    throw x; // no exceptions, consider using longjmp,setjmp
+//    x, y;
+//
+//
+//
+//# Object-Oriented Programming/Encapsulation
+//
+//
+//    class T { // A new type
+//
+//    // these don't exist, can be accomplished by hiding symbols,
+//    private: 
+//    protected: 
+//    public:
+//    friend void i(); // Global function i() has private access
+//    friend class U; // Members of class U have private access
+// 
+//    class Z {}; // Nested class T::Z, does not exist
+// 
+//     int x;
+//     void f(); 
+//     void g() {return;} // Inline member function
+//     void h() const; // Does not modify any data members
+//     int operator+(int y); // t+y means t.operator+(y)
+//     int operator-(); // -t means t.operator-()
+// 
+//     T(): x(1) {} // Constructor with initialization list
+//     T(const T& t): x(t.x) {} // Copy constructor
+//     T& operator=(const T& t) {x=t.x; return *this; } // Assignment operator
+//     ~T(); // Destructor (automatic cleanup routine) (defer operator here)
+// 
+//     explicit T(int a); // Allow t=T(3) but not t=3
+//     operator int() const {return x;} // Allows int(t)
+// 
+//     static int y; // Data shared by all T objects
+//     static void l(); // Shared code. May access y but not x
+//     typedef int V; // T::V means int
+//    };
+//
+//    void T::f() { // Code for member function f of class T
+//     this->x = x;
+//    } // this is address of self (means x=x;)
+//    int T::y = 2; // Initialization of static member (required)
+//    T::l(); // Call to static member
+//
+//    //None of this exists, but you can implement it if you want
+//    class T { 
+//     virtual void f(); // May be overridden at run time by derived
+//    class
+//     virtual void g()=0; }; // Must be overridden (pure virtual)
+//    class U: public T {}; // Derived class U inherits all members of base
+//    T
+//    class V: private T {}; // Inherited members of T become private
+//    class W: public T, public U {}; // Multiple inheritance
+//    class X: public virtual T {}; // Classes derived from X have base T
+//    directly
+//
+//
+//Copy/Assignment/Destructor: Terra does not do RAII, assignment is not overloadable, so no copy constructors exist.
+//
+//# Templates
+//
+//    template <class T> T f(T t); // Overload f for all types
+//    template <class T> class X { // Class with type parameter T
+//     X(T t); }; // A constructor
+//    template <class T> X<T>::X(T t) {} // Definition of constructor
+//    X<int> x(3); // An object of type "X of int"
+//    template <class T, class U=T, int n=0> // Template with default
+//    parameters
+//
+//    //become Lua function calls, use terralib.memoize to make it only execute the first time it is called
+//
+//# Namespaces
+//
+//
+//    namespace N {class T {};} // Hide name T
+//    N::T t; // Use name T in namespace N
+//    using namespace N; // Make T visible without N::
+//
+//
+//# Terra-specific Meta-Programming
+//
+//    `e
+//    quote s in e end
+//    [e]
+//    escape --implicitly defines local emit function
+//        ...
+//        emit()
+//    end
+//    struct Foo(Decorator) {
+//    }
+//
+//# Library Usage
+//
+//    printf,malloc,free,etc.
+//    dlopen
+//
+//
+//# Compiler Usage
+//
+//    gcc compile
+//    gcc link
+//    gcc sharedobj
 
