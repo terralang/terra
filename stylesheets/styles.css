@@ -53,8 +53,7 @@ a:hover small {
 }
 
 .wrapper {
-  max-width:900px;
-  min-width:600px; 
+  width:900px;
   margin: 0 auto;
 }
 .title {
@@ -94,6 +93,8 @@ blockquote {
 pre {
   margin: 0;
   width: max-content;
+  width: -webkit-max-content;
+  width: -moz-max-content;
   padding:8px 15px;
   background: #f8f8f8;  
   border-radius:5px;
