@@ -141,6 +141,10 @@ hr {
   margin:0 0 20px;
 }
 
+#introcode>pre {
+    margin: 0 auto;
+}
+
 @media print {
   body {
     padding:0.4in;

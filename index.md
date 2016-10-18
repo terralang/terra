@@ -42,6 +42,7 @@ __Terra__ is a low-level system programming language that is embedded in and met
     -- You can save Terra code as executables, object files, or shared libraries 
     -- and link them into existing programs
     terralib.saveobj("helloterra",{ main = hello })
+{: id="introcode"}
 
 Like C/C++, Terra is a  **statically-typed**, **compiled language** with manual memory management. 
 But unlike C/C++, it is designed from the beginning to be **meta-programmed from Lua**. 

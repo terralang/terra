@@ -694,19 +694,29 @@ RTTI
     end
     
 Casts
-
     (T) x
-    static_cast<T>(x) // []() syntax
-    reinterpret_cast<T>(x) // punning
-    const_cast<T>(x) // no const
-
-
-    sizeof(x)
-    sizeof(T)
+    (T*) x
     ###
-    sizeof(x)
+    [T](x)
+    [&T](x)
+    -- you are applying the 
+    -- Terra type 'T' like a function.
+    -- Because type constructors like '&T'
+    -- are Lua expressions, you need to use
+    -- an escape '[T]' in general
+    ###
+    local PT = &int
+    terra f(a : &opaque) : PT
+        return PT(a)
+    end
+Sizeof
     sizeof(T)
+    sizeof(t)
+    ###
+    sizeof(T)
+    sizeof([(`t):gettype()])
 
+    
 
 
 Allocation
