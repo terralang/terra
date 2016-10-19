@@ -16,7 +16,11 @@ function test.meq(a,b)
 		error("size mismatch",2)
 	end
 	for i,e in ipairs(a) do
-		if e ~= lst[i] then
+		local te = lst[i]
+		if type(e) == "number" and type(te) == "cdata" then
+		    te = tonumber(te)
+		end
+		if e ~= te then
 			error(tostring(i) .. ": "..tostring(e) .. " ~= " .. tostring(lst[i]),2)
 		end
 	end

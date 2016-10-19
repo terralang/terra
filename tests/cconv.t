@@ -415,7 +415,7 @@ end
 local s23_0, s23_1 = terralib.unpackstruct(c23())
 test.eq(s23_0,1)
 test.eq(s23_1.a,1)
-test.eq(s23_1.b,2)
+test.eq(tonumber(s23_1.b),2)
 
 terra f24()
 	return S2 { 1,2,3}
@@ -437,7 +437,7 @@ test.eq(s22.b,4)
 
 local s23 = f23()
 test.eq(s23.a,1)
-test.eq(s23.b,2)
+test.eq(tonumber(s23.b),2)
 
 
 local s24 = f24()

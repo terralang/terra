@@ -193,3 +193,9 @@ function terra.cast(terratype,obj)
     local ctyp = terratype:cstring()
     return ffi.cast(ctyp,obj)
 end
+function terra.wrapfunction(key,ptr)
+    local terraffi = require("terraffi")
+    local T = ctypetoterra[key]
+    assert(T and T:ispointertofunction(),"no ctypetoterra")
+    return terraffi.wrapcdata(T,ptr)
+end

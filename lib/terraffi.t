@@ -1,4 +1,5 @@
 local terraffi = {}
+local util = require("terrautil")
 local List = terralib.newlist
 local T = terralib.irtypes
 -- HACK: terra.cast is not implemented yet, but the compiler
@@ -24,6 +25,7 @@ local struct lua_State
 luaL_checknumber = terralib.externfunction("luaL_checknumber",{&lua_State,int} -> double)
 lua_pushboolean = terralib.externfunction("lua_pushboolean",{&lua_State,bool} -> {})
 lua_pushvalue = terralib.externfunction("lua_pushvalue",{&lua_State,int} -> {})
+lua_pushnumber = terralib.externfunction("lua_pushnumber",{&lua_State,double} -> {})
 lua_toboolean = terralib.externfunction("lua_toboolean",{&lua_State,int} -> int)
 lua_newuserdata = terralib.externfunction("lua_newuserdata",{&lua_State,int} -> &opaque)
 lua_touserdata = terralib.externfunction("lua_touserdata",{&lua_State,int} -> &opaque)
@@ -70,7 +72,7 @@ local function upvalueindex(i)
 end
 
 function terraffi.wrap(terrafunction)
-    local syms,exprs = List(),List()
+    local exprs = List()
     local fntype = terrafunction:gettype()
     local upvalues = List()
     local upvalueindex_map = {}
@@ -136,6 +138,77 @@ function terraffi.wrap(terrafunction)
     end
     wrapper:setname(terrafunction:getname().."_luawrapper")
     return terralib.bindtoluaapi(wrapper:compile(),unpack(upvalues))
+end
+
+local ffi_setvalue = terralib.externfunction("ffi_setvalue", {&lua_State,int,int,&opaque} -> {})
+local ffi_pushcdata = terralib.externfunction("ffi_pushcdata", {&lua_State,int} -> &opaque)
+
+local function wrapctype(fntypep)
+    local ffi = require('ffi')
+    local fntype = fntypep.type
+    local syms,exprs = List(),List()
+    local upvalues = List { }
+    local upvalueindex_map = {}
+    local function createupvalue(type)
+        if not upvalueindex_map[type] then
+             local obj = ffi.typeof(type:cstring())
+             upvalues:insert(obj)
+             upvalueindex_map[type] = `LUA_GLOBALSINDEX - [#upvalues + 1] -- + 1 because the first upvalue is the function pointer
+        end
+        return upvalueindex_map[type]
+    end
+    
+    local function checktype(type,L,position)
+        local idx = createupvalue(type)
+        return quote
+            var r : type
+            ffi_setvalue(L,position,idx,&r)
+        in r end
+    end
+        
+    local function pushvaluetolua(type,L,value)
+        local class = classifytype(type)
+        if "number" == class then
+            return `lua_pushnumber(L,value)
+        elseif "boolean" == class then
+            return `lua_pushboolean(L,value)
+        elseif "terradata" == class then
+            local idx = createupvalue(type)
+            return quote 
+                var result = [&type](ffi_pushcdata(L,idx))
+                @result = value
+            end
+        end
+    end
+    
+    local terra wrapper(L : &lua_State)
+        escape
+            local terrafunction = `[fntypep](lua_touserdata(L,LUA_GLOBALSINDEX - 1))
+            local exprs = List()
+            for i,a in ipairs(fntype.parameters) do
+                exprs:insert(checktype(a,L,i))
+            end
+            if terralib.types.unit == fntype.returntype then
+                emit quote
+                    terrafunction(exprs)
+                    return 0
+                end
+            else
+                emit quote
+                    var result = terrafunction(exprs)
+                    [ pushvaluetolua(fntype.returntype, L, result) ]
+                    return 1
+                end
+            end
+        end
+    end
+    return { func = wrapper, upvalues = upvalues }
+end
+wrapctype = util.memoize(wrapctype)
+
+function terraffi.wrapcdata(fntypep,fnptr)
+    local launcher = wrapctype(fntypep)
+    return terralib.bindtoluaapi(launcher.func:compile(),fnptr,unpack(launcher.upvalues))
 end
 
 return terraffi
