@@ -263,7 +263,8 @@ $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUA) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
-build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t $(EMBEDDEDLUA)
+TERRA_LIBRARY_FILES=lib/std.t lib/parsing.t lib/terraffi.t
+build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua $(TERRA_LIBRARY_FILES) $(EMBEDDEDLUA)
 	$(LUA) src/geninternalizedfiles.lua POSIX $(CLANG_RESOURCE_DIRECTORY) $@
 
 clean:
