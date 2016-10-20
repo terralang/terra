@@ -6,6 +6,8 @@ else
     lscmd = "find . | cut -c 3-"
 end
 
+local writetolog = (...) == "log"
+
 local function getcommand(file)
     local prefix = terralib and terralib.terrahome and 
                    terralib.terrahome .."/bin/terra" or "../terra"
@@ -31,9 +33,16 @@ for line in io.popen(lscmd):lines() do
     if file then
         print(file .. ":")
         local execstring = getcommand(file) .. " " .. file
+        local logfile = ("log_%s.txt"):format(file:gsub("/","_"))
+        if writetolog then
+            execstring = ("%s >> '%s' 2>&1"):format(execstring,logfile)
+        end 
         local result = os.execute(execstring)
         if type(result) == "number" and result == 0 or result == true then
             table.insert(passed,file)
+            if writetolog then
+                os.execute(("rm '%s'"):format(logfile))
+            end
         else
             --error("fail")
             table.insert(failed,file)
