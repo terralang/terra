@@ -10,9 +10,6 @@ foo = terra(result : &int)
     terralib.asm(terralib.types.unit,"red.global.max.u32 [$0], $1;","l,r",true,result,t)
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>

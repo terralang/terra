@@ -2,6 +2,8 @@
 
 cudalib = {}
 
+terralib.includepath = terralib.includepath .. (";%s/include"):format(terralib.cudahome)
+
 function terralib.cudacompile(...)
     return cudalib.compile(...)
 end
@@ -9,7 +11,7 @@ end
 local ffi = require('ffi')
 
 local cudaruntimelinked = false
-function cudalib.linkruntime(cudahome)
+function cudalib.linkruntime()
     if cudaruntimelinked then return end
     terralib.linklibrary(terralib.cudalibpaths.driver)
     terralib.linklibrary(terralib.cudalibpaths.runtime)

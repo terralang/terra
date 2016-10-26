@@ -16,8 +16,6 @@ terra foo(result : &float,a : A, c : int, d : int[2])
 	result[t] = t + a.a + a.b + c + a.c[0] + a.c[1] + d[0] + d[1]
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>

@@ -23,8 +23,6 @@ foo = terra(result : &float)
     fn(result, array(tid(),tid()+1,tid()+2,tid()+3,tid()+4) )
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>
