@@ -61,7 +61,7 @@ end
 
 -- note: __retcheck is always a tailcall so debug info for the function actually returning
 -- is not on the stack, instead we have to report errors relative to the function that
--- called it "value being returned #2 to 'caller_fn'" is supposed to convey that 
+-- called it "value being returned #2 to 'caller_fn'" is supposed to convey that
 function __retcheck(types,...)
     local expected = #types
     local actual = select("#",...)
@@ -76,7 +76,7 @@ local ListOfType = {}
 ListOfType.__index = ListOfType
 function ListOfType:isclassof(value)
     if not List:isclassof(value) then
-        return false, expectedtype("List",value)
+        return false, expectedtype(tostring(self),value)
     end
     if #value > 0 then
         local first = value[1]
@@ -87,7 +87,7 @@ function ListOfType:isclassof(value)
     end
     return true
 end
-function ListOfType:__tostring() 
+function ListOfType:__tostring()
     return ("ListOf(%s)"):format(tostring(self.element))
 end
 function ListOf(type)
@@ -103,10 +103,39 @@ function OptionOfType:isclassof(value)
     end
     return istype(self.element,value)
 end
-function OptionOfType:__tostring() 
+function OptionOfType:__tostring()
     return ("OptionOf(%s)"):format(tostring(self.element))
 end
 function OptionOf(type)
-    return setmetatable({ element = type },OptionOfType)
+    return setmetatable({ element = assert(type) },OptionOfType)
 end
 OptionOf = util.memoize(OptionOf)
+
+local MapOfType = {}
+MapOfType.__index = MapOfType
+function MapOfType:isclassof(value)
+    if type(value) ~= "table" then
+        return false, expectedtype(tostring(self),value)
+    end
+    for k,v in pairs(value) do
+        local valid, msg = istype(self.key,k)
+        if not valid then
+            return false, ("%s as key of %s"):format(msg,tostring(self))
+        end
+        local valid, msg = istype(self.value,v)
+        if not valid then
+            return false, ("%s as value of %s"):format(msg,tostring(self))
+        end
+        break -- only check one entry, all type annotations should be O(1) time
+    end
+    return true
+end
+function MapOfType:__tostring()
+    return ("MapOf(%s,%s)"):format(tostring(self.key),tostring(self.value))
+end
+function MapOf(key,value)
+    return setmetatable({ key = assert(key), value = assert(value) },MapOfType)
+end
+MapOf = util.memoize(MapOf)
+
+

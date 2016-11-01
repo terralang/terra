@@ -18,7 +18,7 @@ T:Define [[
 local a = { b = {} }
 a.b.foo = function(x : "number", y : "boolean") : "number","boolean"
     local function bar( a : "int") : "bool" return true end
-    do 
+    do
         return 1,true
     end
 end
@@ -67,8 +67,8 @@ end
 a("hi")
 failit("bad value being returned #1 to '%?' expected 'string' but found 'number'",function() a(1) end)
 
-local function two( a : Any, b :Any) : "string","boolean" 
-    return a,b 
+local function two( a : Any, b :Any) : "string","boolean"
+    return a,b
 end
 
 two("hi",true)
@@ -83,17 +83,39 @@ failit("bad argument #1 to 'what' expected 'int' but found 'number' as first ele
 function what(a : ListOf("number")) : ListOf("boolean")
     return a:map(function(x) return x > 4 end)
 end
-failit("bad argument #1 to 'what' expected 'List' but found 'number'",function()what(4)end)
+failit("bad argument #1 to 'what' expected 'ListOf%(number%)' but found 'number'",function()what(4)end)
 what(List{1,2,3})
 what(List{})
 function what2(a : ListOf(ListOf("number"))) return 4 end
 what2(List{List{3}})
 failit("bad argument #1 to 'what2' expected 'number' but found 'string' .* as first element of ListOf%(number%) as first element of ListOf%(ListOf%(number%)%)",
     function() what2(List{List{""}}) end)
-    
+
 function op(a : OptionOf("number")) : OptionOf("boolean")
     if a and a > 3 then return true end
 end
 op(nil)
 op(3)
 failit("bad argument #1 to 'op' expected 'number' but found 'string'",function() op("") end)
+
+
+function takemap( a : MapOf('string','number')) : OptionOf('number')
+    return a["hi"]
+end
+
+assert(3 == takemap( { hi = 3 }))
+assert(nil == takemap( {} ))
+
+failit("bad argument #1 to 'takemap' expected 'MapOf%(string,number%)' but found 'number'", function() takemap(3) end)
+failit("bad argument #1 to 'takemap' expected 'string' but found 'number' as key of MapOf%(string,number%)", function()
+    takemap({ [3] = "hi" })
+end)
+failit("bad argument #1 to 'takemap' expected 'number' but found 'string' .* as value of MapOf%(string,number%)", function()
+    takemap({ hi = "hi" })
+end)
+
+function takemap( a : MapOf('string',ListOf('number'))) : OptionOf('number')
+end
+
+takemap( { a = List {1,2,3} } )
+

@@ -31,7 +31,7 @@ local r = a:flatmapi(function(i,x) return List{x,x+1} end)
 assert(#r == 2*#a and r[4] == 4)
 
 assert(a:findi(function(i,x) return i == 2 and x == 3 end) == 3)
-assert(a:findi(function() return false end) == nil) 
+assert(a:findi(function() return false end) == nil)
 
 assert(a:find(function(x) return x == 2 end) == 2)
 assert(a:find(function(x) return false end) == nil)
@@ -81,3 +81,4 @@ assert(not a:alli(function(i,x) return x == 2 end))
 assert(a:all(tonumber))
 assert(not a:all("not"))
 assert(not a:exists("not"))
+assert(tostring(List{1,2}) == "{1,2}")

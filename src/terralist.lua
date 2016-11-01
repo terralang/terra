@@ -1,20 +1,20 @@
 --[[
--- the List type is a plain Lua table with additional methods that come from: 
+-- the List type is a plain Lua table with additional methods that come from:
 -- 1. all the methods in Lua's 'table' global
--- 2. a list of higher-order functions based on sml's (fairly minimal) list type. 
+-- 2. a list of higher-order functions based on sml's (fairly minimal) list type.
 
 -- For each function that is an argument of a high-order List function can be either:
 -- 1. a real Lua function
 -- 2. a string of an operator "+" (see op table)
 -- 3. a string that specifies a field or method to call on the object
 --    local mylist = List { a,b,c }
---    mylist:map("foo") -- selects the fields:  a.foo, b.foo, c.foo, etc. 
+--    mylist:map("foo") -- selects the fields:  a.foo, b.foo, c.foo, etc.
 --                      -- if a.foo is a function it will be treated as a method a:foo()
 -- extra arguments to the higher-order function are passed through to these function.
--- rationale: Lua inline function syntax is verbose, this functionality avoids 
+-- rationale: Lua inline function syntax is verbose, this functionality avoids
 -- inline functions in many cases
 
-list:sub(i,j) -- Lua's string.sub, but for lists 
+list:sub(i,j) -- Lua's string.sub, but for lists
 list:rev() : List[A] -- reverse list
 list:app(fn : A -> B) : {} -- app fn to every element
 list:map(fn : A -> B) : List[B] -- apply map to every element resulting in new list
@@ -76,6 +76,9 @@ function List:sub(i,j)
     end
     return l
 end
+function List:__tostring()
+   return ("{%s}"):format(self:map(tostring):concat(","))
+end
 
 local OpTable = {
 ["+"] = function(x,y) return x + y end;
@@ -134,7 +137,7 @@ function List:mapi(fn,...)
     local l = List()
     for i,v in ipairs(self) do
         l[i] = fn(i,v,...)
-    end 
+    end
     return l
 end
 function List:map(fn,...)
@@ -144,7 +147,7 @@ function List:map(fn,...)
     local l = List()
     for i,v in ipairs(self) do
         l[i] = fn(v,...)
-    end 
+    end
     return l
 end
 
@@ -202,7 +205,7 @@ function List:flatmapi(fn,...)
         for j,v2 in ipairs(r) do
             l:insert(v2)
         end
-    end 
+    end
     return l
 end
 function List:flatmap(fn,...)
@@ -215,7 +218,7 @@ function List:flatmap(fn,...)
         for j,v2 in ipairs(r) do
             l:insert(v2)
         end
-    end 
+    end
     return l
 end
 
@@ -257,7 +260,7 @@ function List:partitioni(fn,...)
             m[k] = l
         end
         l:insert(v2)
-    end 
+    end
     return m
 end
 function List:partition(fn,...)
@@ -273,7 +276,7 @@ function List:partition(fn,...)
             m[k] = l
         end
         l:insert(v2)
-    end 
+    end
     return m
 end
 
@@ -284,7 +287,7 @@ function List:foldi(init,fn,...)
     local s = init
     for i,v in ipairs(self) do
         s = fn(i,s,v,...)
-    end 
+    end
     return s
 end
 function List:fold(init,fn,...)
@@ -294,7 +297,7 @@ function List:fold(init,fn,...)
     local s = init
     for i,v in ipairs(self) do
         s = fn(s,v,...)
-    end 
+    end
     return s
 end
 
@@ -307,7 +310,7 @@ function List:reducei(fn,...)
     local s = self[1]
     for i = 2,N do
         s = fn(i,s,self[i],...)
-    end 
+    end
     return s
 end
 function List:reduce(fn,...)
@@ -319,7 +322,7 @@ function List:reduce(fn,...)
     local s = self[1]
     for i = 2,N do
         s = fn(s,self[i],...)
-    end 
+    end
     return s
 end
 
