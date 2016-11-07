@@ -2665,10 +2665,11 @@ static int terra_llvmoffsetof(lua_State * L) {
     int fieldoffset = luaL_checkinteger(L, 3);
     Value * zero = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 0);
     Value * field = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), fieldoffset);
+    Value* values[] = {zero,field};
 #if LLVM_VERSION < 39
-    size_t offset = CU->getDataLayout().getIndexedOffset(llvmtyp->type, {zero,field});
+    size_t offset = CU->getDataLayout().getIndexedOffset(llvmtyp->type, values);
 #else
-    size_t offset = CU->getDataLayout().getIndexedOffsetInType(llvmtyp->type, {zero,field});
+    size_t offset = CU->getDataLayout().getIndexedOffsetInType(llvmtyp->type, values);
 #endif
     lua_pushnumber(L,offset);
     return 1;

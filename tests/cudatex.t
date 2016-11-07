@@ -23,8 +23,6 @@ foo = terra(result : C.cudaTextureObject_t)
     vprintf("%f\n",[&int8](&rr))    
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
 
 local R = terralib.cudacompile({ foo = foo })

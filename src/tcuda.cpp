@@ -19,7 +19,6 @@ extern "C" {
 #include "tcompilerstate.h"
 #include "tllvmutil.h"
 #include "tobj.h"
-#include "cudalib.h"
 #include <sstream>
 #ifndef _WIN32
 #include <unistd.h>

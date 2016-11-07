@@ -13,8 +13,6 @@ foo = terra(result : &float)
     vprintf("%d\n",[&int8](&t))
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 
 sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
 
