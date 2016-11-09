@@ -406,9 +406,20 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
 end
 terra.fulltrace = false
 -- override the lua traceback function to be aware of Terra compilation contexts
-function debug.traceback(msg,level)
-    level = level or 1
-    level = level + 1 -- don't count ourselves
+function debug.traceback(thread,msg,level)
+    local getlocal,getinfo
+    if type(thread) == "thread" then
+        function getlocal(...) return debug.getlocal(thread,...) end
+        function getinfo(...) return debug.getinfo(thread,...) end
+    else
+        getlocal = debug.getlocal
+        getinfo = debug.getinfo
+        msg,level = thread,msg
+    end
+    level = type(level) == "number" and level or 1
+    if type(thread) ~= "thread" then
+        level = level + 1 -- don't count ourselves
+    end
     local lim = terra.fulltrace and math.huge or TRACEBACK_LEVELS1 + 1
     local lines = List()
     if msg then
@@ -423,14 +434,14 @@ function debug.traceback(msg,level)
     end
     lines:insert("stack traceback:")
     while true do
-        local di = debug.getinfo(level,"Snlf")
+        local di = getinfo(level,"Snlf")
         if not di then break end
         if di.func == invokeuserfunction then
-            local anchorname,anchor = debug.getlocal(level,1)
-            local whatname,what = debug.getlocal(level,2)
+            local anchorname,anchor = getlocal(level,1)
+            local whatname,what = getlocal(level,2)
             assert(anchorname == "anchor" and whatname == "what")
             lines:insert("\n\t")
-            lines:insert(formaterror(anchor,"Errors reported during "..what):sub(1,-2)) 
+            lines:insert(formaterror(anchor,"Errors reported during "..what):sub(1,-2))
         else
             local short_src,currentline,linedefined = di.short_src,di.currentline,di.linedefined
             local file,outsideline = di.source:match("^@$terra$(.*)$terra$(%d+)$")
@@ -448,14 +459,14 @@ function debug.traceback(msg,level)
             elseif di.what == "main" then
                 lines:insert(" in main chunk")
             elseif di.what == "C" then
-                lines:insert( (" at %s"):format(tostring(di.func)))    
+                lines:insert( (" at %s"):format(tostring(di.func)))
             else
                 lines:insert((" in function <%s:%d>"):format(short_src,linedefined))
             end
         end
         level = level + 1
         if level == lim then
-            if debug.getinfo(level + TRACEBACK_LEVELS2,"") ~= nil then
+            if getinfo(level + TRACEBACK_LEVELS2,"") ~= nil then
                 lines:insert("\n\t...")
                 level = findfirstnilstackframe() - TRACEBACK_LEVELS2
             end
@@ -464,7 +475,6 @@ function debug.traceback(msg,level)
     end
     return table.concat(lines)
 end
-
 -- GLOBALVALUE
 
 function T.globalvalue:gettype() return self.type end
