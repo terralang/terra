@@ -489,6 +489,9 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
     bool issigned;
     bool islogical;
     bool incomplete; // does this aggregate type or its children include an incomplete struct
+#if LLVM_VERSION > 38
+    DIType * dtype; // filled in separately from TType
+#endif
 };
 
 class Types {
@@ -1424,8 +1427,12 @@ struct FunctionEmitter {
     AllocaInst * allocVar(Obj * v) {
         Obj sym;
         v->obj("symbol",&sym);
-        AllocaInst * a = CreateAlloca(B,typeOfValue(v)->type,0,v->string("name"));
+        const char * name = v->string("name");
+        Obj type;
+        v->obj("type",&type);
+        AllocaInst * a = CreateAlloca(B, getType(&type)->type,0,name);
         mapSymbol(&locals->cur,&sym,a);
+        declareDebugVar(v->string("name"), a, &type);
         return a;
     }
     
@@ -2261,10 +2268,13 @@ if(baseT->isIntegerTy()) { \
             B->SetCurrentDebugLocation(DebugLoc::get(customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
         }
     }
+    
+    void declareDebugVar(const char * name, AllocaInst * alloca, Obj * type) {}
 #else
     void initDebug(const char * filename, int lineno) {}
     void endDebug() {}
     void setDebugPoint(Obj * obj) {}
+    void declareDebugVar(const char * name, AllocaInst * alloca, Obj * type) {}
 #endif
 
     void setInsertBlock(BasicBlock * bb) {
@@ -2740,6 +2750,10 @@ static void * JITGlobalValue(TerraCompilationUnit * CU, GlobalValue * gv) {
         }
         llvm::ValueToValueMapTy VMap;
         Module * m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy,CU, VMap);
+        
+#if LLVM_VERSION >= 38
+       m->setDataLayout(CU->TT->tm->createDataLayout());
+#endif
         
         if(CU->T->options.debug > 1) {
             llvm::SmallString<256> tmpname;
