@@ -10,8 +10,7 @@ terra foo(a : &int)
 	terralib.printf("hi\n")
 end
 
-bar:disas()
+
 bar:setinlined(false)
 foo:setinlined(false)
-foo:disas()
 foo(nil)

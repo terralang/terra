@@ -2231,6 +2231,8 @@ if(baseT->isIntegerTy()) { \
                                     fstate->func->getName(), fstate->func->getName(), file, lineno,
                                     DB->createSubroutineType(TA),
                                     false, true, 0,0, true, nullptr);
+            // we need this list so that we can create a valid DICompileUnit on module output
+            this->CU->AllSubprograms.push_back(SP);
             fstate->func->setSubprogram(SP);
 #endif
             
@@ -2245,6 +2247,13 @@ if(baseT->isIntegerTy()) { \
             DB->finalize();
             delete DB;
         }
+#if LLVM_VERSION >= 38
+        if(NamedMDNode * N = M->getNamedMetadata("llvm.dbg.cu")) {
+            DICompileUnit * CU = dyn_cast<DICompileUnit>(N->getOperand(0));
+            DISubprogramArray SPs = MDTuple::get(*this->CU->TT->ctx, this->CU->AllSubprograms);
+            CU->replaceSubprograms(SPs);
+        }
+#endif
     }
     void setDebugPoint(Obj * obj) {
         DEBUG_ONLY(T) {

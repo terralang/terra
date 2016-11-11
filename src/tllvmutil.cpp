@@ -177,7 +177,6 @@ void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) 
 
 //adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfile, emitobjfile_t & dest) {
-
     PassManagerT pass;
     llvmutil_addtargetspecificpasses(&pass, TM);
     
@@ -245,10 +244,13 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst*,8> Returns;
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+                #if LLVM_VERSION >=38
+                if(DISubprogram * SP = fn->getSubprogram()) {
+                    newfn->setSubprogram(dyn_cast<DISubprogram>(MapMetadata(SP,VMap)));
+                }
+                #endif
             }
-            if(DISubprogram * SP = fn->getSubprogram()) {
-                newfn->setSubprogram(dyn_cast<DISubprogram>(MapMetadata(SP,VMap)));
-            }
+
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
             GlobalVariable * newGV = dest->getGlobalVariable(GV->getName(),true);
@@ -331,7 +333,20 @@ struct CopyConnectedComponent : public ValueMaterializer {
         }
    }
 #else
-    Value * materializeValueForMetadata(Value * V) { return NULL; }
+    Value * materializeValueForMetadata(Value * V) {
+        return NULL;
+    }
+    SmallVector<Metadata *, 4> AllSubprograms;
+    virtual bool isMetadataNeeded(Metadata *MD) {
+        // when functions are inlined, the subprograms stick around
+        // so there are subprograms that do not correspond to any Function*
+        // we record them here, because empircally they still need to be listed in DICompileUnit
+        // to prevent crashes
+        if (DISubprogram* SP = dyn_cast<DISubprogram>(MD)) {
+            AllSubprograms.push_back(MapMetadata(SP,VMap));
+        }
+        return true;
+    }
     void CopyDebugMetadata() {}
     void finalize() {
         std::vector<const char *> md_names = {"llvm.module.flags","llvm.dbg.cu"};
@@ -345,12 +360,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
         if(NamedMDNode * CUNode = dest->getNamedMetadata("llvm.dbg.cu")) {
             DICompileUnit * CU = dyn_cast<DICompileUnit>(CUNode->getOperand(0));
             assert(CU);
-            SmallVector<Metadata *, 4> AllSubprograms;
-            for(Function & fn : dest->functions()) {
-                if(DISubprogram* SP = fn.getSubprogram()) {
-                    AllSubprograms.push_back(SP);
-                }
-            }
             DISubprogramArray SPs = MDTuple::get(dest->getContext(), AllSubprograms);
             CU->replaceSubprograms(SPs);
         }

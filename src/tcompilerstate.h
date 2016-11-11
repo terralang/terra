@@ -45,6 +45,10 @@ struct TerraCompilationUnit {
     FunctionPassManager * fpm;
     llvm::ExecutionEngine * ee;
     llvm::JITEventListener * jiteventlistener; //for reporting debug info
+#if LLVM_VERSION >= 38
+    llvm::SmallVector<llvm::Metadata *,4> AllSubprograms; //used in debug mode because the DI builder always clobbers this list when a new function is added.
+#endif
+    
     // Temporary storage for objects that exist only during emitting functions
     Types * Ty;
     CCallingConv * CC;
