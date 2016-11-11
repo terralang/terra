@@ -1224,12 +1224,18 @@ struct FunctionEmitter {
     IRBuilder<> * B;
     std::vector<std::pair<BasicBlock *,int> > breakpoints; //stack of basic blocks where a break statement should go
     
-    #ifdef DEBUG_INFO_WORKING
-    DIBuilder * DB;
+#ifdef DEBUG_INFO_WORKING
+#if LLVM_VERSION < 38
     DISubprogram SP;
-    #endif
+    typedef MDNode FileDebugInfo;
+#else
+    DISubprogram * SP;
+    typedef DILexicalBlockFile FileDebugInfo;
+#endif
+    DIBuilder * DB;
+    StringMap<FileDebugInfo*> filenamecache; //map from filename to lexical scope object representing file.
+#endif
     
-    StringMap<MDNode*> filenamecache; //map from filename to lexical scope object representing file.
     const char * customfilename;
     int customlinenumber;
     
@@ -2176,11 +2182,11 @@ if(baseT->isIntegerTy()) { \
             return DB->createFile(filename,".");
         }
     }
-    MDNode * debugScopeForFile(const char * filename) {
-        StringMap<MDNode*>::iterator it = filenamecache.find(filename);
+    FileDebugInfo * debugScopeForFile(const char * filename) {
+        StringMap<FileDebugInfo*>::iterator it = filenamecache.find(filename);
         if(it != filenamecache.end())
             return it->second;
-        MDNode * block = DB->createLexicalBlockFile(SP, createDebugInfoForFile(filename));
+        FileDebugInfo * block = DB->createLexicalBlockFile(SP, createDebugInfoForFile(filename));
         filenamecache[filename] = block;
         return block;
     }
@@ -2191,30 +2197,47 @@ if(baseT->isIntegerTy()) { \
             DB = new DIBuilder(*M);
             
             DIFileP file = createDebugInfoForFile(filename);
-            #if LLVM_VERSION >= 34
-            DICompileUnit CU =
-            #endif
-                DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
-            #if LLVM_VERSION >= 36
-            auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata*>());
-            #else
+#if LLVM_VERSION < 34
+            DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
             auto TA = DB->getOrCreateArray(ArrayRef<Value*>());
-            #endif
-            SP = DB->createFunction(
-                                    #if LLVM_VERSION >= 34
-                                    CU,
-                                    #else
-                                    (DIDescriptor)DB->getCU(),
-                                    #endif
+            SP = DB->createFunction((DIDescriptor)DB->getCU(),
                                     fstate->func->getName(), fstate->func->getName(), file, lineno,
                                     DB->createSubroutineType(file, TA),
                                     false, true, 0,0, true, fstate->func);
+#elif LLVM_VERSION < 36
+            DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
+            auto TA = DB->getOrCreateArray(ArrayRef<Value*>());
+            SP = DB->createFunction(CU,
+                                    fstate->func->getName(), fstate->func->getName(), file, lineno,
+                                    DB->createSubroutineType(file, TA),
+                                    false, true, 0,0, true, fstate->func);
+#elif LLVM_VERSION < 38
+            DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
+            auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata*>());
+            SP = DB->createFunction(CU,
+                                    fstate->func->getName(), fstate->func->getName(), file, lineno,
+                                    DB->createSubroutineType(file, TA),
+                                    false, true, 0,0, true, fstate->func);
+#else
+            // don't let multiple cu entries into M, we are going to copy this before compilation
+            // and the fix it up to reflect the actual subprograms in that module
+            if(NamedMDNode * N = M->getNamedMetadata("llvm.dbg.cu")) {
+                N->eraseFromParent();
+            }
+            DICompileUnit * CU = DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "", 0);
+            auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata*>());
+            
+            SP = DB->createFunction(CU,
+                                    fstate->func->getName(), fstate->func->getName(), file, lineno,
+                                    DB->createSubroutineType(TA),
+                                    false, true, 0,0, true, nullptr);
+            fstate->func->setSubprogram(SP);
+#endif
             
             if(!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
                 M->addModuleFlag(llvm::Module::Warning, "Debug Info Version",1);
             }
-            filenamecache[filename] = SP;
         }
     }
     void endDebug() {

@@ -246,6 +246,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 SmallVector<ReturnInst*,8> Returns;
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
             }
+            if(DISubprogram * SP = fn->getSubprogram()) {
+                newfn->setSubprogram(dyn_cast<DISubprogram>(MapMetadata(SP,VMap)));
+            }
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
             GlobalVariable * newGV = dest->getGlobalVariable(GV->getName(),true);
@@ -265,6 +268,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
         } else return materializeValueForMetadata(V);
     }
 #ifdef DEBUG_INFO_WORKING
+#if LLVM_VERSION < 38
     DIBuilder * DI;
     DICompileUnit NCU;
     void CopyDebugMetadata() {
@@ -320,12 +324,39 @@ struct CopyConnectedComponent : public ValueMaterializer {
         }
         return NULL;
     }
-    void finalize() {
+   void finalize() {
         if(DI) {
-            DI->finalize();
-            delete DI;
+             DI->finalize();
+             delete DI;
+        }
+   }
+#else
+    Value * materializeValueForMetadata(Value * V) { return NULL; }
+    void CopyDebugMetadata() {}
+    void finalize() {
+        std::vector<const char *> md_names = {"llvm.module.flags","llvm.dbg.cu"};
+        for(const char * name : md_names) {
+            if(NamedMDNode *NMD = src->getNamedMetadata(name)) {
+               NamedMDNode *NewNMD = dest->getOrInsertNamedMetadata(name);
+               for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i)
+                   NewNMD->addOperand(MapMetadata(NMD->getOperand(i), VMap));
+            }
+        }
+        if(NamedMDNode * CUNode = dest->getNamedMetadata("llvm.dbg.cu")) {
+            DICompileUnit * CU = dyn_cast<DICompileUnit>(CUNode->getOperand(0));
+            assert(CU);
+            SmallVector<Metadata *, 4> AllSubprograms;
+            for(Function & fn : dest->functions()) {
+                if(DISubprogram* SP = fn.getSubprogram()) {
+                    AllSubprograms.push_back(SP);
+                }
+            }
+            DISubprogramArray SPs = MDTuple::get(dest->getContext(), AllSubprograms);
+            CU->replaceSubprograms(SPs);
         }
     }
+#endif
+    
 #else
     void CopyDebugMetadata() {}
     Value * materializeValueForMetadata(Value * V) { return NULL; }

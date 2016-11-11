@@ -60,7 +60,7 @@
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
-#define LLVM_VERSION 39
+#define LLVM_VERSION 38
 #include "llvmheaders_39.h"
 #endif
 
