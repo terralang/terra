@@ -61,6 +61,7 @@
 #error "unsupported LLVM version"
 //for OSX code completion
 #define LLVM_VERSION 38
+#define DEBUG_INFO_WORKING
 #include "llvmheaders_39.h"
 #endif
 

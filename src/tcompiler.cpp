@@ -489,7 +489,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
     bool issigned;
     bool islogical;
     bool incomplete; // does this aggregate type or its children include an incomplete struct
-#if LLVM_VERSION > 38
+#if LLVM_VERSION >= 38
     DIType * dtype; // filled in separately from TType
 #endif
 };
@@ -1432,7 +1432,7 @@ struct FunctionEmitter {
         v->obj("type",&type);
         AllocaInst * a = CreateAlloca(B, getType(&type)->type,0,name);
         mapSymbol(&locals->cur,&sym,a);
-        declareDebugVar(v->string("name"), a, &type);
+        declareDebugVar(v, &type, a);
         return a;
     }
     
@@ -2262,19 +2262,64 @@ if(baseT->isIntegerTy()) { \
         }
 #endif
     }
+    
     void setDebugPoint(Obj * obj) {
         DEBUG_ONLY(T) {
             MDNode * scope = debugScopeForFile(customfilename ? customfilename : obj->string("filename"));
             B->SetCurrentDebugLocation(DebugLoc::get(customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
         }
     }
-    
-    void declareDebugVar(const char * name, AllocaInst * alloca, Obj * type) {}
+#if LLVM_VERSION >= 38
+    DIType * getPrimitiveDType(TType * ttype, Obj * prim) {
+        unsigned size = CU->getDataLayout().getTypeAllocSize(ttype->type);
+        unsigned align = CU->getDataLayout().getABITypeAlignment(ttype->type);
+        const char * name = prim->string("name");
+        switch(prim->kind("type")) {
+            case T_float:
+                return DB->createBasicType(name, size*8, align*8, dwarf::DW_ATE_float);
+            case T_integer:
+                return DB->createBasicType(name, size*8, align*8, ttype->issigned ? dwarf::DW_ATE_signed : dwarf::DW_ATE_unsigned);
+            case T_logical:
+                return DB->createBasicType(name, size*8, align*8, dwarf::DW_ATE_boolean);
+            default:
+                printf("kind = %d, %s\n",prim->kind("kind"),tkindtostr(prim->kind("type")));
+                terra_reporterror(T,"type not understood");
+                return nullptr;
+        }
+    }
+    DIType * getDType(Obj * to) {
+        TType * type = getType(to);
+        if(type->dtype)
+            return type->dtype;
+        switch(to->kind("kind")) {
+            case T_primitive:
+                type->dtype = getPrimitiveDType(type,to);
+                break;
+            default:
+                break;
+        }
+        return type->dtype; // may be NULL if we can't generate debug info for the type yet
+    }
+    void declareDebugVar(Obj * alloca, Obj * type, AllocaInst * allocinst) {
+        DEBUG_ONLY(T) {
+            if(DIType * dtype = getDType(type)) {
+                DebugLoc DL = B->getCurrentDebugLocation();
+                DILocation * Loc = DL.get();
+                DILocalVariable * DVar = DB->createAutoVariable(fstate->func->getSubprogram(), alloca->string("name"), Loc->getFile(), Loc->getLine(), dtype, true);
+                Instruction * declare = DB->insertDeclare(allocinst, DVar, DB->createExpression(), DL, allocinst);
+                allocinst->moveBefore(declare);
+            }
+        }
+    }
 #else
+    void declareDebugVar(Obj * alloca, Obj * type, AllocaInst * allocinst) {}
+#endif // >= 38
+    
+#else //DEBUG_INFO_WORKING
     void initDebug(const char * filename, int lineno) {}
     void endDebug() {}
     void setDebugPoint(Obj * obj) {}
-    void declareDebugVar(const char * name, AllocaInst * alloca, Obj * type) {}
+    void declareDebugVar(Obj * alloca, Obj * type, AllocaInst * allocinst) {}
 #endif
 
     void setInsertBlock(BasicBlock * bb) {

@@ -336,14 +336,14 @@ struct CopyConnectedComponent : public ValueMaterializer {
     Value * materializeValueForMetadata(Value * V) {
         return NULL;
     }
-    SmallVector<Metadata *, 4> AllSubprograms;
+    SmallSetVector<Metadata *, 4> AllSubprograms;
     virtual bool isMetadataNeeded(Metadata *MD) {
         // when functions are inlined, the subprograms stick around
         // so there are subprograms that do not correspond to any Function*
         // we record them here, because empircally they still need to be listed in DICompileUnit
         // to prevent crashes
         if (DISubprogram* SP = dyn_cast<DISubprogram>(MD)) {
-            AllSubprograms.push_back(MapMetadata(SP,VMap));
+            AllSubprograms.insert(SP);
         }
         return true;
     }
@@ -360,7 +360,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
         if(NamedMDNode * CUNode = dest->getNamedMetadata("llvm.dbg.cu")) {
             DICompileUnit * CU = dyn_cast<DICompileUnit>(CUNode->getOperand(0));
             assert(CU);
-            DISubprogramArray SPs = MDTuple::get(dest->getContext(), AllSubprograms);
+            SmallVector<Metadata*, 4> AllSubprogramsMapped;
+            for(auto & SP : AllSubprograms) {
+                AllSubprogramsMapped.push_back(MapMetadata(SP,VMap));
+            }
+            DISubprogramArray SPs = MDTuple::get(dest->getContext(), AllSubprogramsMapped);
             CU->replaceSubprograms(SPs);
         }
     }
