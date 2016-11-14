@@ -1213,6 +1213,16 @@ Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcobj, TerraFunctionS
 
 struct Locals { Obj cur; Locals * prev; }; //stack of local environment
 
+struct DeferredCall {
+    Obj fntyp;
+    Obj paramtypes;
+    Value * fn;
+    std::vector<Value*> actuals;
+    Value* emit(IRBuilder<> * B, CCallingConv * CC) {
+        return CC->EmitCall(B,&fntyp,&paramtypes, fn, &actuals);
+    }
+};
+
 struct FunctionEmitter {
     TerraCompilationUnit * CU;
     terra_State * T;
@@ -1244,7 +1254,7 @@ struct FunctionEmitter {
     
     Obj * funcobj;
     TerraFunctionState * fstate;
-    std::vector<BasicBlock *> deferred;
+    std::vector<std::unique_ptr<DeferredCall> > deferred;
     
     Obj labeltbl;
     Locals basescope;
@@ -2348,8 +2358,9 @@ if(baseT->isIntegerTy()) { \
         return bb;
     }
     Value * emitCall(Obj * call, bool defer) {
+        std::unique_ptr<DeferredCall> dc(new DeferredCall());
+        
         Obj paramlist;
-        Obj paramtypes;
         Obj func;
         
         call->obj("arguments",&paramlist);
@@ -2357,28 +2368,23 @@ if(baseT->isIntegerTy()) { \
         paramlist.push();
         lua_pushstring(L,"type");
         lua_call(L,2,1);
-        paramlist.fromStack(&paramtypes);
+        paramlist.fromStack(&dc->paramtypes);
         
         call->obj("value",&func);
         
-        Value * fn = emitExp(&func);
+        dc->fn = emitExp(&func);
         
         Obj fnptrtyp;
         func.obj("type",&fnptrtyp);
-        Obj fntyp;
-        fnptrtyp.obj("type",&fntyp);
+        fnptrtyp.obj("type",&dc->fntyp);
         
-        std::vector<Value*> actuals;
-        emitExpressionList(&paramlist,true,&actuals);
-        BasicBlock * cur = B->GetInsertBlock();
+        emitExpressionList(&paramlist,true,&dc->actuals);
         if(defer) {
-            BasicBlock * bb = createAndInsertBB("defer");
-            setInsertBlock(bb);
-            deferred.push_back(bb);
+            deferred.push_back(std::move(dc));
+            return NULL;
+        } else {
+            return dc->emit(B,CC);
         }
-        Value * r = CC->EmitCall(B,&fntyp,&paramtypes, fn, &actuals);
-        setInsertBlock(cur); //defer may have changed it
-        return r;
     }
     
     void emitReturnUndef() {
@@ -2431,35 +2437,17 @@ if(baseT->isIntegerTy()) { \
         BasicBlock * bb = createAndInsertBB("dead");
         setInsertBlock(bb);
     }
-    BasicBlock * copyBlock(BasicBlock * BB) {
-        ValueToValueMapTy VMap;
-        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", fstate->func);
-        for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
-            RemapInstruction(&*II, VMap,
-#if LLVM_VERSION < 39
-                             RF_IgnoreMissingEntries
-#else
-                             RF_IgnoreMissingLocals
-#endif
-                            );
-        return NewBB;
-    }
     //emit an exit path that includes the most recent num deferred statements
     //this is used by gotos,returns, and breaks. unlike scope ends it copies the dtor stack
     void emitDeferred(size_t num) {
         for(size_t i = 0; i < num; i++) {
-            BasicBlock * bb = deferred[deferred.size() - 1 - i];
-            bb = copyBlock(bb);
-            B->CreateBr(bb);
-            setInsertBlock(bb);
+            deferred[deferred.size() - 1 - i]->emit(B,CC);
         }
     }
     //unwind deferred and remove them from dtor stack, no need to copy the BB, since this is its last use
     void unwindDeferred(size_t to) {
         for(; deferred.size() > to; deferred.pop_back()) {
-            BasicBlock * bb = deferred.back();
-            B->CreateBr(bb);
-            setInsertBlock(bb);
+            deferred.back()->emit(B,CC);
         }
     }
     void enterScope(Locals * buf) {
