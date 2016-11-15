@@ -497,6 +497,7 @@ struct TType { //contains llvm raw type pointer and any metadata about it we nee
 class Types {
     TerraCompilationUnit * CU;
     terra_State * T;
+public:
     TType * GetIncomplete(Obj * typ) {
         TType * t = NULL;
         if(!LookupTypeCache(typ, &t)) {
@@ -549,6 +550,7 @@ class Types {
         assert(t && t->type);
         return t;
     }
+private:
     void CreatePrimitiveType(Obj * typ, TType * t) {
         int bytes = typ->number("bytes");
         switch(typ->kind("type")) {
@@ -2297,18 +2299,88 @@ if(baseT->isIntegerTy()) { \
                 return nullptr;
         }
     }
-    DIType * getDType(Obj * to) {
-        TType * type = getType(to);
-        if(type->dtype)
-            return type->dtype;
-        switch(to->kind("kind")) {
-            case T_primitive:
-                type->dtype = getPrimitiveDType(type,to);
+    DIType * getDType(Obj * typ) {
+        TType * ttype = Ty->GetIncomplete(typ);
+        if(ttype->dtype)
+            return ttype->dtype;
+        switch(typ->kind("kind")) {
+            case T_primitive: {
+                ttype->dtype = getPrimitiveDType(ttype,typ);
                 break;
-            default:
+            } case T_pointer: {
+                Obj base;
+                typ->obj("type",&base);
+                DIType * baset = (base.kind("kind") == T_functype) ? DB->createUnspecifiedType("function_pointer") : getDType(&base);
+                ttype->dtype = DB->createPointerType(baset, CU->getDataLayout().getPointerSizeInBits());
+            } break;
+            case T_array:
+            case T_vector: {
+                unsigned Size = 0, Align = 0;
+                Obj base;
+                typ->obj("type",&base);
+                int N = typ->number("N");
+                DIType * baset = getDType(&base);
+                if(!typ->boolean("incomplete")) {
+                    Ty->Get(typ); // possibly fill in type earlier than needed, to get accurate debug info
+                    Size = CU->getDataLayout().getTypeAllocSize(ttype->type);
+                    Align = CU->getDataLayout().getABITypeAlignment(ttype->type);
+                }
+                SmallVector<llvm::Metadata *, 8> Subscripts;
+                Subscripts.push_back(DB->getOrCreateSubrange(0, N));
+                llvm::DINodeArray SubscriptArray = DB->getOrCreateArray(Subscripts);
+                if(typ->kind("kind") == T_array)
+                    ttype->dtype = DB->createArrayType(Size*8, Align*8, baset, SubscriptArray);
+                else
+                    ttype->dtype = DB->createVectorType(Size*8, Align*8, baset, SubscriptArray);
+            } break;
+            case T_struct: {
+                if(!typ->boolean("incomplete")) {
+                    Ty->Get(typ);
+                    unsigned Size = CU->getDataLayout().getTypeAllocSize(ttype->type);
+                    unsigned Align = CU->getDataLayout().getABITypeAlignment(ttype->type);
+
+                    DICompositeType * dtype = DB->createStructType(SP, typ->asstring("name"), SP->getFile(), 0, Size*8, Align*8, 0, nullptr, DINodeArray());
+                    ttype->dtype = dtype;
+                    
+                    StructType * st = cast<StructType>(ttype->type);
+                    assert(!st->isOpaque());
+                    const StructLayout * sl = CU->getDataLayout().getStructLayout(st);
+                    Obj layout;
+                    GetStructEntries(typ,&layout);
+                    int N = layout.size();
+                    SmallVector<llvm::Metadata *, 8> Members;
+                    for(int i = 0; i < N; i++) {
+                        Obj entry;
+                        layout.objAt(i,&entry);
+                        int allocation = entry.number("allocation");
+                        size_t structoffset = sl->getElementOffset(allocation);
+                        Obj entrytype;
+                        entry.obj("type",&entrytype);
+                        TType * entryttype = Ty->Get(&entrytype);
+                        DIType* entryditype = getDType(&entrytype);
+                        unsigned EntrySize = CU->getDataLayout().getTypeAllocSize(entryttype->type);
+                        unsigned EntryAlign = CU->getDataLayout().getABITypeAlignment(entryttype->type);
+                        Members.push_back(DB->createMemberType(SP, entry.asstring("key"), SP->getFile(), 0, EntrySize*8, EntryAlign*8, structoffset*8, 0, entryditype));
+                    }
+                    DB->replaceArrays(dtype, DB->getOrCreateArray(Members));
+                } else {
+                    ttype->dtype = DB->createUnspecifiedType(typ->asstring("name"));
+                }
+            } break;
+            case T_niltype: {
+                ttype->dtype = DB->createNullPtrType();
+            } break;
+            case T_opaque: {
+                ttype->dtype = DB->createUnspecifiedType("opaque");
+            } break;
+            
+            default: {
+                // do not know how to generate debug type ...
+                terra_reporterror(T,"type not understood");
                 break;
+            }
         }
-        return type->dtype; // may be NULL if we can't generate debug info for the type yet
+        return ttype->dtype; // may be NULL if we can't generate debug info for the type yet
     }
     void declareDebugVar(Obj * alloca, Obj * type, AllocaInst * allocinst) {
         DEBUG_ONLY(T) {
