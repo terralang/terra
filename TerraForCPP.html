@@ -966,3 +966,282 @@ sizeof(t)
 sizeof([(`t):gettype()])
 </code></pre></div>
 </div>
+<p> Allocation
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>new T //malloc, use a std.t metatype, or build your own
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>[&T](C.malloc(sizeof(T)))
+
+
+</code></pre></div>
+</div>
+<p> Arithmetic
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>-x
++x //DNE
+x * y
+x / y
+x % y
+x + y 
+x - y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-x
+x -- no '+' prefix
+x * y
+x / y
+x % y
+x + y -- also pointers
+x - y -- also pointers
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local plus = "+"
+terra two()
+    return operator(plus,1,2)
+end
+
+
+
+</code></pre></div>
+</div>
+<p> Comparisons
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x &lt y
+x &lt= y
+x &gt y
+x &gt= y
+x == y
+x != y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x &lt y
+x &lt= y
+x &gt y
+x &gt= y
+x == y
+x ~= y
+</code></pre></div>
+</div>
+<p> Logical and Bitwise Operators
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>~x
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>not x -- bitwise for integers
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>!x
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>not b -- logical for booleans
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x &lt&lt y
+x &gt&gt y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x &lt&lt y
+x &gt&gt y
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x && y
+x || y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>b and d -- logical 'and' for booleans
+b or d -- short circuits
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x & y
+x | y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x and y -- bitwise 'and' for integers
+x or y  -- _no_ short circuit
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x ^ y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x ^ y
+</code></pre></div>
+</div>
+<p> Other Stuff
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x ? y : z
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.select(x,y,z) -- _no_ short circuit
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>throw x; // no exceptions, consider using longjmp,setjmp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no exceptions
+-- consider longjmp, setjmp
+</code></pre></div>
+</div>
+<p> Templates
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Overload f for all types
+template &ltclass T&gt 
+T f(T t) {
+}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>function f(T)
+    return terra(t : T) : T
+    end
+end
+-- only generate one function per unique 'T'
+f = terralib.memoize(f)
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Class with type parameter T
+template &ltclass T&gt 
+class X { 
+  T myt;
+  void foo(T t) {
+    myt = t;
+  } 
+};
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>function X(T)
+    local struct X {
+        myt : T
+    }
+    terra X:foo(t : T)
+        self.myt = t
+    end
+    return X
+end
+-- only generate one struct per unique 'T'
+X = terralib.memoize(X)
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// An object of type "X of int"
+X&ltint&gt x;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>
+var x : X(int)
+</code></pre></div>
+</div>
+<p> Namespaces
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>namespace N {class T {};}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>N = {} -- lua table
+struct N.T {}
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>N = {}
+local struct mystruct {}
+N["T"] = mystruct
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Use name T in namespace N
+N::T t;
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- access T in the table N
+var t : N.T
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local key = "T"
+terra f()
+    var t :  N[key]
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>using N::T;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local T = N.T
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>using namespace N;
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- merge N with global environment
+for name,value in pairs(N) do
+    _G[name] = value
+end
+</code></pre></div>
+</div>
+<p> C Library Usage
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+int main() {
+    printf("hello, world\n")
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>C = terralib.includec("stdio.h")
+terra main()
+    C.printf("hello, world\n")
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int * a = (int*)malloc(10*sizeof(int))
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var a = [&int](malloc(10*sizeof(int)))
+</code></pre></div>
+</div>
+<p> Offline Compiler Usage
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int main() {
+}
+-- shell
+$ cc -o main.o main.cpp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra main()
+end
+terralib.saveobj("main.o", 
+    { main = main })
+--   ~~~~~~~~~~~~~~~ table of exported functions
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>$ cc -o main -lfoo main.cpp
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.saveobj("main",
+    { main = main}, {"-lfoo"})
+--                  ~~~~~~~~~
+--                  extra linker args
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>$ cc -shared  -o libmain.so main.cpp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.saveobj("libmain.so",
+    { main = main })
+</code></pre></div>
+</div>
+<p> C Libraries
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#include &ltmylib.h&gt
+int main() {
+    mylib_myfunction();
+}
+-- shell:
+$ cc -I mylibinclude main.cpp libmylib.so -o main -
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.includepath = "mylibinclude;"..terralib.includepath
+C = terralib.includec("mylib.h")
+terralib.linklibrary("libmylib.so")
+terra main ()
+    C.mylib_myfunction()
+end
+-- or, for offline use:
+terralib.saveobj("main",{main = main},
+    {"libmylib.so"})
+--  ~~~~~~~~~~~~~~~ extra linker args
+</code></pre></div>
+</div>
