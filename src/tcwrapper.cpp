@@ -50,7 +50,7 @@ public:
           L(res->getState()),
           ref_table(res->getRefTable()),
           livenessfunction(livenessfunction_) {
-        
+
         //create tables for errors messages, general namespace, and the tagged namespace
         InitTable(&error_table,"errors");
         InitTable(&general,"general");
@@ -59,12 +59,12 @@ public:
     void InitTable(Obj * tbl, const char * name) {
         CreateTableWithName(resulttable, name, tbl);
     }
-    
+
     void InitType(const char * name, Obj * tt) {
         PushTypeField(name);
         tt->initFromStack(L,ref_table);
     }
-    
+
     void PushTypeField(const char * name) {
         lua_getfield(L, LUA_GLOBALSINDEX, "terra");
         lua_getfield(L, -1, "types");
@@ -72,14 +72,14 @@ public:
         lua_remove(L,-2);
         lua_remove(L,-2);
     }
-    
+
     bool ImportError(const std::string & msg) {
         error_message = msg;
         return false;
     }
-    
+
     bool GetFields( RecordDecl * rd, Obj * entries) {
-     
+
         //check the fields of this struct, if any one of them is not understandable, then this struct becomes 'opaque'
         //that is, we insert the type, and link it to its llvm type, so it can be used in terra code
         //but none of its fields are exposed (since we don't understand the layout)
@@ -87,7 +87,7 @@ public:
         int anonname = 0;
         for(RecordDecl::field_iterator it = rd->field_begin(), end = rd->field_end(); it != end; ++it) {
             DeclarationName declname = it->getDeclName();
-            
+
             if(it->isBitField() || (!it->isAnonymousStructOrUnion() && !declname)) {
                 opaque = true;
                 continue;
@@ -152,7 +152,7 @@ public:
                     thenamespace->setfield(name.c_str()); //register the type
                 }
             }
-            
+
             if(tt->boolean("undefined") && rd->getDefinition() != NULL) {
                 tt->clearfield("undefined");
                 RecordDecl * defn = rd->getDefinition();
@@ -176,7 +176,7 @@ public:
                     lua_call(L,1,0);
                 }
             }
-            
+
             return true;
         } else {
             return ImportError("non-struct record types are not supported");
@@ -184,10 +184,10 @@ public:
     }
 
     bool GetType(QualType T, Obj * tt) {
-        
+
         T = Context->getCanonicalType(T);
         const Type *Ty = T.getTypePtr();
-        
+
         switch (Ty->getTypeClass()) {
           case Type::Record: {
             const RecordType *RT = dyn_cast<RecordType>(Ty);
@@ -258,7 +258,7 @@ public:
             tt->initFromStack(L, ref_table);
             return true;
           }
-          
+
           case Type::VariableArray:
           case Type::IncompleteArray:
             break;
@@ -369,7 +369,7 @@ public:
     bool GetFuncType(const FunctionType * f, Obj * typ) {
         Obj returntype,parameters;
         resulttable->newlist(&parameters);
-        
+
         bool valid = true; //decisions about whether this function can be exported or not are delayed until we have seen all the potential problems
     #if LLVM_VERSION <= 34
         QualType RT = f->getResultType();
@@ -383,8 +383,8 @@ public:
             if(!GetType(RT,&returntype))
                 valid = false;
         }
-       
-        
+
+
         const FunctionProtoType * proto = f->getAs<FunctionProtoType>();
         //proto is null if the function was declared without an argument list (e.g. void foo() and not void foo(void))
         //we don't support old-style C parameter lists, we just treat them as empty
@@ -405,7 +405,7 @@ public:
                 }
             }
         }
-        
+
         if(valid) {
             PushTypeField("functype");
             parameters.push();
@@ -414,7 +414,7 @@ public:
             lua_call(L, 3, 1);
             typ->initFromStack(L,ref_table);
         }
-        
+
         return valid;
     }
     bool TraverseFunctionDecl(FunctionDecl *f) {
@@ -422,16 +422,16 @@ public:
         DeclarationName DeclName = f->getNameInfo().getName();
         std::string FuncName = DeclName.getAsString();
         const FunctionType * fntyp = f->getType()->getAs<FunctionType>();
-        
+
         if(!fntyp)
             return true;
-        
+
         if(f->getStorageClass() == clang::SC_Static) {
             ImportError("cannot import static functions.");
             SetErrorReport(FuncName.c_str());
             return true;
         }
-        
+
         Obj typ;
         if(!GetFuncType(fntyp,&typ)) {
             SetErrorReport(FuncName.c_str());
@@ -447,9 +447,9 @@ public:
             #endif
         }
         CreateFunction(FuncName,InternalName,&typ);
-        
+
         KeepLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
-        
+
         return true;
     }
     void CreateFunction(const std::string & name, const std::string & internalname, Obj * typ) {
@@ -475,7 +475,7 @@ public:
         QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],outputtypes.size(), FunctionProtoType::ExtProtoInfo());
         #endif
         FunctionDecl * F = FunctionDecl::Create(*Context, Context->getTranslationUnitDecl(), SourceLocation(), SourceLocation(), N,T, 0, SC_Extern);
-        
+
         std::vector<ParmVarDecl *> params;
         for(size_t i = 0; i < outputtypes.size(); i++) {
             params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(), SourceLocation(), 0, outputtypes[i], /*TInfo=*/0, SC_None,
@@ -496,7 +496,7 @@ public:
     bool TraverseVarDecl(VarDecl *v) {
         if(!(v->isFileVarDecl() && (v->hasExternalStorage() || v->getStorageClass() == clang::SC_None))) //is this a non-static global variable?
             return true;
-        
+
         QualType t = v->getType();
         Obj typ;
 
@@ -616,7 +616,7 @@ public:
 static llvm::sys::TimeValue ZeroTime() {
 #if LLVM_VERSION >= 36
     return llvm::sys::TimeValue::ZeroTime();
-#else   
+#else
     return llvm::sys::TimeValue::ZeroTime;
 #endif
 }
@@ -627,7 +627,7 @@ private:
   lua_State * L;
 public:
   LuaOverlayFileSystem(lua_State * L_) : RFS(vfs::getRealFileSystem()), L(L_) {}
-  
+
   bool GetFile(const llvm::Twine &Path, clang::vfs::Status * status, StringRef * contents) {
     lua_pushvalue(L, HEADERPROVIDER_POS);
     lua_pushstring(L, Path.str().c_str());
@@ -725,7 +725,7 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     #else
     TheCompInst->createDiagnostics();
     #endif
-    
+
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend, TheCompInst->getDiagnostics());
     //need to recreate the diagnostics engine so that it actually listens to warning flags like -Wno-deprecated
     //this cannot go before CreateFromArgs
@@ -739,10 +739,10 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     TheCompInst->createDiagnostics();
     std::shared_ptr<TargetOptions> to(new TargetOptions(TheCompInst->getTargetOpts()));
     #endif
-    
+
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
-    
+
     llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
     TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
@@ -759,7 +759,7 @@ static void initializeclang(terra_State * T, llvm::MemoryBuffer * membuffer, con
     // Set the main file handled by the source manager to the input file.
 #if LLVM_VERSION <= 34
     SourceMgr.createMainFileIDForMemBuffer(membuffer);
-#else   
+#else
     SourceMgr.setMainFileID(SourceMgr.createFileID(UNIQUEIFY(llvm::MemoryBuffer,membuffer)));
 #endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),&TheCompInst->getPreprocessor());
@@ -789,10 +789,10 @@ static void AddMacro(terra_State * T, Preprocessor & PP, const IdentifierInfo * 
     } else {
         return;
     }
-    
+
     if(Tok->isNot(clang::tok::numeric_constant))
         return;
-    
+
     SmallString<64> IntegerBuffer;
     bool NumberInvalid = false;
     StringRef Spelling = PP.getSpelling(*Tok, IntegerBuffer, &NumberInvalid);
@@ -838,7 +838,7 @@ static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
     #else
         if(fn->hasDLLImportLinkage()) //clear dll import linkage because it messes up the jit on window
             fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-        
+
     #endif
     }
     M->setTargetTriple(TT->Triple); //suppress warning that occur due to unmatched os versions
@@ -852,15 +852,15 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
-    
+
     #if LLVM_VERSION >=36
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>").release();
     #else
     llvm::MemoryBuffer * membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
     #endif
-    
+
     initializeclang(T,membuffer, argbegin, argend, &TheCompInst);
-    
+
     #if LLVM_VERSION <= 32
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getCodeGenOpts(), *TT->ctx );
     #elif LLVM_VERSION <= 36
@@ -868,7 +868,7 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     #else
     CodeGenerator * codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",  TheCompInst.getHeaderSearchOpts(), TheCompInst.getPreprocessorOpts(), TheCompInst.getCodeGenOpts(), *TT->ctx );
     #endif
-    
+
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";
     ss << TT->next_unused_id++;
@@ -880,14 +880,14 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
     #else
     TheCompInst.setASTConsumer(std::unique_ptr<ASTConsumer>(new CodeGenProxy(codegen,result,livenessfunction)));
     #endif
-    
+
     TheCompInst.createSema(clang::TU_Complete,NULL);
-    
+
     ParseAST(TheCompInst.getSema(),false,false);
-    
+
     Obj macros;
     CreateTableWithName(result, "macros", &macros);
-    
+
     #if LLVM_VERSION >= 33
     Preprocessor & PP = TheCompInst.getPreprocessor();
     //adjust PP so that it no longer reports errors, which could happen while trying to parse numbers here
@@ -903,7 +903,7 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
         AddMacro(T,PP,II,MD,&macros);
     }
     #endif
-    
+
     llvm::Module * M = codegen->ReleaseModule();
     delete codegen;
     if(!M) {
@@ -947,39 +947,39 @@ int include_c(lua_State * L) {
     args.push_back("-fms-compatibility-version=" __indirect(_MSC_VER));
 	args.push_back("-Wno-ignored-attributes");
 #endif
-    
+
     for(int i = 0; i < N; i++) {
         lua_rawgeti(L, 3, i+1);
         args.push_back(luaL_checkstring(L,-1));
         lua_pop(L,1);
     }
-    
+
     const char ** cpaths = clang_paths;
     while(*cpaths) {
         args.push_back(*cpaths);
         cpaths++;
     }
-    
+
     lua_newtable(L); //return a table of loaded functions
     int ref_table = lobj_newreftable(L);
     {
         Obj result;
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
-        
-        dofile(T,TT,code,&args[0],&args[args.size()],&result);
+        const char ** begin = &args[0];
+        dofile(T,TT,code,begin,begin+args.size(),&result);
     }
-    
+
     lobj_removereftable(L, ref_table);
     return 1;
 }
 
 void terra_cwrapperinit(terra_State * T) {
     lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
-    
+
     lua_pushlightuserdata(T->L,(void*)T);
     lua_pushcclosure(T->L,include_c,1);
     lua_setfield(T->L,-2,"registercfile");
-    
+
     lua_pop(T->L,1); //terra object
 }
