@@ -21,9 +21,9 @@ The List type is a plain Lua table with additional methods that come from:
 These make it easier to meta-program Terra objects.
 
 ---
-   
+
     local List = require("terralist")
-    
+
     List() -- empty list
     List { 1,2,3 } -- 3 element list
 
@@ -35,39 +35,39 @@ List also has the following functions:
 
      -- Lua's string.sub, but for lists
     list:sub(i,j)
-    
+
     -- reverse list
-    list:rev() : List[A] 
-    
+    list:rev() : List[A]
+
     -- app fn to every element
-    list:app(fn : A -> B) : {} 
-    
+    list:app(fn : A -> B) : {}
+
     -- apply map to every element resulting in new list
-    list:map(fn : A -> B) : List[B] 
-    
+    list:map(fn : A -> B) : List[B]
+
      -- new list with elements were fn(e) is true
     list:filter(fn : A -> boolean) : List[A]
-    
+
     -- apply map to every element, resulting in lists which are all concatenated together
-    list:flatmap(fn : A -> List[B]) : List[B] 
-    
+    list:flatmap(fn : A -> List[B]) : List[B]
+
     -- find the first element in list satisfying condition
-    list:find(fn : A -> boolean) : A? 
-    
+    list:find(fn : A -> boolean) : A?
+
     -- apply k,v = fn(e) to each element and group the values 'v' into bin of the same 'k'
-    list:partition(fn : A -> {K,V}) : Map[ K,List[V] ] 
-    
+    list:partition(fn : A -> {K,V}) : Map[ K,List[V] ]
+
     -- recurrence fn(a[2],fn(a[1],init)) ...
     list:fold(init : B,fn : {B,A} -> B) -> B
-     
+
     -- recurrence fn(a[3],fn(a[2],a[1]))
     list:reduce(fn : {B,A} -> B) -> B
-    
+
     -- is any fn(e) true in list
-    list:exists(fn : A -> boolean) : boolean 
-    
+    list:exists(fn : A -> boolean) : boolean
+
     -- are all fn(e) true in list
-    list:all(fn : A -> boolean) : boolean 
+    list:all(fn : A -> boolean) : boolean
 
 Every function that takes a higher-order function also has an `i` variant that also provides the list index to the function:
 
@@ -106,153 +106,190 @@ Terra Reflection API
 
 Every Terra entity is also a first-class Lua object. These include Terra [Functions](#Functions), Terra [Types](#Types), and Terra [Global Variables](#global_variables). [Quotes](#quotes) are the objects returned by Terra's quotation syntax (backtick and `quote`), representing a fragment of Terra code not yet inside a Terra function.  [Symbols](#symbols) represent a unique name for a variables and are used to define new parameters and locals.
 
-When a Terra function returns a value that cannot be converted into an equivalent Lua object, it turnes into a Terra [Value](#values), which is a wrapper around that Terra value that can be accessed from Lua (Internally this is a `"cdata"` object). 
+When a Terra function returns a value that cannot be converted into an equivalent Lua object, it turns into a Terra [Value](#values), which is a wrapper that can be accessed from Lua (Internally this is a LuaJIT `"cdata"` object).
 
-Each object provides a Lua API to manipulate it. For instance, you can disassemble a function (`terrafn:disas()`), or query properties of a type (`typ:isarithmetic()`). 
+Each object provides a Lua API to manipulate it. For instance, you can disassemble a function (`terrafn:disas()`), or query properties of a type (`typ:isarithmetic()`).
+
+Generic
+-------
+
+    tostring(terraobj)
+    print(terraobj)
+
+All Terra objects have a string representation that you can use for debugging.
+
+---
+    terra.islist(t)
+    terra.isfunction(t)
+    terra.types.istype(t)
+    terra.isquote(t)
+    terra.issymbol(t)
+    terra.ismacro(t)
+    terra.isglobalvar(t)
+    terra.islabel(t)
+    terra.isoverloadedfunction(t)
+
+Checks that a particular object is a type of Terra class.
+
+---
+
+    terralib.type(o)
+
+Extended version of `type(o)` with the following definition:
+
+    function terra.type(t)
+       if terra.isfunction(t) then return "terrafunction"
+       elseif terra.types.istype(t) then return "terratype"
+       elseif terra.ismacro(t) then return "terramacro"
+       elseif terra.isglobalvar(t) then return "terraglobalvariable"
+       elseif terra.isquote(t) then return "terraquote"
+       elseif terra.istree(t) then return "terratree"
+       elseif terra.islist(t) then return "list"
+       elseif terra.issymbol(t) then return "terrasymbol"
+       elseif terra.isfunction(t) then return "terrafunction"
+       elseif terra.islabel(t) then return "terralabel"
+       elseif terra.isoverloadedfunction(t) then return "overloadedterrafunction"
+       else return type(t) end
+    end
 
 Function
 --------
 
-Terra functions are entry-points into Terra code. Each function can contain 0 or more [Function Definitions](#function-definition). A function with 0 definitions is the equivalent of a function declaration in other statically typed languages. One definition indicates a simple function, and multiple definitions is the equivalent of an [overloaded function](http://en.wikipedia.org/wiki/Function_overloading).
+Terra functions are entry-points into Terra code. Functions can be either defined or undefined (`myfunction:isdefined()`). An undefined function has a known type but its implementation has not yet been provided. The definition of a function can be changed via `myfunction:resetdefinition(another_function)` until it is first run.
+
 
 ---
 
-    [local] terra myfunctionname
-    
-_Terra function declaration_. If `myfunctionname` is not already a Terra function, it creates a new function with 0 definitions and stores it the Lua variable `myfunctionname`. If `myfunctionname` is already a function, then it does not modify it.
-If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`). If `mystruct` is a [Struct](#exotypes-structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`.
+    [local] terra myfunctionname :: type_expresion
+    [local] terra myfunctionname :: {int,bool} -> {int}
+
+_Terra function declaration_. It creates a new undefined function stores it the Lua variable `myfunctionname`.
+ f the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`).
+
+ <!--- If `mystruct` is a [Struct](#exotypes-structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`. --->
 
 ---
 
-    [local] terra myfunctionname(arg0 : type0, 
-                                 ... 
-                                 argN : typeN) 
-            [...] 
-    end 
+    [local] terra myfunctionname(arg0 : type0,
+                                 ...
+                                 argN : typeN)
+            [...]
+    end
 
-_Terra function definition_. Adds the [function definition](#function-definition) specified by the code to the Terra function `myfunctionname`. If `myfunctionname` is not a Terra function, then it first creates a new function declaration using the same rules as Terra function declarations.  
+_Terra function definition_. Defines `myfunctioname` using the body of code specified. If `myfunctioname` already exists and is undefined, then it adds the definition to the existing function declaration. Otherwise it first creates a new function declaration and then adds the definition.
+
+---
+
+    local func = terralib.externfunction(function_name,function_type)
+
+Create a Terra function bound to an externally defined function. Example:
+
+    local atoi = terralib.externfunction("atoi",{rawstring} -> {int})
 
 ---
 
     myfunction(arg0,...,argN)
 
-`myfunction` is a Terra function. Invokes `myfunction` from Lua. It is an error to call this on a function with 0 definitions.  This utility method calls `funcdefinition(arg0,...argN)` on each of this functions definitions until it finds one that does not produce an error. For functions with a single definition this is equivalent to calling the the function definition directly. See the documentation for calling [function definitions](#function-definition) for more details.
+`myfunction` is a Terra function. Invokes `myfunction` from Lua. It is an error to call this on undefined functions. Arguments are translated to Terra using the [rules for translating Lua values to Terra](#converting-lua-values-to-terra-values-of-known-type) and return values are translated by using the [rules for translating Terra values to Lua](#converting-terra-values-to-lua-values).
 
 ---
 
-    func:compile(async)
+    local b = func:isdefined()
 
-Utility method that calls `funcdefinition:compile(async)` on each definition of this function. See the documentation for [function definitions](#function-definition) for more details about compilation. Can be called [asynchronously](#asynchronous-compilation).
-
----
-
-    func:emitllvm(async)
-
-Utility method that calls `funcdefinition:emitllvm(async)` on each definition of this function. See the documentation for [function definitions](#function-definition) for more details about compilation. Can be called [asynchronously](#asynchronous-compilation).
+`true` if function has a filled in definition. To define a function use `func:adddefinition`,
+`func:resetdefinition` or using function definition syntax `terra func(...) ... end`.
 
 ---
 
-    func:adddefinition(v)
+    local b = func:isextern()
 
-Adds a new function definition `v` to this function.
+`true` if this function is bound to an external symbol like libc's `printf`. External functions are created either through importing C functions via `terralib.includec`, or by calling `terralib.externfunction`
 
 ---
 
-    func:getdefinitions()
+    func:adddefinition(another_function)
 
-Returns a [List](#lists) of definitions for this function.
+Sets the definition of `func` to the current definition of `another_function`. `another_function` must be defined and `func` must be undefined. The types of `func` and `another_function` must match.
+
+---
+
+    func:resetdefinition(another_function)
+
+Sets (or resets) the definition of `func` to the current definition of `another_function`. `another_function` must be defined. `func` may or may not be defined. It is an error to call this on a function that has already been compiled.
 
 ---
 
     func:printstats()
 
-Prints statistics about how long this function took to compile and JIT. Will cause the function definitions to compile.
+Prints statistics about how long this function took to compile and JIT. Will cause the function to compile.
 
 ---
 
     func:disas()
 
-Disassembles all of the function definitions into x86 assembly and optimized LLVM, and prints them out. Useful for debugging performance. Will cause the function definitions to compile.
+Disassembles all of the function definitions into x86 assembly and optimized LLVM, and prints them out. Useful for debugging performance. Will cause the function definition to compile.
 
 ---
 
-    func:printpretty([printcompiled])
+    func:printpretty([quote_per_line=true])
 
-Print out a visual representation of the code in this function. If `printcompiled` is `false`, then this will print out an untyped version of the function. Otherwise, this will cause the function
-definitions to compile, and print out a type-checked representation of the function (with all macros and method invocations expanded).
-
----
-
-    terralib.isfunction(obj)
-
-True if `obj` is a Terra function.
-
-Function Definition
--------------------
-
-Function definitions are concrete implementations of a function. Each definition is compiled lazily. A function definition may be (1) uncompiled, (2) in the process of type-checking, (3) emitted to LLVM but not JITed to machine code, or (4) JITed to machine code. Functions will only be in state (2) during calls to the Terra compiler, but may still be observable to user-defined functions like macros and metamethods that run during type-checking.
+Print out a visual representation of the code in this function. By default, this prints each part of the code that was originally specified on a separate line as a individual lines. If `quote_per_line` is `false`, it will print a more collapsed representation that may be easier to read.
 
 ---
 
-    function terralib.isfunctiondefinition(obj)
+    r0, ..., rn = myfunc(arg0, ... argN)
 
-True if `obj` is a function definition.
-
----
-
-    r0, ..., rn = myfuncdefinition(arg0, ... argN)
-    
 Invokes `myfunctiondefinition` from Lua. Arguments are converted into the expected Terra types using the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. Return values are converted back into Lua values using the same rules. Causes the function to be compiled to machine code.
 
 ---
 
-    success, typ = funcdefinition:peektype()
+    func:compile()
 
-Attempt to find out the type of this definition but do _not_ compile it. If `success` is `true` then `typ` is the [type](#types) of the function. Otherwise, the function did not have an explicitly annotated return type and was not already compiled. 
-
----
-
-    funcdefinition:compile(async)
-
-Compile the function into machine code. Can be called [asynchronously](#asynchronous-compilation).
+Compile the function into machine code. Ensures that every function and global variable needed by the function is also defined.
 
 ---
 
-    funcdefinition:emitllvm(async)
+    function_type = func:gettype()
 
-Compile the function into LLVM but do not JIT to machine code. Can be called [asynchronously](#asynchronous-compilation). This is used for offline compilation where the machine code is not needed.
-
----
-
-    typ = funcdefinition:gettype(async)
-
-Return the [type](#types) of the function. This will cause the function to be emitted to LLVM. Can be called [asynchronously](#asynchronous-compilation).
+Return the [type](#types) of the function.
 
 ---
 
-    funcdefinition:getpointer()
+    func:getpointer()
 
 Return the LuaJIT `ctype` object that points to the machine code for this function. Will cause the function to be compiled.
 
+---
+
+    str = func:getname()
+    func:setname(str)
+
+Get or set the pretty name for the function. This is useful when viewing generated code but does not otherwise change the behavior of the function.
+
+---
+
+    func:setinlined(bool)
+
+When `true` function when be always inlined. When `false` the function will never be inlined. By default, functions will be inlined at the descrection of LLVM's function inliner.
 
 Types
 -----
 
-Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors are valid Lua expressions.  To support recursive types like linked lists, [structs](#exotypes-structs) can be declared before their members and methods are fully specified. When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
+Type objects are first-class Lua values that represent the types of Terra objects. Terra's built-in type system closely resembles that of low-level languages like C.  Type constructors (like `&int`) are valid Lua expressions that return Terra type objects.  To support recursive types like linked lists, [structs](#exotypes-structs) can be declared before their members and methods are fully specified. When a struct is declared but not defined, it is _incomplete_ and cannot be used as value. However, pointers to incomplete types can be used as long as no pointer arithmetic is required. A type will become _complete_ when it needs to be fully specified (e.g. we are using it in a compiled function, or we want to allocate a global variable with the type). At this point a full definition for the type must be available.
 
 ---
-    
+
     int int8 int16 int32 int64
     uint  uint8 uint16 uint32 uint64
     bool
     float double
-    
+
 Primitive types.
 
 ---
 
     &typ
-    
+
 Constructs a pointer to `typ`.
 
 ---
@@ -269,7 +306,7 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
 ---
 
     parameters -> returntype
-    
+
 Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. If returntype is a list, a `tuple` of the values in the list is the type returned from the function.
 
 ---
@@ -300,7 +337,7 @@ True if `type` is a primitive type (see above).
 
     type:isintegral()
 
-True if `type` is any integer type. 
+True if `type` is any integer type.
 
 ---
 
@@ -342,7 +379,7 @@ True if `type` is an array. `type.N` is the length. `type.type` is the element t
 
     type:isfunction()
 
-True if `type` is a function (not a function pointer). `type.parameters` is a list of parameter types. `type.returntype` is return type. If a function returns multiple values this type will be a `tuple` of the values. 
+True if `type` is a function (not a function pointer). `type.parameters` is a list of parameter types. `type.returntype` is return type. If a function returns multiple values this type will be a `tuple` of the values.
 
 ---
 
@@ -364,7 +401,7 @@ True if `type` is a pointer to a function.
 
 ---
 
-    type:isaggregate() 
+    type:isaggregate()
 
 True if `type` is an array or a struct (any type that can hold arbitrary types).
 
@@ -382,6 +419,12 @@ True if the `type` is a vector. `type.N` is the length. `type.type` is the eleme
 
 ---
 
+    type:isunit()
+
+True if the `type` is the empty tuple. The empty tuple is also the return type of functions that return no values.
+
+---
+
     type:(isprimitive|isintegral|isarithmetic|islogical|canbeord)orvector()
 
 True if the `type` is a primitive type with the requested property, or if it is a vector of a primitive type with the requested property.
@@ -392,32 +435,61 @@ True if the `type` is a primitive type with the requested property, or if it is 
 
 Forces the type to be complete. For structs, this will calculate the layout of the struct (possibly calling `__getentries` and `__staticinitialize` if defined), and recursively complete any types that this type references.
 
+    type:printpretty()
+
+Print the type, including its members if it is a struct.
+
+---
+
+    terralib.sizeof(terratype)
+
+Wrapper around `ffi.sizeof`. Completes the `terratype` and returns its size in bytes.
+
+---
+
+    terralib.offsetof(terratype,field)
+
+Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
+
+
+
 Quotes
 ------
 
-Quotes are an operator from  [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/) that allows you to construct a Terra statement or expression from Lua code. When quotes are returned from escapes, metamethods, they code they contain is spliced into the surrounding Terra code.
+Quotes are the Lua objects that get returned by terra quotation operators (backtick and `quote ... in ... end`). They rerpresent a fragment of Terra code (a statement or expression) that has not been placed into a function yet. The escape operators (`[...]` and `escape ... emit ... end`) splice quotes into the surround Terra code. Quotes have a short form for generating just one _expression_ and long form for generating _statements and expressions_.
 
 ---
-    `terraexpr
+    quotation = `terraexpr
+    -- `create a quotation
 
-The backtick operator creates a quotation that contains a single terra _expression_. `terraexpr` can be any Terra expression. Any escapes that `terraexpr` contains will be evaluated when the expression is constructed.
+The short form of a quotation. The backtick operator creates a quotation that contains a single terra _expression_. `terraexpr` can be any Terra expression. Any escapes that `terraexpr` contains will be evaluated when the expression is constructed.
 
 ---
     quote
         terrastmts
     end
 
-The `quote` operator creates a quotation that contains a list of terra _statements_. These can only be spliced into Terra code where a statement would normally appear.
- 
+The long form of a quotation. The `quote` operator creates a quotation that contains a list of terra _statements_. This quote can appear where an expression or a statement would be legal in Terra code. If it appears in an expression context, its type is the empty tuple.
 
 ---
+
     quote
         terrastmts
     in
         terraexp1,terraexp2,...,terraexpN
     end
 
-The `quote` operation can also include an optional `in` statement that creates several expressions. This `quote` can be spliced into Terra code where an expression would normally appear and behaves like a function that returns multiple values.
+The long `quote` operation can also include an optional `in` statement that creates several expressions. When this `quote` is spliced into Terra code where an expression would normally appear, its value is the tuple constructed by those expressions.
+
+    local a = quote
+        var a : int = foo()
+        var b : int = bar()
+    in
+        a + b + b
+    end
+    terra f()
+        var c : int = [a] -- 'a' has type int.
+    end
 
 ---
 
@@ -427,21 +499,29 @@ Returns true if `t` is a quote.
 
 ---
 
+    typ = quoteobj:gettype()
+
+Return the Terra type of this quotation.
+
+---
+
     typ = quoteobj:astype()
 
 Try to interpret this quote as if it were a Terra type object. This is normally used in [macros](#macros) that expect a type as an argument (e.g. `sizeof([&int])`). This function converts the `quote` object to the type (e.g. `&int`).
 
----
-
-    typ = quoteobj:gettype()
-
-If the quote object is a typed expression that was passed as an argument to a macro, this will return the type of the value that will result when it is evaluated.
 
 ---
+
+    bool = quoteobj:islvalue()
+
+`true` if the quote can be used on the left hand size of an assignment (i.e. it is an l-value).
+
+---
+
 
     luaval = quoteobj:asvalue()
 
-Try to interpret this quote as if it were a simple Lua value. This is normally used in [macros](#macros) that expect constants as an argument (e.g. the macro that truncates expressions `truncate(2,foo())`). Currently only supports very simple constants (e.g. numbers). Consider using an escape rather than a macro when you want to pass more complicated data structures to generative code.
+Try to interpret this quote as if it were a simple Lua value. This is normally used in [macros](#macros) that expect constants as an argument. Only works for a subset of values (anything that can be a Constant expression). Consider using an escape rather than a macro when you want to pass more complicated data structures to generative code.
 
 ---
 
@@ -463,9 +543,9 @@ True if `s` is a symbol.
 
 ---
 
-    symbol([typ],[displayname])
+    symbol(typ,[displayname])
 
-Construct a new symbol. This symbol will be unique from any other symbol. `typ` is an optional type for the symbol. If the symbol is used in a variable definition without an explicit type, then the variable will use `typ` as its type. `displayname` is an optional name that will be printed out in error messages when this symbol is encountered.
+Construct a new symbol. This symbol will be unique from any other symbol. `typ` is the type for the symbol. `displayname` is an optional name that will be printed out in error messages when this symbol is encountered.
 
 Values
 ------
@@ -476,26 +556,13 @@ We provide wrappers around LuaJIT's [FFI API](http://luajit.org/ext_ffi.html) th
 
     terralib.typeof(obj)
 
-Return the Terra type of `obj`. Object must be a LuaJIT `ctype` that was previously allocated using calls into the Terra API, or as the return value of a Terra function. 
+Return the Terra type of `obj`. Object must be a LuaJIT `ctype` that was previously allocated using calls into the Terra API, or as the return value of a Terra function.
 
 ---
 
     terralib.new(terratype,[init])
 
 Wrapper around LuaJIT's `ffi.new`. Allocates a new object with the type `terratype`. `init` is an optional initializer that follows the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. This object will be garbage collected if it is no longer reachable from Lua.
-
----
-
-    terralib.sizeof(terratype)
-
-Wrapper around `ffi.typeof`. Completes the `terratype` and returns its size in bytes.
-
----
-
-    terralib.offsetof(terratype,field)
-
-Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
-
 
 ---
 
@@ -507,13 +574,17 @@ Wrapper around `ffi.cast`. Converts `obj` to `terratype` using the [rules](#conv
 Global Variables
 ----------------
 
-Global variables are Terra values that are shared among all Terra functions. 
+Global variables are Terra values that are shared among all Terra functions.
 
 ---
-
-    global([type], [init])
+    global(type,[init,name,isextern])
+    global(init,[name,isextern])
 
 Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If `init` is specified, this [completes](#types) the type.
+
+`init` can also be a [Quote](#quote), which will be treated as a [constant expression](#constants) used to initialized the global.
+`name` is used as the debugging name for the global.
+If `isextern` is true, then this global is bound to an externally defined variable with the name `name`.
 
 ---
 
@@ -533,6 +604,26 @@ Gets the value of this global as a LuaJIT `ctype` object. [Completes](#types) th
 
 Converts `v` to a Terra values using the normal conversion [rules](#converting-between-lua-values-and-terra-values), and the global variable to this value. [Completes](#types) the type.
 
+
+---
+
+    globalvar:setname(str)
+    str = globalvar:getname()
+
+Set or get the debug name for this global variable. This can help with debugging but does not otherwise change the behavior of the global.
+
+---
+
+    typ = globalvar:gettype()
+
+Get the terra type of the global variable.
+
+---
+
+    globalvar:setinitializer(init)
+
+Set or change the initializer expression for this global. Only valid before the global is compiled. This can be used to update the value of a globalvar as you add more code to the system. For instance, if you have a global variable storing the vtable for you class, you can add more values to it as you add methods to the class.
+
 Constant
 --------
 
@@ -543,6 +634,20 @@ Terra constants represent constant values used in Terra code. For instance, if y
     constant([type],init)
 
 Create a new constant. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If the optional [type](#types) is specified, then `init` is converted to that `type` explicitly. [Completes](#types) the type.
+
+`init` can also be a Terra [quote](#quotes) object. In this case the quote is treated as a _constant initializer expresssion_:
+
+    local complexobject = constant(`Complex { 3, 4 })
+    --`
+
+Constant expressions are a subset of Terra expressions whose values are guaranteed to be constant and correspond roughly to LLVM's concept of a constant expression. They can include things whose values will be constant after compilation but whose value is not known beforehand such as the value of a function pointer:
+
+    terra a() end
+    terra b() end
+    terra c() end
+    -- array of function pointers to a,b, and c.
+    local functionarray = const(`array(a,b,c))
+    -- `
 
 ---
 
@@ -564,7 +669,7 @@ Create a new macro. The function will be invoked at compile time for each call i
 ---
 
     terralib.ismacro(t)
-    
+
 True if `t` is a macro.
 
 Exotypes (Structs)
@@ -574,7 +679,7 @@ We refer to Terra's way of creating user-defined aggregate types as exotypes
 because they are defined *external* to Terra itself, using a Lua API.
 The design tries to provide the raw mechanisms for defining the behavior of user-defined types without imposing any language-specific policies. Policy-based class systems such as those found in Java or C++ can then be created as libraries on top of these raw mechanisms. For conciseness and familiarity, we use the keyword `struct` to refer to these types in the language itself.
 
-We also provide syntax sugar for defining exotypes for the most common cases. 
+We also provide syntax sugar for defining exotypes for the most common cases.
 This section first discuses the Lua API itself, and then shows how the syntax sugar translates into it.
 
 More information on the rationale for this design is available in our [publications](publications.html).
@@ -582,7 +687,7 @@ More information on the rationale for this design is available in our [publicati
 ### Lua API
 
 A new user-defined type is created with the following call:
-        
+
         mystruct = terralib.types.newstruct([displayname])
 
 `displayname` is an optional name that will be displayed by error messages, but each call to `newstruct` creates a unique type regardless of name (We use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type system. The type can then be used in Terra programs:
@@ -597,7 +702,7 @@ The memory layout and behavior of the type when used in Terra programs is define
 
 When the Terra typechecker needs to know information about the type, it will call the property function in the metamethods table of the type. If a property is not set, it may have a default behavior which is discussed for each property individually.
 
-The following fields in `metamethods` are supported: 
+The following fields in `metamethods` are supported:
 
 ----
 
@@ -607,22 +712,22 @@ A _Lua_ function that determines the fields in a struct computationally. The `__
 
 * A table `{ field = stringorsymbol, type = terratype }`, specifying a named field.
 * A table `{stringorsymbol,terratype}`, also specifying a named field.
-* A [List](#list) of field entries that will be allocated together in a union sharing the same memory. 
+* A [List](#list) of field entries that will be allocated together in a union sharing the same memory.
 
 By default, `__getentries` just returns the `self.entries` table, which is set by the `struct` definition syntax.
 
 ----
 
     method = __getmethod(self,methodname)
-    
-A _Lua_ function looks up a method for a struct when the compiler sees a method invocation `mystruct:mymethod(...)` or a static method lookup `mystruct.mymethod`.  `mymethod` may be either a string or a [symbol](#symbol). This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls. 
+
+A _Lua_ function looks up a method for a struct when the compiler sees a method invocation `mystruct:mymethod(...)` or a static method lookup `mystruct.mymethod`.  `mymethod` may be either a string or a [symbol](#symbol). This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls.
 `method` may be a Terra function, a Lua function, or a [macros](#macro) which will run during typechecking.  
 
-Assuming that `__getmethod` returns the value `method`, then in Terra code the expression `myobj:mymethod(arg0,...argN)` turns into `[method](myobj,arg0,...,argN)` if type of `myobj` is `T`. 
+Assuming that `__getmethod` returns the value `method`, then in Terra code the expression `myobj:mymethod(arg0,...argN)` turns into `[method](myobj,arg0,...,argN)` if type of `myobj` is `T`.
 
 If the type of `myobj` is `&T` then it desugars to `[method](@myobj,arg0,...,argN)`.
 If, when a method is invoked, `myobj` has type `T` but the formal parameter has type `&T` then the argument will be automatically converted to a pointer by taking its address. This _method receiver cast_ allows method calls on objects to modify the object.
- 
+
 By default, `__getmethod(self,methodname)` will return `self.methods[methodname]`, which is set by the method definition syntax sugar. If the table does not contain the method, then the typechecker will call `__methodmissing` as described below.
 
 ----
@@ -634,7 +739,7 @@ A _Lua_ function called after the type is complete but before the compiler retur
 ----
 
     castedexp = __cast(from,to,exp)`
-    
+
 A _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works (i.e. does not call `error`).
 
 ----
@@ -646,13 +751,13 @@ When a method is called `myobj:mymethod(arg0,...,argN)` and `__getmethod` is not
 ----
 
     __entrymissing(entryname,myobj)
-    
+
 If `myobj` does not contain the filed `entryname`, then `__entrymissing` will be called whenever the typechecker sees the expression `myobj.entryname`. It must be a macro and should return a Terra [quote](#quote) to use in place of the field.
 
 Custom operators:
 
     __sub, __add, __mul, __div, __mod, __lt, __le, __gt, __ge,
-    __eq, __ne, __and, __or, __not, __xor, __lshift, __rshift, 
+    __eq, __ne, __and, __or, __not, __xor, __lshift, __rshift,
     __select, __apply
 
 Can be either a Terra method, or a macro. These are invoked when the type is used in the corresponding operator. `__apply` is used for function application, and `__select` for `terralib.select`.  In the case of binary operators, at least one of the two arguments will have type `mystruct`. The interface for custom operators hasn't been heavily tested and is subject to change.
@@ -668,7 +773,7 @@ A _Lua_ function that generates a string that names the type. This name will be 
 ---
 
     [local] struct mystruct
-    
+
 _Struct declaration_ If `mystruct` is not already a Terra struct, it creates a new struct by calling `terralib.types.newstruct("mystruct")` and stores it in the Lua variable `mystruct`. If `mystruct` is already a struct, then it does not modify it. If the optional `local` keyword is used, then `mystruct` is first defined as a new local Lua variable.  When used without the `local` keyword, `mystruct` can be a table specifier (e.g. `a.b.c`).
 
 ----
@@ -687,9 +792,9 @@ _Struct declaration_ If `mystruct` is not already a Terra struct, it creates a n
 _Struct definition_. If `mystruct` is not already a Struct, then it creates a new struct with the behavior of struct declarations. It then fills in the `entries` table of the struct with the fields and types specified in the body of the definition. The `union` block can be used to specify that a group of fields should share the same location in memory. If `mystruct` was previously given a definition, then defining it again will result in an error.
 
 ----
-    
+
     terra mystruct:mymethod
-        
+
 _Method declaration_. Creates a new Terra function with definitions at `mystruct.methods.mymethod` if one does not already exist.
 
 ----
@@ -697,11 +802,31 @@ _Method declaration_. Creates a new Terra function with definitions at `mystruct
     terra mystruct:mymethod(arg0 : type0,..., argN : typeN)
         ...
     end
-    
-    
+
+
 _Method definition_. If `mystruct.methods.mymethod` is not a Terra function, it creates one. Then it adds the method definition. The formal parameter `self` with type `&mystruct` will be added to beginning of the formal parameter list.
 
+Overloaded Functions
+--------------------
 
+Overloaded functions are separate objects from normal Functions and are created using an API call:
+
+    local addone = terralib.overloadedfunction("addone",
+                  { terra(a : int) return a + 1 end,
+                    terra(a : double) return a + 1 end })
+
+
+You can also add methods later:
+
+    addone:adddefinition(terra(a : float) return a + 1 end)
+
+Unlike normal functions overloaded functions cannot be called directly from Lua.
+
+---
+
+    overloaded_func:getdefinitions()
+
+Returns the [List](#lists) of definitions for this function.
 
 Escapes
 -------
@@ -713,7 +838,7 @@ Escapes are a special construct adapted from [multi-stage programming](http://ww
         return [dosomething(a,b)]
     end
 
-The arguments `a` and `b` to `dosomething` will be [symbols](#symbols) that are references to the variables defined in the Terra code. 
+The arguments `a` and `b` to `dosomething` will be [symbols](#symbols) that are references to the variables defined in the Terra code.
 
 We also provide syntax sugar for escapes of identifiers and table selects when they are used in expressions or statements. For instance the Terra expression `ident` is treated as the escape `[ident]`, and the table selection `a.b.c` is treated as the escape `[a.b.c]` when both `a` and `b` are Lua tables.
 
@@ -721,7 +846,7 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
 
     terra foo()
         return [luaexpr],4
-    end 
+    end
 
 `[luaexpr]` is a single-expression escape. `luaexpr` is a single Lua expression that is evaluated to a Lua value when the function is _defined_. The resulting Lua expression is converted to a Terra object using the compilation-time conversion [rules](#converting-between-lua-values-and-terra-values). If the conversion results in a list of Terra values, it is truncated to a single value.
 
@@ -729,11 +854,11 @@ We also provide syntax sugar for escapes of identifiers and table selects when t
     terra foo()
         bar(3,4,[luaexpr])
     end
-    
+
 `[luaexpr]` is a multiple-expression escape since it occurs as the last expression in a list of expressions. It has the same behavior as a single expression escape, except when the conversion of `luaexpr` results in multiple Terra expressions. In this case, the values are appended to the end of the expression list (in this case, the list of arguments to the call to `bar`).
 
 ---
-    
+
     terra foo()
         [luaexpr]
         return 4
@@ -754,7 +879,7 @@ Each `[luaexpr]` is an example of a escape of an identifier. `luaexpr` must resu
 
     terra foo(a : int, [luaexpr])
     end
-    
+
 `[luaexpr]` is an escape of a list of identifiers. In this case, it behaves similarly to an escape of a single identifier, but may also return a list of explicitly typed symbols which will be appended as parameters in the parameter list.
 
 
@@ -783,18 +908,18 @@ Similar to `includecstring` except that C code is loaded from `filename`. This u
 
     terralib.linklibrary(filename)
 
-Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application. 
+Load the dynamic library in file  `filename`. If header files imported with `includec` contain declarations whose definitions are not linked into the executable in which Terra is run, then it is necessary to dynamically load the definitions with `linklibrary`. This situation arises when using external libraries with the `terra` REPL/driver application.
 
 ---
 
     local llvmobj = terralib.linkllvm(filename)
     local sym = llvmobj:extern(functionname,functiontype)
-    
+
 Link an LLVM bitcode file `filename` with extension `.bc` generated with `clang` or `clang++`:
-    
+
     clang++ -O3 -emit-llvm -c mycode.cpp -o mybitcode.bc
 
-The code is loaded as bitcode rather than machine code. This allows for more aggressive optimization (such as inlining the function calls) but will take longer to initialize in Terra since it must be compiled to machine code. To extract functions from this bitcode file, call the `llvmobj:extern` method providing the function's name in the bitcode and its Terra-equivalent type (e.g. `int -> int`). 
+The code is loaded as bitcode rather than machine code. This allows for more aggressive optimization (such as inlining the function calls) but will take longer to initialize in Terra since it must be compiled to machine code. To extract functions from this bitcode file, call the `llvmobj:extern` method providing the function's name in the bitcode and its Terra-equivalent type (e.g. `int -> int`).
 
 
 Converting between Lua values and Terra values
@@ -814,7 +939,7 @@ When a Lua value is used directly from Terra code through an [escape](#escapes),
 * `number` -- If `floor(value) == value` and value can fit into an `int` then the type is an `int` otherwise it is `double`.
 * `boolean` -- the type is `bool`.
 * `string` -- converted into a `rawstring` (i.e. a `&int8`). We may eventually add a special string type.
-* otherwise -- the type cannot be inferred. If you know the type of the object, then you use a `terralib.cast` function to specify it. 
+* otherwise -- the type cannot be inferred. If you know the type of the object, then you use a `terralib.cast` function to specify it.
 
 ### Compile-time conversions ###
 
@@ -828,7 +953,7 @@ When a Lua value is used as the result of an [escape](#escapes) operator in a Te
 * [Macro](#macro) -- If used as a function call, the macro will be run at compile time. The result of the macro will then be convert to Terra using the compile-time conversion rules and spliced in place.
 * [Type](#types) -- If used as an argument to a macro call, it will be passed-through such that calling `arg:astype()` will return the value. If used as a function call (e.g. `[&int](v)`, it acts as an explicit cast to that type.
 * [List](#list) or a rawlist (as classified by `terralib.israwlist`) -- Each member of the list is recursively converted to a Lua value using compile-time conversions (excluding the conversions for Lists). If used as a statement or where multiple expressions can appear, all values of the list are spliced in place. Otherwise, if used where only a single expression can appear, the list is truncated to 1 value.
-* `cdata` aggregates (structs and arrays) -- If a Lua `cdata` aggregate of Terra type `T` is referenced directly in Terra code, the value in Terra code will be an lvalue reference of type `T` to the Lua-allocated memory that holds that aggregate. 
+* `cdata` aggregates (structs and arrays) -- If a Lua `cdata` aggregate of Terra type `T` is referenced directly in Terra code, the value in Terra code will be an lvalue reference of type `T` to the Lua-allocated memory that holds that aggregate.
 * otherwise -- the value is first converted to a Terra vlue using the standard rules for converting Lua to Terra values with unknown type. The resulting value is then spliced in place as a _constant_.
 
 
@@ -841,7 +966,7 @@ Asynchronous Compilation
 
 When the Terra compiler encounters a [macro](#macros) or [metamethod](#exotypes-structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
 
-If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately). 
+If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately).
 
 Situations requiring callbacks arise when building class systems that have virtual function tables (vtables). To build a vtable, you need to compile the concrete implementations of the type's methods and then fill in the vtable with these values. However, it is possible that these functions were already being compiled. In this case, we still need to compile these functions and fill-in the vtable, but cannot finish this task inside the type's `__staticinitialize` metamethod.  By calling compile asynchronously and registering a callback that fills in the vtable, we can guarantee that the vtable is filled in before the call to the compiler returns while allowing `__staticinitialize` to return before the vtable is complete. Callbacks are guaranteed to be invoked before returning to user-defined code that invoked the compiler synchronously. So we know that the vtable will be initialized before any of this newly compiled code is run.
 
@@ -860,22 +985,22 @@ Lua equivalent of C API call `terra_load`. `readerfn` behaves the same as in Lua
 
     terralib.loadstring(s)
 
-Lua equivalent of C API call `terra_loadstring`. 
+Lua equivalent of C API call `terra_loadstring`.
 
 ---
 
     terralib.loadfile(filename)
 
 Lua equivalent of C API call `terra_loadfile`.
- 
+
 ---
 
     require(modulename)
-    
+
 Load the terra code `modulename`. Terra adds an additional code loader to Lua's `package.loaders` to handle the loading of Terra code as a module. `require` first checks if `modulename` has already been loaded by a previous call to `require`, returning the previously loaded results if available. Otherwise it searches `package.terrapath` for the module. `package.terrapath` is a semi-colon separated list of templates, e.g.:
-    
+
     "lib/?.t;./?.t"
-    
+
 The `modulename` is first converted into a path by replacing any `.` with a directory separator, `/`. Then each template is tried until a file is found. For instance, using the example path, the call `require("foo.bar")` will try to load `lib/foo/bar.t` or `foo/bar.t`. If a file is found, then `require` will return the result of calling `terralib.loadfile` on the file. By default, `package.terrapath` is set to the environment variable `TERRA_PATH`. If `TERRA_PATH` is not set then `package.terrapath` will contain the default path (`./?.t`). The string `;;` in `TERRA_PATH` will be replaced with this default path if it exists.
 
 Note that normal Lua code is also imported using `require`. There are two search paths `package.path` (env `LUA_PATH`), which will load code as pure Lua, and `package.terrapth` (env: `TERRA_PATH`), which will load code as Lua-Terra code.
@@ -893,7 +1018,7 @@ Saving Terra Code
 
 Save Terra code to an external representation such as an object file, or executable. `filetype` can be one of `"object"` (an object file `*.o`), `"asm"` (an assembly file `*.s`), `"bitcode"` (LLVM bitcode `*.bc`), `"llvmir"` (LLVM textual IR `*.ll`), or `"executable"` (no extension).
 If `filetype` is missing then it is inferred from the extension. `functiontable` is a table from strings to Terra functions. These functions will be included in the code that is written out with the name given in the table.
-`arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string. 
+`arguments` is an additional list that can contain flags passed to the linker when `filetype` is `"executable"`. If `filename` is `nil`, then the file will be written in memory and returned as a Lua string.
 
 To cross-compile objects for a different architecture, you can specific a [target](#targets) object, which describes the architecture to compile for. Otherwise `saveobj` will use the native architecture.
 
@@ -906,7 +1031,7 @@ The functions `terralib.saveobj` and `terralib.includec` take an optional target
         Triple = "armv6-unknown-linux-gnueabi"; -- LLVM target triple
         CPU = "arm1176jzf-s";,  -- LLVM CPU name,
         Features = ""; -- LLVM feature string
-        FloatABIHard = true; -- For ARM, use floating point registers 
+        FloatABIHard = true; -- For ARM, use floating point registers
     }
 
 All entries in the table except the `Triple` field are optional. [Documentation](http://clang.llvm.org/docs/CrossCompilation.html) for `clang` includes more information about what these strings should be set to.
@@ -955,7 +1080,7 @@ filling in `addr` with the start of the function and `size` with the size of the
 
     terra terralib.lookupline(fnaddr : &opaque, ip : &opaque, filename : &rawstring, namelength : &uint64, line : &uint64) : bool
 
-Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it. 
+Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it.
 Returns `true` if successful, filling in `line` with line on which the instruction occured and `filename` with a pointer to a fixed-width string of to `namemax` characters holding the filename.
 Fills up to `namemax` characters of the function's name into `name`.
 
@@ -972,12 +1097,12 @@ In fact, the `terra` executable and REPL are just clients of the C API. The Terr
 Initializes the internal Terra state for the `lua_State` `L`. `L` must be an already initialized `lua_State`.
 
 ---
-    
+
     typedef struct { /* default values are 0 */
-        int verbose; /* Sets verbosity of debugging output. 
-                        Valid values are 0 (no debug output) 
+        int verbose; /* Sets verbosity of debugging output.
+                        Valid values are 0 (no debug output)
                         to 2 (very verbose). */
-        int debug;   /* Turns on debug information in Terra compiler. 
+        int debug;   /* Turns on debug information in Terra compiler.
                         Enables base pointers and line number
                         information in stack traces. */
     } terra_Options;
@@ -995,16 +1120,16 @@ Initializes the internal Terra state for the `lua_State` `L`. `L` must be an alr
 Loads a combined Terra-Lua chunk. Terra equivalent of `lua_load`. This function takes the same arguments as `lua_load` and performs identically except it parses the input as a combined Terra-Lua program (i.e. a Lua program that has Terra extensions). Currently there is no binary format for combined Lua-Terra code, so the input must be text.
 
 ---
-    
+
     int terra_loadfile(lua_State * L, const char * file);
 
 Loads the file as a combined Terra-Lua chunk. Terra equivalent of `luaL_loadfile`.
 
 ---
 
-    int terra_loadbuffer(lua_State * L, 
-                         const char *buf, 
-                         size_t size, 
+    int terra_loadbuffer(lua_State * L,
+                         const char *buf,
+                         size_t size,
                          const char *name);
 
 Loads a buffer as a combined Terra-Lua chunk. Terra equivalent of `luaL_loadbuffer`.
@@ -1018,11 +1143,11 @@ Loads string `s` as a combined Terra-Lua chunk. Terra equivalent of `luaL_loadst
 ---
 
     terra_dofile(L, file)
-    
+
 Loads and runs the file `file`. Equivalent to
-    
+
     (terra_loadfile(L, fn) || lua_pcall(L, 0, LUA_MULTRET, 0))
-    
+
 ---
 
     terra_dostring(L, s)
@@ -1043,11 +1168,11 @@ A Simple Example
 ----------------
 
 To get started, let's add a simple language extension to Lua that sums up a list of numbers. The syntax will look like `sum 1,2,3 done`, and when run it will sum up the numbers, producing the value `6`. A language extension is defined using a Lua table. Here is the table for our language
-    
+
     local sumlanguage = {
       name = "sumlanguage"; --name for debugging
       -- list of keywords that will start our expressions
-      entrypoints = {"sum"}; 
+      entrypoints = {"sum"};
       keywords = {"done"}; --list of keywords specific to this language
        --called by Terra parser to enter this language
       expression = function(self,lex)
@@ -1063,14 +1188,14 @@ We list `"sum"` in the `entrypoints` list since we want Terra to hand control ov
       if not lex:matches("done") then
         repeat
           --parse a number, return its value
-          local v = lex:expect(lex.number).value 
+          local v = lex:expect(lex.number).value
           sum = sum + v
         --if there is a comma, consume it and continue
-        until not lex:nextif(",") 
+        until not lex:nextif(",")
       end
 
       lex:expect("done")
-      --return a function that is run 
+      --return a function that is run
       --when this expression would be evaluated by Lua
       return function(environment_function)
         return sum
@@ -1091,7 +1216,7 @@ The language extension mechanism includes an `import` statment to load the langu
     import "lib/sumlanguage" --active the new parsing rules
     result = sum 1,2,3 done
 
-Since `import` statements are evaluated at _parse_ time, the argument must be a string literal. 
+Since `import` statements are evaluated at _parse_ time, the argument must be a string literal.
 The parser will then call `require` on the string literal to load the language extension file.
 The file specified should _return_ the Lua table describing your language:
 
@@ -1116,7 +1241,7 @@ Interacting with Lua symbols
 ----------------------------
 
 One of the advantages of Terra is that it shares the same lexical scope as Lua, making it easy to parameterize Terra functions. Extension languages can also access Lua's static scope. Let's extend our sum language so that it supports both constant numbers, as well as Lua variables:
-    
+
     local a = 4
     print(sum a,3 done) --prints 7
 
@@ -1130,11 +1255,11 @@ To do this we need to modify the code in our `expression` function:
         repeat
           if lex:matches(lex.name) then --if it is a variable
             local name = lex:next().value
-            --tell the Terra parser 
+            --tell the Terra parser
             --we will access a Lua variable, 'name'
-            lex:ref(name) 
+            lex:ref(name)
             --add its name to the list of variables
-            variables:insert(name) 
+            variables:insert(name)
           else
             sum = sum + lex:expect(lex.number).value
           end
@@ -1144,7 +1269,7 @@ To do this we need to modify the code in our `expression` function:
       return function(environment_function)
         --capture the local environment
         --a table from variable name => value
-        local env = environment_function() 
+        local env = environment_function()
         local mysum = sum
         for i,v in ipairs(variables) do
           mysum = mysum + env[v]
@@ -1180,7 +1305,7 @@ The method `lex:luaexpr()` will parse a Lua expression. It returns a Lua functio
           --return our result, a single argument lua function
           return function(actual)
             local env = environment_function()
-            --bind the formal argument 
+            --bind the formal argument
             --to the actual one in our environment
             env[formal] = actual
             --evaluate our expression in the environment
@@ -1201,7 +1326,7 @@ In addition to extending the syntax of expressions, you can also define new synt
     local terra foo() end -- a new local variable declaration
 
 This is done by specifying the `statement` and `localstatement` functions in your language table. These function behave the same way as the `expression` function, but they can optionally return a list of names that they define. The file `test/lib/def.t` shows how this would work for the `def` constructor to support statements:
-    
+
     def foo(a) luaexpr --defines global variable foo
     local def bar(a) luaexpr --defins local variable bar
 
@@ -1209,7 +1334,7 @@ This is done by specifying the `statement` and `localstatement` functions in you
 Higher-Level Parsing via Pratt Parsers
 --------------------------------------
 
-Writing a parser that directly uses the lexer interface can be tedious. One simple approach that makes parsing easier (especially for expressions with multiple precedence levels) is Pratt parsing, or top-down precedence parsing (for more information, see http://javascript.crockford.com/tdop/tdop.html). We've provided a library built on top of the Lexer interface to help do this. It can be found, along with documentation of the API in `tests/lib/parsing.t`. An example extension written using this library is found in `tests/lib/pratttest.t` and an example program using it in `tests/pratttest1.t`. 
+Writing a parser that directly uses the lexer interface can be tedious. One simple approach that makes parsing easier (especially for expressions with multiple precedence levels) is Pratt parsing, or top-down precedence parsing (for more information, see http://javascript.crockford.com/tdop/tdop.html). We've provided a library built on top of the Lexer interface to help do this. It can be found, along with documentation of the API in `tests/lib/parsing.t`. An example extension written using this library is found in `tests/lib/pratttest.t` and an example program using it in `tests/pratttest1.t`.
 
 The Language and Lexer API
 -------------------------
@@ -1222,7 +1347,7 @@ A language extension is defined by a Lua table containing the following fields.
 ---
 
     name
-    
+
 a name for your language used for debugging
 
 ---
@@ -1235,7 +1360,7 @@ A Lua list specifying the keywords that can begin a term in your language. These
 
     keywords
 
-A Lua list specifying any additional keywords used in your language. Like entry-points, these also must be valid identifiers. A keyword in Lua or Terra is always considered a keyword in your language, so you do not need to list them here. 
+A Lua list specifying any additional keywords used in your language. Like entry-points, these also must be valid identifiers. A keyword in Lua or Terra is always considered a keyword in your language, so you do not need to list them here.
 
 ---
 
@@ -1245,8 +1370,8 @@ A Lua list specifying any additional keywords used in your language. Like entry-
 
 ---
 
-    statement 
-    
+    statement
+
 (Optional) A Lua method `function(self,lexer)` called when the parser encounters an entry-point keyword at the beginning of a Lua _statement_. Similar to `expression`, it returns a constructor function. Additionally, it can return a second argument that is a list of assignements that the statment performs to variables. For instance, the value `{ "a", "b", {"c","d"} }` will behave like the Lua statment `a,b,c.d = constructor(...)`
 
 ---
@@ -1263,7 +1388,7 @@ The methods in the language are given an interface `lexer` to Terra _lexer_, whi
 
     token.type
 
-The _token type_. For keywords and operators this is just a string (e.g. `"and"`, or `"+"`). The values `lexer.name`, `lexer.number`, `lexer.string` indicate the token is respectively an identifier (e.g. `myvar`), a number (e.g. 3), or a string (e.g. `"my string"`). The type `lexer.eof` indicates the end of the token stream. 
+The _token type_. For keywords and operators this is just a string (e.g. `"and"`, or `"+"`). The values `lexer.name`, `lexer.number`, `lexer.string` indicate the token is respectively an identifier (e.g. `myvar`), a number (e.g. 3), or a string (e.g. `"my string"`). The type `lexer.eof` indicates the end of the token stream.
 
 ---
 
@@ -1379,7 +1504,3 @@ Future Extensions
 * The Pratt parsing library will be extended to support composing multiple languages together
 
 * We will use the composable Pratt parsing library to implement a library of common statements and expressions from Lua/Terra that will allow the user to pick and choose which statements to include, making it easy to get started with a language.
-
-
-
-
