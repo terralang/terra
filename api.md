@@ -793,12 +793,6 @@ _Struct definition_. If `mystruct` is not already a Struct, then it creates a ne
 
 ----
 
-    terra mystruct:mymethod
-
-_Method declaration_. Creates a new Terra function with definitions at `mystruct.methods.mymethod` if one does not already exist.
-
-----
-
     terra mystruct:mymethod(arg0 : type0,..., argN : typeN)
         ...
     end
@@ -960,15 +954,6 @@ When a Lua value is used as the result of an [escape](#escapes) operator in a Te
 ### Converting Terra values to Lua values ###
 
 When converting Terra values back into Lua values (e.g. from the results of a function call), we follow LuaJIT's [conversion semantics](http://luajit.org/ext_ffi_semantics.html#convert-tolua) from C types to Lua objects, substituting the equivalent C type for each Terra type. If the result is a `cdata` object, it can be used with the Terra [Value API](#values).
-
-Asynchronous Compilation
-------------------------
-
-When the Terra compiler encounters a [macro](#macros) or [metamethod](#exotypes-structs), it can call back into user-defined code. The user-defined code in a macro or metamethod might need to create additional Terra functions or types, and try to compile and run Terra functions. This means user-defined code can _re-enter_ the Terra compiler. For the most part this behavior works fine.  However, it is possible for user-defined code to try to compile a function or complete a type that is _already_ being compiled. In this case, the call to `compile` will report an error since it cannot fulfill the (circular) request. It is possible that the user-defined code doesn't need the compilation to finish while inside the macro, but only needs the compilation finished before the compiler returns control to user code that called it synchronously.
-
-If the `async` argument to a compilation function is not `nil` or `false`, then the function is called asynchronous. It may return before the compilation is complete and only needs to be finished by the time the compiler returns to a synchronous call. Furthermore, if `async` is a Lua function, then it will be registered as a callback that will be invoked as soon as the requested compilation operation has completed (in the simple cases where there is no recursive loop, it will just be invoked immediately).
-
-Situations requiring callbacks arise when building class systems that have virtual function tables (vtables). To build a vtable, you need to compile the concrete implementations of the type's methods and then fill in the vtable with these values. However, it is possible that these functions were already being compiled. In this case, we still need to compile these functions and fill-in the vtable, but cannot finish this task inside the type's `__staticinitialize` metamethod.  By calling compile asynchronously and registering a callback that fills in the vtable, we can guarantee that the vtable is filled in before the call to the compiler returns while allowing `__staticinitialize` to return before the vtable is complete. Callbacks are guaranteed to be invoked before returning to user-defined code that invoked the compiler synchronously. So we know that the vtable will be initialized before any of this newly compiled code is run.
 
 Loading Terra Code
 ==================
