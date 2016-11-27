@@ -152,6 +152,12 @@ Extended version of `type(o)` with the following definition:
        else return type(t) end
     end
 
+---
+
+    memoized_fn = terralib.memoize(function(a,b,c,...) ... end)
+
+Memoize the result of a function. The first time a function is call with a particular set of arguments, it calls the function to calculate the return value and caches it. Subsequent calls with the same arguments (using Lua equality) will return that value. Useful for generating templated values, such as `Vector(T)` where the same vector type should be returned everytime for the same `T`.
+
 Function
 --------
 
@@ -251,7 +257,7 @@ Compile the function into machine code. Ensures that every function and global v
 
     function_type = func:gettype()
 
-Return the [type](#types) of the function.
+Return the [type](#types) of the function. `function_type.parameters` is a list of the parameters types. `function_type.returntype` is the return type. If the function returns multiple values, this return type will be a tuple.
 
 ---
 
@@ -307,7 +313,7 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
 
     parameters -> returntype
 
-Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. If returntype is a list, a `tuple` of the values in the list is the type returned from the function.
+Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. If `returntype` is a list, a `tuple` of the values in the list is the type returned from the function.
 
 ---
 
@@ -1141,8 +1147,8 @@ Loads and runs the string `s`. Equivalent to
 
     (terra_loadstring(L, s) || lua_pcall(L, 0, LUA_MULTRET, 0))
 
-Embedded Language API
-=====================
+Embedded New Languages Inside Lua
+=================================
 
 Language extensions in the Terra system allow you to create custom Lua statements and expressions that you can use to implement your own embedded language. Each language registers a set of entry-point keywords that indicate the start of a statement or expression in your language. If the Terra parser sees one of these keywords at the beginning of a Lua expression or statement, it will switch control of parsing over to your language, where you can  parse the tokens into an abstract syntax tree (AST), or other intermediate representation. After creating the AST, your language then returns a _constructor_ function back to Terra parser. This function will be called during execution when your statement or expression should run.
 
