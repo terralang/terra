@@ -21,6 +21,9 @@ CLANG ?= $(shell which clang-3.5 clang | head -1)
 CXX ?= $(CLANG)++
 CC ?= $(CLANG)
 
+PIC_FLAG ?= -fPIC
+FLAGS=$(CFLAGS)
+
 # top-level build rule, must be first
 EXECUTABLE = release/bin/terra
 DYNLIBRARY = release/lib/terra.so
@@ -85,7 +88,7 @@ build/$(LUAJIT_TAR):
 
 build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) $(PIC_FLAG)")
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
@@ -115,7 +118,7 @@ ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 
 AR = ar
 LD = ld
-FLAGS += -Wall -g -fPIC
+FLAGS += -Wall -g $(PIC_FLAG)
 LFLAGS = -g
 
 FLAGS += -I build -I $(LUA_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
@@ -138,11 +141,11 @@ endif
 
 
 ifeq ($(UNAME), Linux)
-DYNFLAGS = -shared -fPIC
-TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
+DYNFLAGS = -shared $(PIC_FLAG)
+WHOLE_ARCHIVE = -Wl,-export-dynamic -Wl,--whole-archive $(1) -Wl,--no-whole-archive
 else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.so"
-TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
+DYNFLAGS = -undefined dynamic_lookup -dynamiclib -single_module $(PIC_FLAG) -install_name "@rpath/terra.so"
+WHOLE_ARCHIVE =  -Wl,-force_load,$(1)
 endif
 
 LLVM_LIBRARY_FLAGS += $(LUA_LIB)
@@ -161,7 +164,7 @@ LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
-    SUPPORT_LIBRARY_FLAGS += -lcurses 
+    SUPPORT_LIBRARY_FLAGS += -lcurses
 endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lz
@@ -175,7 +178,7 @@ PACKAGE_DEPS += $(LUA_LIB)
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 
+LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
@@ -218,15 +221,15 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
 
-release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
+release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB)
 	cp $(LUA_INCLUDE)/$*.h $@
-    
+
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/llvm_objects/llvm_list $(LUA) src/unpacklibraries.lua build/llvm_objects
-	# include all luajit objects, since the entire lua interface is used in terra 
+	# include all luajit objects, since the entire lua interface is used in terra
 
 
 build/lua_objects/lj_obj.o:    $(LUA_LIB)
@@ -249,17 +252,25 @@ $(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 	rm -f $@
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
 
-$(DYNLIBRARY):	$(LIBRARY)
-	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
+$(DYNLIBRARY):	$(LIBRARY_NOLUA)
+	$(CXX) $(DYNFLAGS) $(call WHOLE_ARCHIVE,$(LIBRARY_NOLUA)) $(SUPPORT_LIBRARY_FLAGS) -o $@
 
-$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
+ifeq ($(TERRA_EXTERNAL_LUA),)
+LUA_AND_TERRA=$(call WHOLE_ARCHIVE,$(LIBRARY))
+EXECUTABLE_LIBRARY_DEPENDENCY=$(LIBRARY)
+else
+LUA_AND_TERRA=$(LUA_LIB) $(call WHOLE_ARCHIVE,$(LIBRARY_NOLUA))
+EXECUTABLE_LIBRARY_DEPENDENCY=$(LIBRARY_NOLUA)
+endif
+
+$(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(EXECUTABLE_LIBRARY_DEPENDENCY)
 	mkdir -p release/bin release/lib
-	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
+	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(LUA_AND_TERRA) $(SUPPORT_LIBRARY_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
-#to configure the paths	
+#to configure the paths
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUA) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
@@ -294,7 +305,7 @@ build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
-#if we are cleaning, then don't include dependencies (which would require the header files are built)	
+#if we are cleaning, then don't include dependencies (which would require the header files are built)
 ifeq ($(findstring $(MAKECMDGOALS),purge clean release),)
 -include $(DEPENDENCIES)
 endif
