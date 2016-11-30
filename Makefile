@@ -9,6 +9,14 @@
 
 -include Makefile.inc
 
+# customizable install prefixes
+PREFIX ?= /usr/local
+INSTALL_BINARY_DIR ?= $(PREFIX)/bin
+INSTALL_LIBRARY_DIR ?= $(PREFIX)/lib
+INSTALL_SHARE_DIR ?= $(PREFIX)/share
+INSTALL_INCLUDE_DIR ?= $(PREFIX)/include
+INSTALL_LUA_LIBRARY_DIR ?= $(PREFIX)/lib
+
 # Debian packages name llvm-config with a version number - list them here in preference order
 LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
 #luajit will be downloaded automatically (it's much smaller than llvm)
@@ -25,9 +33,8 @@ PIC_FLAG ?= -fPIC
 FLAGS=$(CFLAGS)
 
 # top-level build rule, must be first
-LUA_CPATH_SUBDIR ?= lib
 EXECUTABLE = release/bin/terra
-DYNLIBRARY = release/$(LUA_CPATH_SUBDIR)/terra.so
+DYNLIBRARY = release/lualib/terra.so
 .PHONY:	all clean purge test release install
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
@@ -42,6 +49,18 @@ endif
 
 ifneq ($(TERRA_RPATH),)
 TERRA_RPATH_FLAGS = -Wl,-rpath $(TERRA_RPATH)
+endif
+
+###########################
+# Sanity Checks
+###########################
+
+ifeq (,$(wildcard $(CLANG)))
+    $(error clang could not be found; please set the CLANG and LLVM_CONFIG variables)
+endif
+
+ifeq (,$(wildcard $(LLVM_CONFIG)))
+    $(error llvm-config could not be found; please set the CLANG and LLVM_CONFIG variables)
 endif
 
 ############################
@@ -258,7 +277,7 @@ $(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
 
 $(DYNLIBRARY):	$(LIBRARY_NOLUA)
-	mkdir -p release/$(LUA_CPATH_SUBDIR)
+	mkdir -p release/lualib
 	$(CXX) $(DYNFLAGS) $(call WHOLE_ARCHIVE,$(LIBRARY_NOLUA)) $(SUPPORT_LIBRARY_FLAGS) -o $@
 
 ifeq ($(TERRA_EXTERNAL_LUA),)
@@ -300,9 +319,12 @@ release:
 	zip -q -r $(RELEASE_NAME).zip $(RELEASE_NAME)
 	mv $(RELEASE_NAME) release
 
-PREFIX ?= /usr/local
 install: all
-	cp -R release/* $(PREFIX)
+	cp -R release/bin/* $(INSTALL_BINARY_DIR)
+	cp -R release/lib/* $(INSTALL_LIBRARY_DIR)
+	cp -R release/share/* $(INSTALL_SHARE_DIR)
+	cp -R release/include/* $(INSTALL_INCLUDE_DIR)
+	cp -R release/lualib/* $(INSTALL_LUA_LIBRARY_DIR)
 
 # dependency rules
 DEPENDENCIES = $(patsubst %.o,build/%.d,$(OBJS))
