@@ -25,8 +25,9 @@ PIC_FLAG ?= -fPIC
 FLAGS=$(CFLAGS)
 
 # top-level build rule, must be first
+LUA_CPATH_SUBDIR ?= lib
 EXECUTABLE = release/bin/terra
-DYNLIBRARY = release/lib/terra.so
+DYNLIBRARY = release/$(LUA_CPATH_SUBDIR)/terra.so
 .PHONY:	all clean purge test release install
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
@@ -37,6 +38,10 @@ LUA_TARGET = macosx
 else
 WGET = wget -O
 LUA_TARGET = linux
+endif
+
+ifneq ($(TERRA_RPATH),)
+TERRA_RPATH_FLAGS = -Wl,-rpath $(TERRA_RPATH)
 endif
 
 ############################
@@ -253,6 +258,7 @@ $(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
 
 $(DYNLIBRARY):	$(LIBRARY_NOLUA)
+	mkdir -p release/$(LUA_CPATH_SUBDIR)
 	$(CXX) $(DYNFLAGS) $(call WHOLE_ARCHIVE,$(LIBRARY_NOLUA)) $(SUPPORT_LIBRARY_FLAGS) -o $@
 
 ifeq ($(TERRA_EXTERNAL_LUA),)
@@ -265,7 +271,7 @@ endif
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(EXECUTABLE_LIBRARY_DEPENDENCY)
 	mkdir -p release/bin release/lib
-	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(LUA_AND_TERRA) $(SUPPORT_LIBRARY_FLAGS)
+	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(LUA_AND_TERRA) $(SUPPORT_LIBRARY_FLAGS) $(TERRA_RPATH_FLAGS)
 	if [ ! -e terra  ]; then ln -s $(EXECUTABLE) terra; fi;
 
 #run clang on a C file to extract the header search paths for this architecture
