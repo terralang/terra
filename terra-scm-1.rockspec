@@ -3,7 +3,7 @@ version = "scm-1"
 
 source = {
    url = "git://github.com/zdevito/terra.git",
-   branch = "master",
+   branch = "develop",
 }
 
 description = {
@@ -13,14 +13,24 @@ description = {
 }
 
 build = {
-   type = "command",
-   build_command = [[
-make clean
-libdir=$(LUA_LIBDIR)
-LUAJIT_PREFIX=${libdir%/lib}
-make LUAJIT_PREFIX=$LUAJIT_PREFIX CXX=clang++ CC=clang LLVM_CONFIG=$(LUA_BINDIR)/llvm-config
-   ]],
-   install_command = [[
-make PREFIX=$(PREFIX) install
-   ]],
+   type = "make",
+   variables = {
+      LUA="$(LUA)",
+      LUA_LIB="$(LUA_LIBDIR)/libluajit.so",
+      LUA_INCLUDE="$(LUA_INCDIR)",
+      TERRA_RPATH="$(LUA_LIBDIR)",
+      TERRA_EXTERNAL_LUA="1",
+      INSTALL_BINARY_DIR="$(LUA_BINDIR)",
+      INSTALL_LIBRARY_DIR="$(LUA_LIBDIR)",
+      INSTALL_SHARE_DIR="$(LUA_BINDIR)/../share",
+      INSTALL_INCLUDE_DIR="$(LUA_INCDIR)",
+      INSTALL_LUA_LIBRARY_DIR="$(LIBDIR)",
+   },
+   platforms = {
+      macosx = {
+         variables = {
+            LUA_LIB="$(LUA_LIBDIR)/libluajit.dylib",
+         }
+      }
+   }
 }
