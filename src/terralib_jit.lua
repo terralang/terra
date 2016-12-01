@@ -16,32 +16,32 @@ function T.struct:definecstruct(layout)
     local str = "struct "..nm.." { "
     local entries = layout.entries
     for i,v in ipairs(entries) do
-    
+
         local prevalloc = entries[i-1] and entries[i-1].allocation
         local nextalloc = entries[i+1] and entries[i+1].allocation
 
         if v.inunion and prevalloc ~= v.allocation then
             str = str .. " union { "
         end
-        
+
         local keystr = terra.islabel(v.key) and v.key:tocname() or v.key
         str = str..v.type:cstring().." "..keystr.."; "
-        
+
         if v.inunion and nextalloc ~= v.allocation then
             str = str .. " }; "
         end
-        
+
     end
     str = str .. "};"
     local status,err = pcall(ffi.cdef,str)
-    if not status then 
+    if not status then
         if err:match("redefin") then
             print(("warning: attempting to define a C struct %s that has already been defined by the luajit ffi, assuming the Terra type matches it."):format(nm))
         else error(err) end
     end
 end
 
-local uniquetypenameset = util.uniquenameset("_") 
+local uniquetypenameset = util.uniquenameset("_")
 --sanitize a string, making it a valid lua/C identifier
 local function tovalididentifier(name)
     return tostring(name):gsub("[^_%w]","_"):gsub("^(%d)","_%1"):gsub("^$","_") --sanitize input to be valid identifier
@@ -54,7 +54,7 @@ local ctypetokey = ffi.key or tonumber
 
  --map from luajit ffi ctype objects to corresponding terra type
 local ctypetoterra = {}
-   
+
 function T.Type:cstring()
     if not self.cachedcstring then
         --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
@@ -103,10 +103,11 @@ function T.Type:cstring()
         elseif self:isstruct() then
             local nm = uniquecname(tostring(self))
             ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
-                                                          --when the struct is 
+                                                          --when the struct is
             self.cachedcstring = nm
-            if self.cachedlayout then
-                self:definecstruct(self.cachedlayout)
+            local layout = self:getlayout(true) -- only get if cached
+            if layout then
+                self:definecstruct(layout)
             end
         elseif self:isarray() then
             local value = self.type:cstring()
@@ -122,7 +123,7 @@ function T.Type:cstring()
             local pow2 = 1 --round N to next power of 2
             while pow2 < self.N do pow2 = 2*pow2 end
             ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
-            self.cachedcstring = nm 
+            self.cachedcstring = nm
         elseif self == terra.types.niltype then
             local nilname = uniquecname("niltype")
             ffi.cdef("typedef void * "..nilname..";")
@@ -135,13 +136,13 @@ function T.Type:cstring()
             error("NYI - cstring")
         end
         if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
-        
+
         --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
         local ctype = ffi.typeof(self.cachedcstring)
         ctypetoterra[ctypetokey(ctype)] = self
         local rctype = ffi.typeof(self.cachedcstring.."&")
         ctypetoterra[ctypetokey(rctype)] = self
-        
+
         if self:isstruct() then
             local function index(obj,idx)
                 local method = self:getmethod(idx)

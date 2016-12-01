@@ -51,7 +51,7 @@ ident =     escapedident(luaexpression expression) # removed during specializati
 
 field = recfield(ident key, tree value)
       | listfield(tree value)
-      
+
 structbody = structentry(string key, luaexpression type)
            | structlist(structbody* entries)
 
@@ -63,20 +63,20 @@ structdef = (luaexpression? metatype, structlist records)
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
 Label = (string displayname, number id)
-tree = 
+tree =
      # trees that are introduced in parsing and are ...
      # removed during specialization
        luaexpression(function expression, boolean isexpression)
      # removed during typechecking
      | constructoru(field* records) #untyped version
      | selectu(tree value, ident field) #untyped version
-     | method(tree value,ident name,tree* arguments) 
+     | method(tree value,ident name,tree* arguments)
      | statlist(tree* statements)
      | fornumu(param variable, tree initial, tree limit, tree? step,block body) #untyped version
      | defvar(param* variables,  boolean hasinit, tree* initializers)
      | forlist(param* variables, tree iterator, block body)
      | functiondefu(param* parameters, boolean is_varargs, TypeOrLuaExpression? returntype, block body)
-     
+
      # introduced temporarily during specialization/typing, but removed after typing
      | luaobject(any value)
      | setteru(function setter) # temporary node introduced and removed during typechecking to handle __update and __setfield
@@ -114,7 +114,7 @@ tree =
      | constructor(tree* expressions)
      | returnstat(tree expression)
      | setter(allocvar rhs, tree setter) # handles custom assignment behavior, real rhs is first stored in 'rhs' and then the 'setter' expression uses it
-     
+
      # special purpose nodes, they only occur in specific locations, but are considered trees because they can contain typed trees
      | ifbranch(tree condition, block body)
      | storelocation(number index, tree value) # for struct cast, value uses structvariable
@@ -135,11 +135,11 @@ labelstate = undefinedlabel(gotostat * gotos, table* positions) #undefined label
 
 definition = functiondef(string? name, functype type, allocvar* parameters, boolean is_varargs, block body, table labeldepths, globalvalue* globalsused)
            | functionextern(string? name, functype type)
-     
+
 globalvalue = terrafunction(definition? definition)
             | globalvariable(tree? initializer, number addressspace, boolean extern, boolean constant)
             attributes(string name, Type type, table anchor)
-            
+
 overloadedterrafunction = (string name, terrafunction* definitions)
 ]]
 terra.irtypes = T
@@ -155,7 +155,7 @@ end
 function T.tree:is(value)
     return self.kind == value
 end
- 
+
 function terra.printraw(self)
     local function header(t)
         local mt = getmetatable(t)
@@ -248,7 +248,7 @@ function terra.newanchor(depth)
     return setmetatable(body,terra.tree)
 end
 
-function terra.istree(v) 
+function terra.istree(v)
     return T.tree:isclassof(v)
 end
 
@@ -286,7 +286,7 @@ function terra.newenvironment(_luaenv)
         __index = function(_,idx)
             return self._localenv[idx] or self._luaenv[idx]
         end;
-        __newindex = function() 
+        __newindex = function()
             error("cannot define global variables or assign to upvalues in an escape")
         end;
     })
@@ -311,12 +311,12 @@ local function formaterror(anchor,...)
     errlist:insert(anchor.filename..":"..anchor.linenumber..": ")
     for i = 1,select("#",...) do errlist:insert(tostring(select(i,...))) end
     errlist:insert("\n")
-    if not anchor.offset then 
+    if not anchor.offset then
         return errlist:concat()
     end
-    
+
     local filename = anchor.filename
-    local filetext = diagcache[filename] 
+    local filetext = diagcache[filename]
     if not filetext then
         local file = io.open(filename,"r")
         if file then
@@ -337,7 +337,7 @@ local function formaterror(anchor,...)
         while finish < filetext:len() and filetext:byte(finish + 1) ~= NL do
             finish = finish + 1
         end
-        local line = filetext:sub(begin,finish) 
+        local line = filetext:sub(begin,finish)
         errlist:insert(line)
         errlist:insert("\n")
         for i = begin,anchor.offset do
@@ -543,8 +543,8 @@ function T.terrafunction:printstats()
 end
 function T.terrafunction:isextern() return self.definition and self.definition.kind == "functionextern" end
 function T.terrafunction:isdefined() return self.definition ~= nil end
-function T.terrafunction:setname(name) 
-    self.name = tostring(name) 
+function T.terrafunction:setname(name)
+    self.name = tostring(name)
     if self.definition then self.definition.name = name end
     return self
 end
@@ -554,19 +554,19 @@ function T.terrafunction:adddefinition(functiondef)
     self:resetdefinition(functiondef)
 end
 function T.terrafunction:resetdefinition(functiondef)
-    if T.terrafunction:isclassof(functiondef) and functiondef:isdefined() then 
+    if T.terrafunction:isclassof(functiondef) and functiondef:isdefined() then
         functiondef = functiondef.definition
     end
     assert(T.definition:isclassof(functiondef), "expected a defined terra function")
     if self.readytocompile then error("cannot reset a definition of function that has already been compiled",2) end
-    if self.type ~= functiondef.type and self.type ~= terra.types.placeholderfunction then 
+    if self.type ~= functiondef.type and self.type ~= terra.types.placeholderfunction then
         error(("attempting to define terra function declaration with type %s with a terra function definition of type %s"):format(tostring(self.type),tostring(functiondef.type)))
     end
     self.definition,self.type,functiondef.name = functiondef,functiondef.type,assert(self.name)
 end
 function T.terrafunction:gettype(nop)
     assert(nop == nil, ":gettype no longer takes any callbacks for when a function is complete")
-    if self.type == terra.types.placeholderfunction then 
+    if self.type == terra.types.placeholderfunction then
         error("function being recursively referenced needs an explicit return type, function defintion at: "..formaterror(self.anchor,""),2)
     end
     return self.type
@@ -632,7 +632,7 @@ local function constantcheck(e,checklvalue)
         if e.expression.type:isarray() then
             if checklvalue then
                 constantcheck(e.expression,true)
-            else 
+            else
                 erroratlocation(e,"non-constant cast of array to pointer used as a constant initializer")
             end
         else constantcheck(e.expression) end
@@ -643,7 +643,7 @@ local function constantcheck(e,checklvalue)
     else
         erroratlocation(e,"non-constant expression being used as a constant initializer")
     end
-    return e 
+    return e
 end
 
 local function createglobalinitializer(anchor, typ, c)
@@ -734,7 +734,7 @@ local compilationunit = {}
 compilationunit.__index = compilationunit
 function terra.newcompilationunit(target,opt)
     assert(terra.istarget(target),"expected a target object")
-    return setmetatable({ symbols = newweakkeytable(), 
+    return setmetatable({ symbols = newweakkeytable(),
                           collectfunctions = opt,
                           llvm_cu = terra.initcompilationunit(target.llvm_target,opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
@@ -787,7 +787,7 @@ end
 function terra.createmacro(fromterra,fromlua)
     return setmetatable({fromterra = fromterra,fromlua = fromlua}, terra.macro)
 end
-function terra.internalmacro(...) 
+function terra.internalmacro(...)
     local m = terra.createmacro(...)
     m._internal = true
     return m
@@ -841,7 +841,7 @@ function T.quote:asvalue()
         elseif e:is "constructor" then
             local t,typ = {},e.type
             for i,r in ipairs(typ:getentries()) do
-                local v,e = getvalue(e.expressions[i]) 
+                local v,e = getvalue(e.expressions[i])
                 if e then return nil,e end
                 local key = typ.convertible == "tuple" and i or r.field
                 t[key] = v
@@ -887,7 +887,7 @@ function T.Symbol:__tostring()
 end
 function T.Symbol:tocname() return "__symbol"..tostring(self.id) end
 
-_G["symbol"] = terra.newsymbol 
+_G["symbol"] = terra.newsymbol
 
 -- LABEL
 function terra.islabel(l) return T.Label:isclassof(l) end
@@ -937,7 +937,7 @@ terra.asm = terra.internalmacro(function(diag,tree,returntype, asm, constraints,
     local args = List{...}
     return typecheck(newobject(tree, T.inlineasm,returntype:astype(), tostring(asm:asvalue()), not not volatile:asvalue(), tostring(constraints:asvalue()), args))
 end)
-    
+
 
 local evalluaexpression
 -- CONSTRUCTORS
@@ -955,7 +955,7 @@ local function layoutstruct(st,tree,env)
         end
         return { field = v.key, type = resolvedtype }
     end
-    
+
     local function getrecords(records)
         return records:map(function(v)
             if v.kind == "structlist" then
@@ -1019,7 +1019,7 @@ function terra.defineobjects(fmt,envfn,...)
         end
         return t,name:match("[^.]*$")
     end
-    
+
     local decls = terralib.newlist()
     for i,c in ipairs(cmds) do --pass: declare all structs
         if "s" == c.c then
@@ -1083,7 +1083,7 @@ function terra.defineobjects(fmt,envfn,...)
         end
     end
     diag:finishandabortiferrors("Errors reported during function declaration.",2)
-    
+
     for i,c in ipairs(cmds) do -- pass: define structs
         if "s" == c.c and c.tree then
             layoutstruct(decls[i],c.tree,env)
@@ -1130,8 +1130,8 @@ end
 
 -- TYPE
 
-do 
-    
+do
+
     local types = {}
     local defaultproperties = { "name", "tree", "undefined", "incomplete", "convertible", "cachedcstring", "llvm_definingfunction" }
     for i,dp in ipairs(defaultproperties) do
@@ -1148,9 +1148,9 @@ do
     end
     T.Type.__tostring = nil --force override to occur
     T.Type.__tostring = util.memoize(function(self)
-        if self:isstruct() then 
+        if self:isstruct() then
             if self.metamethods.__typename then
-                local status,r = pcall(function() 
+                local status,r = pcall(function()
                     return tostring(self.metamethods.__typename(self))
                 end)
                 if status then return r end
@@ -1169,7 +1169,7 @@ do
         if not self.name then error("unknown type?") end
         return self.name
     end)
-    
+
     T.Type.printraw = terra.printraw
     function T.Type:isprimitive() return self.kind == "primitive" end
     function T.Type:isintegral() return self.kind == "primitive" and self.type == "integer" end
@@ -1184,20 +1184,20 @@ do
     function T.Type:ispointertostruct() return self:ispointer() and self.type:isstruct() end
     function T.Type:ispointertofunction() return self:ispointer() and self.type:isfunction() end
     function T.Type:isaggregate() return self:isstruct() or self:isarray() end
-    
+
     function T.Type:iscomplete() return not self.incomplete end
-    
+
     function T.Type:isvector() return self.kind == "vector" end
-    
+
     function T.Type:isunit() return types.unit == self end
-    
+
     local applies_to_vectors = {"isprimitive","isintegral","isarithmetic","islogical", "canbeord"}
     for i,n in ipairs(applies_to_vectors) do
         T.Type[n.."orvector"] = function(self)
-            return self[n](self) or (self:isvector() and self.type[n](self.type))  
+            return self[n](self) or (self:isvector() and self.type[n](self.type))
         end
     end
-    
+
     --pretty print of layout of type
     function T.Type:layoutstring()
         local seen = {}
@@ -1235,32 +1235,31 @@ do
         return parts:concat()
     end
     function T.Type:printpretty() io.write(self:layoutstring()) end
-    local function memoizeproperty(data)
-        local name = data.name
-        local erroronrecursion = data.erroronrecursion
-        local getvalue = data.getvalue
-
-        local key = "cached"..name
-        local inside = "inget"..name
-        T.struct[key],T.struct[inside] = false,false
-        return function(self)
-            if not self[key] then
-                if self[inside] then
-                    erroratlocation(self.anchor,erroronrecursion)
-                else 
-                    self[inside] = true
-                    self[key] = getvalue(self)
-                    self[inside] = nil
+    local function memoizeproperty(erroronrecursion,getvalue)
+        local cache = newweakkeytable()
+        local inprogress = newweakkeytable()
+        return function(self,onlywhencached)
+            assert(onlywhencached == nil or type(onlywhencached) == "boolean", "onlywhencached should be a boolean")
+            local v = cache[self]
+            if not v then
+                if onlywhencached then
+                    return nil
                 end
+                if inprogress[self] then
+                    erroratlocation(self.anchor, erroronrecursion)
+                end
+                inprogress[self] = true
+                v = getvalue(self)
+                cache[self] = v
+                inprogress[self] = nil
             end
-            return self[key]
+            return v
         end
     end
-    
-    T.struct.getentries = memoizeproperty{
-        name = "entries";
-        erroronrecursion = "recursively calling getentries on type, or using a type whose getentries failed";
-        getvalue = function(self)
+
+    T.struct.getentries = memoizeproperty(
+        "recursively calling getentries on type, or using a type whose getentries failed",
+        function(self)
             local entries = self.entries
             if type(self.metamethods.__getentries) == "function" then
                 entries = invokeuserfunction(self.anchor,"invoking __getentries for struct",false,self.metamethods.__getentries,self)
@@ -1272,7 +1271,7 @@ do
             end
             local function checkentry(e,results)
                 if type(e) == "table" then
-                    local f = e.field or e[1] 
+                    local f = e.field or e[1]
                     local t = e.type or e[2]
                     if terra.types.istype(t) and (type(f) == "string" or terra.islabel(f)) then
                         results:insert { type = t, field = f}
@@ -1290,7 +1289,7 @@ do
             for i,e in ipairs(entries) do checkentry(e,checkedentries) end
             return checkedentries
         end
-    }
+    )
     local function reportopaque(type)
         local msg = "attempting to use an opaque type "..tostring(type).." where the layout of the type is needed"
         if type.anchor then
@@ -1299,16 +1298,15 @@ do
             error(msg,4)
         end
     end
-    T.struct.getlayout = memoizeproperty {
-        name = "layout"; 
-        erroronrecursion = "type recursively contains itself, or using a type whose layout failed";
-        getvalue = function(self)
+    T.struct.getlayout = memoizeproperty(
+        "type recursively contains itself, or using a type whose layout failed",
+        function(self)
             local tree = self.anchor
             local entries = self:getentries()
             local nextallocation = 0
             local uniondepth = 0
             local unionsize = 0
-            
+
             local layout = {
                 entries = terra.newlist(),
                 keytoindex = {}
@@ -1320,12 +1318,12 @@ do
                     elseif t:isarray() then
                         ensurelayout(t.type)
                     elseif t == types.opaque then
-                        reportopaque(self)    
+                        reportopaque(self)
                     end
                 end
                 ensurelayout(t)
                 local entry = { type = t, key = k, allocation = nextallocation, inunion = uniondepth > 0 }
-                
+
                 if layout.keytoindex[entry.key] ~= nil then
                     erroratlocation(tree,"duplicate field ",tostring(entry.key))
                 end
@@ -1360,24 +1358,24 @@ do
                 end
             end
             addentrylist(entries)
-            
+
             util.dbprint(2,"Resolved Named Struct To:")
             util.dbprintraw(2,self)
             -- if this type was previously registered with luajit ffi as opaque
             -- we have to also provide a definition to luajit since it thinks it already
             -- knows about it
-            if self.cachedcstring then 
+            if self.cachedcstring then
                 self:definecstruct(layout)
             end
             return layout
-        end;
-    }
+        end
+    )
     function T.functype:completefunction()
         for i,p in ipairs(self.parameters) do p:complete() end
         self.returntype:complete()
         return self
     end
-    function T.Type:complete() 
+    function T.Type:complete()
         if self.incomplete then
             if self:isarray() then
                 self.type:complete()
@@ -1408,7 +1406,7 @@ do
     function T.Type:tcomplete(anchor)
         return invokeuserfunction(anchor,"finalizing type",false,self.complete,self)
     end
-    
+
     local function defaultgetmethod(self,methodname)
         local fnlike = self.methods[methodname]
         if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
@@ -1438,18 +1436,18 @@ do
     function T.struct:getfields()
         return self:getlayout().entries
     end
-        
+
     function types.istype(t)
         return T.Type:isclassof(t)
     end
-    
-    
+
+
     local function globaltype(name, typ)
         typ.name = typ.name or name
         rawset(_G,name,typ)
         types[name] = typ
     end
-    
+
     --initialize integral types
     local integer_sizes = {1,2,4,8}
     types.integraltypes = List()
@@ -1463,23 +1461,23 @@ do
             globaltype(name,typ)
             types.integraltypes:insert(typ) -- luajit ffi will need to pre-register these to make typeof work
         end
-    end  
-    
+    end
+
     globaltype("float", T.primitive("float",4,true))
     globaltype("double",T.primitive("float",8,true))
     globaltype("bool", T.primitive("logical",1,false))
-    
+
     types.error,T.error.name = T.error,"<error>"
     T.luaobjecttype.name = "luaobjecttype"
-    
+
     types.niltype = T.niltype
     globaltype("niltype",T.niltype)
-    
+
     types.opaque,T.opaque.incomplete = T.opaque,true
     globaltype("opaque", T.opaque)
-    
+
     types.array,types.vector,types.functype = T.array,T.vector,T.functype
-    
+
     T.functype.incomplete = true
     function T.functype:init()
         if self.isvararg and #self.parameters == 0 then error("vararg functions must have at least one concrete parameter") end
@@ -1488,18 +1486,18 @@ do
     function T.array:init()
         self.incomplete = true
     end
-    
+
     function T.vector:init()
         if not self.type:isprimitive() and self.type ~= T.error then
             error("vectors must be composed of primitive types (for now...) but found type "..tostring(self.type))
         end
     end
-    
+
     types.tuple = util.memoize(function(...)
         local args = terra.newlist {...}
         local t = types.newstruct()
         for i,e in ipairs(args) do
-            if not types.istype(e) then 
+            if not types.istype(e) then
                 error("expected a type but found "..type(e))
             end
             t.entries:insert {"_"..(i-1),e}
@@ -1523,7 +1521,7 @@ do
     function types.newstructwithanchor(displayname,anchor)
         assert(displayname ~= "")
         local name = getuniquestructname(displayname)
-        local tbl = T.struct(name) 
+        local tbl = T.struct(name)
         tbl.entries = List()
         tbl.methods = {}
         tbl.metamethods = {}
@@ -1531,7 +1529,7 @@ do
         tbl.incomplete = true
         return tbl
     end
-   
+
     function types.funcpointer(parameters,ret,isvararg)
         if types.istype(parameters) then
             parameters = {parameters}
@@ -1570,7 +1568,7 @@ end
 -- TYPECHECKER
 function evalluaexpression(env, e)
     if not T.luaexpression:isclassof(e) then
-       error("not a lua expression?") 
+       error("not a lua expression?")
     end
     assert(type(e.expression) == "function")
     local fn = e.expression
@@ -1597,7 +1595,7 @@ function evaltype(diag,env,typ)
     diag:reporterror(typ,"expected a type but found ",terra.type(v))
     return terra.types.error
 end
-    
+
 function evaluateparameterlist(diag, env, paramlist, requiretypes)
     local result = List()
     for i,p in ipairs(paramlist) do
@@ -1629,21 +1627,21 @@ function evaluateparameterlist(diag, env, paramlist, requiretypes)
         if requiretypes and not entry.type then
             diag:reporterror(entry,"type must be specified for parameters and uninitialized variables")
         end
-    
+
     end
     return result
 end
-    
+
 local function semanticcheck(diag,parameters,block)
     local symbolenv = terra.newenvironment()
-    
+
     local labelstates = {} -- map from label value to labelstate object, either representing a defined or undefined label
-    local globalsused = List() 
-    
+    local globalsused = List()
+
     local loopdepth = 0
     local function enterloop() loopdepth = loopdepth + 1 end
     local function leaveloop() loopdepth = loopdepth - 1 end
-    
+
     local scopeposition = List()
     local function getscopeposition() return List { unpack(scopeposition) } end
     local function getscopedepth(position)
@@ -1768,7 +1766,7 @@ local function semanticcheck(diag,parameters,block)
     end
     visit(parameters)
     visit(block)
-    
+
     --check the label table for any labels that have been referenced but not defined
     local labeldepths = {}
     for k,state in pairs(labelstates) do
@@ -1778,7 +1776,7 @@ local function semanticcheck(diag,parameters,block)
             labeldepths[k] = getscopedepth(state.position)
         end
     end
-    
+
     return labeldepths, globalsused
 end
 
@@ -1786,7 +1784,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local env = terra.newenvironment(luaenv or {})
     local diag = terra.newdiagnostics()
     simultaneousdefinitions = simultaneousdefinitions or {}
-    
+
     local invokeuserfunction = function(...)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         return invokeuserfunction(...)
@@ -1795,7 +1793,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         return evalluaexpression(...)
     end
-    
+
     local function checklabel(e,stringok)
         if e.kind == "namedident" then return e end
         local r = evalluaexpression(env:combinedenv(),e.expression)
@@ -1859,9 +1857,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local function insertselect(v, field)
         assert(v.type:isstruct())
 
-        local layout = v.type:getlayout(v)
+        local layout = v.type:getlayout()
         local index = layout.keytoindex[field]
-    
+
         if index == nil then
             return nil,false
         end
@@ -1950,8 +1948,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     function structcast(explicit,exp,typ, speculative)
-        local from = exp.type:getlayout(exp)
-        local to = typ:getlayout(exp)
+        local from = exp.type:getlayout()
+        local to = typ:getlayout()
 
         local valid = true
         local function err(...)
@@ -1961,7 +1959,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
         end
         local structvariable, var_ref = allocvar(exp,exp.type,"<structcast>")
-    
+
         local entries = List()
         if #from.entries > #to.entries or (not explicit and #from.entries ~= #to.entries) then
             err("structural cast invalid, source has ",#from.entries," fields but target has only ",#to.entries)
@@ -1995,7 +1993,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return createcast(exp,typ), true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return createcast(exp,typ), true
-            elseif typ:isstruct() and typ.convertible and exp.type:isstruct() and exp.type.convertible then 
+            elseif typ:isstruct() and typ.convertible and exp.type:isstruct() and exp.type.convertible then
                 return structcast(false,exp,typ,speculative), true
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 return createcast(exp,typ), true
@@ -2023,7 +2021,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local success,result = invokeuserfunction(exp, "invoking __cast", true,__cast,exp.type,typ,quotedexp)
                 if success then
                     local result = asterraexpression(exp,result)
-                    if result.type ~= typ then 
+                    if result.type ~= typ then
                         diag:reporterror(exp,"user-defined cast returned expression with the wrong type.")
                     end
                     return result,true
@@ -2056,7 +2054,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         elseif (typ:isprimitive() and exp.type:isprimitive())
             or (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N) then --explicit conversions from logicals to other primitives are allowed
             return createcast(exp,typ)
-        elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then 
+        elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then
             return structcast(true,exp,typ)
         else
             return insertcast(exp,typ) --otherwise, allow any implicit casts
@@ -2135,7 +2133,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 entries:insert(rt)
             end
             return terra.types.tuple(unpack(entries))
-        else    
+        else
             err()
             return terra.types.error
         end
@@ -2153,7 +2151,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return e:aserror()
         end
         return ee:copy { operands = List{e} }:withtype(e.type)
-    end 
+    end
 
 
     local function meetbinary(e,property,lhs,rhs)
@@ -2180,9 +2178,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         if #operands == 1 then
             return checkunary(e,operands,"isarithmeticorvector")
         end
-    
+
         local l,r = unpack(operands)
-    
+
         local function pointerlike(t)
             return t:ispointer() or t:isarray()
         end
@@ -2233,15 +2231,15 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 else
                     typ = a.type
                 end
-            
+
                 a = insertcast(a,typ)
                 b = insertcast(b,typ)
-        
+
             else
                 diag:reporterror(ee,"arguments to shift must be integers but found ",a.type," and ", b.type)
             end
         end
-    
+
         return ee:copy { operands =  List{a,b} }:withtype(typ)
     end
 
@@ -2255,7 +2253,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     diag:reporterror(ee,"conditional in select is not the same shape as ",cond.type)
                 end
             elseif cond.type ~= terra.types.bool then
-                diag:reporterror(ee,"expected a boolean or vector of booleans but found ",cond.type)   
+                diag:reporterror(ee,"expected a boolean or vector of booleans but found ",cond.type)
             end
         end
         return ee:copy {operands = List {cond,l,r}}:withtype(t)
@@ -2284,7 +2282,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function checkoperator(ee)
         local op_string = ee.operator
-    
+
         --check non-overloadable operators first
         if op_string == "@" then
             local e = checkexp(ee.operands[1])
@@ -2294,16 +2292,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             local ty = terra.types.pointer(e.type)
             return ee:copy { operands = List {e} }:withtype(ty)
         end
-    
+
         local op, genericoverloadmethod, unaryoverloadmethod = unpack(operator_table[op_string] or {})
-    
+
         if op == nil then
             diag:reporterror(ee,"operator ",op_string," not defined in terra code.")
             return ee:aserror()
         end
-    
+
         local operands = ee.operands:map(checkexp)
-    
+
         local overloads = terra.newlist()
         for i,e in ipairs(operands) do
             if e.type:isstruct() then
@@ -2314,7 +2312,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 end
             end
         end
-    
+
         if #overloads > 0 then
             return checkcall(ee, overloads, operands, "all", true, "expression")
         end
@@ -2323,7 +2321,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --functions to handle typecheck invocations (functions,methods,macros,operator overloads)
     local function removeluaobject(e)
-        if not e:is "luaobject" or e.type == terra.types.error then 
+        if not e:is "luaobject" or e.type == terra.types.error then
             return e --don't repeat error messages
         else
             if terra.types.istype(e.value) then
@@ -2374,7 +2372,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function tryinsertcasts(anchor, typelists,castbehavior, speculate, allowambiguous, paramlist)
         local PERFECT_MATCH,CAST_MATCH,TOP = 1,2,math.huge
-     
+
         local function trylist(typelist, speculate)
             if #typelist ~= #paramlist then
                 if not speculate then
@@ -2454,7 +2452,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if #results > 1 and not allowambiguous then
                     local strings = results:map(function(x) return util.mkstring(typelists[x.idx],"type list (",",",") ") end)
                     diag:reporterror(anchor,"call to overloaded function is ambiguous. can apply to ",unpack(strings))
-                end 
+                end
                 return results[1].expressions, results[1].idx
             end
         end
@@ -2513,11 +2511,11 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if location == "lexpression" and typ.metamethods.__update then
                     local function setter(rhs)
                         arguments:insert(rhs)
-                        return checkmethodwithreciever(exp, true, "__update", fnlike, arguments, "statement") 
+                        return checkmethodwithreciever(exp, true, "__update", fnlike, arguments, "statement")
                     end
                     return newobject(exp,T.setteru,setter)
                 end
-                return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, location) 
+                return checkmethodwithreciever(exp, true, "__apply", fnlike, arguments, location)
             end
         end
         return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, location)
@@ -2525,8 +2523,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, location)
         --arguments are always typed trees, or a lua object
         assert(#fnlikelist > 0)
-    
-        --collect all the terra functions, stop collecting when we reach the first 
+
+        --collect all the terra functions, stop collecting when we reach the first
         --macro and record it as themacro
         local terrafunctions = terra.newlist()
         local themacro = nil
@@ -2560,14 +2558,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if fn.type ~= terra.types.error then
                     diag:reporterror(anchor,"expected a function but found ",fn.type)
                 end
-            end 
+            end
         end
 
         local function createcall(callee, paramlist)
             callee.type.type:tcompletefunction(anchor)
             return newobject(anchor,T.apply,callee,paramlist):withtype(callee.type.type.returntype)
         end
-    
+
         if #terrafunctions > 0 then
             local paramlist = arguments:map(removeluaobject)
             local function getparametertypes(fn) --get the expected types for parameters to the call (this extends the function type to the length of the parameters if the function is vararg)
@@ -2633,7 +2631,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local v = checkexp(e.value,"luavalue")
                 local f = checklabel(e.field,true)
                 local field = f.value
-            
+
                 if v:is "luaobject" then -- handle A.B where A is a luatable or type
                     --check for and handle Type.staticmethod
                     if terra.types.istype(v.value) and v.value:isstruct() then
@@ -2655,7 +2653,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         return asterraexpression(e,selected,location)
                     end
                 end
-            
+
                 if v.type:ispointertostruct() then --allow 1 implicit dereference
                     v = insertdereference(v)
                 end
@@ -2665,12 +2663,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     if not success then
                         --struct has no member field, call metamethod __entrymissing
                         local typ = v.type
-                    
+
                         local function checkmacro(metamethod,arguments,location)
                             local named = terra.internalmacro(function(ctx,tree,...)
                                 return typ.metamethods[metamethod]:run(ctx,tree,field,...)
                             end)
-                            local getter = asterraexpression(e, named, "luaobject") 
+                            local getter = asterraexpression(e, named, "luaobject")
                             return checkcall(v, terra.newlist{ getter }, arguments, "first", false, location)
                         end
                         if location == "lexpression" and typ.metamethods.__setentry then
@@ -2700,7 +2698,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif e:is "index" then
                 local v = checkexp(e.value)
                 local idx = checkexp(e.index)
-                local typ,lvalue = terra.types.error, v.type:ispointer() or (v.type:isarray() and v.lvalue) 
+                local typ,lvalue = terra.types.error, v.type:ispointer() or (v.type:isarray() and v.lvalue)
                 if v.type:ispointer() or v.type:isarray() or v.type:isvector() then
                     typ = v.type.type
                     if not idx.type:isintegral() and idx.type ~= terra.types.error then
@@ -2721,7 +2719,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif e:is "vectorconstructor" or e:is "arrayconstructor" then
                 local entries = checkexpressions(e.expressions)
                 local N = #entries
-                     
+
                 local typ
                 if e.oftype ~= nil then
                     typ = e.oftype:tcomplete(e)
@@ -2730,14 +2728,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         diag:reporterror(e,"cannot determine type of empty aggregate")
                         return e:aserror()
                     end
-                
+
                     --figure out what type this vector has
                     typ = entries[1].type
                     for i,e2 in ipairs(entries) do
                         typ = typemeet(e,typ,e2.type)
                     end
                 end
-            
+
                 local aggtype
                 if e:is "vectorconstructor" then
                     if not typ:isprimitive() and typ ~= terra.types.error then
@@ -2748,7 +2746,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 else
                     aggtype = terra.types.array(typ,N)
                 end
-            
+
                 --insert the casts to the right type in the parameter list
                 local typs = entries:map(function(x) return typ end)
                 entries = insertcasts(e,typs,entries)
@@ -2810,7 +2808,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return e:aserror()
             end
         end
-    
+
         local result = docheck(e_)
         --freeze all types returned by the expression (or list of expressions)
         if not result:is "luaobject" and not result:is "setteru" then
@@ -2822,7 +2820,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         if location ~= "luavalue" then
             result = removeluaobject(result)
         end
-    
+
         return result
     end
 
@@ -2918,7 +2916,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return checkblock(s)
             elseif s:is "returnstat" then
                 return s:copy { expression = checkexp(s.expression)}
-            elseif s:is "label" or s:is "gotostat" then    
+            elseif s:is "label" or s:is "gotostat" then
                 local ss = checklabel(s.label)
                 return copyobject(s, { label = ss })
             elseif s:is "breakstat" then
@@ -2927,7 +2925,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return checkcondbranch(s)
             elseif s:is "fornumu" then
                 local initial, limit, step = checkexp(s.initial), checkexp(s.limit), s.step and checkexp(s.step)
-                local t = typemeet(initial,initial.type,limit.type) 
+                local t = typemeet(initial,initial.type,limit.type)
                 t = step and typemeet(limit,t,step.type) or t
                 local variables = checkformalparameterlist(List {s.variable },false)
                 if #variables ~= 1 then
@@ -2942,7 +2940,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return newobject(s,T.fornum,variable,initial,limit,step,body)
             elseif s:is "forlist" then
                 local iterator = checkexp(s.iterator)
-            
+
                 local typ = iterator.type
                 if typ:ispointertostruct() then
                     typ,iterator = typ.type, insertdereference(iterator)
@@ -2952,7 +2950,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return s
                 end
                 local generator = typ.metamethods.__for
-            
+
                 local function bodycallback(...)
                     local exps = List()
                     for i = 1,select("#",...) do
@@ -2967,7 +2965,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     local stats = createstatementlist(s, List { assign, body })
                     return terra.newquote(stats)
                 end
-            
+
                 local value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
                 return asterraexpression(s,value,"statement")
             elseif s:is "ifstat" then
@@ -2981,7 +2979,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "defvar" then
                 local rhs = s.hasinit and checkexpressions(s.initializers)
                 local lhs = checkformalparameterlist(s.variables, not s.hasinit)
-                local res = s.hasinit and createassignment(s,lhs,rhs) 
+                local res = s.hasinit and createassignment(s,lhs,rhs)
                             or createstatementlist(s,lhs)
                 return res
             elseif s:is "assignment" then
@@ -3011,7 +3009,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             else
                 newstats:insert(s)
             end
-        end 
+        end
         for _,s in ipairs(stmts) do
             local r = checksingle(s)
             if r.kind == "statlist" then -- lists of statements are spliced directly into the list
@@ -3098,7 +3096,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local typed_parameters = checkformalparameterlist(topexp.parameters, true)
         local parameter_types = typed_parameters:map("type")
         local body,returntype = checkreturns(checkblock(topexp.body),topexp.returntype)
-        
+
         local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
@@ -3136,7 +3134,7 @@ function terra.registerinternalizedfile(name,content,size)
         cur.children = cur.children or {}
         cur.kind = "directory"
         if not cur.children[segment] then
-            cur.children[segment] = {} 
+            cur.children[segment] = {}
         end
         cur = cur.children[segment]
     end
@@ -3174,7 +3172,7 @@ function terra.includecstring(code,cargs,target)
     	args:insert("-internal-isystem")
     	args:insert(path)
     end
-    
+
     if cargs then
         args:insertall(cargs)
     end
@@ -3248,7 +3246,7 @@ local function createunpacks(tupleonly)
         local entries = typ:getentries()
         from = from and tonumber(from:asvalue()) or 1
         to = to and tonumber(to:asvalue()) or #entries
-        for i = from,to do 
+        for i = from,to do
             local e= entries[i]
             if e.field then
                 local ident = newobject(tree,type(e.field) == "string" and T.namedident or T.labelident,e.field)
@@ -3259,7 +3257,7 @@ local function createunpacks(tupleonly)
     end
     local function unpacklua(cdata,from,to)
         local t = type(cdata) == "cdata" and terra.typeof(cdata)
-        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then 
+        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then
           return cdata
         end
         local results = terralib.newlist()
@@ -3296,7 +3294,7 @@ local function createattributetable(q)
     if type(attr) ~= "table" then
         error("attributes must be a table")
     end
-    return T.attr(attr.nontemporal and true or false, 
+    return T.attr(attr.nontemporal and true or false,
                   type(attr.align) == "number" and attr.align or nil,
                   attr.isvolatile and true or false)
 end
@@ -3325,7 +3323,7 @@ function prettystring(toptree,breaklines)
     local buffer = terralib.newlist() -- list of strings that concat together into the pretty output
     local env = terra.newenvironment({})
     local indentstack = terralib.newlist{ 0 } -- the depth of each indent level
-    
+
     local currentlinelength = 0
     local function enterblock()
         indentstack:insert(indentstack[#indentstack] + 4)
@@ -3339,7 +3337,7 @@ function prettystring(toptree,breaklines)
     local function emit(fmt,...)
         local function toformat(x)
             if type(x) ~= "number" and type(x) ~= "string" then
-                return tostring(x) 
+                return tostring(x)
             else
                 return x
             end
@@ -3355,7 +3353,7 @@ function prettystring(toptree,breaklines)
     end
     local function differentlocation(a,b)
         return (a.linenumber ~= b.linenumber or a.filename ~= b.filename)
-    end 
+    end
     local lastanchor = { linenumber = "", filename = "" }
     local function begin(anchor,...)
         local fname = differentlocation(lastanchor,anchor) and (anchor.filename..":"..anchor.linenumber..": ")
@@ -3407,10 +3405,10 @@ function prettystring(toptree,breaklines)
     end
     local function emitParam(p)
         assert(T.allocvar:isclassof(p) or T.param:isclassof(p))
-        if T.unevaluatedparam:isclassof(p) then 
+        if T.unevaluatedparam:isclassof(p) then
             emit("%s%s",IdentToString(p.name),p.type and " : "..luaexpression or "")
         else
-            emitIdent(p.name,p.symbol) 
+            emitIdent(p.name,p.symbol)
             if p.type then emit(" : %s",p.type) end
         end
     end
@@ -3465,7 +3463,7 @@ function prettystring(toptree,breaklines)
             begin(s,"for ")
             emitParam(s.variable)
             emit(" = ")
-            emitExp(s.initial) emit(",") emitExp(s.limit) 
+            emitExp(s.initial) emit(",") emitExp(s.limit)
             if s.step then emit(",") emitExp(s.step) end
             emit(" do\n")
             emitStmt(s.body)
@@ -3520,7 +3518,7 @@ function prettystring(toptree,breaklines)
             emit("\n")
         end
     end
-    
+
     local function makeprectable(...)
         local lst = {...}
         local sz = #lst
@@ -3538,7 +3536,7 @@ function prettystring(toptree,breaklines)
      "~=",3,">",3,">=",3,
      "and",2,"or",1,
      "@",9,"&",9,"not",9,"select",12)
-    
+
     local function getprec(e)
         if e:is "operator" then
             if "-" == e.operator and #e.operands == 1 then return 9 --unary minus case
@@ -3637,7 +3635,7 @@ function prettystring(toptree,breaklines)
             emit(")")
         elseif e:is "constructor" then
             local success,keys = pcall(function() return e.type:getlayout().entries:map(function(e) return tostring(e.key) end) end)
-            if not success then emit("<layouttypeerror> = ") 
+            if not success then emit("<layouttypeerror> = ")
             else emitList(keys,"",", "," = ",emit) end
             emitParamList(e.expressions)
         elseif e:is "constructoru" then
@@ -3813,8 +3811,8 @@ end
 
 -- configure path variables
 terra.cudahome = os.getenv("CUDA_HOME") or (terra.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
-terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"}; 
-                       Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"}; 
+terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"};
+                       Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"};
                        Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[terra.os]
 for name,path in pairs(terra.cudalibpaths) do
 	path = path:gsub("%$CUDA_HOME",terra.cudahome)
@@ -3826,7 +3824,7 @@ for name,path in pairs(terra.cudalibpaths) do
 		end
 	end
 	terra.cudalibpaths[name] = path
-end                       
+end
 
 terra.systemincludes = List()
 if terra.os == "Windows" then
@@ -3837,7 +3835,7 @@ if terra.os == "Windows" then
 		return result or default
 	end
 	terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
-	local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
+	local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])
 
 	terra.systemincludes:insertall {
 		("%sVC/INCLUDE"):format(terra.vshome),
@@ -3985,7 +3983,7 @@ function terra.linkllvmstring(str,target) return terra.linkllvm(str,target,true)
 
 terra.languageextension = {
     tokentype = {}; --metatable for tokentype objects
-    tokenkindtotoken = {}; --map from token's kind id (terra.kind.name), to the singleton table (terra.languageextension.name) 
+    tokenkindtotoken = {}; --map from token's kind id (terra.kind.name), to the singleton table (terra.languageextension.name)
 }
 
 function terra.importlanguage(languages,entrypoints,langstring)
@@ -3994,7 +3992,7 @@ function terra.importlanguage(languages,entrypoints,langstring)
     if not lang or type(lang) ~= "table" then error("expected a table to define language") end
     lang.name = lang.name or "anonymous"
     local function haslist(field,typ)
-        if not lang[field] then 
+        if not lang[field] then
             error(field .. " expected to be list of "..typ)
         end
         for i,k in ipairs(lang[field]) do
@@ -4005,7 +4003,7 @@ function terra.importlanguage(languages,entrypoints,langstring)
     end
     haslist("keywords","string")
     haslist("entrypoints","string")
-    
+
     for i,e in ipairs(lang.entrypoints) do
         if entrypoints[e] then
             error(("language '%s' uses entrypoint '%s' already defined by language '%s'"):format(lang.name,e,entrypoints[e].name),-1)
@@ -4051,7 +4049,7 @@ end
 
 function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstatement,islocal)
     local lex = {}
-    
+
     lex.name = terra.languageextension.name
     lex.string = terra.languageextension.string
     lex.number = terra.languageextension.number
@@ -4086,7 +4084,7 @@ function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstateme
         return v
     end
     local function doembeddedcode(self,isterra,isexp)
-        self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations 
+        self._cur,self._lookahead = nil,nil --parsing an expression invalidates our lua representations
         local expr = embeddedcode(isterra,isexp)
         return function(env)
             local oldenv = getfenv(expr)
@@ -4113,7 +4111,7 @@ function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstateme
     function lex:typetostring(name)
         return name
     end
-    
+
     function lex:nextif(typ)
         if self:cur().type == typ then
             return self:next()
@@ -4161,7 +4159,7 @@ function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstateme
     else
         lex:error("unexpected token")
     end
-    
+
     if not constructor or type(constructor) ~= "function" then
         error("expected language to return a construction function")
     end
@@ -4171,9 +4169,9 @@ function terra.runlanguage(lang,cur,lookahead,next,embeddedcode,source,isstateme
         return b == 1 and e == string.len(str)
     end
 
-    --fixup names    
+    --fixup names
 
-    if not names then 
+    if not names then
         names = {}
     end
 

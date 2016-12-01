@@ -26,10 +26,15 @@ terra main(argc : int, argv : &rawstring)
     end
     return 0;
 end
-
+local libluajit = io.open("../build/lib/libluajit-5.1.a","r")
+if not libluajit then
+    print("can't find libluajit, disabling test...")
+    return
+end
+libluajit:close()
 if terralib.os ~= "Windows" then
     print(libpath)
-    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so"}
+    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so", "../build/lib/libluajit-5.1.a"}
     if require("ffi").os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end

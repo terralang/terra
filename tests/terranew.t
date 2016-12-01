@@ -9,7 +9,6 @@ terra foo(a : &int)
 	end
 	return sum,a
 end
-
 local test = require("test")
 
 local a,b = terralib.unpackstruct(foo(A))
