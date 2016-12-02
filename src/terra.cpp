@@ -24,6 +24,7 @@
 #include <Windows.h>
 #include <Shlwapi.h>
 #endif
+#include <luaconf.h>
 
 static char * vstringf(const char * fmt, va_list ap) {
     int N = 128;
@@ -155,7 +156,7 @@ void terra_ongc(lua_State * L, int idx, lua_CFunction gcfn) {
 static int terra_free(lua_State * L);
 
 #ifndef _WIN32
-static bool pushterrahome(lua_State * L) {
+static bool pushcalculatedterrahome(lua_State * L) {
     Dl_info info;
     if (dladdr((void*)terra_init, &info) != 0) {
 #ifdef __linux__
@@ -184,7 +185,7 @@ static bool pushterrahome(lua_State * L) {
 }
 #else
 
-static bool pushterrahome(lua_State * L) {
+static bool pushcalculatedterrahome(lua_State * L) {
     //based on approach that clang uses as well
     MEMORY_BASIC_INFORMATION mbi;
     char path[MAX_PATH];
@@ -198,10 +199,23 @@ static bool pushterrahome(lua_State * L) {
 
 #endif
 
-static void setterrahome(lua_State * L) {
+static void setterradefaultpaths(lua_State * L) {
     lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-    if (pushterrahome(L))
+
+#ifndef TERRA_HOME
+    if (pushcalculatedterrahome(L)) {
         lua_setfield(L, -2, "terrahome");
+    }
+#else
+    lua_pushstring(L, TERRA_HOME);
+    lua_setfield(L, -2, "terrahome");
+#endif
+    
+#ifdef LUA_LUADIR
+    lua_pushstring(L,"share" LUA_LUADIR);
+    lua_setfield(L, -2, "luadir");
+#endif
+    
     lua_pop(L, 1);
 }
 
@@ -228,7 +242,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     
     lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
-    setterrahome(T->L); //find the location of support files such as the clang resource directory
+    setterradefaultpaths(T->L); //find the location of support files such as the clang resource directory
     
     int err = terra_compilerinit(T);
     if(err) {

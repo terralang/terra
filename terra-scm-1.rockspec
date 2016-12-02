@@ -11,7 +11,6 @@ description = {
    homepage = "",
    license = "MIT",
 }
-
 build = {
    type = "make",
    variables = {
@@ -25,6 +24,7 @@ build = {
       INSTALL_SHARE_DIR="$(LUA_BINDIR)/../share",
       INSTALL_INCLUDE_DIR="$(LUA_INCDIR)",
       INSTALL_LUA_LIBRARY_DIR="$(LIBDIR)",
+      TERRA_HOME="$(abspath $(LUA_BINDIR)/..)",
    },
    platforms = {
       macosx = {

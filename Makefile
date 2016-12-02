@@ -159,6 +159,12 @@ FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 ifneq ($(TERRA_EXTERNAL_TERRALIB),)
 FLAGS += -DTERRA_EXTERNAL_TERRALIB="\"$(realpath src)/?.lua\""
 endif
+
+# customizable path locations for LuaRocks install
+ifneq ($(TERRA_HOME),)
+FLAGS += -DTERRA_HOME="\"$(TERRA_HOME)\""
+endif
+
 ifneq ($(LLVM_VERSION), 32)
 CPPFLAGS += -std=c++11
 endif
