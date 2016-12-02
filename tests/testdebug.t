@@ -1,4 +1,4 @@
-if not terralib.traceback then return end
+if not terralib.traceback or terralib.llvmversion ~= 35 then return end
 --this test require debug on, if it is not on, relaunch with it on
 if 0 == terralib.isdebug then
   assert(0 == os.execute(terralib.terrahome.."/bin/terra -g testdebug.t"))
@@ -33,7 +33,7 @@ terra testbt3()
   for i = 0,N do
     C.printf("%p ",frames[i])
     var nm : rawstring
-    var nmL : uint64 
+    var nmL : uint64
     var si : terralib.SymbolInfo
     if terralib.lookupsymbol(frames[i],&si) then
       C.printf("frame %.*s\n", si.namelength, si.name)

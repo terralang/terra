@@ -843,7 +843,7 @@ function T.quote:asvalue()
             for i,r in ipairs(typ:getentries()) do
                 local v,e = getvalue(e.expressions[i])
                 if e then return nil,e end
-                local key = typ.convertible == "tuple" and i or r.field
+                local key = typ:istuple() and i or r.field
                 t[key] = v
             end
             return t
@@ -1133,7 +1133,7 @@ end
 do
 
     local types = {}
-    local defaultproperties = { "name", "tree", "undefined", "incomplete", "convertible", "cachedcstring", "llvm_definingfunction" }
+    local defaultproperties = { "name", "tree", "undefined", "incomplete", "cachedcstring", "llvm_definingfunction" }
     for i,dp in ipairs(defaultproperties) do
         T.Type[dp] = false
     end
@@ -1492,7 +1492,10 @@ do
             error("vectors must be composed of primitive types (for now...) but found type "..tostring(self.type))
         end
     end
-
+    local istupletype = {}
+    function T.Type:istuple()
+        return istupletype[self]
+    end
     types.tuple = util.memoize(function(...)
         local args = terra.newlist {...}
         local t = types.newstruct()
@@ -1505,7 +1508,10 @@ do
         t.metamethods.__typename = function(self)
             return util.mkstring(args,"{",",","}")
         end
-        t:setconvertible("tuple")
+        function t:cancaststructurally()
+            return true
+        end
+        istupletype[t] = true
         return t
     end)
     local getuniquestructname = util.uniquenameset("$")
@@ -1514,9 +1520,8 @@ do
         depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
-    function T.struct:setconvertible(b)
-        assert(self.incomplete)
-        self.convertible = b
+    function T.struct:cancaststructurally()
+        return false
     end
     function types.newstructwithanchor(displayname,anchor)
         assert(displayname ~= "")
@@ -1967,7 +1972,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         for i,entry in ipairs(from.entries) do
             local selected = insertselect(var_ref,entry.key)
-            local offset = exp.type.convertible == "tuple" and i - 1 or to.keytoindex[entry.key]
+            local offset = exp.type:istuple() and i - 1 or to.keytoindex[entry.key]
             if not offset then
                 err("structural cast invalid, result structure has no key ", entry.key)
             else
@@ -1993,7 +1998,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return createcast(exp,typ), true
             elseif typ:ispointer() and exp.type == terra.types.niltype then --niltype can be any pointer
                 return createcast(exp,typ), true
-            elseif typ:isstruct() and typ.convertible and exp.type:isstruct() and exp.type.convertible then
+            elseif typ:isstruct() and typ:cancaststructurally()
+              and exp.type:isstruct() and exp.type:cancaststructurally() then
                 return structcast(false,exp,typ,speculative), true
             elseif typ:ispointer() and exp.type:isarray() and typ.type == exp.type.type then
                 return createcast(exp,typ), true
@@ -2054,7 +2060,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         elseif (typ:isprimitive() and exp.type:isprimitive())
             or (typ:isvector() and exp.type:isvector() and typ.N == exp.type.N) then --explicit conversions from logicals to other primitives are allowed
             return createcast(exp,typ)
-        elseif typ:isstruct() and exp.type:isstruct() and exp.type.convertible then
+        elseif typ:isstruct() and exp.type:isstruct() and exp.type:cancaststructurally() then
             return structcast(true,exp,typ)
         else
             return insertcast(exp,typ) --otherwise, allow any implicit casts
@@ -2123,7 +2129,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
             local rt = typemeet(op,a.type,b)
             return (rt == terra.types.error and rt) or terra.types.vector(rt,a.N)
-        elseif a:isstruct() and b:isstruct() and a.convertible == "tuple" and b.convertible == "tuple" and #a.entries == #b.entries then
+        elseif a:istuple() and b:istuple() and #a.entries == #b.entries then
             local entries = terra.newlist()
             local as,bs = a:getentries(),b:getentries()
             for i,ae in ipairs(as) do
@@ -2791,7 +2797,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     typ = terra.types.tuple(unpack(paramlist:map("type")))
                 elseif named == #e.records then
                     typ = terra.types.newstructwithanchor("anon",e)
-                    typ:setconvertible("named")
+                    function typ:cancaststructurally()
+                        return true
+                    end
                     for i,e in ipairs(e.records) do
                         typ.entries:insert({field = checklabel(e.key,true).value, type = paramlist[i].type})
                     end
@@ -2870,7 +2878,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local function createassignment(anchor,lhs,rhs)
         if #lhs > #rhs and #rhs > 0 then
             local last = rhs[#rhs]
-            if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
+            if last.type:istuple() and #last.type.entries + #rhs - 1 == #lhs then
                 --struct pattern match
                 local av,v = allocvar(anchor,last.type,"<structpattern>")
                 local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
@@ -3238,7 +3246,7 @@ end)
 local function createunpacks(tupleonly)
     local function unpackterra(diag,tree,obj,from,to)
         local typ = obj:gettype()
-        if not obj or not typ:isstruct() or (tupleonly and typ.convertible ~= "tuple") then
+        if not obj or not typ:isstruct() or (tupleonly and not typ:istuple()) then
             return obj
         end
         if not obj:islvalue() then diag:reporterror("expected an lvalue") end
@@ -3257,7 +3265,7 @@ local function createunpacks(tupleonly)
     end
     local function unpacklua(cdata,from,to)
         local t = type(cdata) == "cdata" and terra.typeof(cdata)
-        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then
+        if not t or not t:isstruct() or (tupleonly and not t:istuple()) then
           return cdata
         end
         local results = terralib.newlist()
