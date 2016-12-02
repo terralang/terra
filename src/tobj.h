@@ -7,12 +7,34 @@ extern "C" {
 #include "lauxlib.h"
 }
 #include "tkind.h"
-
+#include <utility>
 //object to hold reference to lua object and help extract information
+//moveable but not copyable
 struct Obj {
+public:
     Obj() {
-        ref = LUA_NOREF; L = NULL;
+        ref = LUA_NOREF;
+        L = NULL;
     }
+    Obj(Obj&& other) {
+        steal(other);
+    }
+    Obj &operator=(Obj&& other) {
+        freeref();
+        steal(other);
+        return *this;
+    }
+private:
+    void steal(Obj& other) {
+        ref = other.ref;
+        L = other.L;
+        ref_table = other.ref_table;
+        other.ref = LUA_NOREF;
+    }
+    Obj(const Obj&);
+    Obj& operator=(const Obj&);
+public:
+    
     void initFromStack(lua_State * L, int ref_table) {
         freeref();
         this->L = L;

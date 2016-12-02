@@ -1262,7 +1262,7 @@ struct FunctionEmitter {
 
     Obj * funcobj;
     TerraFunctionState * fstate;
-    std::vector<std::unique_ptr<DeferredCall> > deferred;
+    std::vector< DeferredCall > deferred;
 
     Obj labeltbl;
     Locals basescope;
@@ -2436,7 +2436,7 @@ if(baseT->isIntegerTy()) { \
         return bb;
     }
     Value * emitCall(Obj * call, bool defer) {
-        std::unique_ptr<DeferredCall> dc(new DeferredCall());
+        DeferredCall dc;
 
         Obj paramlist;
         Obj func;
@@ -2446,22 +2446,22 @@ if(baseT->isIntegerTy()) { \
         paramlist.push();
         lua_pushstring(L,"type");
         lua_call(L,2,1);
-        paramlist.fromStack(&dc->paramtypes);
+        paramlist.fromStack(&dc.paramtypes);
 
         call->obj("value",&func);
 
-        dc->fn = emitExp(&func);
+        dc.fn = emitExp(&func);
 
         Obj fnptrtyp;
         func.obj("type",&fnptrtyp);
-        fnptrtyp.obj("type",&dc->fntyp);
+        fnptrtyp.obj("type",&dc.fntyp);
 
-        emitExpressionList(&paramlist,true,&dc->actuals);
+        emitExpressionList(&paramlist,true,&dc.actuals);
         if(defer) {
             deferred.push_back(std::move(dc));
             return NULL;
         } else {
-            return dc->emit(B,CC);
+            return dc.emit(B,CC);
         }
     }
 
@@ -2519,13 +2519,13 @@ if(baseT->isIntegerTy()) { \
     //this is used by gotos,returns, and breaks. unlike scope ends it copies the dtor stack
     void emitDeferred(size_t num) {
         for(size_t i = 0; i < num; i++) {
-            deferred[deferred.size() - 1 - i]->emit(B,CC);
+            deferred[deferred.size() - 1 - i].emit(B,CC);
         }
     }
     //unwind deferred and remove them from dtor stack, no need to copy the BB, since this is its last use
     void unwindDeferred(size_t to) {
         for(; deferred.size() > to; deferred.pop_back()) {
-            deferred.back()->emit(B,CC);
+            deferred.back().emit(B,CC);
         }
     }
     void enterScope(Locals * buf) {
@@ -2739,7 +2739,6 @@ Function * EmitFunction(TerraCompilationUnit * CU, Obj * funcdecl, TerraFunction
     TerraFunctionState * result = fe.emitFunction(&funcdefn);
     if(user && result->onstack)
         user->lowlink = std::min(user->lowlink,result->lowlink); // Tarjan's scc algorithm
-
     return result->func;
 }
 
