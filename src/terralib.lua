@@ -4267,6 +4267,7 @@ end
 terra.printf = terra.externfunction("printf", terra.types.funcpointer(terra.types.rawstring,terra.types.int,true))
 
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
+package.loaded.terra = terra
 
 if util.isluajit() then
     require("terralib_jit")
