@@ -34,7 +34,7 @@ private:
     Obj(const Obj&);
     Obj& operator=(const Obj&);
 public:
-    
+
     void initFromStack(lua_State * L, int ref_table) {
         freeref();
         this->L = L;
@@ -83,6 +83,15 @@ public:
         bool v = lua_toboolean(L,-1);
         pop(2);
         return v;
+    }
+    bool booleanproperty(const char * prop) {
+        push();
+        lua_getfield(L,-1,prop);
+        lua_insert(L,-2);
+        lua_call(L,1,1);
+        bool r = lua_toboolean(L,-1);
+        pop();
+        return r;
     }
     const char * string(const char * field) {
         push();
@@ -186,7 +195,7 @@ public:
         lua_getfield(L,-1,"printraw");
         push();
         lua_call(L, 1, 0);
-        
+
         lua_pop(L,1);
     }
     void print() {
@@ -223,7 +232,7 @@ private:
     }
     int ref;
     int ref_table;
-    lua_State * L; 
+    lua_State * L;
 };
 
 static inline int lobj_newreftable(lua_State * L) {

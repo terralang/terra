@@ -1133,7 +1133,7 @@ end
 do
 
     local types = {}
-    local defaultproperties = { "name", "tree", "undefined", "incomplete", "cachedcstring", "llvm_definingfunction" }
+    local defaultproperties = { "name", "tree", "undefined", "cachedcstring", "llvm_definingfunction" }
     for i,dp in ipairs(defaultproperties) do
         T.Type[dp] = false
     end
@@ -1184,8 +1184,6 @@ do
     function T.Type:ispointertostruct() return self:ispointer() and self.type:isstruct() end
     function T.Type:ispointertofunction() return self:ispointer() and self.type:isfunction() end
     function T.Type:isaggregate() return self:isstruct() or self:isarray() end
-
-    function T.Type:iscomplete() return not self.incomplete end
 
     function T.Type:isvector() return self.kind == "vector" end
 
@@ -1375,20 +1373,29 @@ do
         self.returntype:complete()
         return self
     end
+    -- types that have currently been created but are not yet complete
+
+    local incompletetypes = newweakkeytable()
+    function T.Type:iscomplete()
+        return incompletetypes[self] == nil
+    end
     function T.Type:complete()
-        if self.incomplete then
+        if not self:iscomplete() then
             if self:isarray() then
                 self.type:complete()
-                self.incomplete = self.type.incomplete
+                if self.type:iscomplete() then
+                    incompletetypes[self] = nil
+                end
             elseif self == types.opaque or self:isfunction() then
                 reportopaque(self)
             else
                 assert(self:isstruct())
                 local layout = self:getlayout()
                 if not layout.invalid then
-                    self.incomplete = nil --static initializers run only once
-                                          --if one of the members of this struct recursively
-                                          --calls complete on this type, then it will return before the static initializer has run
+                    incompletetypes[self] = nil
+                    --static initializers run only once
+                    --if one of the members of this struct recursively
+                    --calls complete on this type, then it will return before the static initializer has run
                     for i,e in ipairs(layout.entries) do
                         e.type:complete()
                     end
@@ -1473,18 +1480,26 @@ do
     types.niltype = T.niltype
     globaltype("niltype",T.niltype)
 
-    types.opaque,T.opaque.incomplete = T.opaque,true
+    types.opaque = T.opaque
+    -- opaque is permanently incomplete
+    function T.opaque:iscomplete()
+        return false
+    end
     globaltype("opaque", T.opaque)
 
     types.array,types.vector,types.functype = T.array,T.vector,T.functype
 
-    T.functype.incomplete = true
+    -- all functypes are always incomplete
+    function T.functype:iscomplete()
+        return false
+    end
+
     function T.functype:init()
         if self.isvararg and #self.parameters == 0 then error("vararg functions must have at least one concrete parameter") end
     end
     function types.pointer(t,as) return T.pointer(t,as or 0) end
     function T.array:init()
-        self.incomplete = true
+        incompletetypes[self] = true
     end
 
     function T.vector:init()
@@ -1531,7 +1546,7 @@ do
         tbl.methods = {}
         tbl.metamethods = {}
         tbl.anchor = anchor
-        tbl.incomplete = true
+        incompletetypes[tbl] = true
         return tbl
     end
 

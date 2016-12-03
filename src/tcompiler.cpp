@@ -2326,7 +2326,7 @@ if(baseT->isIntegerTy()) { \
                 typ->obj("type",&base);
                 int N = typ->number("N");
                 DIType * baset = getDType(&base);
-                if(!typ->boolean("incomplete")) {
+                if(typ->booleanproperty("iscomplete")) {
                     Ty->Get(typ); // possibly fill in type earlier than needed, to get accurate debug info
                     Size = CU->getDataLayout().getTypeAllocSize(ttype->type);
                     Align = CU->getDataLayout().getABITypeAlignment(ttype->type);
@@ -2340,7 +2340,7 @@ if(baseT->isIntegerTy()) { \
                     ttype->dtype = DB->createVectorType(Size*8, Align*8, baset, SubscriptArray);
             } break;
             case T_struct: {
-                if(!typ->boolean("incomplete")) {
+                if(typ->booleanproperty("iscomplete")) {
                     Ty->Get(typ);
                     unsigned Size = CU->getDataLayout().getTypeAllocSize(ttype->type);
                     unsigned Align = CU->getDataLayout().getABITypeAlignment(ttype->type);
