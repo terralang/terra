@@ -152,25 +152,28 @@ public:
                     thenamespace->setfield(name.c_str()); //register the type
                 }
             }
-
-            if(tt->boolean("undefined") && rd->getDefinition() != NULL) {
-                tt->clearfield("undefined");
+            if(!tt->booleanproperty("isdefined") && rd->getDefinition() != NULL) {
+                // this process might recurively visit this type again
+                // so we mark it as defined by clearing the custom isdefined
+                // field that the c wrapper sets
+                tt->clearfield("isdefined");
                 RecordDecl * defn = rd->getDefinition();
                 Obj entries;
                 tt->newlist(&entries);
                 if(GetFields(defn, &entries)) {
-                    if(!defn->isUnion()) {
-                        //structtype.entries = {entry1, entry2, ... }
-                        entries.push();
-                        tt->setfield("entries");
-                    } else {
-                        //add as a union:
-                        //structtype.entries = { {entry1,entry2,...} }
+                    if(defn->isUnion()) {
+                        // entries = { entries }
+                        lua_newtable(L);
                         Obj allentries;
-                        tt->obj("entries",&allentries);
+                        allentries.initFromStack(L, entries.getRefTable());
                         entries.push();
                         allentries.addentry();
+                        entries = std::move(allentries);
                     }
+                    tt->pushfield("addentries");
+                    tt->push();
+                    entries.push();
+                    lua_call(L,2,0);
                     tt->pushfield("complete");
                     tt->push();
                     lua_call(L,1,0);
