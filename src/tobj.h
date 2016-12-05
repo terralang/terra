@@ -84,12 +84,21 @@ public:
         pop(2);
         return v;
     }
-    bool booleanproperty(const char * prop) {
+    void pushproperty(const char * prop) {
         push();
         lua_getfield(L,-1,prop);
         lua_insert(L,-2);
         lua_call(L,1,1);
+    }
+    bool booleanproperty(const char * prop) {
+        pushproperty(prop);
         bool r = lua_toboolean(L,-1);
+        pop();
+        return r;
+    }
+    const char * stringproperty(const char * prop) {
+        pushproperty(prop);
+        const char * r = luaL_checkstring(L,-1);
         pop();
         return r;
     }

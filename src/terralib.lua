@@ -124,7 +124,7 @@ Type = primitive(string type, number bytes, boolean signed)
      | vector(Type type, number N) unique
      | array(Type type, number N) unique
      | functype(Type* parameters, Type returntype, boolean isvararg) unique
-     | struct(string name)
+     | struct()
      | niltype #the type of the singleton nil (implicitly convertable to any pointer type)
      | opaque #an type of unknown layout used with a pointer (&opaque) to point to data of an unknown type (i.e. void*)
      | error #used in compiler to squelch errors
@@ -1152,7 +1152,7 @@ end
 do
 
     local types = {}
-    local defaultproperties = { "name", "cachedcstring", "llvm_definingfunction" }
+    local defaultproperties = { "cachedcstring", "llvm_definingfunction" }
     for i,dp in ipairs(defaultproperties) do
         T.Type[dp] = false
     end
@@ -1174,7 +1174,7 @@ do
                 end)
                 if status then return r end
             end
-            return self.name
+            return self:uniquename()
         elseif self:ispointer() then return "&"..tostring(self.type)
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
         elseif self:isfunction() then return util.mkstring(self.parameters,"{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
@@ -1566,17 +1566,26 @@ do
     function T.struct:definewithentries(entries,tree)
         self:addentries(entries)
     end
+    local uniquestructnames = newweakkeytable()
+    function T.struct:uniquename()
+        return assert(uniquestructnames[self])
+    end
     function types.newstructwithanchor(displayname,anchor)
         assert(displayname ~= "")
-        local name = getuniquestructname(displayname)
-        local tbl = T.struct(name)
+        local tbl = T.struct()
+
         function tbl:location()
             return anchor
         end
         tbl.entries = List()
         tbl.methods = {}
         tbl.metamethods = {}
+
+        -- properties not stored in struct object so that users can't
+        -- override them and break the compiler
         incompletetypes[tbl] = true
+        uniquestructnames[tbl] = getuniquestructname(displayname)
+
         return tbl
     end
 

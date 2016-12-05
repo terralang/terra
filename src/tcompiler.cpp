@@ -609,7 +609,7 @@ private:
             assert(st);
             return st;
         }
-        std::string name = typ->asstring("name");
+        std::string name = typ->stringproperty("uniquename");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
         return StructType::create(*CU->TT->ctx, name);
@@ -2345,7 +2345,7 @@ if(baseT->isIntegerTy()) { \
                     unsigned Size = CU->getDataLayout().getTypeAllocSize(ttype->type);
                     unsigned Align = CU->getDataLayout().getABITypeAlignment(ttype->type);
 
-                    DICompositeType * dtype = DB->createStructType(SP, typ->asstring("name"), SP->getFile(), 0, Size*8, Align*8, 0, nullptr, DINodeArray());
+                    DICompositeType * dtype = DB->createStructType(SP, typ->stringproperty("uniquename"), SP->getFile(), 0, Size*8, Align*8, 0, nullptr, DINodeArray());
                     ttype->dtype = dtype;
 
                     StructType * st = cast<StructType>(ttype->type);
@@ -2370,7 +2370,7 @@ if(baseT->isIntegerTy()) { \
                     }
                     DB->replaceArrays(dtype, DB->getOrCreateArray(Members));
                 } else {
-                    ttype->dtype = DB->createUnspecifiedType(typ->asstring("name"));
+                    ttype->dtype = DB->createUnspecifiedType(typ->stringproperty("uniquename"));
                 }
             } break;
             case T_niltype: {
