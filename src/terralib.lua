@@ -4,6 +4,7 @@ require("luatypeannotation")
 local asdl = require("asdl")
 local List = asdl.List
 local util = require("terrautil")
+local newweakkeytable = util.newweakkeytable
 
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
@@ -695,10 +696,6 @@ end
 -- END GLOBALVAR
 
 -- TARGET
-local weakkeys = { __mode = "k" }
-local function newweakkeytable()
-    return setmetatable({},weakkeys)
-end
 
 terra.target = {}
 terra.target.__index = terra.target
@@ -1152,7 +1149,7 @@ end
 do
 
     local types = {}
-    local defaultproperties = { "cachedcstring", "llvm_definingfunction" }
+    local defaultproperties = { "llvm_definingfunction" }
     for i,dp in ipairs(defaultproperties) do
         T.Type[dp] = false
     end
@@ -1381,7 +1378,7 @@ do
             -- if this type was previously registered with luajit ffi as opaque
             -- we have to also provide a definition to luajit since it thinks it already
             -- knows about it
-            if self.cachedcstring then
+            if self.cstring and self:cstring(true) then -- true == only get if already computed
                 self:definecstruct(layout)
             end
             return layout

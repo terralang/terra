@@ -12,7 +12,7 @@ end
 -- Translate a Terra type to a LuaJIT FFI c definition:
 
 function T.struct:definecstruct(layout)
-    local nm = assert(self.cachedcstring)
+    local nm = assert(self:cstring(true)) -- true == only get if computed
     local str = "struct "..nm.." { "
     local entries = layout.entries
     for i,v in ipairs(entries) do
@@ -54,15 +54,18 @@ local ctypetokey = ffi.key or tonumber
 
  --map from luajit ffi ctype objects to corresponding terra type
 local ctypetoterra = {}
+local function createcstring(self)
+end
 
-function T.Type:cstring()
-    if not self.cachedcstring then
+local typetocstring = util.newweakkeytable()
+function T.Type:cstring(onlywhencached)
+    if not typetocstring[self] and not onlywhencached then
         --assumption: cstring needs to be an identifier, it cannot be a derived type (e.g. int*)
         --this makes it possible to predict the syntax of subsequent typedef operations
         if self:isintegral() then
-            self.cachedcstring = tostring(self).."_t"
+            typetocstring[self] = tostring(self).."_t"
         elseif self:isfloat() then
-            self.cachedcstring = tostring(self)
+            typetocstring[self] = tostring(self)
         elseif self:ispointer() and self.type:isfunction() then --function pointers and functions have the same typedef
             local ftype = self.type
             local rt = (ftype.returntype:isunit() and "void") or ftype.returntype:cstring()
@@ -77,7 +80,7 @@ function T.Type:cstring()
                 end
             end
             local pa = ftype.parameters:map(getcstring)
-            if not self.cachedcstring then
+            if not typetocstring[self] then
                 pa = util.mkstring(pa,"(",",","")
                 if ftype.isvararg then
                     pa = pa .. ",...)"
@@ -87,34 +90,34 @@ function T.Type:cstring()
                 local ntyp = uniquecname("function")
                 local cdef = "typedef "..rt.." (*"..ntyp..")"..pa..";"
                 ffi.cdef(cdef)
-                self.cachedcstring = ntyp
+                typetocstring[self] = ntyp
             end
         elseif self:isfunction() then
             error("asking for the cstring for a function?",2)
         elseif self:ispointer() then
             local value = self.type:cstring()
-            if not self.cachedcstring then
+            if not typetocstring[self] then
                 local nm = uniquecname("ptr_"..value)
                 ffi.cdef("typedef "..value.."* "..nm..";")
-                self.cachedcstring = nm
+                typetocstring[self] = nm
             end
         elseif self:islogical() then
-            self.cachedcstring = "bool"
+            typetocstring[self] = "bool"
         elseif self:isstruct() then
             local nm = uniquecname(tostring(self))
             ffi.cdef("typedef struct "..nm.." "..nm..";") --just make a typedef to the opaque type
                                                           --when the struct is
-            self.cachedcstring = nm
+            typetocstring[self] = nm
             local layout = self:getlayout(true) -- only get if cached
             if layout then
                 self:definecstruct(layout)
             end
         elseif self:isarray() then
             local value = self.type:cstring()
-            if not self.cachedcstring then
+            if not typetocstring[self] then
                 local nm = uniquecname(value.."_arr")
                 ffi.cdef("typedef "..value.." "..nm.."["..tostring(self.N).."];")
-                self.cachedcstring = nm
+                typetocstring[self] = nm
             end
         elseif self:isvector() then
             local value = self.type:cstring()
@@ -123,24 +126,24 @@ function T.Type:cstring()
             local pow2 = 1 --round N to next power of 2
             while pow2 < self.N do pow2 = 2*pow2 end
             ffi.cdef("typedef "..value.." "..nm.." __attribute__ ((vector_size("..tostring(pow2*elemSz)..")));")
-            self.cachedcstring = nm
+            typetocstring[self] = nm
         elseif self == terra.types.niltype then
             local nilname = uniquecname("niltype")
             ffi.cdef("typedef void * "..nilname..";")
-            self.cachedcstring = nilname
+            typetocstring[self] = nilname
         elseif self == terra.types.opaque then
-            self.cachedcstring = "void"
+            typetocstring[self] = "void"
         elseif self == terra.types.error then
-            self.cachedcstring = "int"
+            typetocstring[self] = "int"
         else
             error("NYI - cstring")
         end
-        if not self.cachedcstring then error("cstring not set? "..tostring(self)) end
-
+        if not typetocstring[self] then error("cstring not set? "..tostring(self)) end
+        local cstring = typetocstring[self]
         --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
-        local ctype = ffi.typeof(self.cachedcstring)
+        local ctype = ffi.typeof(cstring)
         ctypetoterra[ctypetokey(ctype)] = self
-        local rctype = ffi.typeof(self.cachedcstring.."&")
+        local rctype = ffi.typeof(cstring.."&")
         ctypetoterra[ctypetokey(rctype)] = self
 
         if self:isstruct() then
@@ -154,7 +157,7 @@ function T.Type:cstring()
             ffi.metatype(ctype, self.metamethods.__luametatable or { __index = index })
         end
     end
-    return self.cachedcstring
+    return typetocstring[self]
 end
 for _,typ in ipairs(terra.types.integraltypes) do
     typ:cstring() --pre-register with LuaJIT FFI to make typeof work for 1ULL, etc.

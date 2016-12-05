@@ -22,7 +22,7 @@ function util.isluajit()
 end
 
 terra.isverbose = 0 --set by C api
-function util.dbprint(level,...) 
+function util.dbprint(level,...)
     if terra.isverbose >= level then
         print(...)
     end
@@ -60,5 +60,10 @@ function util.memoize(fn)
         return v
     end
 end
-    
+
+local weakkeys = { __mode = "k" }
+function util.newweakkeytable()
+    return setmetatable({},weakkeys)
+end
+
 return util
