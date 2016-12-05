@@ -3920,12 +3920,16 @@ terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or defaultterrahome
 
 local defaultpath
 if terra.os == "Windows" then
-    defaultpath = ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
+    defaultpath = ".\\?.t;"..terra.terrahome.."\\include\\?.t"
 else
-    defaultpath = (";./?.t;%s/%s?.t;%s/%s?/init.t"):format(terra.terrahome,terra.luadir,terra.terrahome,terra.luadir)
+    defaultpath = ("./?.t;%s/%s?.t;%s/%s?/init.t"):format(terra.terrahome,terra.luadir,terra.terrahome,terra.luadir)
 end
 
-package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",defaultpath)
+package.terrapath = defaultpath
+local osterrapath = os.getenv("TERRA_PATH")
+if osterrapath then
+    package.terrapath = osterrapath:gsub(";;",";"..defaultpath..";")
+end
 
 local function terraloader(name)
     local fname = name:gsub("%.","/")
