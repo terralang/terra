@@ -8,7 +8,7 @@ function Array(T)
 		data : &T;
 		N : int;
 	}
-	function ArrayImpl.metamethods.__typename(self)
+	function ArrayImpl:__typename()
 	    return "Array("..tostring(T)..")"
 	end
 	arraytypes[ArrayImpl] = true
@@ -51,7 +51,7 @@ struct Complex {
 	imag : float;
 }
 
-terra Complex:add(c : Complex) 
+terra Complex:add(c : Complex)
 	return Complex { self.real + c.real, self.imag + c.imag }
 end
 

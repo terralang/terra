@@ -10,13 +10,13 @@ struct B {
 local a = global(A)
 
 terra foo :: {} -> int
-function A.metamethods.__staticinitialize(self)
+function A:__staticinitialize()
 	print("A")
 	assert(A:iscomplete())
 	a:get().a = 4
 end
 
-function B.metamethods.__staticinitialize(self)
+function B:__staticinitialize()
 	print("B")
 	assert(B:iscomplete())
 	a:get().b = 3

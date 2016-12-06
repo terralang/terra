@@ -1197,11 +1197,15 @@ do
     T.Type.__tostring = nil --force override to occur
     T.Type.__tostring = util.memoize(function(self)
         if self:isstruct() then
-            if self.metamethods.__typename then
-                local status,r = pcall(function()
-                    return tostring(self.metamethods.__typename(self))
+            if self.__typename then
+                -- almost impossible to debug a type you cannot print
+                -- so if __typename() fails we default back to original
+                local success,r = pcall(function()
+                    return tostring(self:__typename())
                 end)
-                if status then return r end
+                if success then
+                    return r
+                end
             end
             return self:uniquename()
         elseif self:ispointer() then return "&"..tostring(self.type)
@@ -1302,19 +1306,18 @@ do
             return v
         end
     end
-
     T.struct.getentries = memoizeproperty(
         "recursively calling getentries on type, or using a type whose getentries failed",
         function(self)
-            local entries = self.entries
-            if type(self.metamethods.__getentries) == "function" then
-                entries = invokeuserfunction(self:location(),"invoking __getentries for struct",false,self.metamethods.__getentries,self)
-            elseif not self:isdefined() then
+            if not self:isdefined() then
                 erroratlocation(self:location(),"attempting to use type ",self," before it is defined.")
             end
+
+            local entries = invokeuserfunction(self:location(),"invoking __getentries for struct",false,self.__getentries,self)
             if type(entries) ~= "table" then
-                erroratlocation(self:location(),"computed entries are not a table")
+                erroratlocation(self:location(),"entries returned from __getentries are not a table")
             end
+
             local function checkentry(e,results)
                 if type(e) == "table" then
                     local f = e.field or e[1]
@@ -1447,8 +1450,8 @@ do
                     for i,e in ipairs(layout.entries) do
                         e.type:complete()
                     end
-                    if type(self.metamethods.__staticinitialize) == "function" then
-                        invokeuserfunction(self:location(),"invoking __staticinitialize",false,self.metamethods.__staticinitialize,self)
+                    if self.__staticinitialize then
+                        invokeuserfunction(self:location(),"invoking __staticinitialize",false,self.__staticinitialize,self)
                     end
                 end
             end
@@ -1469,6 +1472,9 @@ do
         else
             return result
         end
+    end
+    function T.struct:getoperator(operatorname)
+        return invokeuserfunction(self:location(),"invoking __getoperator",false,self.__getoperator,self,operatorname)
     end
     function T.struct:getfield(fieldname)
         local l = self:getlayout()
@@ -1501,12 +1507,33 @@ do
 
     function overridablestructmethods:__getmethod(methodname)
         local fnlike = self.methods[methodname]
-        if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
-            fnlike = terra.internalmacro(function(ctx,tree,...)
-                return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
-            end)
+        if not fnlike then
+            -- legacy support for weird calling convension for mm.__methodmissing
+            if terra.ismacro(self.metamethods.__methodmissing) then
+                fnlike = terra.internalmacro(function(ctx,tree,...)
+                    return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
+                end)
+            elseif terra.ismacro(self.__methodmissing) then
+                fnlike = terra.internalmacro(function(ctx,tree,...)
+                    return self.__methodmissing:run(ctx,tree,self,methodname,...)
+                end)
+            end
         end
         return fnlike
+    end
+    -- TODO: getmethod, getmacro, getoperator
+    -- getmethod only returns true Terra methods
+    -- getoperator does: 1. getmethod 2. getmacro
+    function overridablestructmethods:__getoperator(operatorname)
+        local fnlike = self.methods[operatorname]
+        if not fnlike then
+            fnlike = self[operatorname]
+        end
+        return fnlike
+    end
+
+    function overridablestructmethods:__getentries()
+        return self.entries
     end
 
     -- set overridable default methods
@@ -1614,7 +1641,7 @@ do
             end
             t.entries:insert {"_"..(i-1),e}
         end
-        t.metamethods.__typename = function(self)
+        function t:__typename()
             return util.mkstring(args,"{",",","}")
         end
         function t:cancaststructurally()
@@ -1641,8 +1668,10 @@ do
         function tbl:location()
             return anchor
         end
+        -- default places where addentries and addmethod use
         tbl.entries = List()
         tbl.methods = {}
+        -- to not break legacy use of metamethods
         tbl.metamethods = {}
 
         -- properties not stored in struct object so that users can't
@@ -2131,8 +2160,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             --no builtin casts worked... now try user-defined casts
             local cast_fns = terra.newlist()
             local function addcasts(typ)
-                if typ:isstruct() and typ.metamethods.__cast then
-                    cast_fns:insert(typ.metamethods.__cast)
+                if typ:isstruct() and typ.__cast then
+                    cast_fns:insert(typ.__cast)
                 elseif typ:ispointertostruct() then
                     addcasts(typ.type)
                 end
@@ -2431,7 +2460,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         for i,e in ipairs(operands) do
             if e.type:isstruct() then
                 local overloadmethod = (#operands == 1 and unaryoverloadmethod) or genericoverloadmethod
-                local overload = e.type.metamethods[overloadmethod] --TODO: be more intelligent here about merging overloaded functions so that all possibilities are considered
+                local overload = e.type:getoperator(overloadmethod) --TODO: be more intelligent here about merging overloaded functions so that all possibilities are considered
                 if overload then
                     overloads:insert(asterraexpression(ee, overload, "luaobject"))
                 end
@@ -2587,7 +2616,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return tryinsertcasts(anchor, terra.newlist { typelist }, "none", false, false, paramlist)
     end
 
-    local function checkmethodwithreciever(anchor, ismeta, methodname, reciever, arguments, location)
+    local function checkmethodwithreciever(anchor, isoperator, methodname, reciever, arguments, location)
         local objtyp
         reciever.type:tcomplete(anchor)
         if reciever.type:isstruct() then
@@ -2601,9 +2630,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
 
         local fnlike,errmsg
-        if ismeta then
-            fnlike = objtyp.metamethods[methodname]
-            errmsg = fnlike == nil and "no such metamethodmethod "..methodname.." defined for type "..tostring(objtyp)
+        if isoperator then
+            fnlike = objtyp[methodname]
+            errmsg = fnlike == nil and "no such operator "..methodname.." defined for type "..tostring(objtyp)
         else
             fnlike,errmsg = objtyp:getmethod(methodname)
         end
@@ -2633,7 +2662,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             local typ = fnlike.type
             typ = typ:ispointer() and typ.type or typ
             if typ:isstruct() then
-                if location == "lexpression" and typ.metamethods.__update then
+                if location == "lexpression" and typ:getoperator("__update") then
                     local function setter(rhs)
                         arguments:insert(rhs)
                         return checkmethodwithreciever(exp, true, "__update", fnlike, arguments, "statement")
@@ -2791,17 +2820,17 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
                         local function checkmacro(metamethod,arguments,location)
                             local named = terra.internalmacro(function(ctx,tree,...)
-                                return typ.metamethods[metamethod]:run(ctx,tree,field,...)
+                                return typ[metamethod]:run(ctx,tree,field,...)
                             end)
                             local getter = asterraexpression(e, named, "luaobject")
                             return checkcall(v, terra.newlist{ getter }, arguments, "first", false, location)
                         end
-                        if location == "lexpression" and typ.metamethods.__setentry then
+                        if location == "lexpression" and typ.__setentry then
                             local function setter(rhs)
                                 return checkmacro("__setentry", terra.newlist { v , rhs }, "statement")
                             end
                             return newobject(v,T.setteru,setter)
-                        elseif terra.ismacro(typ.metamethods.__entrymissing) then
+                        elseif terra.ismacro(typ.__entrymissing) then
                             return checkmacro("__entrymissing",terra.newlist { v },location)
                         else
                             diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
@@ -3072,11 +3101,11 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if typ:ispointertostruct() then
                     typ,iterator = typ.type, insertdereference(iterator)
                 end
-                if not typ:isstruct() or type(typ.metamethods.__for) ~= "function" then
-                    diag:reporterror(iterator,"expected a struct with a __for metamethod but found ",typ)
+                if not typ:isstruct() or type(typ.__for) ~= "function" then
+                    diag:reporterror(iterator,"expected a struct with a __for meta-method but found ",typ)
                     return s
                 end
-                local generator = typ.metamethods.__for
+                local generator = typ.__for
 
                 local function bodycallback(...)
                     local exps = List()

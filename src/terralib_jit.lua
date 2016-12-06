@@ -154,7 +154,7 @@ function T.Type:cstring(onlywhencached)
                 end
                 return method
             end
-            ffi.metatype(ctype, self.metamethods.__luametatable or { __index = index })
+            ffi.metatype(ctype, self.__luametatable or { __index = index })
         end
     end
     return typetocstring[self]

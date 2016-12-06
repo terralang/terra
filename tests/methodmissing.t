@@ -4,7 +4,7 @@ struct A {
 	a : int
 }
 
-A.metamethods.__methodmissing = macro(function(methodname,obj,anarg)
+A.__methodmissing = macro(function(self,methodname,obj,anarg)
 	print(methodname)
 	return `anarg + [string.byte(methodname,1,1)]
 end)
