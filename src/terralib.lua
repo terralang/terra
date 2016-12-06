@@ -887,6 +887,7 @@ function T.Symbol:__tostring()
     return "$"..self.displayname
 end
 function T.Symbol:tocname() return "__symbol"..tostring(self.id) end
+function T.Symbol:gettype() return self.type end
 
 _G["symbol"] = terra.newsymbol
 
@@ -1558,15 +1559,19 @@ do
         if self.isvararg and #self.parameters == 0 then error("vararg functions must have at least one concrete parameter") end
     end
     function types.pointer(t,as) return T.pointer(t,as or 0) end
+    function T.pointer:getelementtype() return self.type end
+
     function T.array:init()
         incompletetypes[self] = true
     end
+    function T.array:getelementtype() return self.type end
 
     function T.vector:init()
         if not self.type:isprimitive() and self.type ~= T.error then
             error("vectors must be composed of primitive types (for now...) but found type "..tostring(self.type))
         end
     end
+    function T.vector:getelementtype() return self.type end
     local istupletype = {}
     function T.Type:istuple()
         return istupletype[self]
