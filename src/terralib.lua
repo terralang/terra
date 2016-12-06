@@ -1011,6 +1011,15 @@ local function definedonce(st)
     return st
 end
 
+local function evalfunctiontypeannotation(diag,env,tree)
+    local typ = evaltype(diag,env,tree)
+    if not typ:ispointertofunction() then
+        diag:reporterror(tree,"expected a function pointer but found ",typ)
+        return nil
+    end
+    return typ.type
+end
+
 function terra.defineobjects(fmt,envfn,...)
     local cmds = terralib.newlist()
     local nargs = 2
@@ -1070,23 +1079,35 @@ function terra.defineobjects(fmt,envfn,...)
 
     for i,c in ipairs(cmds) do -- pass: declare all functions, create return list
         local tbl,lastname = enclosing(c.name)
-        if "s" ~= c.c then
-            if "m" == c.c then
-                if not terra.types.istype(tbl) or not tbl:isstruct() then
-                    erroratlocation(c.tree,"expected a struct but found ",terra.type(tbl)," when attempting to add method ",c.name)
-                end
-                c.tree = desugarmethoddefinition(c.tree,tbl)
-                tbl = tbl.methods
+        local structtype = nil -- for methods, this is the type it is defined on
+        if "m" == c.c then
+            if not terra.types.istype(tbl) or not tbl:isstruct() then
+                erroratlocation(c.tree,"expected a struct but found ",terra.type(tbl)," when attempting to add method ",c.name)
             end
-            local v = paccess(c.name,3,tbl,lastname)
-            if c.tree.kind == "luaexpression" then -- declaration with type
-                local typ = evaltype(diag,env,c.tree)
-                if not typ:ispointertofunction() then
-                    diag:reporterror(c.tree,"expected a function pointer but found ",typ)
-                else
-                    v = T.terrafunction(nil,c.name,typ.type,c.tree)
+            structtype,tbl = tbl,tbl.methods
+        end
+        if "s" ~= c.c then
+            local v = nil
+        -- handle the declaration case
+            if c.tree.kind == "luaexpression" then
+                local typ = evalfunctiontypeannotation(diag,env,c.tree)
+                if typ then
+                    -- desugar method declaration by adding a self pointer as first argument
+                    if "m" == c.c then
+                        local ptr = terra.types.pointer(structtype)
+                        local params = List{ptr,unpack(typ.parameters)}
+                        typ = terra.types.functype(params,typ.returntype,typ.isvararg)
+                    end
+                    v = T.terrafunction(nil,c.name,typ,c.tree)
                 end
-            else -- definition, evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
+            else
+        --the definition case
+                if "m" == c.c then
+                    c.tree = desugarmethoddefinition(c.tree,structtype)
+                end
+                v = paccess(c.name,3,tbl,lastname)
+
+                -- evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
                 c.tree = evalformalparameters(diag,env,c.tree)
                 checkduplicate(tbl,lastname,c.tree)
                 if not terra.isfunction(v) or v:isdefined() then
@@ -1130,12 +1151,20 @@ end
 
 function terra.anonfunction(tree,envfn)
     local env = envfn()
+    local name = "anon ("..tree.filename..":"..tree.linenumber..")"
     local diag = terra.newdiagnostics()
-    tree = evalformalparameters(diag,env,tree)
-    diag:finishandabortiferrors("Errors during function declaration.",2)
-    tree = typecheck(tree,env)
-    tree.name = "anon ("..tree.filename..":"..tree.linenumber..")"
-    return T.terrafunction(tree,tree.name,tree.type,tree)
+
+    if tree.kind == "luaexpression" then -- function declaration
+        local type = evalfunctiontypeannotation(diag,env,tree)
+        diag:finishandabortiferrors("Errors during function declaration.",2)
+        return T.terrafunction(nil,name,type,tree)
+    else -- function definition
+        tree = evalformalparameters(diag,env,tree)
+        diag:finishandabortiferrors("Errors during function declaration.",2)
+        tree = typecheck(tree,env)
+        tree.name = name
+        return T.terrafunction(tree,name,tree.type,tree)
+    end
 end
 
 function terra.externfunction(name,typ,anchor)
