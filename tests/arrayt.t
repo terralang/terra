@@ -19,10 +19,10 @@ function Array(T)
 	terra ArrayImpl:free()
 		C.free(self.data)
 	end
-	ArrayImpl.metamethods.__apply = macro(function(self,idx)
+	ArrayImpl.__apply = macro(function(self,idx)
 		return `self.data[idx]
 	end)
-	ArrayImpl.metamethods.__methodmissing = macro(function(methodname,selfexp,...)
+	ArrayImpl.__methodmissing = macro(function(self,methodname,selfexp,...)
 		local args = terralib.newlist {...}
 		local i = symbol(int)
 		local promotedargs = args:map(function(a)

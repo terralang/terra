@@ -10,7 +10,7 @@ terra twoAs(a : int)
 	return A {a}, A { a }
 end
 
-function A.metamethods.__cast(fromt,tot,exp)
+function A.__cast(fromt,tot,exp)
 	if tot == A and fromt == int then
 		return `twoAs(exp)._0
 	end
@@ -31,7 +31,7 @@ dotwice = macro(function(exp)
 end)
 
 terra doit()
-	return dotwice(takesAnA((twoInts()._0))) 
+	return dotwice(takesAnA((twoInts()._0)))
 end
 
 

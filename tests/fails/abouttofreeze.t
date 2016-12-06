@@ -4,7 +4,7 @@ struct A {
 	b : int;
 }
 
-function A.metamethods.__finalizelayout(self)
+function A.__finalizelayout(self)
 	self:freeze()
 end
 

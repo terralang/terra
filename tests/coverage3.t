@@ -54,7 +54,7 @@ end
 what:compile()
 end)
 
-A.metamethods.__getmethod = function(self,methodname)
+A.__getmethod = function(self,methodname)
     return 1
 end
 

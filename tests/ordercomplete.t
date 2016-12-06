@@ -8,13 +8,13 @@ struct B {
 	a : A
 }
 
-function A.metamethods.__staticinitialize()
+function A.__staticinitialize()
 	print("STATIC INIT A")
 	local terra what(b : B)
 	end
 end
 
-function B.metamethods.__staticinitialize()
+function B.__staticinitialize()
 	print("STATIC INIT B")
 end
 

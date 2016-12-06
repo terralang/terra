@@ -1,7 +1,7 @@
 
 struct A { a : int, b : float }
 
-function A.metamethods.__cast(from,to,exp)
+function A.__cast(from,to,exp)
     if from == int and to == A then
         return `A {exp, 1.f }
     elseif from == float and to == A then

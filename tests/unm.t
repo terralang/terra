@@ -4,11 +4,11 @@ struct A {
 	a : int
 }
 
-A.metamethods.__unm = terra(self : &A)
+A.__unm = terra(self : &A)
 	return A { -self.a }
 end
 
-A.metamethods.__sub = terra(self : &A, rhs  : &A)
+A.__sub = terra(self : &A, rhs  : &A)
 	return A { self.a - rhs.a }
 end
 

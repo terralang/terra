@@ -21,11 +21,11 @@ local anonstructgetter = macro(function(name,self)
         if e.key:match("_%d+") and e.type:getfield(name) then
             return `self.[e.key].[name]
         end
-    end 
+    end
     error("no field "..name.." in struct of type "..tostring(T))
 end)
 
-C.float2.metamethods.__entrymissing = anonstructgetter
+C.float2.__entrymissing = anonstructgetter
 
 terra foo(pa : &C.float2)
     var a = @C.what()

@@ -3,7 +3,7 @@ if not require("fail") then return end
 
 struct A {}
 
-function A.metamethods.__getmethod()
+function A.__getmethod()
 	error("nope!")
 end
 

@@ -31,7 +31,7 @@ local struct A {
 	a : int
 }
 
-A.metamethods.__getentries = function(self)
+function A:__getentries()
 	error("I AM BAD")
 end
 

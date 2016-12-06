@@ -3,11 +3,11 @@
 struct Array {
     data : int[3];
 }
-Array.metamethods.__for = function(iter,bodycallback)
+Array.__for = function(iter,bodycallback)
     return quote
         var it = &iter
         for i = 0,3 do
-            [bodycallback(`&it.data[i])] 
+            [bodycallback(`&it.data[i])]
         end
     end
 end

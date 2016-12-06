@@ -12,8 +12,8 @@ local C = terralib.includecstring [[
 S.rundestructor = macro(function(self)
     local T = self:gettype()
     local function hasdtor(T) --avoid generating code for empty array destructors
-        if T:isstruct() then return T:getmethod("destruct") 
-        elseif T:isarray() then return hasdtor(T.type) 
+        if T:isstruct() then return T:getmethod("destruct")
+        elseif T:isarray() then return hasdtor(T.type)
         else return false end
     end
     if T:isstruct() then
@@ -21,7 +21,7 @@ S.rundestructor = macro(function(self)
         if d then
             return `self:destruct()
         end
-    elseif T:isarray() and hasdtor(T) then        
+    elseif T:isarray() and hasdtor(T) then
         return quote
             var pa = &self
             for i = 0,T.N do
@@ -34,13 +34,13 @@ end)
 
 S.assert = macro(function(check)
     local loc = check.tree.filename..":"..check.tree.linenumber
-    return quote 
+    return quote
         if not check then
             C.printf("%s: assertion failed!\n",loc)
             C.abort()
         end
     end
-end) 
+end)
 
 local generatedtor = macro(function(self)
     local T = self:gettype()
@@ -79,12 +79,12 @@ function S.Object(T)
             self:destruct()
             C.free(self)
         end
-    end) 
+    end)
     terra T.methods.alloc()
         return [&T](C.malloc(sizeof(T)))
     end
     T.methods.salloc = macro(function()
-        return quote 
+        return quote
             var t : T
             defer t:destruct()
         in
@@ -105,7 +105,7 @@ function S.Vector(T,debug)
         _size : uint64;
         _capacity : uint64;
     }
-    function Vector.metamethods.__typename() return ("Vector(%s)"):format(tostring(T)) end
+    function Vector:__typename() return ("Vector(%s)"):format(tostring(T)) end
     local assert = debug and S.assert or macro(function() return quote end end)
     terra Vector:reserve(cap : uint64)
         if cap > 0 and cap > self._capacity then
@@ -140,15 +140,15 @@ function S.Vector(T,debug)
         end
     end
     terra Vector:size() return self._size end
-    
+
     terra Vector:get(i : uint64)
-        assert(i < self._size) 
+        assert(i < self._size)
         return &self._data[i]
     end
-    Vector.metamethods.__apply = macro(function(self,idx)
+    Vector.__apply = macro(function(self,idx)
         return `@self:get(idx)
     end)
-    
+
     terra Vector:insert0(idx : uint64, N : uint64, v : T) : {}
         assert(idx <= self._size)
         self._size = self._size + N
@@ -183,7 +183,7 @@ function S.Vector(T,debug)
         Vector.methods.insert:adddefinition(Vector.methods[n])
         Vector.methods[n] = nil
     end
-    
+
     Vector.methods.remove = terralib.overloadedfunction("remove")
     Vector.methods.remove:adddefinition(terra(self : &Vector, idx : uint64) : T
         assert(idx < self._size)
@@ -198,7 +198,7 @@ function S.Vector(T,debug)
         assert(self._size > 0)
         return self:remove(self._size - 1)
     end)
-    
+
     return Vector
 end
 

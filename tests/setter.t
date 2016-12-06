@@ -4,11 +4,11 @@ a : int;
 b : int;
 }
 
-terra A.metamethods.__update(self : &A, a : int, b : int)
+terra A.__update(self : &A, a : int, b : int)
     self.a = a
     self.b = b
 end
-terra A.metamethods.__apply(self : &A, a : int)
+terra A.__apply(self : &A, a : int)
     return a + self.b
 end
 
@@ -17,11 +17,11 @@ struct B {
 }
 
 
-B.metamethods.__update = macro(function(me,arg,arg2,rhs)
+B.__update = macro(function(me,arg,arg2,rhs)
     return quote me.a = arg + arg2 + rhs end
 end)
 
-B.metamethods.__setentry = macro(function(field,self,rhs)
+B.__setentry = macro(function(field,self,rhs)
     field = field:sub(2)
     return quote self.[field] = self.[field] + rhs end
 end)

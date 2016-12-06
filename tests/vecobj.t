@@ -1,11 +1,11 @@
 local Vec = terralib.memoize(function(typ,N)
     N = assert(tonumber(N),"expected a number")
     local ops = { "__sub","__add","__mul","__div" }
-    local struct VecType { 
+    local struct VecType {
         data : typ[N]
     }
-    VecType.metamethods.type, VecType.metamethods.N = typ,N
-    VecType.metamethods.__typename = function(self) return ("%s_%d"):format(tostring(self.metamethods.type),self.metamethods.N) end
+    VecType.type, VecType.N = typ,N
+    VecType.__typename = function(self) return ("%s_%d"):format(tostring(self.type),self.N) end
     for i, op in ipairs(ops) do
         local i = symbol(int,"i")
         local function template(ae,be)
@@ -17,11 +17,11 @@ local Vec = terralib.memoize(function(typ,N)
                 return c
             end
         end
-        
+
         local terra doop1(a : VecType, b : VecType) [template(`a.data[i],`b.data[i])]  end
         local terra doop2(a : typ, b : VecType) [template(`a,`b.data[i])]  end
         local terra doop3(a : VecType, b : typ) [template(`a.data[i],`b)]  end
-        VecType.metamethods[op] = terralib.overloadedfunction("doop",{doop1,doop2,doop3})
+        VecType[op] = terralib.overloadedfunction("doop",{doop1,doop2,doop3})
     end
     terra VecType.methods.FromConstant(x : typ)
         var c : VecType
@@ -30,8 +30,8 @@ local Vec = terralib.memoize(function(typ,N)
         end
         return c
     end
-    VecType.metamethods.__apply = macro(function(self,idx) return `self.data[idx] end)
-    VecType.metamethods.__cast = function(from,to,exp)
+    VecType.__apply = macro(function(self,idx) return `self.data[idx] end)
+    VecType.__cast = function(from,to,exp)
         if from:isarithmetic() and to == VecType then
             return `VecType.FromConstant(exp)
         end

@@ -4,7 +4,7 @@ struct Range {
     a : int;
     b : int;
 }
-Range.metamethods.__for = function(iter,body)
+Range.__for = function(iter,body)
     return quote
         var it = iter
         for i = it.a,it.b do

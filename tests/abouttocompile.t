@@ -3,7 +3,7 @@ struct A {
 	b : int;
 }
 
-function A.metamethods.__getentries(self)
+function A:__getentries()
 	print("GET ENTRIES")
 	for i,e in ipairs(self.entries) do
 		e.field = "foo"..e.field

@@ -1,6 +1,6 @@
 struct Complex { real : float, imag : float }
 
-terra Complex.metamethods.__add(a : Complex, b : Complex)
+terra Complex.__add(a : Complex, b : Complex)
     return Complex { a.real + b.real, a.imag + b.imag }
 end
 

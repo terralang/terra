@@ -1,6 +1,6 @@
 if not require("fail") then return end
 struct A {}
-function A.metamethods.__getentries(self)
+function A.__getentries(self)
 	return 0
 end
 

@@ -20,12 +20,12 @@ function Interface.create(methods)
 		data : uint64
 	}
 	Interface.defined[self.type] = self
-	self.type.metamethods.__cast = Interface.castmethod
+	self.type.__cast = Interface.castmethod
 
 	self.nextid = 0
 	self.allocatedsize = 256
-	self.implementedtypes = {} 
-	
+	self.implementedtypes = {}
+
 	self.methods = terralib.newlist()
 	self.vtabletype = terralib.types.newstruct("vtable")
 	for k,v in pairs(methods) do
@@ -67,7 +67,7 @@ function Interface.interface:createcast(from,exp)
 		for _,m in ipairs(self.methods) do
 			local fn = from.methods[m.name]
 			assert(fn and terralib.isfunction(fn))
-			vtableentry[m.name] = terralib.cast(&uint8,fn:getpointer()) 
+			vtableentry[m.name] = terralib.cast(&uint8,fn:getpointer())
 		end
 		self.implementedtypes[from] = instance
 	end

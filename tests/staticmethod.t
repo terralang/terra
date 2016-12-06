@@ -1,6 +1,6 @@
 struct A {
 }
-A.metamethods.__getmethod = function(self,idx)
+A.__getmethod = function(self,idx)
     return tonumber(string.sub(idx,2,-1))
 end
 terra foo()

@@ -11,12 +11,12 @@ local mangleSelector
 
 
 --replace methods such as:   myobj:methodcall(arg0,arg1)
---with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
+--with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1)
 
 local struct Wrapper {
     data : &C.objc_object
 }
-Wrapper.metamethods.__methodmissing = macro(function(sel,obj,...)
+Wrapper.__methodmissing = macro(function(self,sel,obj,...)
 	local arguments = {...}
 	sel = mangleSelector(sel,#arguments)
 	return `Wrapper { C.objc_msgSend(obj.data,C.sel_registerName(sel),arguments) }

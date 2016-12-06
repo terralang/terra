@@ -8,9 +8,9 @@ end
 get.y = macro(function(self)
     return `self.data[1]
 end)
-    
-Vec.metamethods.__entrymissing = macro(function(name,self)
-    return `[get[name]](&self) 
+
+Vec.__entrymissing = macro(function(name,self)
+    return `[get[name]](&self)
 end)
 
 terra bar()
@@ -22,4 +22,3 @@ end
 
 local test = require("test")
 test.eq(bar(),5)
-

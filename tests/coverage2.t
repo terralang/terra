@@ -20,7 +20,7 @@ end)
 A = terralib.types.newstruct()
 A.entries:insert{ field = "a", type = int[2] }
 
-A.metamethods.__getentries = function() error("NOPE") end
+A.__getentries = function() error("NOPE") end
 
 failit(erd,function()
 	A:complete()
@@ -59,7 +59,7 @@ end)
 SICS = terralib.types.newstruct()
 SICS.entries:insert { field = label(), type = int }
 a = 1
-SICS.metamethods.__staticinitialize = function() a = a + 1 end
+SICS.__staticinitialize = function() a = a + 1 end
 --print(terralib.new(SICS,{3}))
 
 NSF = terralib.types.newstruct()
@@ -72,11 +72,11 @@ SICS:complete()
 assert(a == 2)
 struct SF {
 	a : SF2
-} 
+}
 struct SF2 {
 	a : int
 }
-SF2.metamethods.__getentries = function(self) SF:complete() end
+SF2.__getentries = function(self) SF:complete() end
 failit("type recursively contains itself",function()
 SF:complete()
 end)
@@ -94,7 +94,7 @@ struct C {
 	a : int
 }
 
-C.metamethods.__cast = function() return error("CAST ERROR") end
+C.__cast = function() return error("CAST ERROR") end
 
 local terra casttest :: {} -> int
 failit(erd,function()
@@ -172,7 +172,7 @@ struct ATF {
 	a : int
 }
 
-ATF.metamethods.__getentries = function(self) 
+ATF.__getentries = function(self)
 	local terra foo()
 		var a : ATF
 		return a.a
@@ -191,9 +191,9 @@ struct FA2 {
 	a : int
 }
 
-FA.metamethods.__staticinitialize = function() a = a + 1 end
+FA.__staticinitialize = function() a = a + 1 end
 
-FA2.metamethods.__staticinitialize = function(self)
+FA2.__staticinitialize = function(self)
 	FA:complete()
 end
 

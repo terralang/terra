@@ -3,7 +3,7 @@ local malloc = terralib.externfunction("malloc", uint64 -> &opaque)
 local free = terralib.externfunction("free", &opaque -> {})
 local printf = terralib.externfunction("printf", terralib.types.funcpointer({rawstring},int,true))
 local function createvtable(T)
-    return 
+    return
 end
 local function getcast(fromp,top,exp)
     if fromp:ispointer() and top:ispointer() then
@@ -11,7 +11,7 @@ local function getcast(fromp,top,exp)
         while from ~= to and from ~= nil do
             from = from.metamethods.parent
         end
-        if from ~= nil then 
+        if from ~= nil then
             return `[top](exp)
         end
     end
@@ -46,11 +46,11 @@ local function Class(_,parent,...)
         for _,interface in ipairs(interfaces) do
             interface.implementors:insert(T)
             mm.interfaces:insert(interface)
-            ne:insert { field = interface.label, type = interface.type } 
+            ne:insert { field = interface.label, type = interface.type }
         end
-        
+
         T.entries = ne
-        
+
         for name,m in pairs(T.methods) do
             local idx = mm.methodtoidx[name]
             if not idx then
@@ -61,7 +61,7 @@ local function Class(_,parent,...)
             mm.methodtoidx[name] = idx
         end
         mm.vtableptr = terralib.constant(`arrayof([&opaque],[mm.methods]))
-        
+
         local stubs = {}
         terra stubs.init(self : &T)
             self.__vtable = mm.vtableptr
@@ -75,7 +75,7 @@ local function Class(_,parent,...)
         terra stubs.free(self : &T)
             free(self)
         end
-            
+
         for name,idx in pairs(mm.methodtoidx) do
             print("stub "..name.." in "..tostring(T))
             local m = mm.methods[idx]
@@ -99,7 +99,7 @@ local function Interface(name,methodlist_)
     }
     function iface.type.metamethods:__typename() return name end
     iface.label = label(name)
-    
+
     function iface.type.metamethods.__cast(from,to,exp)
         if to == &iface.type then
             for _,T in ipairs(iface.implementors) do
@@ -131,7 +131,7 @@ local function Interface(name,methodlist_)
         end
         for _,T in ipairs(iface.implementors) do
             print("defining interface "..tostring(name).." for type "..tostring(T))
-            local ctor = List {} 
+            local ctor = List {}
             for i,entry in ipairs(Impl.entries) do
                 if i > 1 then
                     local methodname,method = entry.field,entry.type.type

@@ -137,7 +137,7 @@ terra foo15() : int
 end
 assert(foo15() == 3)
 
-failit(function() 
+failit(function()
 	local terra foo16() : 3
 	end
 end)
@@ -154,7 +154,7 @@ assert(foo16() == 20)
 
 terra foo17()
 	var i = 0
-	repeat 
+	repeat
 		i = i + 1
 		var b = i + 1
 	until b == 10
@@ -363,11 +363,11 @@ terra B:inc(v : int)
 	self.a = self.a + v
 end
 
-B.metamethods.__apply = terra(self : &B, v :int)
+B.__apply = terra(self : &B, v :int)
 	return v + v
 end
 
-B.metamethods.__entrymissing = macro(function() return 8 end)
+B.__entrymissing = macro(function() return 8 end)
 
 struct C {
 	a : int;
@@ -379,7 +379,7 @@ end
 terra __add2(self : &B, a : int, b : int, c : int)
 	return self.a + a
 end
-B.metamethods.__add = terralib.overloadedfunction("__add",{__add1,__add2})
+B.__add = terralib.overloadedfunction("__add",{__add1,__add2})
 
 
 function myvoid()
@@ -393,7 +393,7 @@ print("BEFORE")
 testcallvoid()
 print("AFTER")
 
-terra C.metamethods.__add(b : &B, c : &C)
+terra C.__add(b : &B, c : &C)
 	return b.a + c.a
 end
 
@@ -407,7 +407,7 @@ terra foo40()
 end
 
 assert(foo40() == 8 + 8 + 6 + 6 + 6 + 11 + 6 + 11 + 3 + 11)
-B.metamethods.__add = macro(function(b,c) return `b.a + c.a + 1 end)
+B.__add = macro(function(b,c) return `b.a + c.a + 1 end)
 terra foo41()
 	var b = B { 5,6 }
 	var c = C { 3 }
@@ -479,7 +479,7 @@ assert(foo39() == 8)
 --expression macro expanded
 --expression macro that returns a multi-ret function
 --expression macro that returns a multi-ret function that was an argument
---function call, function call with multi-return, 
+--function call, function call with multi-return,
 --function call to overloaded function/undef function
 --overloaded operator with mixed macro/function stuff
 --reciever cast stuff
