@@ -3,7 +3,7 @@
 struct A {}
 
 
-A.metamethods.__getmethod = function(self,methodname)
+function A:__getmethod(methodname)
 	local c = methodname:sub(1,1):byte()
 	return terra(a : &A)
 		return c

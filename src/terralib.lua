@@ -1432,21 +1432,9 @@ do
         return invokeuserfunction(anchor,"finalizing type",false,self.complete,self)
     end
 
-    local function defaultgetmethod(self,methodname)
-        local fnlike = self.methods[methodname]
-        if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
-            fnlike = terra.internalmacro(function(ctx,tree,...)
-                return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
-            end)
-        end
-        return fnlike
-    end
     function T.struct:getmethod(methodname)
-        local gm = (type(self.metamethods.__getmethod) == "function" and self.metamethods.__getmethod) or defaultgetmethod
-        local success,result = pcall(gm,self,methodname)
-        if not success then
-            return nil,"error while looking up method: "..result
-        elseif result == nil then
+        local result = invokeuserfunction(self:location(),"invoking __getmethod",false,self.__getmethod,self,methodname)
+        if result == nil then
             return nil, "no such method "..tostring(methodname).." defined for type "..tostring(self)
         else
             return result
@@ -1464,33 +1452,56 @@ do
 
     -- overridable struct methods, anything else already defined is protected with
     -- __newindex
-    local overridable = {}
-    function overridable:cancaststructurally()
+    local overridablestructmethods = {}
+    function overridablestructmethods:cancaststructurally()
         return false
     end
-    function overridable:isdefined()
+    function overridablestructmethods:isdefined()
         return true
     end
-    function overridable:addentries(entries)
+    function overridablestructmethods:addentries(entries)
         self.entries:insertall(entries)
     end
-    function overridable:definewithentries(entries,tree)
+    function overridablestructmethods:definewithentries(entries,tree)
         self:addentries(entries)
     end
-    function overridable:location()
+    function overridablestructmethods:location()
         return terra.newanchor(1)
     end
+
+    function overridablestructmethods:__getmethod(methodname)
+        local fnlike = self.methods[methodname]
+        if not fnlike and terra.ismacro(self.metamethods.__methodmissing) then
+            fnlike = terra.internalmacro(function(ctx,tree,...)
+                return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
+            end)
+        end
+        return fnlike
+    end
+
     -- set overridable default methods
-    for name,method in pairs(overridable) do
+    for name,method in pairs(overridablestructmethods) do
         T.struct[name] = method
     end
 
     function T.struct:__newindex(key,value)
         if type(key) == "number" or
-            (not overridable[key] and getmetatable(self)[key] ~= nil) then
+            (not overridablestructmethods[key] and getmetatable(self)[key] ~= nil) then
             error(("struct field '%s' cannot be overridden with user-defined values."):format(tostring(key)),2)
         end
         rawset(self,key,value)
+    end
+    function T.struct:__index(key)
+        -- support legacy functions in metamethods
+        local metamethods = rawget(self,"metamethods")
+        if type(metamethods) == "table" then
+            local v = metamethods[key]
+            if v then
+                return v
+            end
+        end
+        -- and then fall back to same behavior as normal types
+        return T.Type.__index(self,key)
     end
 
     function types.istype(t)
