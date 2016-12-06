@@ -59,7 +59,8 @@ structbody = structentry(string key, luaexpression type)
 param = unevaluatedparam(ident name, luaexpression? type)
       | concreteparam(Type? type, string name, Symbol symbol,boolean isnamed)
 
-structdef = (luaexpression? metatype, structlist records)
+structstat = structdecl() # just struct S
+           | structdef(luaexpression? metatype, structlist records) # with {}
 
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
@@ -1036,31 +1037,36 @@ function terra.defineobjects(fmt,envfn,...)
         return t,name:match("[^.]*$")
     end
 
+    local simultaneousdefinitions,definedfunctions = {},{}
+    local diag = terra.newdiagnostics()
+    local function checkduplicate(tbl,name,tree)
+        local fntbl = definedfunctions[tbl] or {}
+        if fntbl[name] then
+            diag:reporterror(tree,"duplicate definition of '",name,"'")
+            diag:reporterror(fntbl[name],"previous definition is here")
+        end
+        fntbl[name] = tree
+        definedfunctions[tbl] = fntbl
+    end
+
     local decls = terralib.newlist()
     for i,c in ipairs(cmds) do --pass: declare all structs
         if "s" == c.c then
             local tbl,lastname = enclosing(c.name)
             local v = paccess(c.name,3,tbl,lastname)
             if not T.struct:isclassof(v) or v:isdefined() then
-                v = terra.types.newstruct(c.name,1)
+                v = terra.types.newstructwithanchor(c.name,c.tree)
                 definedonce(v)
+            end
+            if T.structdef:isclassof(c.tree) then
+                checkduplicate(tbl,lastname,c.tree)
             end
             decls[i] = v
             paccess(c.name,3,tbl,lastname,v)
         end
     end
     local r = terralib.newlist()
-    local simultaneousdefinitions,definedfunctions = {},{}
-    local diag = terra.newdiagnostics()
-    local function checkduplicate(tbl,name,tree)
-        local fntbl = definedfunctions[tbl] or {}
-        if fntbl[name] then
-            diag:reporterror(tree,"duplicate definition of function")
-            diag:reporterror(fntbl[name],"previous definition is here")
-        end
-        fntbl[name] = tree
-        definedfunctions[tbl] = fntbl
-    end
+
     for i,c in ipairs(cmds) do -- pass: declare all functions, create return list
         local tbl,lastname = enclosing(c.name)
         if "s" ~= c.c then
@@ -1098,10 +1104,10 @@ function terra.defineobjects(fmt,envfn,...)
             r:insert(decls[i])
         end
     end
-    diag:finishandabortiferrors("Errors reported during function declaration.",2)
+    diag:finishandabortiferrors("Errors reported during function and type declaration.",2)
 
     for i,c in ipairs(cmds) do -- pass: define structs
-        if "s" == c.c and c.tree then
+        if "s" == c.c and T.structdef:isclassof(c.tree) then
             layoutstruct(decls[i],c.tree,env)
         end
     end
@@ -1149,10 +1155,6 @@ end
 do
 
     local types = {}
-    local defaultproperties = { "llvm_definingfunction" }
-    for i,dp in ipairs(defaultproperties) do
-        T.Type[dp] = false
-    end
     T.Type.__index = nil -- force overrides
     function T.Type:__index(key)
         local N = tonumber(key)
@@ -1460,6 +1462,37 @@ do
         return self:getlayout().entries
     end
 
+    -- overridable struct methods, anything else already defined is protected with
+    -- __newindex
+    local overridable = {}
+    function overridable:cancaststructurally()
+        return false
+    end
+    function overridable:isdefined()
+        return true
+    end
+    function overridable:addentries(entries)
+        self.entries:insertall(entries)
+    end
+    function overridable:definewithentries(entries,tree)
+        self:addentries(entries)
+    end
+    function overridable:location()
+        return terra.newanchor(1)
+    end
+    -- set overridable default methods
+    for name,method in pairs(overridable) do
+        T.struct[name] = method
+    end
+
+    function T.struct:__newindex(key,value)
+        if type(key) == "number" or
+            (not overridable[key] and getmetatable(self)[key] ~= nil) then
+            error(("struct field '%s' cannot be overridden with user-defined values."):format(tostring(key)),2)
+        end
+        rawset(self,key,value)
+    end
+
     function types.istype(t)
         return T.Type:isclassof(t)
     end
@@ -1551,18 +1584,7 @@ do
         depth = depth or 1
         return types.newstructwithanchor(displayname,terra.newanchor(1 + depth))
     end
-    function T.struct:cancaststructurally()
-        return false
-    end
-    function T.struct:isdefined()
-        return true
-    end
-    function T.struct:addentries(entries)
-        self.entries:insertall(entries)
-    end
-    function T.struct:definewithentries(entries,tree)
-        self:addentries(entries)
-    end
+
     local uniquestructnames = newweakkeytable()
     function T.struct:uniquename()
         return assert(uniquestructnames[self])
@@ -1605,6 +1627,7 @@ do
     globaltype("rawstring",types.pointer(types.int8))
     terra.types = types
     terra.memoize = util.memoize
+
 end
 
 function T.tree:setlvalue(v)
