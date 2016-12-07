@@ -21,12 +21,12 @@ struct planet {
 }
 
 terra advance(nbodies : int, bodies : &planet, dt : double)
-  
+
   for i = 0, nbodies do
     var b = &bodies[i]
     for j = i + 1, nbodies do
       var b2 = &bodies[j]
-      
+
       var dx = b.x - b2.x;
       var dy = b.y - b2.y;
       var dz = b.z - b2.z;
@@ -69,7 +69,7 @@ end
 
 terra offset_momentum(nbodies : int, bodies : &planet)
   var px,py,pz = 0.0,0.0,0.0
-  
+
   for i = 0,nbodies do
     px = px + bodies[i].vx * bodies[i].mass
     py = py + bodies[i].vy * bodies[i].mass
@@ -124,7 +124,7 @@ local terra main(argc : int, argv : &&int8)
         5.15138902046611451e-05 * solar_mass
       }
     )
-    var n = C.atoi(argv[1])    
+    var n = C.atoi(argv[1])
     offset_momentum(NBODIES, bodies)
     C.printf ("%.9f\n", energy(NBODIES, bodies))
     for i = 0,n do
@@ -138,6 +138,9 @@ local N = (...) or "1000000"
 local terra run()
     main(2,array("what",N))
 end
-
-terralib.saveobj("benchmark_nbody",{ main = main } )
+local args
+if terralib.os ~= "Windows" then
+   args = {"-lm"}
+end
+terralib.saveobj("benchmark_nbody",{ main = main }, args )
 os.execute("./benchmark_nbody "..tostring(N))

@@ -149,7 +149,7 @@ BIN2C = build/bin2c
 .PHONY:	all clean purge test release install
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
-test:	$(EXECUTABLE)
+test:	all
 	(cd tests; ./run)
 
 variants:	$(LIBRARY_VARIANTS)
