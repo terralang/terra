@@ -7,7 +7,7 @@ C = terralib.includecstring [[
 #include "terra.h"
 ]]
 
-local libpath = terralib.terrahome.."/lib"
+local libpath = terralib.terrahome.."/lualib"
 
 terra doerror(L : &C.lua_State)
     C.printf("%s\n",C.luaL_checklstring(L,-1,nil))
