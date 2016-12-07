@@ -1,0 +1,33 @@
+language: cpp
+sudo: required
+dist: trusty
+os:
+  - linux
+  - osx
+compiler:
+  - gcc
+env:
+  matrix:
+  - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
+
+matrix:
+  exclude:
+    - os: osx
+      compiler: gcc
+# blacklist some branches
+branches:
+  only:
+    - develop
+before_install:
+  - |
+    if [[ "$(uname)" = "Linux" ]]; then
+      sudo apt-get update -qq
+      sudo apt-get install -qq clang-3.5 libclang-3.5-dev llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev
+    fi
+  - |
+    if [[ "$(uname)" = "Darwin" ]]; then
+      brew update
+      brew install homebrew/versions/llvm35 homebrew/versions/llvm38
+    fi
+script:
+  - make test

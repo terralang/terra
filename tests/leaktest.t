@@ -8,7 +8,7 @@ function make()
   local terra b(x:int)
     return a(x)
   end
-  
+
   return b(12),leak.track(b)
 end
 nan = 0/0
@@ -17,7 +17,11 @@ assert(res == 13)
 local gcd, path = leak.find(t)
 if gcd then
 	print(path)
-	assert(false)
+   if path:match("failed to find the path to object") then
+      print("I couldn't find the path, so not reporting an error but this is suspicious...")
+      return
+   end
+   error("leaked")
 end
 
 l = leak.track(leak)
