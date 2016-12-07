@@ -2058,11 +2058,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             if type(mt) == "table" and mt.__toterraexpression then
                 return asterraexpression(anchor,mt.__toterraexpression(v),location)
             end
+            -- implicit convert to macro
+            if type(v) == "function" then
+                v = terra.createmacro(v)
+            end
             if not (terra.isoverloadedfunction(v) or terra.ismacro(v) or terra.types.istype(v) or type(v) == "table") then
                 diag:reporterror(anchor,"lua object of type ", terra.type(v), " not understood by terra code.")
-                if type(v) == "function" then
-                    diag:reporterror(anchor, "to call a lua function from terra first use terralib.cast to cast it to a terra function type.")
-                end
             end
             return newobject(anchor,T.luaobject,v):withtype(T.luaobjecttype)
         end
@@ -2631,7 +2632,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
         local fnlike,errmsg
         if isoperator then
-            fnlike = objtyp[methodname]
+            fnlike = objtyp:getoperator(methodname)
             errmsg = fnlike == nil and "no such operator "..methodname.." defined for type "..tostring(objtyp)
         else
             fnlike,errmsg = objtyp:getmethod(methodname)
@@ -2810,20 +2811,22 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         --struct has no member field, call metamethod __entrymissing
                         local typ = v.type
 
-                        local function checkmacro(metamethod,arguments,location)
-                            local named = terra.internalmacro(function(ctx,tree,...)
-                                return typ[metamethod]:run(ctx,tree,field,...)
-                            end)
-                            local getter = asterraexpression(e, named, "luaobject")
-                            return checkcall(v, terra.newlist{ getter }, arguments, "first", false, location)
+                        local function checksetter(fn,what,arguments,location)
+                            if terra.ismacro(fn) then
+                                diag:reporterror(v,what.." must be a function, not macro")
+                            end
+                            local quoted = arguments:map(terra.newquote)
+                            local self,rest = quoted[1],quoted:sub(2)
+                            local result = invokeuserfunction(e,"invoking "..what,false,fn,self,field,unpack(rest))
+                            return asterraexpression(e,result,location)
                         end
                         if location == "lexpression" and typ.__setentry then
                             local function setter(rhs)
-                                return checkmacro("__setentry", terra.newlist { v , rhs }, "statement")
+                                return checksetter(typ.__setentry,"__setentry", List { v , rhs }, "statement")
                             end
                             return newobject(v,T.setteru,setter)
-                        elseif terra.ismacro(typ.__entrymissing) then
-                            return checkmacro("__entrymissing",terra.newlist { v },location)
+                        elseif typ.__entrymissing then
+                            return checksetter(typ.__entrymissing,"__entrymissing", List { v },location)
                         else
                             diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
                             return e:aserror()
@@ -3115,7 +3118,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 end
 
                 local value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
-                return asterraexpression(s,value,"statement")
+                return removeluaobject(asterraexpression(s,value,"statement"))
             elseif s:is "ifstat" then
                 local br = s.branches:map(checkcondbranch)
                 local els = (s.orelse and checkblock(s.orelse))

@@ -4,11 +4,11 @@ a : int;
 b : int;
 }
 
-terra A.__update(self : &A, a : int, b : int)
+terra A:__update(a : int, b : int)
     self.a = a
     self.b = b
 end
-terra A.__apply(self : &A, a : int)
+terra A:__apply(a : int)
     return a + self.b
 end
 
@@ -17,14 +17,14 @@ struct B {
 }
 
 
-B.__update = macro(function(me,arg,arg2,rhs)
-    return quote me.a = arg + arg2 + rhs end
-end)
+function B:__update(arg,arg2,rhs)
+    return quote self.a = arg + arg2 + rhs end
+end
 
-B.__setentry = macro(function(field,self,rhs)
+function B:__setentry(field,rhs)
     field = field:sub(2)
     return quote self.[field] = self.[field] + rhs end
-end)
+end
 
 terra foo()
     var a : A

@@ -9,9 +9,9 @@ get.y = macro(function(self)
     return `self.data[1]
 end)
 
-Vec.__entrymissing = macro(function(name,self)
+function Vec:__entrymissing(name)
     return `[get[name]](&self)
-end)
+end
 
 terra bar()
     var a = Vec { array(1.f,2.f,3.f) }

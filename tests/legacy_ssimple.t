@@ -367,7 +367,7 @@ B.metamethods.__apply = terra(self : &B, v :int)
 	return v + v
 end
 
-B.metamethods.__entrymissing = macro(function() return 8 end)
+B.metamethods.__entrymissing = function() return 8 end
 
 struct C {
 	a : int;

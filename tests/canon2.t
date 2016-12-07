@@ -16,16 +16,14 @@ local C = terralib.includecstring [[
 
 C.float2:printpretty()
 
-local anonstructgetter = macro(function(name,self)
+function C.float2:__entrymissing(name)
     for i,e in pairs(self:gettype():getfields()) do
         if e.key:match("_%d+") and e.type:getfield(name) then
             return `self.[e.key].[name]
         end
     end
     error("no field "..name.." in struct of type "..tostring(T))
-end)
-
-C.float2.__entrymissing = anonstructgetter
+end
 
 terra foo(pa : &C.float2)
     var a = @C.what()

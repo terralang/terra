@@ -367,7 +367,7 @@ B.__apply = terra(self : &B, v :int)
 	return v + v
 end
 
-B.__entrymissing = macro(function() return 8 end)
+function B:__entrymissing(field) return 8 end
 
 struct C {
 	a : int;
