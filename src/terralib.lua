@@ -774,6 +774,7 @@ terra.macro.__call = function(self,...)
     end
     return self.fromlua(...)
 end
+function terra.macro.__tostring() return "<terra macro>" end
 function terra.macro:run(ctx,tree,...)
     if self._internal then
         return self.fromterra(ctx,tree,...)
@@ -1466,16 +1467,12 @@ do
     end
 
     function T.struct:getmethod(methodname)
-        local result = invokeuserfunction(self:location(),"invoking __getmethod",false,self.__getmethod,self,methodname)
-        if result == nil then
-            return nil, "no such method "..tostring(methodname).." defined for type "..tostring(self)
-        else
-            return result
-        end
+        return invokeuserfunction(self:location(),"invoking __getmethod",false,self.__getmethod,self,methodname)
     end
     function T.struct:getoperator(operatorname)
         return invokeuserfunction(self:location(),"invoking __getoperator",false,self.__getoperator,self,operatorname)
     end
+
     function T.struct:getfield(fieldname)
         local l = self:getlayout()
         local i = l.keytoindex[fieldname]
@@ -1506,30 +1503,35 @@ do
     end
 
     function overridablestructmethods:__getmethod(methodname)
-        local fnlike = self.methods[methodname]
-        if not fnlike then
-            -- legacy support for weird calling convension for mm.__methodmissing
-            if terra.ismacro(self.metamethods.__methodmissing) then
-                fnlike = terra.internalmacro(function(ctx,tree,...)
-                    return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
-                end)
-            elseif terra.ismacro(self.__methodmissing) then
-                fnlike = terra.internalmacro(function(ctx,tree,...)
-                    return self.__methodmissing:run(ctx,tree,self,methodname,...)
-                end)
-            end
+        local m = self.methods[methodname] or self[methodname]
+        if m then
+            return m
         end
-        return fnlike
+
+        -- legacy support for weird calling convension for mm.__methodmissing
+        if self.metamethods and terra.ismacro(self.metamethods.__methodmissing) then
+            return terra.internalmacro(function(ctx,tree,...)
+                return self.metamethods.__methodmissing:run(ctx,tree,methodname,...)
+            end)
+        end
+
+        -- normal __methodmissing behavior
+        local mm = self.__methodmissing
+        if not mm then
+            return nil
+        end
+
+        if terra.ismacro(mm) then
+            erroratlocation(self:location(),"__methodmissing must be a function, not a macro")
+        end
+
+        return terra.internalmacro(function(ctx,tree,self,...)
+            return invokeuserfunction(tree,"invoking __methodmissing",false,mm,self,methodname,...)
+        end)
     end
-    -- TODO: getmethod, getmacro, getoperator
-    -- getmethod only returns true Terra methods
-    -- getoperator does: 1. getmethod 2. getmacro
+
     function overridablestructmethods:__getoperator(operatorname)
-        local fnlike = self.methods[operatorname]
-        if not fnlike then
-            fnlike = self[operatorname]
-        end
-        return fnlike
+        return self.methods[operatorname] or self[operatorname]
     end
 
     function overridablestructmethods:__getentries()
@@ -2630,16 +2632,17 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return anchor:aserror()
         end
 
-        local fnlike,errmsg
+        local fnlike
         if isoperator then
             fnlike = objtyp:getoperator(methodname)
-            errmsg = fnlike == nil and "no such operator "..methodname.." defined for type "..tostring(objtyp)
         else
-            fnlike,errmsg = objtyp:getmethod(methodname)
+            fnlike = objtyp:getmethod(methodname)
         end
 
         if not fnlike then
-            diag:reporterror(anchor,errmsg)
+            local what = isoperator and "operator" or "method"
+            local msg = ("no such %s '%s' defined for type %s"):format(what,tostring(methodname),tostring(objtyp))
+            diag:reporterror(anchor,msg)
             return anchor:aserror()
         end
 

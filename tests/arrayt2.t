@@ -29,7 +29,7 @@ function Array(T)
     ArrayImpl.__apply = macro(function(self,idx)
         return `self.data[idx]
     end)
-    ArrayImpl.__methodmissing = macro(function(self,methodname,selfexp,...)
+    function ArrayImpl:__methodmissing(methodname,...)
         local args = terralib.newlist {...}
         local params = args:map(function(a) return symbol(a:gettype()) end)
         local terra elemfn(a : &T, [params])
@@ -37,7 +37,7 @@ function Array(T)
         end
         local RT = elemfn:gettype().returntype
         return quote
-            var self = selfexp
+            var self = self
             var r : Array(RT)
             r:init(self.N)
             for i = 0,r.N do
@@ -46,7 +46,7 @@ function Array(T)
         in
             r
         end
-    end)
+    end
     return ArrayImpl
 end
 

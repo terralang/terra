@@ -4,10 +4,10 @@ struct A {
 	a : int
 }
 
-A.__methodmissing = macro(function(self,methodname,obj,anarg)
+function A:__methodmissing(methodname,anarg)
 	print(methodname)
 	return `anarg + [string.byte(methodname,1,1)]
-end)
+end
 
 terra foobar()
 	var a : A

@@ -22,7 +22,7 @@ function Array(T)
 	ArrayImpl.__apply = macro(function(self,idx)
 		return `self.data[idx]
 	end)
-	ArrayImpl.__methodmissing = macro(function(self,methodname,selfexp,...)
+	function ArrayImpl:__methodmissing(methodname,...)
 		local args = terralib.newlist {...}
 		local i = symbol(int)
 		local promotedargs = args:map(function(a)
@@ -33,16 +33,16 @@ function Array(T)
 			end
 		end)
 		return quote
-			var self = selfexp
+			var selfv = self
 			var r : ArrayImpl
-			r:init(self.N)
+			r:init(selfv.N)
 			for [i] = 0,r.N do
-				r.data[i] = self.data[i]:[methodname](promotedargs)
+				r.data[i] = selfv.data[i]:[methodname](promotedargs)
 			end
 		in
 			r
 		end
-	end)
+	end
 	return ArrayImpl
 end
 

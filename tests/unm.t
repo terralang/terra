@@ -4,13 +4,14 @@ struct A {
 	a : int
 }
 
-A.__unm = terra(self : &A)
+terra A:__unm()
 	return A { -self.a }
 end
 
-A.__sub = terra(self : &A, rhs  : &A)
+terra A:__sub(rhs : &A)
 	return A { self.a - rhs.a }
 end
+
 
 terra doit()
 	var a,b = A { 1 } ,  A { 2 }

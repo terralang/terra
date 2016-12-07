@@ -16,11 +16,11 @@ local mangleSelector
 local struct Wrapper {
     data : &C.objc_object
 }
-Wrapper.__methodmissing = macro(function(self,sel,obj,...)
+function Wrapper:__methodmissing(sel,...)
 	local arguments = {...}
 	sel = mangleSelector(sel,#arguments)
-	return `Wrapper { C.objc_msgSend(obj.data,C.sel_registerName(sel),arguments) }
-end)
+	return `Wrapper { C.objc_msgSend(self.data,C.sel_registerName(sel),arguments) }
+end
 
 function mangleSelector(sel,nargs)
 	local sel = sel:gsub("_",":")
