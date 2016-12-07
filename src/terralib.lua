@@ -2795,7 +2795,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         diag:reporterror(e,"expected a table but found ", terra.type(v.value))
                         return e:aserror()
                     else
-                        local selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
+                        local selected
+                        if T.struct:isclassof(v.value) then
+                           selected = v.value:getmethod(field)
+                        else
+                           selected = invokeuserfunction(e,"extracting field "..tostring(field),false,function() return v.value[field] end)
+                        end
                         if selected == nil then
                             diag:reporterror(e,"no field ", field," in lua object")
                             return e:aserror()

@@ -89,8 +89,9 @@ uses()
 
 
 --[[
+
 -- support for luarocks install
--- support for LLVM 3.8 (experimental 3.9 support)
+-- support for LLVM 3.8
 -- Terra path is configured to match lua path for installing mixed Lua-Terra packages
 -- better debug info support with LLVM 3.8 (use -gg on osx, on linux use -g with gdb or -gg with any debugger)
 -- experimental support for Lua type annotations (behavior may change in the future)
