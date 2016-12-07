@@ -34,7 +34,7 @@ end
 libluajit:close()
 if terralib.os ~= "Windows" then
     print(libpath)
-    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so", "../build/lib/libluajit-5.1.a","-ldl"}
+    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so", "../build/lib/libluajit-5.1.a","-ldl","-lm"}
     if require("ffi").os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
