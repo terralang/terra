@@ -240,7 +240,7 @@ LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 
-test:	$(EXECUTABLE)
+test:	all
 	(cd tests; ./run)
 
 variants:	$(LIBRARY_VARIANTS)
