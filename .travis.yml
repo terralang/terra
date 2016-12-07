@@ -30,4 +30,4 @@ before_install:
       brew install homebrew/versions/llvm35 homebrew/versions/llvm38
     fi
 script:
-  - make LLVM_CONFIG=$LLVM_CONFIG CLANG=$CLANG test
+  - make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
