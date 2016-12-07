@@ -69,7 +69,7 @@ print(foo9())
 
 struct A { a : int }
 
-A.methods.what = terra() return 4 end
+A.what = terra() return 4 end
 
 
 terra foo10()

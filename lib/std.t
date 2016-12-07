@@ -80,10 +80,10 @@ function S.Object(T)
             C.free(self)
         end
     end)
-    terra T.methods.alloc()
+    terra T.alloc()
         return [&T](C.malloc(sizeof(T)))
     end
-    T.methods.salloc = macro(function()
+    T.salloc = macro(function()
         return quote
             var t : T
             defer t:destruct()

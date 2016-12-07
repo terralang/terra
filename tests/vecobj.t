@@ -23,7 +23,7 @@ local Vec = terralib.memoize(function(typ,N)
         local terra doop3(a : VecType, b : typ) [template(`a.data[i],`b)]  end
         VecType[op] = terralib.overloadedfunction("doop",{doop1,doop2,doop3})
     end
-    terra VecType.methods.FromConstant(x : typ)
+    terra VecType.FromConstant(x : typ)
         var c : VecType
         for i = 0,N do
             c.data[i] = x

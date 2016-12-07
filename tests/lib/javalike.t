@@ -67,7 +67,7 @@ local function Class(_,parent,...)
             self.__vtable = mm.vtableptr
             return self
         end
-        terra stubs.alloc()
+        terra T.alloc()
             var r = [&T](malloc(sizeof(T)))
             stubs.init(r)
             return r

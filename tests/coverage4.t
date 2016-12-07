@@ -44,7 +44,7 @@ terra foo()
 end
 end)
 
-failit("no such method",
+failit("no field",
 function()
 struct A {}
 

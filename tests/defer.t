@@ -71,7 +71,7 @@ doit4()
 struct A {
 }
 
-A.methods.stackalloc = macro(function()
+A.stackalloc = macro(function()
     return quote
         var a : A
         defer a:free()

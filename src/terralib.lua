@@ -2787,15 +2787,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local field = f.value
 
                 if v:is "luaobject" then -- handle A.B where A is a luatable or type
-                    --check for and handle Type.staticmethod
-                    if terra.types.istype(v.value) and v.value:isstruct() then
-                        local fnlike, errmsg = v.value:getmethod(field)
-                        if not fnlike then
-                            diag:reporterror(e,errmsg)
-                            return e:aserror()
-                        end
-                        return asterraexpression(e,fnlike, location)
-                    elseif type(v.value) ~= "table" then
+                    if type(v.value) ~= "table" then
                         diag:reporterror(e,"expected a table but found ", terra.type(v.value))
                         return e:aserror()
                     else
