@@ -1701,6 +1701,15 @@ do
     globaltype("intptr",types.uint64)
     globaltype("ptrdiff",types.int64)
     globaltype("rawstring",types.pointer(types.int8))
+
+    -- export IR types for use in type annotations
+    types.Symbol = T.Symbol
+    types.Type = T.Type
+    types.Quote = T.quote
+    types.GlobalVariable = T.globalvariable
+    types.Function = T.terrafunction
+    types.Struct = T.struct
+
     terra.types = types
     terra.memoize = util.memoize
 

@@ -119,3 +119,13 @@ end
 
 takemap( { a = List {1,2,3} } )
 
+local T = terralib.types
+function takeTerraStuff( a : T.Quote,
+								 b  : T.Function,
+							    c  : T.Type,
+							    d  : T.GlobalVariable,
+							    e  : T.Struct,
+							    f :  T.Symbol) : T.Quote
+	return `1
+end
+takeTerraStuff(`3+4,terra() end, int, global(int), struct {}, symbol(int))
