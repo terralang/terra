@@ -24,6 +24,7 @@ list:find(fn : A -> boolean) : A? -- find the first element in list satisfying c
 list:partition(fn : A -> {K,V}) : Map[ K,List[V] ] -- apply k,v = fn(e) to each element and group the values 'v' into bin of the same 'k'
 list:fold(init : B,fn : {B,A} -> B) -> B -- recurrence fn(a[2],fn(a[1],init)) ...
 list:reduce(fn : {B,A} -> B) -> B -- recurrence fn(a[3],fn(a[2],a[1]))
+list:reduceor(init : B,fn : {B,A} -> B) -> B -- recurrence fn(a[3],fn(a[2],a[1])) or init if the list is empty
 list:exists(fn : A -> boolean) : boolean -- is any fn(e) true in list
 list:all(fn : A -> boolean) : boolean -- are all fn(e) true in list
 
@@ -319,6 +320,35 @@ function List:reduce(fn,...)
     end
     local N = #self
     assert(N > 0, "reduce requires non-empty list")
+    local s = self[1]
+    for i = 2,N do
+        s = fn(s,self[i],...)
+    end
+    return s
+end
+
+function List:reduceori(init,fn,...)
+    if type(fn) ~= "function" then
+        fn = selectori(fn)
+    end
+    local N = #self
+    if N == 0 then
+      return init
+    end
+    local s = self[1]
+    for i = 2,N do
+        s = fn(i,s,self[i],...)
+    end
+    return s
+end
+function List:reduceor(init,fn,...)
+    if type(fn) ~= "function" then
+        fn = selector(fn)
+    end
+    local N = #self
+    if N == 0 then
+      return init
+    end
     local s = self[1]
     for i = 2,N do
         s = fn(s,self[i],...)

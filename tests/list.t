@@ -82,3 +82,6 @@ assert(a:all(tonumber))
 assert(not a:all("not"))
 assert(not a:exists("not"))
 assert(tostring(List{1,2}) == "{1,2}")
+assert(List{}:reduceor(3,function()end) == 3)
+
+assert(List{1,5}:reduceori(3,function(i,x,y) return x+y end) == 6)
