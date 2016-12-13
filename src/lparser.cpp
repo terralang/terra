@@ -1276,6 +1276,9 @@ static BinOpr subexpr (LexState *ls, int limit) {
   const char * lhs_string = NULL;
   if(op == OPR_FUNC_PTR) {
     lhs_string = luaX_saveoutput(ls,&begintoken);
+    //leading whitespace will be included before the token, so skip it here
+    while(isspace(*lhs_string))
+      lhs_string++;
   }
   while (op != OPR_NOBINOPR && priority[op].left > limit) {
     check_lua_operator(ls,ls->t.token);
