@@ -14,7 +14,6 @@ end
 
 local a = foo()
 
-
 struct B {
 	a : int
 }

@@ -78,6 +78,7 @@ tree =
      | defvar(param* variables,  boolean hasinit, tree* initializers)
      | forlist(param* variables, tree iterator, block body)
      | functiondefu(param* parameters, boolean is_varargs, TypeOrLuaExpression? returntype, block body)
+     | functiondecl(luaexpression type) # passed to defineobject
 
      # introduced temporarily during specialization/typing, but removed after typing
      | luaobject(any value)
@@ -1050,19 +1051,6 @@ function terra.defineobjects(fmt,envfn,...)
         return t,name:match("[^.]*$")
     end
 
-    local simultaneousdefinitions,definedfunctions = {},{}
-    local function checkduplicate(tbl,name,tree)
-        local fntbl = definedfunctions[tbl] or {}
-        if fntbl[name] then
-            local err = formaterror(tree,"Error occured while declaration functions: duplicate definition of '",name,"'") ..
-                formaterror(fntbl[name],"previous definition is here")
-            error(err,3)
-        end
-        fntbl[name] = tree
-        definedfunctions[tbl] = fntbl
-    end
-
-    local decls = terralib.newlist()
     for i,c in ipairs(cmds) do --pass: declare all structs
         if "s" == c.c then
             local tbl,lastname = enclosing(c.tree,c.name)
@@ -1071,13 +1059,12 @@ function terra.defineobjects(fmt,envfn,...)
                 v = terra.types.newstructwithanchor(c.name,c.tree)
                 definedonce(v)
             end
-            if T.structdef:isclassof(c.tree) then
-                checkduplicate(tbl,lastname,c.tree)
-            end
-            decls[i] = v
+            c.decl = assert(v)
             paccess(c.tree,c.name,tbl,lastname,v)
         end
     end
+
+    local simultaneousdefinitions = {}
     local r = terralib.newlist()
 
     for i,c in ipairs(cmds) do -- pass: declare all functions, create return list
@@ -1092,8 +1079,8 @@ function terra.defineobjects(fmt,envfn,...)
         if "s" ~= c.c then
             local v = nil
         -- handle the declaration case
-            if c.tree.kind == "luaexpression" then
-                local typ = evalfunctiontypeannotation(env,c.tree)
+            if c.tree.kind == "functiondecl" then
+                local typ = evalfunctiontypeannotation(env,c.tree.type)
                  -- desugar method declaration by adding a self pointer as first argument
                  if "m" == c.c then
                      local ptr = terra.types.pointer(structtype)
@@ -1110,7 +1097,6 @@ function terra.defineobjects(fmt,envfn,...)
 
                 -- evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
                 c.tree = evalformalparameters(env,c.tree)
-                checkduplicate(tbl,lastname,c.tree)
                 if not terra.isfunction(v) or v:isdefined() then
                     local typ = terra.types.placeholderfunction
                     if c.tree.returntype then
@@ -1120,22 +1106,40 @@ function terra.defineobjects(fmt,envfn,...)
                 end
                 simultaneousdefinitions[v] = c.tree
             end
-            decls[i] = v
+
+            c.decl = assert(v)
             paccess(c.tree,c.name,tbl,lastname,v)
         end
         if lastname == c.name then
-            r:insert(decls[i])
+            r:insert(c.decl)
+        end
+    end
+
+    -- check for duplicate declarations:
+    -- two defs are duplicates if they will attempt to define the same struct or function
+    local existing_def = {}
+    for i,c in ipairs(cmds) do
+        -- is this a struct or function def?
+        if "s" == c.c and T.structdef:isclassof(c.tree) or
+            c.tree.kind ~= "functiondecl" then
+            -- do w already have a def for that decl?
+            if existing_def[c.decl] then
+                local err = formaterror(c.tree,"Error occured while declaration functions: duplicate definition of '",c.name,"'") ..
+                    formaterror(existing_def[c.decl].tree,"previous definition is here.")
+                error(err,2)
+            end
+            existing_def[c.decl] = c
         end
     end
 
     for i,c in ipairs(cmds) do -- pass: define structs
         if "s" == c.c and T.structdef:isclassof(c.tree) then
-            layoutstruct(decls[i],c.tree,env)
+            layoutstruct(c.decl,c.tree,env)
         end
     end
     for i,c in ipairs(cmds) do -- pass: define functions
-        local decl = decls[i]
-        if "s" ~= c.c and not decl:isdefined() and c.tree.kind ~= "luaexpression" then -- may have already been defined as part of a previous call to typecheck in this loop
+        local decl = c.decl
+        if "s" ~= c.c and not decl:isdefined() and c.tree.kind ~= "functiondecl" then -- may have already been defined as part of a previous call to typecheck in this loop
             simultaneousdefinitions[decl] = nil -- so that a recursive check of this fails if there is no return type
             decl:adddefinition(typecheck(c.tree,env,simultaneousdefinitions))
         end
@@ -1153,8 +1157,8 @@ function terra.anonfunction(tree,envfn)
     local env = envfn()
     local name = "anon ("..tree.filename..":"..tree.linenumber..")"
 
-    if tree.kind == "luaexpression" then -- function declaration
-        local type = evalfunctiontypeannotation(env,tree)
+    if tree.kind == "functiondecl" then -- function declaration
+        local type = evalfunctiontypeannotation(env,tree.type)
         return T.terrafunction(nil,name,type,tree)
     else -- function definition
         tree = evalformalparameters(env,tree)

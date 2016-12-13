@@ -1036,7 +1036,9 @@ static void bodyortype(LexState * ls, int ismethod) {
         body(ls, ismethod, ls->linenumber);
     } else {
         checknext(ls, TK_DBCOLON);
+        Position p = getposition(ls);
         terratype(ls);
+        new_object(ls, "functiondecl",1, &p);
     }
 }
 
