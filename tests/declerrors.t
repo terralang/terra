@@ -16,14 +16,20 @@ end,"expected a struct")
 
 failit(function()
 terra A.b() end
-end,"failed attempting to index field")
+end,"Expected a table")
 
 failit(function()
 terra A.b.c() end
-end,"failed attempting to index field")
+end,"Expected a table")
 
 
 failit(function()
 local A = 4
 struct A.b {}
-end,"failed attempting to index field")
+end,"Expected a table")
+
+
+failit(function()
+local A = setmetatable({},{__newindex = function() error("NO") end})
+terra A.b() end
+end,"NO")
