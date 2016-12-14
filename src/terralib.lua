@@ -1007,20 +1007,20 @@ local function definedonce(st)
 end
 
 local evaluateparameterlist,evaltype
-local function evalformalparameters(env,tree)
+local function evalformalparameters(env,tree,depth)
     local diag = terra.newdiagnostics()
     local r = copyobject(tree, { parameters = evaluateparameterlist(diag,env,tree.parameters,true),
                               returntype = tree.returntype and evaltype(diag,env,tree.returntype) })
-    diag:finishandabortiferrors("Errors reported during type evaluation.",3)
+    diag:finishandabortiferrors("Errors reported during type evaluation.",depth)
     return r
 end
-local function evalfunctiontypeannotation(env,tree)
+local function evalfunctiontypeannotation(env,tree,depth)
     local diag = terra.newdiagnostics()
     local typ = evaltype(diag,env,tree)
     if not typ:ispointertofunction() then
         diag:reporterror(tree,"expected a function pointer but found ",typ)
     end
-    diag:finishandabortiferrors("Errors reported during type evaluation.",3)
+    diag:finishandabortiferrors("Errors reported during type evaluation.",depth)
     return typ.type
 end
 
@@ -1032,10 +1032,11 @@ function terra.defineobjects(fmt,envfn,...)
         local name,tree = select(2*i - 1,...)
         cmds:insert { c = c, name = name, tree = tree }
     end
+
     local env = setmetatable({},{__index = envfn()})
     local function paccess(anchor,debugname,tbl,key,value)
         if type(tbl) ~= "table" then
-            error(formaterror(anchor,"Expected a table before field '",key,"' but found ",terra.type(tbl)),3)
+            error(formaterror(anchor,"Expected a table before field '",key,"' but found ",terra.type(tbl)),4)
         end
         local function access()
             if value then tbl[key] = value
@@ -1051,23 +1052,29 @@ function terra.defineobjects(fmt,envfn,...)
         return t,name:match("[^.]*$")
     end
 
-    for i,c in ipairs(cmds) do --pass: declare all structs
-        if "s" == c.c then
-            local tbl,lastname = enclosing(c.tree,c.name)
-            local v = paccess(c.tree,c.name,tbl,lastname)
-            if not T.struct:isclassof(v) or v:isdefined() then
-                v = terra.types.newstructwithanchor(c.name,c.tree)
-                definedonce(v)
-            end
-            c.decl = assert(v)
-            paccess(c.tree,c.name,tbl,lastname,v)
+    local function declarestruct(c)
+        if "s" ~= c.c then
+            return
+        end
+        local tbl,lastname = enclosing(c.tree,c.name)
+        local v = paccess(c.tree,c.name,tbl,lastname)
+        if not T.struct:isclassof(v) or v:isdefined() then
+            v = terra.types.newstructwithanchor(c.name,c.tree)
+            definedonce(v)
+        end
+        c.decl = assert(v)
+        paccess(c.tree,c.name,tbl,lastname,v)
+    end
+    local function definestruct(c)
+        if "s" == c.c and T.structdef:isclassof(c.tree) then
+            layoutstruct(c.decl,c.tree,env)
         end
     end
 
-    local simultaneousdefinitions = {}
-    local r = terralib.newlist()
-
-    for i,c in ipairs(cmds) do -- pass: declare all functions, create return list
+    local function declarefunction(c,simultaneousdefinitions)
+        if "s" == c.c then
+            return
+        end
         local tbl,lastname = enclosing(c.tree,c.name)
         local structtype = nil -- for methods, this is the type it is defined on
         if "m" == c.c then
@@ -1080,7 +1087,7 @@ function terra.defineobjects(fmt,envfn,...)
             local v = nil
         -- handle the declaration case
             if c.tree.kind == "functiondecl" then
-                local typ = evalfunctiontypeannotation(env,c.tree.type)
+                local typ = evalfunctiontypeannotation(env,c.tree.type,4)
                  -- desugar method declaration by adding a self pointer as first argument
                  if "m" == c.c then
                      local ptr = terra.types.pointer(structtype)
@@ -1096,7 +1103,7 @@ function terra.defineobjects(fmt,envfn,...)
                 v = paccess(c.tree,c.name,tbl,lastname)
 
                 -- evaluate the parameters to try to determine its type, create a placeholder declaration if a return type is not present
-                c.tree = evalformalparameters(env,c.tree)
+                c.tree = evalformalparameters(env,c.tree,4)
                 if not terra.isfunction(v) or v:isdefined() then
                     local typ = terra.types.placeholderfunction
                     if c.tree.returntype then
@@ -1110,38 +1117,49 @@ function terra.defineobjects(fmt,envfn,...)
             c.decl = assert(v)
             paccess(c.tree,c.name,tbl,lastname,v)
         end
-        if lastname == c.name then
-            r:insert(c.decl)
+    end
+    local function definefunction(c,simultaneousdefinitions)
+        if "s" ~= c.c and c.tree.kind ~= "functiondecl" and not c.decl:isdefined() then -- may have already been defined as part of a previous call to typecheck in this loop
+            simultaneousdefinitions[c.decl] = nil -- so that a recursive check of this fails if there is no return type
+            c.decl:adddefinition(typecheck(c.tree,env,simultaneousdefinitions))
         end
     end
 
-    -- check for duplicate declarations:
-    -- two defs are duplicates if they will attempt to define the same struct or function
-    local existing_def = {}
-    for i,c in ipairs(cmds) do
-        -- is this a struct or function def?
-        if "s" == c.c and T.structdef:isclassof(c.tree) or
-            c.tree.kind ~= "functiondecl" then
-            -- do w already have a def for that decl?
-            if existing_def[c.decl] then
-                local err = formaterror(c.tree,"Error occured while declaration functions: duplicate definition of '",c.name,"'") ..
-                    formaterror(existing_def[c.decl].tree,"previous definition is here.")
-                error(err,2)
+    local function checkduplicates(cmds)
+        local existing_def = {}
+        for _,c in ipairs(cmds) do
+            -- is this a struct or function def?
+            if "s" == c.c and T.structdef:isclassof(c.tree) or
+                c.tree.kind ~= "functiondecl" then
+                -- do w already have a def for that decl?
+                if existing_def[c.decl] then
+                    local err = formaterror(c.tree,"Error occured while declaration functions: duplicate definition of '",c.name,"'") ..
+                        formaterror(existing_def[c.decl].tree,"previous definition is here.")
+                    error(err,3)
+                end
+                existing_def[c.decl] = c
             end
-            existing_def[c.decl] = c
         end
     end
 
-    for i,c in ipairs(cmds) do -- pass: define structs
-        if "s" == c.c and T.structdef:isclassof(c.tree) then
-            layoutstruct(c.decl,c.tree,env)
-        end
+    for _,c in ipairs(cmds) do
+        declarestruct(c)
     end
-    for i,c in ipairs(cmds) do -- pass: define functions
-        local decl = c.decl
-        if "s" ~= c.c and not decl:isdefined() and c.tree.kind ~= "functiondecl" then -- may have already been defined as part of a previous call to typecheck in this loop
-            simultaneousdefinitions[decl] = nil -- so that a recursive check of this fails if there is no return type
-            decl:adddefinition(typecheck(c.tree,env,simultaneousdefinitions))
+    local simultaneousdefinitions = {}
+    for _,c in ipairs(cmds) do
+        declarefunction(c,simultaneousdefinitions)
+    end
+    checkduplicates(cmds)
+    for _,c in ipairs(cmds) do
+        definestruct(c)
+    end
+    for _,c in ipairs(cmds) do
+        definefunction(c,simultaneousdefinitions)
+    end
+    local r = List()
+    for _,c in ipairs(cmds) do
+        if not c.name:match("%.") then
+            r:insert(c.decl)
         end
     end
     return unpack(r)
@@ -1158,10 +1176,10 @@ function terra.anonfunction(tree,envfn)
     local name = "anon ("..tree.filename..":"..tree.linenumber..")"
 
     if tree.kind == "functiondecl" then -- function declaration
-        local type = evalfunctiontypeannotation(env,tree.type)
+        local type = evalfunctiontypeannotation(env,tree.type,3)
         return T.terrafunction(nil,name,type,tree)
     else -- function definition
-        tree = evalformalparameters(env,tree)
+        tree = evalformalparameters(env,tree,3)
         tree = typecheck(tree,env)
         tree.name = name
         return T.terrafunction(tree,name,tree.type,tree)
