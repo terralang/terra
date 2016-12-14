@@ -570,7 +570,7 @@ end
 function T.terrafunction:gettype(nop)
     assert(nop == nil, ":gettype no longer takes any callbacks for when a function is complete")
     if self.type == terra.types.placeholderfunction then
-        error("function being recursively referenced needs an explicit return type, function defintion at: "..formaterror(self.anchor,""),2)
+        error("function being referenced needs an explicit return type, function defintion at: "..formaterror(self.anchor,""),2)
     end
     return self.type
 end
@@ -1111,10 +1111,11 @@ function terra.defineobjects(fmt,envfn,...)
             return desugarmethoddefinition(tree,structtype)
         end
         local function get()
-            return paccess(tree,name,structtype.methods,lastname)
+            return structtype:getmethoddeclaration(lastname)
         end
         local function set(v)
-            paccess(tree,name,structtype.methods,lastname,v)
+            invokeuserfunction(tree,"invoking addmethod for struct",false,
+                structtype.addmethod,structtype,lastname,v)
         end
         return declarecallable(tree,name,desugartype,desugardefinition,get,set)
     end
@@ -1508,6 +1509,9 @@ do
     function T.struct:getmethod(methodname)
         return invokeuserfunction(self:location(),"invoking __getmethod",false,self.__getmethod,self,methodname)
     end
+    function T.struct:getmethoddeclaration(methodname)
+        return invokeuserfunction(self:location(),"invoking __getmethoddeclaration",false,self.__getmethod,self,methodname)
+    end
     function T.struct:getoperator(operatorname)
         return invokeuserfunction(self:location(),"invoking __getoperator",false,self.__getoperator,self,operatorname)
     end
@@ -1533,6 +1537,9 @@ do
     end
     function overridablestructmethods:addentries(entries)
         self.entries:insertall(entries)
+    end
+    function overridablestructmethods:addmethod(methodname,methoddeclaration)
+        self.methods[methodname] = methoddeclaration
     end
     function overridablestructmethods:definewithentries(entries,tree)
         self:addentries(entries)
@@ -1567,6 +1574,9 @@ do
         return terra.internalmacro(function(ctx,tree,self,...)
             return invokeuserfunction(tree,"invoking __methodmissing",false,mm,self,methodname,...)
         end)
+    end
+    function overridablestructmethods:__getmethoddeclaration(methodname)
+        return self.methods[methodname]
     end
 
     function overridablestructmethods:__getoperator(operatorname)
