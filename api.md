@@ -727,7 +727,7 @@ By default, `__getentries` just returns the `self.entries` table, which is set b
     method = __getmethod(self,methodname)
 
 A _Lua_ function looks up a method for a struct when the compiler sees a method invocation `mystruct:mymethod(...)` or a static method lookup `mystruct.mymethod`.  `mymethod` may be either a string or a [symbol](#symbol). This metamethod will be called by the compiler for every static invocation of `methodname` on this type. Since it can be called multiple times for the same `methodname`, any expensive operations should be memoized across calls.
-`method` may be a Terra function, a Lua function, or a [macros](#macro) which will run during typechecking.  
+`method` may be a Terra function, a Lua function, or a [macros](#macro) which will run during typechecking.
 
 Assuming that `__getmethod` returns the value `method`, then in Terra code the expression `myobj:mymethod(arg0,...argN)` turns into `[method](myobj,arg0,...,argN)` if type of `myobj` is `T`.
 
@@ -925,7 +925,7 @@ The code is loaded as bitcode rather than machine code. This allows for more agg
 Converting between Lua values and Terra values
 ==============================================
 
-When compiling or invoking Terra code, it is necessary to convert values between Terra and Lua. Internally, we implement this conversion on top of LuaJIT's [foreign-function interface](http://luajit.org/ext_ffi.html), which makes it possible to call C functions and use C values directly from Lua. Since Terra type system is similar to that of C's, we can reuse most of this infrastructure.  
+When compiling or invoking Terra code, it is necessary to convert values between Terra and Lua. Internally, we implement this conversion on top of LuaJIT's [foreign-function interface](http://luajit.org/ext_ffi.html), which makes it possible to call C functions and use C values directly from Lua. Since Terra type system is similar to that of C's, we can reuse most of this infrastructure.
 
 ### Converting Lua values to Terra values of known type ###
 
@@ -1147,7 +1147,7 @@ Loads and runs the string `s`. Equivalent to
 
     (terra_loadstring(L, s) || lua_pcall(L, 0, LUA_MULTRET, 0))
 
-Embedded New Languages Inside Lua
+Embedding New Languages Inside Lua
 =================================
 
 Language extensions in the Terra system allow you to create custom Lua statements and expressions that you can use to implement your own embedded language. Each language registers a set of entry-point keywords that indicate the start of a statement or expression in your language. If the Terra parser sees one of these keywords at the beginning of a Lua expression or statement, it will switch control of parsing over to your language, where you can  parse the tokens into an abstract syntax tree (AST), or other intermediate representation. After creating the AST, your language then returns a _constructor_ function back to Terra parser. This function will be called during execution when your statement or expression should run.
@@ -1488,10 +1488,183 @@ Report that the string `msg` was expected but did not appear. Does not return.
 
 Parses a single Lua expression from the token stream. This can be used to switch back into the Lua language for expressions in your language. For instance, Terra uses this to parse its types (which are just Lua expressions): `var a : aluaexpression(4) = 3`. It returns a function `function(lexicalenv)` that takes a table of the current lexical scope (such as the one return from `environment_function` in the constructor) and returns the value of the expression evaluated in that scope. This function is not intended to be used to parse a Lua expression into an AST. Currently, parsing a Lua expression into an AST requires you to writing the parser yourself. In the future we plan to add a library which will let you pick and choose pieces of Lua/Terra's grammar to use in your language.
 
+Intermediate Representations with Abstract Syntax Description Language
+======================================================================
 
-Future Extensions
------------------
+[Abstract Syntax Description Language (ASDL)](https://www.usenix.org/legacy/publications/library/proceedings/dsl97/full_papers/wang/wang.pdf) is a way of describing compiler intermediate representations (IR) and other tree- or graph-based data structures in a concise way. It is similar in many ways to algebraic data types, but offers a consistent cross-language specification. ASDL is used in the Python compiler to describe its grammer, and is also used internally in Terra to represent Terra code.
 
-* The Pratt parsing library will be extended to support composing multiple languages together
+We provide a Lua library for parsing ASDL specifications that can be used to implement IR and other data-structures that are useful when building domain-specific languages. It allows you to parse ASDL specifications to create a set of Lua classes (actually specially defined meta-tables) for building IR. The library automatically sets up the classes with constructors for building the IR, and additional methods can be added to the classes using standard Lua method definitions. 
 
-* We will use the composable Pratt parsing library to implement a library of common statements and expressions from Lua/Terra that will allow the user to pick and choose which statements to include, making it easy to get started with a language.
+---
+
+    local asdl = require 'asdl'
+   
+The ASDL package comes with Terra.
+
+---
+
+    context = asdl.NewContext()
+
+ASDL classes are defined inside a context. Different contexts do not share anything. Each class inside a context must have a unique name.
+
+---
+
+
+Creating ASDL Classes
+---------------------
+
+    local Types = asdl.NewContext()
+
+    Types:Define [[
+
+       # define a simple record type with two members
+       Real = (number mantissa, number exp)
+       #       ^~~~ field type         ^~~~~ field name
+
+       # define a tagged union (aka a variant, descriminated union, sum type)
+       # with several optional data types.
+       # Here the type Stm has three sub-types
+       Stm = Compound(Stm head, Stm next)
+           | Assign(string lval, Exp rval)
+       # '*' specifies that a field is a List object 
+       # '?' marks a field optional (may be nil as well as the type)
+           | Print(Exp* args, string? format)
+    
+
+
+       Exp = Id(string name)
+           | Num(number v)
+           | Op(Exp lhs, BinOp op, Exp rhs)
+
+       # Omitting () on a tagged union creates a singleton value
+       BinOp = Plus | Minus
+    ]]
+
+Types can be Lua primitives returned by `type(v)` (e.g. number table function string boolean), other ASDL types, or checked with arbitrary functions registered with `context:Extern`.
+
+---
+
+
+External types can be used by registering a name for the type and a function that returns true for objects of that type:
+
+    Types:Extern("File",function(v) 
+       return io.type(obj) == "file" 
+    end)
+    
+---
+
+
+   
+Using ASDL Classes
+------------------
+
+    local exp = Types.Num(1)
+    local assign = Types.Assign("x",exp)
+    local real = Types.Real(3,4)
+
+    local List = require 'terralist'
+    local p = Types.Print(List {exp})
+
+Values are created by calling the Class as function. Arguments are checked to be the correct type on construction. Helpful warnings are emitted when the types are wrong.
+
+Fields are initialized by the constructor:
+
+    print(exp.v) -- 1
+
+By default classes have a string representation
+
+    print(assign) -- Assign(lval = x,rval = Num(v = 1))
+   
+And you can check for membership using :isclassof
+
+    assert(Types.Assign:isclassof(assign))
+    assert(Types.Stm:isclassof(assign))
+    assert(Types.Exp:isclassof(assign) == false)
+   
+Singletons are not classes but values:
+   
+    assert(Types.BinOp:isclassof(Types.Plus))
+   
+Classes are the metatables of their values and have `Class.__index = Class`
+   
+    assert(getmetatable(assign) == Types.Assign)
+   
+Tagged unions have a string field .kind that identifies which variant in the union the value is
+
+    assert(assign.kind == "Assign")
+   
+   
+---
+
+
+Adding Methods To ASDL Classes
+---------------------------------
+
+You can define additional methods on the classes to add additional behavior
+
+    function Types.Id:eval(env)
+      return env[self.name]
+    end
+    function Types.Num:eval(env)
+      return self.v
+    end
+    function Types.Op:eval(env)
+      local op = self.op
+      local lhs = self.lhs:eval(env)    
+      local rhs = self.rhs:eval(env)
+      if op.kind == "Plus" then
+         return lhs + rhs
+      elseif op.kind == "Minus" then
+         return lhs - rhs
+      end
+    end
+
+    local s = Types.Op(Types.Num(1),Types.Plus,Types.Num(2))
+    assert(s:eval({}) == 3)
+
+You can also define methods on the super classes which will be defined for sub-classes as well:
+
+    function Types.Stm:foo()
+      print("foo")
+    end
+
+    assign:foo()
+   
+WARNING: To keep the metatable structure simple, this is not implemented with chained tables Instead definitions on the superclass also copy their method to the subclass because of this design YOU MUST DEFINE PARENT METHODS BEFORE CHILD METHODS. Otherwise, the parent method will clobber the child.
+ 
+IF YOU NEED TO OVERRIDE AN ALREADY DEFINE METHOD LIKE __tostring SET IT TO NILFIRST IN THE SUPERCLASS:
+
+    Types.Stm.__tostring = nil
+    function Types.Stm:__tostring()
+      return "<Stm>"
+    end
+
+Namespaces
+----------
+
+As an extension to ASDL, you can use the module keyword to define a namespace. This helps when you have many different kinds of Exp and Type in your compiler.
+
+    Types:Define [[
+       module Foo {
+          Bar = (number a)
+          Baz = (Bar b)
+       }
+       Outside = (Foo.Baz x)
+    ]]
+    local a = Types.Foo.Bar(3)
+
+Unique
+------
+Another extension allows you to mark any concrete type 'unique'. Unique types are
+memoized on construction so that if constructed with the same arguments (under Lua equality), the same Lua
+object is returned again. This works for types containing Lists (*) and Options (?) as well
+
+    Types:Define [[
+       module U {
+          Exp = Id(string name) unique
+              | Num(number v) unique
+       }
+   
+    ]]
+    assert(Types.U.Id("foo") == Types.U.Id("foo"))
+

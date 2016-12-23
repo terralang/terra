@@ -393,7 +393,7 @@ Of course, a single power function is boring. Instead we might want to create sp
     mymath.pow2(2) -- 4
     mymath.pow3(2) -- 8
 
-Again thing of `terra(...` as a _constructor_ for a Terra function. By nesting inside a loop, we are actually _constructing_ ten different Terra functions, provided different arguments to the constructor by change the `i` variable.
+Again think of `terra(...` as a _constructor_ for a Terra function. By nesting inside a loop, we are actually _constructing_ ten different Terra functions, provided different arguments to the constructor by change the `i` variable.
 
 Here we use the fact that in Lua the select operator on tables (`a.b`) is equivalent to looking up the value in table (`a["b"]`).
 
