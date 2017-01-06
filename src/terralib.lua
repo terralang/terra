@@ -2894,14 +2894,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         elseif typ.__entrymissing then
                             return checksetter(typ.__entrymissing,"__entrymissing", List { v },location)
                         else
-                            diag:reporterror(v,"no field ",field," in terra object of type ",v.type)
+                            diag:reporterror(e,"no field ",field," in terra object of type ",v.type)
                             return e:aserror()
                         end
                     else
                         return ret
                     end
                 else
-                    diag:reporterror(v,"expected a structural type")
+                    diag:reporterror(e,"expected a structural type")
                     return e:aserror()
                 end
             elseif e:is "luaexpression" then
