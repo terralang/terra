@@ -264,17 +264,6 @@ void luaX_patchbegin(LexState *ls, Token * begin_token) {
     return;
     //code can now safely write to this buffer
 }
-void luaX_insertbeforecurrenttoken(LexState * ls, char c) {
-    int sz = ls->output_buffer.N - ls->t.seminfo.buffer_begin;
-    //make sure the buffer has enough space and the right size
-    OutputBuffer_putc(&ls->output_buffer, c);
-    char * begin = ls->output_buffer.data + ls->t.seminfo.buffer_begin;
-    memmove(begin + 1, begin ,sz);
-    *begin = c;
-    //adjust offsets of current tokens
-    ls->t.seminfo.buffer_begin++;
-    ls->lookahead.seminfo.buffer_begin++;
-}
 void luaX_getoutput(LexState * ls, Token * begin_token, const char ** output, int * N) {
     OutputBuffer * ob = &ls->output_buffer;
     

@@ -2116,7 +2116,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
             local mt = getmetatable(v)
             if type(mt) == "table" and mt.__toterraexpression then
-                return asterraexpression(anchor,mt.__toterraexpression(v),location)
+                local result = invokeuserfunction(anchor, "invoking __toterraexpression", false, mt.__toterraexpression,v)
+                return asterraexpression(anchor,result,location)
             end
             -- implicit convert to macro
             if type(v) == "function" then

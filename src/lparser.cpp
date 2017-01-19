@@ -899,9 +899,31 @@ static void prefixexp (LexState *ls) {
   }
 }
 
+static void injectsemicolon(LexState * ls) {
+  int sz = ls->output_buffer.N - ls->t.seminfo.buffer_begin;
+  //make sure the buffer has enough space and the right size
+  OutputBuffer_putc(&ls->output_buffer, ';');
+  char * begin = ls->output_buffer.data + ls->t.seminfo.buffer_begin;
+  memmove(begin + 1, begin ,sz);
+  *begin = ';';
+  // cannot be called when there is already a lookahead token
+  // be careful to ensure there is not lookahead when injectsemicolon is called
+  assert(ls->lookahead.token == TK_EOS);
+  //put current token in lookahead
+  ls->lookahead = ls->t;
+  //adjust the offset of the old token
+  ls->lookahead.seminfo.buffer_begin++;
+  
+  // inject a semicolon token
+  ls->t.token = ';';
+  ls->t.seminfo.ts = luaX_newstring(ls, begin, 1);
+  
+}
+
+
 static int issplitprimary(LexState * ls) {
     if(ls->lastline != ls->linenumber) {
-        luaX_insertbeforecurrenttoken(ls, ';');
+        injectsemicolon(ls);
         return 1;
     } else {
         return 0;
