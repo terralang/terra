@@ -27,14 +27,13 @@ terralib.CUDAParams.entries = { { "gridDimX", uint },
                                 { "blockDimZ", uint },
                                 { "sharedMemBytes", uint },
                                 {"hStream" , terra.types.pointer(opaque) } }
-                                
+
 function cudalib.toptx(module,dumpmodule,version)
     dumpmodule,version = not not dumpmodule,assert(tonumber(version))
     local cu = terralib.newcompilationunit(terralib.nativetarget,false) -- TODO: add nvptx target options here
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
     local function addkernel(k,fn)
-        fn:setinlined(true)
-        
+
         local typ = fn:gettype()
         if not typ.returntype:isunit() then
             error(k..": kernels must return no arguments.")
@@ -49,7 +48,7 @@ function cudalib.toptx(module,dumpmodule,version)
         cu:addvalue(k,fn)
         annotations:insert({k,"kernel",1})
     end
-    
+
     for k,v in pairs(module) do
         k = tostring(k)
         if not k:match("[%w_]+") then
@@ -105,7 +104,7 @@ local C = {
     CUdeviceptr = uint64;
     CUfunction = &CUfunc_st;
     CUjit_option = uint32;
-    
+
     cuCtxCreate_v2 = ef("cuCtxCreate_v2",{&&CUctx_st,uint32,int32} -> uint32);
     cuCtxGetCurrent = ef("cuCtxGetCurrent",{&&CUctx_st} -> uint32);
     cuCtxGetDevice = ef("cuCtxGetDevice",{&int32} -> uint32);
@@ -135,7 +134,7 @@ local function unwrapexpressions(paramtypes) -- helper that gets around calling 
     local function addtype(s,t)
         if t:isstruct() then
             for i,e in ipairs(t:getentries()) do
-                if not e.type then 
+                if not e.type then
                     error("cuda kernels cannot pass struct "..tostring(t).." by value because it contains a union")
                 end
                 addtype(`s.[e.field],e.type)
@@ -153,9 +152,10 @@ local function unwrapexpressions(paramtypes) -- helper that gets around calling 
     for i,s in ipairs(symbols) do
         addtype(s,paramtypes[i])
     end
-    return symbols,flatsymbols,expressions 
+    return symbols,flatsymbols,expressions
 end
 function cudalib.flattenkernel(v)
+    v:setinlined(true)
     local symbols,flatsymbols,expressions = unwrapexpressions(v:gettype().parameters)
     return terra([flatsymbols])
         var [symbols]
@@ -199,7 +199,7 @@ local cd = macro(function(nm,...)
         end
     end
 end)
-local terra initcuda(CX : &C.CUcontext, D : &C.CUdevice, version : &uint64, 
+local terra initcuda(CX : &C.CUcontext, D : &C.CUdevice, version : &uint64,
                     [error_str], [error_sz])
     if error_sz > 0 then error_str[0] = 0 end
     cd("cuInit",0)
@@ -244,9 +244,9 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     var D : C.CUdevice
     var CX : C.CUcontext
     var version : uint64
-    
+
     return1(initcuda(&CX,&D,&version,error_str,error_sz))
-    
+
     if useculink or linker ~= nil then
         var linkState : C.CUlinkState
         var cubin : &opaque
@@ -262,7 +262,7 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
         if linker ~= nil then
             return1(linker(linkState,error_str,error_sz))
         end
-        
+
         cd("cuLinkComplete",linkState,&cubin,&cubinSize)
 
         if module ~= nil then
@@ -286,7 +286,7 @@ function cudalib.wrapptx(module,ptx)
         return1(loadmodule(&cudaM,ptxc,[ptx:len() + 1],cudalib.useculink,linker,module_fn,error_str,error_sz))
         escape
             for k,v in pairs(module) do
-                
+
                 if type(v) == "table" and terralib.isfunction(v.kernel) then
                     v = v.kernel
                 end
