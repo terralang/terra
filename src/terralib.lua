@@ -2105,12 +2105,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local typ = terra.typeof(v)
                 if typ:isaggregate() then --when an aggregate is directly referenced from Terra we get its pointer
                                           --a constant would make an entire copy of the object
-                    local ptrobj = createsingle(terra.constant(terra.types.pointer(typ),v))
+                    local ptrobj = createsingle(terra.constant(terra.types.pointer(typ),v,anchor))
                     return insertdereference(ptrobj)
                 end
-                return createsingle(terra.constant(typ,v))
+                return createsingle(terra.constant(typ,v,anchor))
             elseif type(v) == "number" or type(v) == "boolean" or type(v) == "string" then
-                return createsingle(terra.constant(v))
+                return createsingle(terra.constant(v,nil,anchor))
             elseif terra.isfunction(v) then
                 return createfunctionreference(anchor,v)
             end
@@ -4133,7 +4133,7 @@ function terra.makeenv(env,defined,g)
     return setmetatable(env,mt)
 end
 
-function terra.constant(typ,init)
+function terra.constant(typ,init,anchor)
     if typ ~= nil and not terra.types.istype(typ) then -- if typ is not a typ, shift arguments
         typ,init = nil,typ
     end
@@ -4155,7 +4155,7 @@ function terra.constant(typ,init)
     if init == nil or T.quote:isclassof(init) then -- cases: no init, quote init -> global constant
         return terra.global(typ,init,"<constant>",false,true)
     end
-    local anchor = terra.newanchor(2)
+    anchor = anchor or terra.newanchor(2)
     if type(init) == "string" and typ == terra.types.rawstring then
         return terra.newquote(newobject(anchor,T.literal,init,typ))
     end
