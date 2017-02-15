@@ -326,7 +326,7 @@ Embedding and Interoperability
 
 Programming languages don't exist in a vacuum, and the generative programming features of Terra can be useful even in projects that are primarily implemented in other programming languages. We make it possible to integrate Terra with other projects so you can use it to generate low-level code, while keeping most of your project in a well-established language. 
 
-First, we make it possible to pass values between Lua and Terra. Our implementation is built on top of LuaJIT's [foreign fuction interface](http://luajit.org/ext_ffi_tutorial.html). You can call Terra functions directly from Lua (or vice-versa), and access Terra objects directly from Lua (more details in the [API reference](http://localhost:4000/api.html#converting-between-lua-values-and-terra-values)). 
+First, we make it possible to pass values between Lua and Terra. Our implementation is built on top of LuaJIT's [foreign fuction interface](http://luajit.org/ext_ffi_tutorial.html). You can call Terra functions directly from Lua (or vice-versa), and access Terra objects directly from Lua (more details in the [API reference](api.html#converting-between-lua-values-and-terra-values)). 
 
 Furthermore, Lua-Terra is backwards compatible with both pure Lua and C, which makes it easy to use preexisting code. In Lua-Terra, you can use `require` or `loadfile` and it will treat the file as a Lua program (use `terralib.loadfile` to load a combined Lua-Terra file). You can use `terralib.includec` to import C functions from already existing header files.
 
