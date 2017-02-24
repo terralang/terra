@@ -45,12 +45,12 @@ LFLAGS = -g
 #LUAJIT_VERSION_BASE =2.1
 #LUAJIT_VERSION_EXTRA =.0-beta2
 
-LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .4
+LUAJIT_VERSION_BASE ?= 2.1
+LUAJIT_VERSION_EXTRA ?= .0-beta2
 LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
+LUAJIT_URL ?= https://github.com/LuaJIT/LuaJIT.git
+LUAJIT_BRANCH ?= v2.1
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
 LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
 LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
@@ -160,16 +160,11 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
 
-build/$(LUAJIT_TAR):
-ifeq ($(UNAME), Darwin)
-	curl $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
-else
-	wget $(LUAJIT_URL) -O build/$(LUAJIT_TAR)
-endif
+build/$(LUAJIT_DIR):
+	(git clone -b $(LUAJIT_BRANCH) $(LUAJIT_URL) $(LUAJIT_DIR))
 
-build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
-	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+build/lib/libluajit-5.1.a: build/$(LUAJIT_DIR)
+	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC") # XCFLAGS=-DLUAJIT_ENABLE_GC64)
 
 release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
 	cp $(LUAJIT_INCLUDE)/$*.h $@
@@ -217,7 +212,7 @@ $(BIN2C):	src/bin2c.c
 #rule for packaging lua code into a header file
 # fix narrowing warnings by using unsigned char
 build/%.h:	src/%.lua $(PACKAGE_DEPS)
-	$(LUAJIT) -bg $< -t h - | sed "s/char/unsigned char/" > $@
+	$(LUAJIT) -bg $< -t h - > $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
