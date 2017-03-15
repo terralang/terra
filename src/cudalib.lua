@@ -231,7 +231,7 @@ end
 local return1 = macro(function(x)
     return quote
         var r = x;
-        if x ~= 0 then return x end
+        if r ~= 0 then return r end
     end
 end)
 
