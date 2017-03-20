@@ -702,19 +702,19 @@ end
  </p>
 <div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
 int max(int a, int b) {
-    return (a &lt b) ? a : b;
+    return (a &gt b) ? a : b;
 }
 float max(float a, float b) {
-    return (a &lt b) ? a : b;
+    return (a &gt b) ? a : b;
 }
 
 </code></pre></div>
 <div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>max = terralib.overloadedfunction("max" { 
     terra(a : int, b : int) 
-        return terralib.select( a &lt b, a, b) 
+        return terralib.select( a &gt b, a, b) 
     end,
     terra(a : float, b : float) 
-        return terralib.select( a &lt b, a, b)
+        return terralib.select( a &gt b, a, b)
     end
 })
 </code></pre></div>
