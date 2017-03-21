@@ -107,6 +107,7 @@ local C = {
 
     cuCtxCreate_v2 = ef("cuCtxCreate_v2",{&&CUctx_st,uint32,int32} -> uint32);
     cuCtxGetCurrent = ef("cuCtxGetCurrent",{&&CUctx_st} -> uint32);
+    cudaFree = ef("cudaFree", {&opaque} -> uint32);
     cuCtxGetDevice = ef("cuCtxGetDevice",{&int32} -> uint32);
     cuDeviceComputeCapability = ef("cuDeviceComputeCapability",{&int32,&int32,int32} -> uint32);
     cuDeviceGet = ef("cuDeviceGet",{&int32,int32} -> uint32);
@@ -202,15 +203,9 @@ end)
 local terra initcuda(CX : &C.CUcontext, D : &C.CUdevice, version : &uint64,
                     [error_str], [error_sz])
     if error_sz > 0 then error_str[0] = 0 end
-    cd("cuInit",0)
+    cd("cudaFree",nil) -- ensure runtime is initialized before grabbing context
     cd("cuCtxGetCurrent",CX)
-    if @CX ~= nil then
-        -- there is already a valid cuda context, so use that
-        cd("cuCtxGetDevice",D)
-    else
-        cd("cuDeviceGet",D,0)
-        cd("cuCtxCreate_v2",CX,0,@D)
-    end
+    cd("cuCtxGetDevice",D)
     var major : int, minor : int
     cd("cuDeviceComputeCapability",&major,&minor,@D)
     @version = major * 10 + minor
@@ -244,7 +239,6 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     var D : C.CUdevice
     var CX : C.CUcontext
     var version : uint64
-
     return1(initcuda(&CX,&D,&version,error_str,error_sz))
 
     if useculink or linker ~= nil then
