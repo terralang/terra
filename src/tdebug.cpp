@@ -149,6 +149,10 @@ static void printstacktrace(void * uap, void * data) {
     } else {
         ucontext_t * uc = (ucontext_t*) uap;
 #ifdef __linux__
+#if defined(__arm__)
+        rip = (void*) uc->uc_mcontext.arm_pc;
+        rbp = (void*) uc->uc_mcontext.arm_fp;
+#else
         rip = (void*) uc->uc_mcontext.gregs[REG_RIP];
         rbp = (void*) uc->uc_mcontext.gregs[REG_RBP];
 #else
