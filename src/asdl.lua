@@ -1,3 +1,5 @@
+jit.off()
+
 local List = {}
 List.__index = List
 for k,v in pairs(table) do
