@@ -276,6 +276,7 @@ end
 function cudalib.wrapptx(module,ptx)
     local ptxc = terralib.constant(ptx)
     local m = {}
+    local fnhandles = {}
     local terra loader(linker : {C.CUlinkState,rawstring,uint64} -> int,
                        module_fn : {&opaque,uint64} -> {},
                        [error_str],[error_sz])
@@ -290,6 +291,7 @@ function cudalib.wrapptx(module,ptx)
                 end
                 if terralib.isfunction(v) then
                     local gbl = global(`C.CUfunction(nil))
+                    fnhandles[k] = gbl
                     m[k] = makekernelwrapper(v:gettype(),k,gbl)
                     emit quote
                         cd("cuModuleGetFunction",[&C.CUfunction](&gbl),cudaM,k)
@@ -308,7 +310,7 @@ function cudalib.wrapptx(module,ptx)
         end
         return 0
     end
-    return m,loader
+    return m,loader,fnhandles
 end
 
 local function dumpsass(data,sz)
@@ -325,14 +327,14 @@ function cudalib.compile(module,dumpmodule,version,jitload)
     version = version or cudalib.localversion()
     if jitload == nil then jitload = true end
     local ptx = cudalib.toptx(module,dumpmodule,version)
-    local m,loader = cudalib.wrapptx(module,ptx,dumpmodule)
+    local m,loader,fnhandles = cudalib.wrapptx(module,ptx,dumpmodule)
     if jitload then
         cudalib.linkruntime()
         if 0 ~= loader(nil,dumpmodule and dumpsass or nil,error_buf,error_buf_sz) then
             error(ffi.string(error_buf),2)
         end
     end
-    return m,loader
+    return m,loader,fnhandles
 end
 
 function cudalib.sharedmemory(typ,N)
