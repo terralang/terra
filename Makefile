@@ -7,7 +7,7 @@
 -include Makefile.inc
 
 # Debian packages name llvm-config with a version number - list them here in preference order
-LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
+LLVM_CONFIG ?= $(shell which llvm-config-3.7 llvm-config | head -1)
 #luajit will be downloaded automatically (it's much smaller than llvm)
 #to override this, set LUAJIT_PREFIX to the home of an already installed luajit
 LUAJIT_PREFIX ?= build
