@@ -41,6 +41,14 @@ LD = ld
 FLAGS += -Wall -g -fPIC
 LFLAGS = -g
 
+# The -E flag is BSD-specific. It is supported (though undocumented)
+# on certain newer versions of GNU Sed, but not all. Check for -E
+# support and otherwise fall back to the GNU Sed flag -r.
+SED_E = sed -E
+ifeq ($(shell sed -E '' </dev/null >/dev/null 2>&1 && echo yes || echo no),no)
+SED_E = sed -r
+endif
+
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
 #LUAJIT_VERSION_BASE =2.1
 #LUAJIT_VERSION_EXTRA =.0-beta2
@@ -62,7 +70,7 @@ FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
-LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 ifneq ($(LLVM_VERSION), 32)
