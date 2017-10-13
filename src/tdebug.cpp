@@ -21,9 +21,11 @@
 
 using namespace llvm;
 
+#ifdef DEBUG_INFO_WORKING
 static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
     return point < inst || (!isNextInst && point == inst);
 }
+#endif
 static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
     #ifdef DEBUG_INFO_WORKING
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> & LineStarts = fi->efd.LineStarts;
