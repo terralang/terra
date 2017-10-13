@@ -90,7 +90,22 @@ ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
 LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
-LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+# by default, Terra includes only the pieces of the LLVM libraries it needs,
+#  but this can be a problem if third-party-libraries that also need LLVM are
+#  used - allow the user to request that some/all of the LLVM components be
+#  included and re-exported in their entirety
+LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+ifneq ($(REEXPORT_LLVM_COMPONENTS),)
+  REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
+  ifeq ($(UNAME), Linux)
+    LLVM_LIBRARY_FLAGS += -Wl,--whole-archive $(REEXPORT_LIBS) -Wl,--no-whole-archive
+  else
+    LLVM_LIBRARY_FLAGS += $(REEXPORT_LIBS:%=-Wl,-force_load,%)
+  endif
+  LLVM_LIBRARY_FLAGS += $(filter-out $(REEXPORT_LIBS),$(LLVM_LIBS))
+else
+  LLVM_LIBRARY_FLAGS += $(LLVM_LIBS)
+endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
