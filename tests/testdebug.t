@@ -1,4 +1,4 @@
-if not terralib.traceback then return end
+if not terralib.traceback or terralib.llvmversion ~= 35 then return end
 --this test require debug on, if it is not on, relaunch with it on
 if 0 == terralib.isdebug then
   assert(0 == os.execute(terralib.terrahome.."/bin/terra -g testdebug.t"))
