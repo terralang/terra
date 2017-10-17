@@ -652,12 +652,16 @@ static void Name_print(Name * name, LexState * ls) {
 
 static void print_captured_locals(LexState * ls, TerraCnt * tc);
 
+/* print_stack not used anywhere right now - comment out to eliminate
+   compiler warning */
+#if 0
 static void print_stack(lua_State * L, int idx) {
     lua_pushvalue(L,idx);
     lua_getfield(L,LUA_GLOBALSINDEX,"print");
     lua_insert(L,-2);
     lua_call(L,1,0);
 }
+#endif
 
 //store the lua object on the top of the stack to to the _G.terra._trees table, returning its index in the table
 static int store_value(LexState * ls) {
