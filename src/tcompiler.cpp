@@ -2935,10 +2935,10 @@ static int terra_linkllvmimpl(lua_State * L) {
     OwningPtr<MemoryBuffer> mb;
     error_code ec = MemoryBuffer::getFile(filename,mb);
     if(ec)
-        terra_reporterror(CU->T, "llvm: %s\n", ec.message().c_str());
+        terra_reporterror(CU->T, "linkllvm(%s): %s\n", filename, ec.message().c_str());
     Module * m = ParseBitcodeFile(mb.get(), *T->C->ctx,&Err);
     if(!m)
-        terra_reporterror(CU->T, "llvm: %s\n", Err.c_str());
+        terra_reporterror(CU->T, "linkllvm(%s): %s\n", filename, Err.c_str());
 #else
     ErrorOr<std::unique_ptr<MemoryBuffer> > mb = std::error_code();
     if(fromstring) {
@@ -2947,8 +2947,12 @@ static int terra_linkllvmimpl(lua_State * L) {
     } else {
         mb = MemoryBuffer::getFile(filename);
     }
-    if(!mb)
-        terra_reporterror(T, "llvm: %s\n", mb.getError().message().c_str());
+    if(!mb) {
+        if(fromstring)
+            terra_reporterror(T, "linkllvm: %s\n", mb.getError().message().c_str());
+	else
+	    terra_reporterror(T, "linkllvm(%s): %s\n", filename, mb.getError().message().c_str());
+    }
     #if LLVM_VERSION == 36
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #elif LLVM_VERSION >= 37
@@ -2956,8 +2960,12 @@ static int terra_linkllvmimpl(lua_State * L) {
     #else
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*TT->ctx);
     #endif
-    if(!mm)
-        terra_reporterror(T, "llvm: %s\n", mm.getError().message().c_str());
+    if(!mm) {
+        if(fromstring)
+            terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
+	else
+	    terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
+    }
     #if LLVM_VERSION >= 37
     Module * M = mm.get().release();
     #else
@@ -2968,13 +2976,19 @@ static int terra_linkllvmimpl(lua_State * L) {
 #if LLVM_VERSION < 39
     char * err;
     if(LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource, &err)) {
-        terra_pusherror(T, "linker reported error: %s",err);
+        if(fromstring)
+            terra_pusherror(T, "linker reported error: %s",err);
+	else
+            terra_pusherror(T, "linker(%s) reported error: %s",filename,err);
         LLVMDisposeMessage(err);
         lua_error(T->L);
     }
 #else
     if(LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
-        terra_pusherror(T, "linker reported error");
+        if(fromstring)
+            terra_pusherror(T, "linker reported error");
+	else
+            terra_pusherror(T, "linker reported error on %s",filename);
         lua_error(T->L);
     }
 #endif
