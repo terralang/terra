@@ -2376,7 +2376,7 @@ if(baseT->isIntegerTy()) { \
             case T_label: {
                 int depth;
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt,&depth);
-                assert(depth == deferred.size());
+                assert((size_t)depth == deferred.size());
                 B->CreateBr(bb);
                 followsBB(bb);
                 setInsertBlock(bb);
@@ -2384,7 +2384,7 @@ if(baseT->isIntegerTy()) { \
             case T_gotostat: {
                 int depth;
                 BasicBlock * bb = getOrCreateBlockForLabel(stmt,&depth);
-                assert(deferred.size() >= depth);
+                assert(deferred.size() >= (size_t)depth);
                 emitDeferred(deferred.size() - depth);
                 B->CreateBr(bb);
                 startDeadCode();
