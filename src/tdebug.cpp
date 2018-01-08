@@ -136,6 +136,10 @@ static bool printfunctioninfo(terra_CompilerState * C, uintptr_t ip, bool isNext
 }
 
 static void printstacktrace(void * uap, void * data) {
+#define PPC64 1
+#if PPC64
+    printf("printstacktrace disabled on PPC64\n");
+#else
     terra_CompilerState * C = (terra_CompilerState*) data;
     const int maxN = 128;
     void * frames[maxN];
@@ -199,6 +203,7 @@ static void printstacktrace(void * uap, void * data) {
 #ifndef _WIN32
     free(symbols);
 #endif
+#endif // PPC64
 }
 
 struct SymbolInfo {
