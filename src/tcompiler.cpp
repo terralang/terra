@@ -84,7 +84,7 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if LLVM_VERSION >= 34
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if(type == object::SymbolRef::ST_Function) {
-            #if !defined(__arm__) && !defined(__linux__)
+            #if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
             name = name.substr(1);
             #endif
             void * addr = (void*) CU->ee->getFunctionAddress(name);
@@ -2840,7 +2840,9 @@ static bool SaveSharedObject(TerraCompilationUnit * CU, Module * M, std::vector<
 	cmd.push_back("-g");
     cmd.push_back("-shared");
     cmd.push_back("-Wl,-export-dynamic");
+#ifndef __FreeBSD__
     cmd.push_back("-ldl");
+#endif
 	cmd.push_back("-fPIC");
 #endif
 

@@ -154,8 +154,13 @@ static void printstacktrace(void * uap, void * data) {
         rip = (void*) uc->uc_mcontext.gregs[REG_RIP];
         rbp = (void*) uc->uc_mcontext.gregs[REG_RBP];
 #else
+#ifdef __FreeBSD__
+        rip = (void*)uc->uc_mcontext.mc_rip;
+        rbp = (void*)uc->uc_mcontext.mc_rbp;
+#else
         rip = (void*)uc->uc_mcontext->__ss.__rip;
         rbp = (void*)uc->uc_mcontext->__ss.__rbp;
+#endif
 #endif
     }
 #else

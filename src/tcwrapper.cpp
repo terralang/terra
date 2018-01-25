@@ -441,7 +441,7 @@ public:
         AsmLabelAttr * asmlabel = f->getAttr<AsmLabelAttr>();
         if(asmlabel) {
             InternalName = asmlabel->getLabel();
-            #ifndef __linux__
+            #if !defined(__linux__) && !defined(__FreeBSD__)
                 //In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
                 InternalName.insert(InternalName.begin(), '\01');
             #endif
