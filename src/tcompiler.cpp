@@ -348,9 +348,13 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
 #endif
     
     std::string err;
+    std::vector<std::string> mattrs;
+    if(!CU->TT->Features.empty())
+      mattrs.push_back(CU->TT->Features);
     EngineBuilder eb(UNIQUEIFY(Module,topeemodule));
     eb.setErrorStr(&err)
       .setMCPU(CU->TT->CPU)
+      .setMAttrs(mattrs)
       .setEngineKind(EngineKind::JIT)
 #ifdef TERRA_CAN_USE_OLD_JIT
       .setAllocateGVsWithCode(false)

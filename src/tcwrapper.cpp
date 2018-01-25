@@ -938,6 +938,10 @@ int include_c(lua_State * L) {
     args.push_back(TT->Triple.c_str());
     args.push_back("-target-cpu");
     args.push_back(TT->CPU.c_str());
+    if(!TT->Features.empty()) {
+      args.push_back("-target-feature");
+      args.push_back(TT->Features.c_str());
+    }
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");
