@@ -84,7 +84,7 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if LLVM_VERSION >= 34
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if(type == object::SymbolRef::ST_Function) {
-            #if !defined(__arm__) && !defined(__linux__)
+            #if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
             name = name.substr(1);
             #endif
             void * addr = (void*) CU->ee->getFunctionAddress(name);
@@ -273,7 +273,11 @@ int terra_inittarget(lua_State * L) {
     if(!lua_isnil(L, 3))
         TT->Features = lua_tostring(L,3);
     else
+#ifdef DISABLE_AVX
+        TT->Features = "-avx";
+#else
         TT->Features = HostHasAVX() ? "+avx" : "";
+#endif
     
     TargetOptions options;
     DEBUG_ONLY(T) {
@@ -348,9 +352,13 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
 #endif
     
     std::string err;
+    std::vector<std::string> mattrs;
+    if(!CU->TT->Features.empty())
+      mattrs.push_back(CU->TT->Features);
     EngineBuilder eb(UNIQUEIFY(Module,topeemodule));
     eb.setErrorStr(&err)
       .setMCPU(CU->TT->CPU)
+      .setMAttrs(mattrs)
       .setEngineKind(EngineKind::JIT)
 #ifdef TERRA_CAN_USE_OLD_JIT
       .setAllocateGVsWithCode(false)
@@ -2832,7 +2840,9 @@ static bool SaveSharedObject(TerraCompilationUnit * CU, Module * M, std::vector<
 	cmd.push_back("-g");
     cmd.push_back("-shared");
     cmd.push_back("-Wl,-export-dynamic");
+#ifndef __FreeBSD__
     cmd.push_back("-ldl");
+#endif
 	cmd.push_back("-fPIC");
 #endif
 

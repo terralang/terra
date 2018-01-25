@@ -441,7 +441,7 @@ public:
         AsmLabelAttr * asmlabel = f->getAttr<AsmLabelAttr>();
         if(asmlabel) {
             InternalName = asmlabel->getLabel();
-            #ifndef __linux__
+            #if !defined(__linux__) && !defined(__FreeBSD__)
                 //In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
                 InternalName.insert(InternalName.begin(), '\01');
             #endif
@@ -938,6 +938,10 @@ int include_c(lua_State * L) {
     args.push_back(TT->Triple.c_str());
     args.push_back("-target-cpu");
     args.push_back(TT->CPU.c_str());
+    if(!TT->Features.empty()) {
+      args.push_back("-target-feature");
+      args.push_back(TT->Features.c_str());
+    }
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");

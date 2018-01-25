@@ -1,6 +1,8 @@
 /build
 /release/bin
 /release/lib
+/release/include/terra/lauxlib.h
+/release/include/terra/lua*.h
 /terra
 /tests/afile.txt
 /tests/benchmark_fannkuchredux
@@ -10,6 +12,8 @@
 /tests/output2
 /tests/renamed
 /tests/speed
+/tests/dynlib
+/tests/dynlib.exe
 
 *.bc
 *.ll

@@ -78,7 +78,7 @@ CPPFLAGS += -std=c++11
 endif
 
 
-ifeq ($(UNAME), Linux)
+ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared -fPIC
 TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
@@ -105,7 +105,7 @@ endif
 LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
 ifneq ($(REEXPORT_LLVM_COMPONENTS),)
   REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
-  ifeq ($(UNAME), Linux)
+  ifneq ($(findstring $(UNAME), Linux FreeBSD),)
     LLVM_LIBRARY_FLAGS += -Wl,--whole-archive $(REEXPORT_LIBS) -Wl,--no-whole-archive
   else
     LLVM_LIBRARY_FLAGS += $(REEXPORT_LIBS:%=-Wl,-force_load,%)
@@ -125,6 +125,9 @@ endif
 
 ifeq ($(UNAME), Linux)
 SUPPORT_LIBRARY_FLAGS += -ldl -pthread
+endif
+ifeq ($(UNAME), FreeBSD)
+SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
@@ -192,7 +195,7 @@ endif
 
 build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+	(cd $(LUAJIT_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
 
 release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
 	cp $(LUAJIT_INCLUDE)/$*.h $@
