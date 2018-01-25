@@ -273,7 +273,11 @@ int terra_inittarget(lua_State * L) {
     if(!lua_isnil(L, 3))
         TT->Features = lua_tostring(L,3);
     else
+#ifdef DISABLE_AVX
+        TT->Features = "-avx";
+#else
         TT->Features = HostHasAVX() ? "+avx" : "";
+#endif
     
     TargetOptions options;
     DEBUG_ONLY(T) {
