@@ -172,7 +172,7 @@ BIN2C = build/bin2c
 #put any install-specific stuff in here
 -include Makefile.inc
 
-.PHONY:	all clean purge test release install
+.PHONY:	all clean download purge test release install
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	all
@@ -185,6 +185,8 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
+
+download: build/$(LUAJIT_TAR)
 
 build/$(LUAJIT_TAR):
 ifeq ($(UNAME), Darwin)
@@ -282,6 +284,6 @@ build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
 #if we are cleaning, then don't include dependencies (which would require the header files are built)	
-ifeq ($(findstring $(MAKECMDGOALS),purge clean release),)
+ifeq ($(findstring $(MAKECMDGOALS),download purge clean release),)
 -include $(DEPENDENCIES)
 endif
