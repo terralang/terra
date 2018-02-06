@@ -543,6 +543,14 @@ end
 function T.terrafunction:setinlined(v)
     assert(self:isdefined(), "attempting to set the inlining state of an undefined function")
     self.definition.alwaysinline = not not v
+    assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
+           "setinlined(true) and setoptimized(false) are incompatible")
+end
+function T.terrafunction:setoptimized(v)
+    assert(self:isdefined(), "attempting to set the optimization state of an undefined function")
+    self.definition.dontoptimize = not v
+    assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
+           "setinlined(true) and setoptimized(false) are incompatible")
 end
 function T.terrafunction:disas()
     print("definition ", self:gettype())
