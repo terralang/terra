@@ -1255,7 +1255,13 @@ struct FunctionEmitter {
                     fstate->func->ADDFNATTR(NoInline);
                 }
             }
-            
+            if(funcobj->hasfield("dontoptimize")) {
+                if(funcobj->boolean("dontoptimize")) {
+                    fstate->func->ADDFNATTR(OptimizeNone);
+                    fstate->func->ADDFNATTR(NoInline);
+                }
+            }
+
             if(!isextern) {
                 if(CU->optimize) {
                     fstate->index = CU->functioncount++;
