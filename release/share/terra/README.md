@@ -97,7 +97,7 @@ Expect it to print a lot of junk out. At the end it will summarize the results:
 Building Terra
 ==============
 
-If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.3 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.5 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
 
 
 ### Windows ###
