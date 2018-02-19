@@ -957,7 +957,7 @@ struct CCallingConv {
     
     Function * CreateFunction(Module * M, Obj * ftype, const Twine & name) {
         Classification * info = ClassifyFunction(ftype);
-        Function * fn = Function::Create(info->fntype, Function::ExternalLinkage, name, M);
+        Function * fn = Function::Create(info->fntype, Function::InternalLinkage, name, M);
         AttributeFnOrCall(fn,info);
         #if LLVM_VERSION > 32 && defined(__arm__)
             fn->addAttribute(llvm::AttributeSet::FunctionIndex, llvm::Attribute::NoUnwind);
@@ -1247,7 +1247,11 @@ struct FunctionEmitter {
             funcobj->obj("type",&ftype);
             //function name is $+name so that it can't conflict with any symbols imported from the C namespace
             fstate->func = CC->CreateFunction(M,&ftype, Twine(StringRef((isextern) ? "" : "$"),name));
-            
+            if (isextern) {
+                // Set external linkage for extern functions.
+                fstate->func->setLinkage(GlobalValue::ExternalLinkage);
+            }
+
             if(funcobj->hasfield("alwaysinline")) {
                 if(funcobj->boolean("alwaysinline")) {
                     fstate->func->ADDFNATTR(AlwaysInline);
@@ -2593,6 +2597,7 @@ static int terra_compilationunitaddvalue(lua_State * L) { //entry point into com
         } else {
             gv = EmitFunction(CU,&value,NULL);
         }
+        gv->setLinkage(GlobalValue::ExternalLinkage); // User explicitly exported this function.
         CU->Ty = NULL; CU->CC = NULL; CU->symbols = NULL; CU->tooptimize = NULL;
         if(modulename) {
             if(GlobalValue * gv2 = CU->M->getNamedValue(modulename))
