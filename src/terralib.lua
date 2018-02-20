@@ -873,6 +873,8 @@ function T.quote:asvalue()
             end
             return t
         elseif e:is "var" then return e.symbol
+        elseif e:is "luaobject" then
+             return e.value
         else
             local runconstantprop = function()
                 return terra.constant(self):get()
@@ -3502,7 +3504,7 @@ end)
 local function createattributetable(q)
     local attr = q:asvalue()
     if type(attr) ~= "table" then
-        error("attributes must be a table")
+        error("attributes must be a table, not a " .. type(attr))
     end
     return T.attr(attr.nontemporal and true or false, 
                   type(attr.align) == "number" and attr.align or nil,
