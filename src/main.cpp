@@ -20,7 +20,7 @@
 #include "terra.h"
 
 static void doerror(lua_State * L) {
-    printf("%s\n",luaL_checkstring(L,-1));
+    fprintf(stderr,"%s\n",luaL_checkstring(L,-1));
     lua_close(L);
     terra_llvmshutdown();
     exit(1);
