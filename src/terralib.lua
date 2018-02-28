@@ -4213,7 +4213,7 @@ function terra.type(t)
 end
 
 function terra.linklibrary(filename)
-    assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
+    assert(not filename:match("%.bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
     terra.linklibraryimpl(filename)
 end
 function terra.linkllvm(filename,target,fromstring)

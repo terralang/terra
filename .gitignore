@@ -14,6 +14,7 @@
 /tests/speed
 /tests/dynlib
 /tests/dynlib.exe
+/tests/not_bc
 
 *.bc
 *.ll
