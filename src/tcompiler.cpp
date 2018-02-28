@@ -1149,7 +1149,10 @@ static GlobalVariable * CreateGlobalVariable(TerraCompilationUnit * CU, Obj * gl
         llvmconstant = EmitConstantInitializer(CU,&constant);
     }
     int as = global->number("addressspace");
-    return new GlobalVariable(*CU->M, typ, global->boolean("constant"), GlobalValue::ExternalLinkage, llvmconstant, name, NULL,GlobalVariable::NotThreadLocal, as);
+    GlobalValue::LinkageTypes linkage =
+        (global->boolean("constant") && !global->boolean("extern"))
+        ? GlobalValue::InternalLinkage : GlobalValue::ExternalLinkage;
+    return new GlobalVariable(*CU->M, typ, global->boolean("constant"), linkage, llvmconstant, name, NULL, GlobalVariable::NotThreadLocal, as);
 }
 
 static bool AlwaysShouldCopy(GlobalValue * G, void * data) { return true; }
