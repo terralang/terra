@@ -91,6 +91,12 @@ int main(int argc, char ** argv) {
     
     setupcrashsignal(L);
     
+    if(options.cmd_line_chunk != NULL) {
+      if(terra_dostring(L,options.cmd_line_chunk))
+        doerror(L);
+      free(options.cmd_line_chunk);
+    }
+
     if(scriptidx < argc) {
       int narg = getargs(L, argv, scriptidx);  
       lua_setglobal(L, "arg");
@@ -104,7 +110,7 @@ int main(int argc, char ** argv) {
         doerror(L);
     }
     
-    if(isatty(0) && (interactive || scriptidx == argc)) {
+    if(isatty(0) && (interactive || (scriptidx == argc && !options.cmd_line_chunk))) {
         progname = NULL;
         dotty(L);
     }
@@ -124,6 +130,7 @@ void usage() {
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
            "    -m use LLVM's MCJIT\n"
+           "    -e 'chunk' : execute command-line 'chunk' of code\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
 
@@ -135,11 +142,12 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
         { "debugsymbols",   0,     NULL,           'g' },
         { "interactive",     0,     NULL,     'i' },
         { "mcjit", 0, NULL, 'm' },
+        { "execute", required_argument, NULL, 'e' },
         { NULL,        0,     NULL,            0 }
     };
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(argc, argv, "+hvgimp:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvgime:p:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
                 options->verbose++;
@@ -152,6 +160,10 @@ void parse_args(lua_State * L, int  argc, char ** argv, terra_Options * options,
                 break;
             case 'm':
                 options->usemcjit = 1;
+                break;
+            case 'e':
+                options->cmd_line_chunk = (char*)malloc(strlen(optarg) + 1);
+                strcpy(options->cmd_line_chunk, optarg);
                 break;
             case ':':
             case 'h':
