@@ -245,6 +245,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst*,8> Returns;
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+            }else{
+                newfn->setLinkage(GlobalValue::ExternalLinkage);
             }
             return newfn;
         } else if(GlobalVariable * GV = dyn_cast<GlobalVariable>(V)) {
