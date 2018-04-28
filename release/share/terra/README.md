@@ -124,10 +124,11 @@ Now run make in the `terra` directory to download LuaJIT and build Terra:
 
 If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
 
-    LLVM_CONFIG = $(shell which llvm-config)
-    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
-    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
-    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
+    LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
+    LLVM_PREFIX ?= $(shell $(LLVM_CONFIG) --prefix)
+    CLANG ?= $(shell which clang-3.5 clang | head -1)
+    CXX ?= $(CLANG)++
+    CC  ?= $(CLANG)
 
 If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
 
