@@ -782,6 +782,7 @@ end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
+terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
 terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)

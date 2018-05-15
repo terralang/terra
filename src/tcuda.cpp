@@ -20,6 +20,7 @@ extern "C" {
 #include "tllvmutil.h"
 #include "tobj.h"
 #include "cudalib.h"
+#include <fstream>
 #include <sstream>
 #ifndef _WIN32
 #include <unistd.h>
@@ -93,7 +94,7 @@ public:
 };
 #endif
 
-void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::string * buf) {
+void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::string * buf, const char * libdevice) {
     
 #if LLVM_VERSION < 38
     for(llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
@@ -127,9 +128,21 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
         foutput << *M;
         #endif
     }
-    
+
     nvvmProgram prog;
     CUDA_DO(T->cuda->nvvmCreateProgram(&prog));
+
+    // Add libdevice module first
+    if (libdevice != NULL) {
+      std::ifstream libdeviceFile(libdevice);
+      std::stringstream sstr;
+      sstr << libdeviceFile.rdbuf();
+      std::string libdeviceStr = sstr.str();
+      size_t libdeviceModSize = libdeviceStr.size();
+      const char* libdeviceMod = libdeviceStr.data();
+      CUDA_DO(T->cuda->nvvmAddModuleToProgram(prog, libdeviceMod, libdeviceModSize, "libdevice"));
+    }
+
     CUDA_DO(T->cuda->nvvmAddModuleToProgram(prog, llvmir.data(), llvmir.size(), M->getModuleIdentifier().c_str()));
     int numOptions = 1;
     const char * options[] = { deviceopt.c_str() };
@@ -175,6 +188,7 @@ int terra_toptx(lua_State * L) {
     int version = lua_tonumber(L,4);
     int major = version / 10;
     int minor = version % 10;
+    const char * libdevice = lua_tostring(L,5);
 
     int N = lua_objlen(L,annotations);
     for(int i = 0; i < N; i++) {
@@ -208,7 +222,7 @@ int terra_toptx(lua_State * L) {
     }
 	
     std::string ptx;
-    moduleToPTX(T,M,major,minor,&ptx);
+    moduleToPTX(T,M,major,minor,&ptx,libdevice);
     if(dumpmodule) {
         fprintf(stderr,"CUDA Module:\n");
         M->dump();
