@@ -5,49 +5,61 @@
 # (3) directory where you downloaded the Terra source
 # all paths must be ABSOLUTE
 
+!IFNDEF LLVM_DIR
 LLVM_DIR=C:\Users\zdevito\LLVM
+!ENDIF
+
+!IFNDEF LLVM_VERSION
+LLVM_VERSION=3.5.0
+!ENDIF
+
+!IFNDEF LLVM_VERSION_SHORT
+LLVM_VERSION_SHORT=35
+!ENDIF
+
+!IFNDEF LUAJIT_DIR
 LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
+!ENDIF
+
+!IFNDEF TERRA_DIR
 TERRA_DIR=C:\Users\zdevito\terra
+!ENDIF
+
+!IFNDEF CUDA_DIR
 CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
+!ENDIF
 
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
 
 
-LIBS=      LLVMLTO.lib  LLVMObjCARCOpts.lib  LLVMLinker.lib  LLVMipo.lib  LLVMVectorize.lib \
-           LLVMBitWriter.lib  LLVMIRReader.lib  LLVMAsmParser.lib  LLVMXCoreDisassembler.lib \
-           LLVMXCoreCodeGen.lib  LLVMXCoreDesc.lib  LLVMXCoreInfo.lib  LLVMXCoreAsmPrinter.lib \
-           LLVMSystemZDisassembler.lib  LLVMSystemZCodeGen.lib  LLVMSystemZAsmParser.lib  LLVMSystemZDesc.lib \
-           LLVMSystemZInfo.lib  LLVMSystemZAsmPrinter.lib  LLVMSparcDisassembler.lib  LLVMSparcCodeGen.lib \
-           LLVMSparcAsmParser.lib  LLVMSparcDesc.lib  LLVMSparcInfo.lib  LLVMSparcAsmPrinter.lib \
-           LLVMR600CodeGen.lib  LLVMR600Desc.lib  LLVMR600Info.lib  LLVMR600AsmPrinter.lib \
-           LLVMPowerPCDisassembler.lib  LLVMPowerPCCodeGen.lib  LLVMPowerPCAsmParser.lib  LLVMPowerPCDesc.lib \
-           LLVMPowerPCInfo.lib  LLVMPowerPCAsmPrinter.lib  LLVMNVPTXCodeGen.lib  LLVMNVPTXDesc.lib \
-           LLVMNVPTXInfo.lib  LLVMNVPTXAsmPrinter.lib  LLVMMSP430CodeGen.lib  LLVMMSP430Desc.lib \
-           LLVMMSP430Info.lib  LLVMMSP430AsmPrinter.lib  LLVMMipsDisassembler.lib  LLVMMipsCodeGen.lib \
-           LLVMMipsAsmParser.lib  LLVMMipsDesc.lib  LLVMMipsInfo.lib  LLVMMipsAsmPrinter.lib \
-           LLVMHexagonCodeGen.lib  LLVMHexagonAsmPrinter.lib  LLVMHexagonDesc.lib  LLVMHexagonInfo.lib \
-           LLVMCppBackendCodeGen.lib  LLVMCppBackendInfo.lib  LLVMARMDisassembler.lib  LLVMARMCodeGen.lib \
-           LLVMARMAsmParser.lib  LLVMARMDesc.lib  LLVMARMInfo.lib  LLVMARMAsmPrinter.lib \
-           LLVMAArch64Disassembler.lib  LLVMAArch64CodeGen.lib  LLVMAArch64AsmParser.lib  LLVMAArch64Desc.lib \
-           LLVMAArch64Info.lib  LLVMAArch64AsmPrinter.lib  LLVMAArch64Utils.lib  LLVMTableGen.lib \
-           LLVMDebugInfo.lib  LLVMOption.lib  LLVMX86Disassembler.lib  LLVMX86AsmParser.lib \
-           LLVMX86CodeGen.lib  LLVMSelectionDAG.lib  LLVMAsmPrinter.lib  LLVMX86Desc.lib  LLVMX86Info.lib \
-           LLVMX86AsmPrinter.lib  LLVMX86Utils.lib  LLVMJIT.lib  LLVMLineEditor.lib  LLVMMCAnalysis.lib \
-           LLVMMCDisassembler.lib  LLVMInstrumentation.lib  LLVMInterpreter.lib  LLVMCodeGen.lib \
-           LLVMScalarOpts.lib  LLVMInstCombine.lib  LLVMTransformUtils.lib  LLVMipa.lib  LLVMAnalysis.lib \
-           LLVMProfileData.lib  LLVMMCJIT.lib  LLVMTarget.lib  LLVMRuntimeDyld.lib  LLVMObject.lib \
-           LLVMMCParser.lib  LLVMBitReader.lib  LLVMExecutionEngine.lib  LLVMMC.lib  LLVMCore.lib \
-           LLVMSupport.lib \
-           clangTooling.lib clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib \
-           clangCodeGen.lib clangDriver.lib clangEdit.lib clangFrontend.lib clangFrontendTool.lib clangLex.lib \
-           clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib \
-           clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib \
-           $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
+LIBS= LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBitReader.lib   \
+      LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMDebugInfo.lib          \
+      LLVMExecutionEngine.lib LLVMInstCombine.lib LLVMInstrumentation.lib       \
+      LLVMInterpreter.lib LLVMipa.lib LLVMipo.lib LLVMIRReader.lib              \
+      LLVMJIT.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib      \
+      LLVMMCAnalysis.lib LLVMMCDisassembler.lib LLVMMCJIT.lib                   \
+      LLVMMCParser.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMOption.lib        \
+      LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib                \
+      LLVMSelectionDAG.lib LLVMSupport.lib LLVMTableGen.lib LLVMTarget.lib      \
+      LLVMTransformUtils.lib LLVMVectorize.lib LLVMX86AsmParser.lib             \
+      LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib                  \
+      LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib                  \
+      clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   \
+      clangBasic.lib clangCodeGen.lib clangDriver.lib                           \
+      clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib                 \
+      clangFrontend.lib clangFrontendTool.lib clangIndex.lib clangLex.lib       \
+      clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib    \
+      clangSerialization.lib clangStaticAnalyzerCheckers.lib                    \
+      clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib               \
+      clangTooling.lib                                                          \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
 
 LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
 
-CLANG_RESOURCE_DIRECTORY=$(LLVM_DIR)\lib\clang\3.5.0
+!IFNDEF CLANG_RESOURCE_DIRECTORY
+CLANG_RESOURCE_DIRECTORY=$(LLVM_DIR)\lib\clang\$(LLVM_VERSION)
+!ENDIF
 
 TERRALIB_SRC = $(SRC)\lctype.cpp $(SRC)\llex.cpp $(SRC)\lobject.cpp $(SRC)\lparser.cpp $(SRC)\lstring.cpp $(SRC)\lzio.cpp $(SRC)\tcompiler.cpp $(SRC)\tcuda.cpp $(SRC)\tcwrapper.cpp $(SRC)\tdebug.cpp $(SRC)\terra.cpp $(SRC)\tinline.cpp $(SRC)\tkind.cpp $(SRC)\tllvmutil.cpp $(SRC)\tinternalizedfiles.cpp $(SRC)\treadnumber.c $(SRC)\lj_strscan.c
 CPP=cl
@@ -57,7 +69,7 @@ LUAJIT = $(LUAJIT_DIR)\src\luajit.exe
 
 CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
            /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(TERRA_DIR)\release\include\terra /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
-           /DLLVM_VERSION=35 \
+           /DLLVM_VERSION=$(LLVM_VERSION_SHORT) \
            /DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
 
 all:	$(TERRA_DIR)\release\bin\terra.exe
