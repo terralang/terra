@@ -3977,11 +3977,16 @@ function T.quote:__tostring() return self:prettystring(false) end
 
 local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true, asm = true }
 local mustbefile = { sharedlibrary = true, executable = true }
-function compilationunit:saveobj(filename,filekind,arguments)
+function compilationunit:saveobj(filename,filekind,arguments,optimize)
     if filekind ~= nil and type(filekind) ~= "string" then
         --filekind is missing, shift arguments to the right
-        filekind,arguments = nil,filekind
+        filekind,arguments,optimize = nil,filekind,arguments
     end
+
+    if optimize == nil then
+        optimize = true
+    end
+
     if filekind == nil and filename ~= nil then
         --infer filekind from string
         if filename:match("%.o$") then
@@ -4004,19 +4009,19 @@ function compilationunit:saveobj(filename,filekind,arguments)
     if filename == nil and mustbefile[filekind] then
         error(filekind .. " must be written to a file")
     end
-    return terra.saveobjimpl(filename,filekind,self,arguments or {})
+    return terra.saveobjimpl(filename,filekind,self,arguments or {},optimize)
 end
 
-function terra.saveobj(filename,filekind,env,arguments,target)
+function terra.saveobj(filename,filekind,env,arguments,target,optimize)
     if type(filekind) ~= "string" then
-        filekind,env,arguments,target = nil,filekind,env,arguments
+        filekind,env,arguments,target,optimize = nil,filekind,env,arguments,target
     end
     local cu = terra.newcompilationunit(target or terra.nativetarget,false)
     for k,v in pairs(env) do
         if not T.globalvalue:isclassof(v) then error("expected terra global or function but found "..terra.type(v)) end
         cu:addvalue(k,v)
     end
-    local r = cu:saveobj(filename,filekind,arguments)
+    local r = cu:saveobj(filename,filekind,arguments,optimize)
     cu:free()
     return r
 end

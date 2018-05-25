@@ -2879,10 +2879,13 @@ static int terra_saveobjimpl(lua_State * L) {
     const char * filename = lua_tostring(L, 1); //NULL means write to memory
     std::string filekind = lua_tostring(L,2);
     int argument_index = 4;
-    
+    bool optimize = lua_toboolean(L,5);
+
     lua_getfield(L,3,"llvm_cu");
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,-1); assert(CU);
-    llvmutil_optimizemodule(CU->M,CU->TT->tm);
+    if (optimize) {
+        llvmutil_optimizemodule(CU->M,CU->TT->tm);
+    }
     //TODO: interialize the non-exported functions?
     std::vector<const char *> args;
     int nargs = lua_objlen(L,argument_index);
