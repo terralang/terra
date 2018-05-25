@@ -575,7 +575,10 @@ class Types {
         std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
-        return StructType::create(*CU->TT->ctx, name);
+        if (isreserved)
+            return StructType::create(*CU->TT->ctx, name);
+        else
+            return StructType::create(*CU->TT->ctx);
     }
     bool beginsWith(const std::string & s, const std::string & prefix) {
         return s.substr(0,prefix.size()) == prefix;
