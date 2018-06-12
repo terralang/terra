@@ -578,12 +578,12 @@ class Types {
         if (isreserved)
             return StructType::create(*CU->TT->ctx, name);
         else
-            return StructType::create(*CU->TT->ctx);
+            return StructType::get(*CU->TT->ctx, LayoutStruct(NULL, typ), false);
     }
     bool beginsWith(const std::string & s, const std::string & prefix) {
         return s.substr(0,prefix.size()) == prefix;
     }
-    void LayoutStruct(StructType * st, Obj * typ) {
+    std::vector<Type*> LayoutStruct(StructType * st, Obj * typ) {
         Obj layout;
         GetStructEntries(typ,&layout);
         int N = layout.size();
@@ -635,12 +635,17 @@ class Types {
                 entry_types.push_back(fieldtype);
             }
         }
-        st->setBody(entry_types);
+	if (st) {
+          st->setBody(entry_types);
+        }
         VERBOSE_ONLY(T) {
+          if (st) {
             printf("Struct Layout Is:\n");
             st->dump();
             printf("\nEnd Layout\n");
+	  }
         }
+      return entry_types;
     }
 public:
     Types(TerraCompilationUnit * CU_) :  CU(CU_), T(CU_->T) {}
