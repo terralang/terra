@@ -169,8 +169,8 @@ Terra functions are entry-points into Terra code. Functions can be either define
     [local] terra myfunctionname :: type_expresion
     [local] terra myfunctionname :: {int,bool} -> {int}
 
-_Terra function declaration_. It creates a new undefined function stores it the Lua variable `myfunctionname`.
- f the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`).
+_Terra function declaration_. It creates a new undefined function and stores it the Lua variable `myfunctionname`.
+ If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`).
 
  <!--- If `mystruct` is a [Struct](#exotypes-structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`. --->
 
