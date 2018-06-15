@@ -8,7 +8,7 @@ environment:
     #   LLVM_VERSION_SHORT: 38
 
 install:
-  - appveyor DownloadFile https://github.com/elliottslaughter/llvm-package-windows/releases/download/clang-%LLVM_VERSION%/llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt.7z
+  - appveyor DownloadFile https://github.com/elliottslaughter/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt.7z
   - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt.7z
   - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
@@ -26,4 +26,12 @@ install:
 
 build_script:
   - call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64
-  - cd msvc & nmake
+  - cd msvc
+  - nmake
+  - cd ..
+
+test_script:
+  - release\bin\terra tests\hello.t
+  # - cd tests
+  # - ..\release\bin\terra run
+  # - cd ..

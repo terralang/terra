@@ -25,34 +25,39 @@ LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
 TERRA_DIR=C:\Users\zdevito\terra
 !ENDIF
 
-!IFNDEF CUDA_DIR
-CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
+# Set this if you want to enable CUDA.
+# CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
+!IFDEF CUDA_DIR
+CUDA_INCLUDES=/DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
+!ELSE
+CUDA_INCLUDES=
 !ENDIF
 
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
 
 
-LIBS= LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBitReader.lib   \
-      LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMDebugInfo.lib          \
-      LLVMExecutionEngine.lib LLVMInstCombine.lib LLVMInstrumentation.lib       \
-      LLVMInterpreter.lib LLVMipa.lib LLVMipo.lib LLVMIRReader.lib              \
-      LLVMJIT.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib      \
-      LLVMMCAnalysis.lib LLVMMCDisassembler.lib LLVMMCJIT.lib                   \
-      LLVMMCParser.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMOption.lib        \
-      LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib                \
-      LLVMSelectionDAG.lib LLVMSupport.lib LLVMTableGen.lib LLVMTarget.lib      \
-      LLVMTransformUtils.lib LLVMVectorize.lib LLVMX86AsmParser.lib             \
-      LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib                  \
-      LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib                  \
-      clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   \
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   \
       clangBasic.lib clangCodeGen.lib clangDriver.lib                           \
       clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib                 \
       clangFrontend.lib clangFrontendTool.lib clangIndex.lib clangLex.lib       \
       clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib    \
       clangSerialization.lib clangStaticAnalyzerCheckers.lib                    \
       clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib               \
-      clangTooling.lib                                                          \
+      clangTooling.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib    \
+      LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib          \
+      LLVMDebugInfo.lib LLVMExecutionEngine.lib LLVMInstCombine.lib             \
+      LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipa.lib LLVMipo.lib       \
+      LLVMIRReader.lib LLVMJIT.lib LLVMLineEditor.lib LLVMLinker.lib            \
+      LLVMLTO.lib LLVMMC.lib LLVMMCAnalysis.lib LLVMMCDisassembler.lib          \
+      LLVMMCJIT.lib LLVMMCParser.lib LLVMNVPTXAsmPrinter.lib                    \
+      LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib                  \
+      LLVMObjCARCOpts.lib LLVMObject.lib LLVMOption.lib LLVMProfileData.lib     \
+      LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib               \
+      LLVMSupport.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib    \
+      LLVMVectorize.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib              \
+      LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib                \
+      LLVMX86Info.lib LLVMX86Utils.lib                                          \
       $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
 
 LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
@@ -70,7 +75,7 @@ LUAJIT = $(LUAJIT_DIR)\src\luajit.exe
 CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
            /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(TERRA_DIR)\release\include\terra /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
            /DLLVM_VERSION=$(LLVM_VERSION_SHORT) \
-           /DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
+           $(CUDA_INCLUDES)
 
 all:	$(TERRA_DIR)\release\bin\terra.exe
 
