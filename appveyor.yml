@@ -17,9 +17,9 @@ install:
   - 7z x LuaJIT-2.0.5.zip
   - set LUAJIT_DIR=%CD%\LuaJit-2.0.5
 
-  - appveyor DownloadFile  https://developer.nvidia.com/compute/cuda/8.0/prod/local_installers/cuda_8.0.44_windows-exe -FileName cuda_8.0.44_windows.exe
-  - cuda_8.0.44_windows.exe -s compiler_8.0 cublas_8.0 cublas_dev_8.0 cudart_8.0 curand_8.0 curand_dev_8.0
-  - set CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v8.0
+  # - appveyor DownloadFile  https://developer.nvidia.com/compute/cuda/8.0/prod/local_installers/cuda_8.0.44_windows-exe -FileName cuda_8.0.44_windows.exe
+  # - cuda_8.0.44_windows.exe -s compiler_8.0 cublas_8.0 cublas_dev_8.0 cudart_8.0 curand_8.0 curand_dev_8.0
+  # - set CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v8.0
 
   - set TERRA_DIR=%CD%
   - dir
