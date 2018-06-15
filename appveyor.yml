@@ -31,7 +31,6 @@ build_script:
   - cd ..
 
 test_script:
-  - release\bin\terra tests\hello.t
-  # - cd tests
-  # - ..\release\bin\terra run
-  # - cd ..
+  - cd tests
+  - ..\release\bin\terra run
+  - cd ..

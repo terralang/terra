@@ -9,4 +9,4 @@ local function getcommand()
     return prefix
 end
 
-assert(os.execute(getcommand() .. " -e 'local c = terralib.includec([[stdio.h]]); terra f() c.printf([[hello\n]]) end; f()'") == 0)
+assert(os.execute(getcommand() .. " -e \"local c = terralib.includec([[stdio.h]]); terra f() c.printf([[hello]]) end; f(); print()\"") == 0)

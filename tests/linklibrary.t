@@ -1,4 +1,7 @@
 local ffi = require 'ffi'
+if ffi.os == "Windows" then
+    os.exit()
+end
 
 -- Test that terralib.linklibrary doesn't reject a library that just happens to end in bc
 
