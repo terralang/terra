@@ -144,6 +144,7 @@ local C = {
     cuModuleGetGlobal_v2 = ef("cuModuleGetGlobal_v2",{&uint64,&uint64,&CUmod_st,&int8} -> uint32);
     cuModuleLoadData = ef("cuModuleLoadData",{&&CUmod_st,&opaque} -> uint32);
     cuFuncGetAttribute = ef("cuFuncGetAttribute", {&int,int,&CUfunc_st} -> uint32);
+    cuGetErrorString = ef("cuGetErrorString", {uint32,&rawstring} -> uint32);
     exit = ef("exit",{int32} -> {});
     printf = ef("printf",terralib.types.funcpointer(&int8,int32,true));
     snprintf = ef(snprintf,terralib.types.funcpointer({&int8,uint64,&int8},int32,true));
@@ -213,7 +214,9 @@ local cd = macro(function(nm,...)
             if error_str ~= nil then
                 var start = C.strlen(error_str)
                 if error_sz - start > 0 then
-                    C.snprintf(error_str+start,error_sz - start,"%s: cuda reported error %d",nm,r)
+                    var s : rawstring
+                    C.cuGetErrorString(r, &s)
+                    C.snprintf(error_str+start,error_sz - start,"%s: cuda reported error %d: %s",nm,r,s)
                 end
             end
             return r
