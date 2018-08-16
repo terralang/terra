@@ -98,17 +98,36 @@ target_include_directories(TerraLibrary
     ${CLANG_INCLUDE_DIRS}
 )
 
-message(STATUS "LLVM definitions:" ${LLVM_DEFINITIONS})
-
 target_compile_definitions(TerraLibrary
   PRIVATE
     LLVM_VERSION=${LLVM_VERSION_MAJOR}${LLVM_VERSION_MINOR}
+    # FIXME: Find portable ways to do all these
+    _GNU_SOURCE
+    __STDC_CONSTANT_MACROS
+    __STDC_FORMAT_MACROS
+    __STDC_LIMIT_MACROS
+)
+
+target_compile_options(TerraLibrary
+  PRIVATE
+    # FIXME: Find portable ways to do all these
+    -fno-common
+    -Wcast-qual
+    $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
+    $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
 )
 
 if(${LLVM_ENABLE_RTTI} EQUAL 0)
   target_compile_options(TerraLibrary
     PRIVATE
-      -fno-rtti # FIXME: Find portable way to do this
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti> # FIXME: Find portable way to do this
+  )
+endif()
+
+if(${LLVM_ENABLE_ASSERTIONS} EQUAL 0)
+  target_compile_definitions(TerraLibrary
+    PRIVATE
+      TERRA_LLVM_HEADERS_HAVE_NDEBUG
   )
 endif()
 
