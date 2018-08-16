@@ -4,6 +4,7 @@
 # It defines the following variables
 # CLANG_FOUND        - true if Clang is found
 # CLANG_INCLUDE_DIRS - list of Clang include directories
+# CLANG_RESOURCE_DIR - directory where Clang stores system libraries
 # CLANG_LIBRARIES    - list of Clang libraries
 # CLANG_EXECUTABLE   - Clang executable
 
@@ -38,6 +39,8 @@ find_program(CLANG_EXECUTABLE
   clang clang-3.4 clang-3.5 clang-3.6 clang-3.7 clang-3.8 clang-3.9
   HINTS ${LLVM_TOOLS_BINARY_DIRS}
 )
+
+set(CLANG_RESOURCE_DIR ${LLVM_INSTALL_PREFIX}/lib/clang/${LLVM_PACKAGE_VERSION})
 
 if(CLANG_LIBRARIES AND CLANG_INCLUDE_DIRS AND CLANG_EXECUTABLE)
   message(STATUS "Clang libraries: ${CLANG_LIBRARIES}")
