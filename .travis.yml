@@ -29,6 +29,11 @@ before_install:
       sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
       sudo apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-3.8 main" -y
       sudo apt-get update -qq
+      sudo cat > /etc/apt/preferences.d/llvm-600 <<EOF
+    Package: *
+    Pin: origin apt.llvm.org
+    Pin-Priority: 600
+      EOF
       sudo apt-get install -qq clang-3.5 libclang-3.5-dev llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev
       ls /usr/share
       export CMAKE_PREFIX_PATH=/usr/share/llvm-3.8
