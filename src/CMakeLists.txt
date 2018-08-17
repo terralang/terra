@@ -151,6 +151,8 @@ list(APPEND TERRA_EXE_SRC
 
 add_executable(TerraExecutable ${TERRA_EXE_SRC})
 
+set_target_properties(TerraExecutable PROPERTIES OUTPUT_NAME terra)
+
 target_include_directories(TerraExecutable
   PRIVATE
     "${PROJECT_SOURCE_DIR}/release/include/terra"
@@ -158,9 +160,8 @@ target_include_directories(TerraExecutable
 
 target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
 
-install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/TerraExecutable"
+install(TARGETS TerraExecutable
   DESTINATION ${PROJECT_SOURCE_DIR}/release/bin
-  RENAME terra
 )
 
 install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/release/bin/terra ${PROJECT_SOURCE_DIR}/terra )")
