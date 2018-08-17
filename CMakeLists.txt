@@ -15,7 +15,8 @@ if(DEFINED ENV{CLANG})
   list(APPEND LLVM_HINTS "${CLANG_DIR}")
 endif()
 
-find_package(LLVM REQUIRED HINTS ${LLVM_HINTS})
+find_package(LLVM HINTS ${LLVM_HINTS} NO_DEFAULT_PATH)
+find_package(LLVM REQUIRED)
 find_package(Clang REQUIRED)
 find_package(CUDA)
 
