@@ -6,11 +6,11 @@ list(INSERT CMAKE_MODULE_PATH 0 "${Terra_SOURCE_DIR}/cmake/Modules")
 # Try to locate LLVM based on location of LLVM_CONFIG and/or CLANG
 if(DEFINED ENV{LLVM_CONFIG})
   get_filename_component(LLVM_CONFIG_DIR "$ENV{LLVM_CONFIG}" DIRECTORY)
-  list(append LLVM_HINTS "${LLVM_CONFIG_DIR}")
+  list(APPEND LLVM_HINTS "${LLVM_CONFIG_DIR}")
 endif()
 if(DEFINED ENV{CLANG})
   get_filename_component(CLANG_DIR "$ENV{CLANG}" DIRECTORY)
-  list(append LLVM_HINTS "${CLANG_DIR}")
+  list(APPEND LLVM_HINTS "${CLANG_DIR}")
 endif()
 
 find_package(LLVM REQUIRED HINTS ${LLVM_HINTS})
