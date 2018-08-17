@@ -149,11 +149,17 @@ target_link_libraries(TerraLibrary PRIVATE ${CLANG_LIBRARIES})
 target_link_libraries(TerraLibrary PRIVATE ${LLVM_AVAILABLE_LIBS})
 target_link_libraries(TerraLibrary PRIVATE ${LUAJIT_OBJECTS})
 
-target_link_libraries(TerraLibraryShared PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
+if(APPLE)
+elseif(UNIX)
+  target_link_libraries(TerraLibraryShared PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
+endif()
 target_link_libraries(TerraLibraryShared PRIVATE ${CLANG_LIBRARIES})
 target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_AVAILABLE_LIBS})
 target_link_libraries(TerraLibraryShared PRIVATE ${LUAJIT_OBJECTS})
-target_link_libraries(TerraLibraryShared PRIVATE -Wl,--no-whole-archive)
+if(APPLE)
+elseif(UNIX)
+  target_link_libraries(TerraLibraryShared PRIVATE -Wl,--no-whole-archive)
+endif()
 
 install(TARGETS TerraLibrary TerraLibraryShared
   DESTINATION ${PROJECT_SOURCE_DIR}/release/lib
@@ -177,9 +183,15 @@ target_include_directories(TerraExecutable
     "${PROJECT_SOURCE_DIR}/release/include/terra"
 )
 
-target_link_libraries(TerraExecutable PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
+if(APPLE)
+elseif(UNIX)
+  target_link_libraries(TerraExecutable PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
+endif()
 target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
-target_link_libraries(TerraExecutable PRIVATE -Wl,--no-whole-archive)
+if(APPLE)
+elseif(UNIX)
+  target_link_libraries(TerraExecutable PRIVATE -Wl,--no-whole-archive)
+endif()
 
 install(TARGETS TerraExecutable
   DESTINATION ${PROJECT_SOURCE_DIR}/release/bin
