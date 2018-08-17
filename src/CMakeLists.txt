@@ -88,9 +88,9 @@ list(APPEND TERRA_BIN_SRC
   linenoise.cpp linenoise.h
 )
 
-add_library(TerraLibrary ${TERRA_LIB_SRC})
+add_library(TerraObjectFiles OBJECT ${TERRA_LIB_SRC})
 
-target_include_directories(TerraLibrary
+target_include_directories(TerraObjectFiles
   PRIVATE
     "${PROJECT_SOURCE_DIR}/release/include/terra"
     ${PROJECT_BINARY_DIR}
@@ -98,7 +98,7 @@ target_include_directories(TerraLibrary
     ${CLANG_INCLUDE_DIRS}
 )
 
-target_compile_definitions(TerraLibrary
+target_compile_definitions(TerraObjectFiles
   PRIVATE
     LLVM_VERSION=${LLVM_VERSION_MAJOR}${LLVM_VERSION_MINOR}
     # FIXME: Find portable ways to do all these
@@ -108,7 +108,7 @@ target_compile_definitions(TerraLibrary
     __STDC_LIMIT_MACROS
 )
 
-target_compile_options(TerraLibrary
+target_compile_options(TerraObjectFiles
   PRIVATE
     # FIXME: Find portable ways to do all these
     -fno-common
@@ -118,27 +118,46 @@ target_compile_options(TerraLibrary
 )
 
 if(${LLVM_ENABLE_RTTI} EQUAL 0)
-  target_compile_options(TerraLibrary
+  target_compile_options(TerraObjectFiles
     PRIVATE
       $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti> # FIXME: Find portable way to do this
   )
 endif()
 
 if(${LLVM_ENABLE_ASSERTIONS} EQUAL 0)
-  target_compile_definitions(TerraLibrary
+  target_compile_definitions(TerraObjectFiles
     PRIVATE
       TERRA_LLVM_HEADERS_HAVE_NDEBUG
   )
 endif()
 
-set_target_properties(TerraLibrary PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(TerraObjectFiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+add_dependencies(TerraObjectFiles LuaJIT)
+add_dependencies(TerraObjectFiles TerraGeneratedFiles)
+
+add_library(TerraLibrary STATIC $<TARGET_OBJECTS:TerraObjectFiles>)
+add_library(TerraLibraryShared SHARED $<TARGET_OBJECTS:TerraObjectFiles>)
+
+set_target_properties(TerraLibrary PROPERTIES PREFIX "")
+set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
+
+set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
+set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 
 target_link_libraries(TerraLibrary PRIVATE ${CLANG_LIBRARIES})
 target_link_libraries(TerraLibrary PRIVATE ${LLVM_AVAILABLE_LIBS})
-target_link_libraries(TerraLibrary PRIVATE ${LUAJIT_LIBRARIES})
+target_link_libraries(TerraLibrary PRIVATE ${LUAJIT_OBJECTS})
 
-add_dependencies(TerraLibrary LuaJIT)
-add_dependencies(TerraLibrary TerraGeneratedFiles)
+target_link_libraries(TerraLibraryShared PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
+target_link_libraries(TerraLibraryShared PRIVATE ${CLANG_LIBRARIES})
+target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_AVAILABLE_LIBS})
+target_link_libraries(TerraLibraryShared PRIVATE ${LUAJIT_OBJECTS})
+target_link_libraries(TerraLibraryShared PRIVATE -Wl,--no-whole-archive)
+
+install(TARGETS TerraLibrary TerraLibraryShared
+  DESTINATION ${PROJECT_SOURCE_DIR}/release/lib
+)
 
 ###
 ### Terra Executable
@@ -158,7 +177,9 @@ target_include_directories(TerraExecutable
     "${PROJECT_SOURCE_DIR}/release/include/terra"
 )
 
+target_link_libraries(TerraExecutable PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
 target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
+target_link_libraries(TerraExecutable PRIVATE -Wl,--no-whole-archive)
 
 install(TARGETS TerraExecutable
   DESTINATION ${PROJECT_SOURCE_DIR}/release/bin
