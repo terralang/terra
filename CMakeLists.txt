@@ -7,6 +7,10 @@ find_package(LLVM HINTS ${LLVM_HINTS} REQUIRED)
 find_package(Clang REQUIRED)
 find_package(CUDA)
 
+# The official binary for 3.8 on macOS is buggy and lists LTO (a dynamic
+# library) even though LLVMLTO (a static library) is already on the list.
+list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
+
 include(GetLuaJIT)
 
 set(CMAKE_CXX_STANDARD 11)
