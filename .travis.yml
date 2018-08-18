@@ -57,7 +57,7 @@ script:
   - |
     if [[ $USE_CMAKE -eq 1 ]]; then
       (cd build && cmake .. && make install)
-      (cd test && ./run)
+      (cd tests && ./run)
     else
       make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
     fi
