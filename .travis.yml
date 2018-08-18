@@ -25,18 +25,17 @@ branches:
 before_install:
   - |
     if [[ "$(uname)" = "Linux" ]]; then
-      wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-      sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-      sudo apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-3.8 main" -y
-      sudo apt-get update -qq
-      sudo bash -c "echo 'Package: *' >> /etc/apt/preferences.d/llvm-600"
-      sudo bash -c "echo 'Pin: origin apt.llvm.org' >> /etc/apt/preferences.d/llvm-600"
-      sudo bash -c "echo 'Pin-Priority: 600' >> /etc/apt/preferences.d/llvm-600"
-      cat /etc/apt/preferences.d/llvm-600
-      apt-cache policy llvm-3.8-dev
-      sudo apt-get install -qq clang-3.5 libclang-3.5-dev llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev
-      ls /usr/share
-      export CMAKE_PREFIX_PATH=/usr/share/llvm-3.8
+      curl -O https://releases.llvm.org/3.8.1/clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+      tar xf clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+      ln -s clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-14.04/bin/llvm-config llvm-config-3.8
+      ln -s clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-14.04/bin/clang clang-3.8
+      export CMAKE_PREFIX_PATH=$PWD/clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-14.04
+
+      curl -O https://releases.llvm.org/3.5.2/clang+llvm-3.5.2-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+      tar xf clang+llvm-3.5.2-x86_64-linux-gnu-ubuntu-14.04.tar.xz
+      ln -s clang+llvm-3.5.2-x86_64-linux-gnu-ubuntu-14.04/bin/llvm-config llvm-config-3.5
+      ln -s clang+llvm-3.5.2-x86_64-linux-gnu-ubuntu-14.04/bin/clang clang-3.5
+      export PATH=$PWD:$PATH
     fi
   - |
     if [[ "$(uname)" = "Darwin" ]]; then
