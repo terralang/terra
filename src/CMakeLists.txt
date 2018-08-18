@@ -115,14 +115,8 @@ target_compile_options(TerraObjectFiles
     -Wcast-qual
     $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
     $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
-
-if(${LLVM_ENABLE_RTTI} EQUAL 0)
-  target_compile_options(TerraObjectFiles
-    PRIVATE
-      $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti> # FIXME: Find portable way to do this
-  )
-endif()
 
 if(${LLVM_ENABLE_ASSERTIONS} EQUAL 0)
   target_compile_definitions(TerraObjectFiles
