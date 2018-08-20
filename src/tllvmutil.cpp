@@ -370,8 +370,12 @@ void llvmutil_optimizemodule(Module * M, TargetMachine * TM) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
+#if LLVM_VERSION < 50
+    PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0);
+#else
     PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0, false);
-    
+#endif
+
 #if LLVM_VERSION >= 35
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
