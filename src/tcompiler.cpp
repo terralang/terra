@@ -11,7 +11,7 @@ extern "C" {
 #include <stdio.h>
 #include <inttypes.h>
 
-#ifndef TERRA_NO_STACKTRACE
+#ifdef TERRA_STACKTRACE
 #include <execinfo.h>
 #endif
 
@@ -390,7 +390,7 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
 }
 
-#ifndef TERRA_NO_STACKTRACE
+#ifdef TERRA_STACKTRACE
 static inline void printStackTrace( FILE *out = stderr, unsigned int max_frames = 63 )
 {
    fprintf(out, "stack trace:\n");
@@ -451,7 +451,7 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
 #endif
     }
-#ifndef TERRA_NO_STACKTRACE
+#ifdef TERRA_STACKTRACE
     install_fatal_error_handler(llvm_fatal_handler);
 #endif
     return 0;
