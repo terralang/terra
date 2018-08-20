@@ -34,8 +34,6 @@ extern "C" {
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
 #include "tllvmutil.h"
@@ -307,7 +305,20 @@ int terra_inittarget(lua_State * L) {
     if(!TheTarget) {
         luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",TT->Triple.c_str(),err.c_str());
     }
-    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,Reloc::PIC_,CodeModel::Large,CodeGenOpt::Aggressive);
+    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+        Reloc::PIC_,
+#else
+        Optional<Reloc::Model>(),
+#endif
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+        // On PPC the small model is limited to 16bit offsets
+        CodeModel::Medium,
+#else
+        // Use small model so that we can use signed 32bits offset in the function and GV tables
+        CodeModel::Small,
+#endif
+    CodeGenOpt::Aggressive);
     TT->external = new Module("external",*TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
