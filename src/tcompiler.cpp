@@ -11,6 +11,10 @@ extern "C" {
 #include <stdio.h>
 #include <inttypes.h>
 
+#ifndef TERRA_NO_STACKTRACE
+#include <execinfo.h>
+#endif
+
 #ifdef _WIN32
 #include <io.h>
 #include <time.h>
@@ -30,7 +34,8 @@ extern "C" {
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
 #include "tllvmutil.h"
@@ -302,7 +307,7 @@ int terra_inittarget(lua_State * L) {
     if(!TheTarget) {
         luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",TT->Triple.c_str(),err.c_str());
     }
-    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,Reloc::PIC_,CodeModel::Default,CodeGenOpt::Aggressive);
+    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,Reloc::PIC_,CodeModel::Large,CodeGenOpt::Aggressive);
     TT->external = new Module("external",*TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -374,6 +379,41 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
 }
 
+#ifndef TERRA_NO_STACKTRACE
+static inline void printStackTrace( FILE *out = stderr, unsigned int max_frames = 63 )
+{
+   fprintf(out, "stack trace:\n");
+ 
+   // storage array for stack trace address data
+   void* addrlist[max_frames+1];
+ 
+   // retrieve current stack addresses
+   size_t addrlen = backtrace( addrlist, sizeof( addrlist ) / sizeof( void* ));
+ 
+   if ( addrlen == 0 ) 
+   {
+      fprintf( out, "  \n" );
+      return;
+   }
+ 
+   // create readable strings to each frame.
+   char** symbollist = backtrace_symbols( addrlist, addrlen );
+ 
+   // print the stack trace.
+   for ( size_t i = 4; i < addrlen; i++ )
+      fprintf( out, "%s\n", symbollist[i]);
+ 
+   free(symbollist);
+}
+
+void llvm_fatal_handler(void *user_data, const std::string &reason, bool gen_crash_diag) {
+#ifdef __APPLE__
+    printStackTrace();
+#endif
+    std::abort();
+}
+#endif
+
 int terra_compilerinit(struct terra_State * T) {
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
@@ -400,6 +440,9 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
 #endif
     }
+#ifndef TERRA_NO_STACKTRACE
+    install_fatal_error_handler(llvm_fatal_handler);
+#endif
     return 0;
 }
 static void freetarget(TerraTarget * TT) {
@@ -638,7 +681,7 @@ class Types {
         st->setBody(entry_types);
         VERBOSE_ONLY(T) {
             printf("Struct Layout Is:\n");
-            st->dump();
+            st->print(llvm::errs(), false);
             printf("\nEnd Layout\n");
         }
     }
@@ -1304,7 +1347,7 @@ struct FunctionEmitter {
                         }
                         CU->fpm->run(*scc[i]);
                         VERBOSE_ONLY(T) {
-                            scc[i]->dump();
+                            scc[i]->print(llvm::errs(), nullptr);
                         }
                     }
                 }
@@ -1375,7 +1418,7 @@ struct FunctionEmitter {
         assert(breakpoints.size() == 0);
         
         VERBOSE_ONLY(T) {
-            fstate->func->dump();
+            fstate->func->print(llvm::errs(), nullptr);
         }
         verifyFunction(*fstate->func);
         
@@ -1941,7 +1984,7 @@ if(baseT->isIntegerTy()) { \
                     Constant * ptrint = ConstantInt::get(CU->getDataLayout().getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
                     r = ConstantExpr::getIntToPtr(ptrint, typ->type);
                 } else {
-                    typ->type->dump();
+                    typ->type->print(llvm::errs(), false);
                     assert(!"NYI - constant load\n");
                 }
                 lua_pop(L,1); // remove pointer
@@ -2652,7 +2695,7 @@ static int terra_llvmsizeof(lua_State * L) {
 static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
     if(CU->T->options.debug > 1)
         return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
-    return (void*)CU->ee->getGlobalValueAddress(Name);
+    return (void*)CU->ee->getPointerToGlobalIfAvailable(Name);
 }
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
     TerraCompilationUnit * CU = (TerraCompilationUnit*) data;
@@ -2751,7 +2794,7 @@ static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     Function * fn = (Function*) lua_touserdata(L,1); assert(fn);
     void * addr = lua_touserdata(L,2); assert(fn);
-    fn->dump();
+    fn->print(llvm::errs(), nullptr);
     if(T->C->functioninfo.count(addr)) {
         TerraFunctionInfo & fi = T->C->functioninfo[addr];
         printf("assembly for function at address %p\n",addr);
@@ -2993,6 +3036,8 @@ static int terra_linkllvmimpl(lua_State * L) {
     }
     #if LLVM_VERSION == 36
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
+    #elif LLVM_VERSION >= 60
+    Expected<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #elif LLVM_VERSION >= 37
     ErrorOr<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #else
@@ -3000,9 +3045,29 @@ static int terra_linkllvmimpl(lua_State * L) {
     #endif
     if(!mm) {
         if(fromstring)
+            #if LLVM_VERSION >= 50
+            {
+                std::string Msg;
+                raw_string_ostream S((Msg));
+                logAllUnhandledErrors(mm.takeError(), S, "");
+                S.flush();
+                terra_reporterror(T, "linkllvm: %s\n", S.str().c_str());
+            }
+            #else
             terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
-	else
-	    terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
+            #endif
+	    else
+        #if LLVM_VERSION >= 60
+            {
+                std::string Msg;
+                raw_string_ostream S((Msg));
+                logAllUnhandledErrors(mm.takeError(), S, "");
+                S.flush();
+                terra_reporterror(T, "linkllvm(%s): %s\n", filename, S.str().c_str());
+            }
+        #else
+	        terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
+        #endif
     }
     #if LLVM_VERSION >= 37
     Module * M = mm.get().release();
@@ -3037,6 +3102,6 @@ static int terra_dumpmodule(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,1);
     if(CU)
-        CU->M->dump();
+        CU->M->print(llvm::errs(), nullptr);
     return 0;
 }

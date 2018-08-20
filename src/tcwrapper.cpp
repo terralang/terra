@@ -485,7 +485,9 @@ public:
             0));
         }
         F->setParams(params);
-        #if LLVM_VERSION >= 33
+        #if LLVM_VERSION >= 50
+        CompoundStmt * stmts = CompoundStmt::Create(*Context, outputstmts, SourceLocation(), SourceLocation());
+        #elif LLVM_VERSION >= 33
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
         #else
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(), SourceLocation(), SourceLocation());
@@ -613,6 +615,7 @@ public:
 #endif
 };
 
+#if LLVM_VERSION < 50
 static llvm::sys::TimeValue ZeroTime() {
 #if LLVM_VERSION >= 36
     return llvm::sys::TimeValue::ZeroTime();
@@ -620,7 +623,11 @@ static llvm::sys::TimeValue ZeroTime() {
     return llvm::sys::TimeValue::ZeroTime;
 #endif
 }
-
+#else
+static llvm::sys::TimePoint<> ZeroTime() {
+    return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
+}
+#endif
 class LuaOverlayFileSystem : public clang::vfs::FileSystem {
 private:
   IntrusiveRefCntPtr<vfs::FileSystem> RFS;

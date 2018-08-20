@@ -225,7 +225,7 @@ int terra_toptx(lua_State * L) {
     moduleToPTX(T,M,major,minor,&ptx,libdevice);
     if(dumpmodule) {
         fprintf(stderr,"CUDA Module:\n");
-        M->dump();
+        M->print(llvm::errs(), nullptr);
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
     lua_pushstring(L,ptx.c_str());
