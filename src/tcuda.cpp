@@ -225,7 +225,11 @@ int terra_toptx(lua_State * L) {
     moduleToPTX(T,M,major,minor,&ptx,libdevice);
     if(dumpmodule) {
         fprintf(stderr,"CUDA Module:\n");
+        #if LLVM_VERSION < 38
+        M->dump();
+        #else
         M->print(llvm::errs(), nullptr);
+        #endif        
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
     lua_pushstring(L,ptx.c_str());
