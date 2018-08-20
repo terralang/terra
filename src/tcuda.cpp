@@ -229,7 +229,7 @@ int terra_toptx(lua_State * L) {
         M->dump();
         #else
         M->print(llvm::errs(), nullptr);
-        #endif        
+        #endif
         fprintf(stderr,"Generated PTX:\n%s\n",ptx.c_str());
     }
     lua_pushstring(L,ptx.c_str());

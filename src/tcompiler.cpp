@@ -2722,7 +2722,11 @@ static int terra_llvmsizeof(lua_State * L) {
 static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
     if(CU->T->options.debug > 1)
         return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
+#if LLVM_VERSION < 38
+    return (void*)CU->ee->getGlobalValueAddress(Name);
+#else
     return (void*)CU->ee->getPointerToGlobalIfAvailable(Name);
+#endif
 }
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
     TerraCompilationUnit * CU = (TerraCompilationUnit*) data;
