@@ -306,12 +306,12 @@ int terra_inittarget(lua_State * L) {
         luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",TT->Triple.c_str(),err.c_str());
     }
     TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,
-#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
+#if defined(__linux__) || defined(__unix__) || (LLVM_VERSION < 50)
         Reloc::PIC_,
 #else
         Optional<Reloc::Model>(),
 #endif
-#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+#if defined(__powerpc64__)
         // On PPC the small model is limited to 16bit offsets
         CodeModel::Medium,
 #else
