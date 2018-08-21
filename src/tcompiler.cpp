@@ -2727,7 +2727,7 @@ static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
 #if LLVM_VERSION < 38
     return (void*)CU->ee->getGlobalValueAddress(Name);
 #else
-    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name);
+    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name, false);
     //CU->ee->finalizeObject();
     return gvar?(void*)CU->ee->getOrEmitGlobalVariable(gvar):0;
 #endif
