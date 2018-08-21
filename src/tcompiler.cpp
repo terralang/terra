@@ -1364,6 +1364,8 @@ struct FunctionEmitter {
                         VERBOSE_ONLY(T) {
                             #if LLVM_VERSION < 38
                             scc[i]->dump();
+                            #elif LLVM_VERSION == 38
+                            scc[i]->print(llvm::errs(), true);
                             #else
                             scc[i]->print(llvm::errs(), nullptr);
                             #endif
@@ -2725,7 +2727,9 @@ static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
 #if LLVM_VERSION < 38
     return (void*)CU->ee->getGlobalValueAddress(Name);
 #else
-    return (void*)CU->ee->getPointerToGlobalIfAvailable(Name);
+    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name);
+    //CU->ee->finalizeObject();
+    return gvar?(void*)CU->ee->getOrEmitGlobalVariable(gvar):0;
 #endif
 }
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
