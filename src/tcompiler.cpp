@@ -11,10 +11,6 @@ extern "C" {
 #include <stdio.h>
 #include <inttypes.h>
 
-#ifdef TERRA_STACKTRACE
-#include <execinfo.h>
-#endif
-
 #ifdef _WIN32
 #include <io.h>
 #include <time.h>
@@ -402,41 +398,6 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
 }
 
-#ifdef TERRA_STACKTRACE
-static inline void printStackTrace( FILE *out = stderr, unsigned int max_frames = 63 )
-{
-   fprintf(out, "stack trace:\n");
- 
-   // storage array for stack trace address data
-   void* addrlist[max_frames+1];
- 
-   // retrieve current stack addresses
-   size_t addrlen = backtrace( addrlist, sizeof( addrlist ) / sizeof( void* ));
- 
-   if ( addrlen == 0 ) 
-   {
-      fprintf( out, "  \n" );
-      return;
-   }
- 
-   // create readable strings to each frame.
-   char** symbollist = backtrace_symbols( addrlist, addrlen );
- 
-   // print the stack trace.
-   for ( size_t i = 4; i < addrlen; i++ )
-      fprintf( out, "%s\n", symbollist[i]);
- 
-   free(symbollist);
-}
-
-void llvm_fatal_handler(void *user_data, const std::string &reason, bool gen_crash_diag) {
-#ifdef __APPLE__
-    printStackTrace();
-#endif
-    std::abort();
-}
-#endif
-
 int terra_compilerinit(struct terra_State * T) {
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
@@ -463,9 +424,7 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
 #endif
     }
-#ifdef TERRA_STACKTRACE
-    install_fatal_error_handler(llvm_fatal_handler);
-#endif
+    
     return 0;
 }
 static void freetarget(TerraTarget * TT) {
