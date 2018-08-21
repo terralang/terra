@@ -1441,6 +1441,8 @@ struct FunctionEmitter {
         VERBOSE_ONLY(T) {
             #if LLVM_VERSION < 38
             fstate->func->dump();
+            #elif LLVM_VERSION == 38
+            fstate->func->print(llvm::errs(), true);
             #else
             fstate->func->print(llvm::errs(), nullptr);
             #endif
@@ -2727,7 +2729,11 @@ static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
 #if LLVM_VERSION < 38
     return (void*)CU->ee->getGlobalValueAddress(Name);
 #else
+    #if LLVM_VERSION == 38
+    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name.str().c_str(), false);
+    #else
     GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name, false);
+    #endif
     //CU->ee->finalizeObject();
     return gvar?(void*)CU->ee->getOrEmitGlobalVariable(gvar):0;
 #endif
@@ -2831,6 +2837,8 @@ static int terra_disassemble(lua_State * L) {
     void * addr = lua_touserdata(L,2); assert(fn);
     #if LLVM_VERSION < 38
     fn->dump();
+    #elif LLVM_VERSION == 38
+    fn->print(llvm::errs(), true);
     #else
     fn->print(llvm::errs(), nullptr);
     #endif
