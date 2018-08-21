@@ -33,7 +33,13 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
+
+#if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
+#else
+#include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
+#endif
+
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
 #include "tllvmutil.h"
@@ -381,7 +387,13 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
       .setUseMCJIT(CU->T->options.usemcjit)
 #endif
       .setTargetOptions(CU->TT->tm->Options)
-	  .setOptLevel(CodeGenOpt::Aggressive);
+#if LLVM_VERSION < 50
+      .setOptLevel(CodeGenOpt::Aggressive);
+#else
+      .setOptLevel(CodeGenOpt::Aggressive)
+      .setMCJITMemoryManager(make_unique<SectionMemoryManager>())
+      .setUseOrcMCJITReplacement(true);
+#endif
 
     CU->ee = eb.create();
     if (!CU->ee)
@@ -2726,17 +2738,8 @@ static int terra_llvmsizeof(lua_State * L) {
 static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
     if(CU->T->options.debug > 1)
         return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
-#if LLVM_VERSION < 38
+
     return (void*)CU->ee->getGlobalValueAddress(Name);
-#else
-    #if LLVM_VERSION == 38
-    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name.str().c_str(), false);
-    #else
-    GlobalVariable * gvar = CU->ee->FindGlobalVariableNamed(Name, false);
-    #endif
-    //CU->ee->finalizeObject();
-    return gvar?(void*)CU->ee->getOrEmitGlobalVariable(gvar):0;
-#endif
 }
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
     TerraCompilationUnit * CU = (TerraCompilationUnit*) data;
