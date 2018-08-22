@@ -424,7 +424,6 @@ int terra_compilerinit(struct terra_State * T) {
         return LUA_ERRRUN;
 #endif
     }
-    
     return 0;
 }
 static void freetarget(TerraTarget * TT) {
@@ -3053,30 +3052,27 @@ static int terra_linkllvmimpl(lua_State * L) {
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*TT->ctx);
     #endif
     if(!mm) {
-        if(fromstring)
+        if(fromstring) {
             #if LLVM_VERSION >= 50
-            {
                 std::string Msg;
                 raw_string_ostream S((Msg));
                 logAllUnhandledErrors(mm.takeError(), S, "");
                 S.flush();
                 terra_reporterror(T, "linkllvm: %s\n", S.str().c_str());
-            }
             #else
-            terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
+                terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
             #endif
-	    else
+        } else {
         #if LLVM_VERSION >= 60
-            {
-                std::string Msg;
-                raw_string_ostream S((Msg));
-                logAllUnhandledErrors(mm.takeError(), S, "");
-                S.flush();
-                terra_reporterror(T, "linkllvm(%s): %s\n", filename, S.str().c_str());
-            }
+            std::string Msg;
+            raw_string_ostream S((Msg));
+            logAllUnhandledErrors(mm.takeError(), S, "");
+            S.flush();
+            terra_reporterror(T, "linkllvm(%s): %s\n", filename, S.str().c_str());
         #else
 	        terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
         #endif
+        }
     }
     #if LLVM_VERSION >= 37
     Module * M = mm.get().release();
