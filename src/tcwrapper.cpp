@@ -440,17 +440,23 @@ public:
         std::string InternalName = FuncName;
 
         // Avoid mangle on LLVM 6 and macOS
-        #if !((LLVM_VERSION > 50) && __APPLE__)
         AsmLabelAttr * asmlabel = f->getAttr<AsmLabelAttr>();
         if(asmlabel) {
+            #if !((LLVM_VERSION > 50) && __APPLE__)
             InternalName = asmlabel->getLabel();
             #if !defined(__linux__) && !defined(__FreeBSD__)
                 //In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
                 InternalName.insert(InternalName.begin(), '\01');
             #endif
+            #else
+            std::string label = asmlabel->getLabel();
+            if(!((label[0] == '_') && (label.substr(1) == InternalName))) {
+                InternalName = asmlabel->getLabel();
+                InternalName.insert(InternalName.begin(), '\01');
+            }
+            #endif
         }
-        #endif
-        
+
         CreateFunction(FuncName,InternalName,&typ);
         
         KeepLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
