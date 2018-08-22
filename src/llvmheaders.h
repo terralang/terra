@@ -67,7 +67,7 @@
 #elif LLVM_VERSION == 60
 #include "llvmheaders_60.h"
 #else
-//#error "unsupported LLVM version"
+#error "unsupported LLVM version"
 //for OSX code completion
 #define LLVM_VERSION 60
 #include "llvmheaders_60.h"
