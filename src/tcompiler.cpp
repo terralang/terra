@@ -154,6 +154,37 @@ struct DisassembleFunctionListener : public JITEventListener {
 #endif
 };
 
+
+#if LLVM_VERSION > 40
+class TerraSectionMemoryManager : public SectionMemoryManager {
+
+    public:
+
+    TerraSectionMemoryManager(TerraCompilationUnit * CU_in, MemoryMapper *MM = nullptr) : SectionMemoryManager(MM) {
+        CU = CU_in;
+    }
+
+    TerraSectionMemoryManager(const TerraSectionMemoryManager &) = delete;
+    void operator=(const TerraSectionMemoryManager &) = delete;
+
+    void notifyObjectLoaded (ExecutionEngine *EE, const object::ObjectFile &obj) override {
+        auto size_map = llvm::object::computeSymbolSizes(obj);
+        for(auto & S : size_map) {
+            object::SymbolRef sym = S.first;
+            auto name = sym.getName();
+            auto type = sym.getType();
+            // printf("notify: %s %d %#010llx\n", cantFail(std::move(name)).data(), cantFail(std::move(type)), S.second);
+            if(name && type)
+                static_cast<DisassembleFunctionListener*>(CU->jiteventlistener)->InitializeDebugData(name.get(),type.get(),S.second);
+        }
+    }
+
+    private:
+
+    TerraCompilationUnit * CU;
+};
+#endif
+
 static double CurrentTimeInSeconds() {
 #ifdef _WIN32
     static uint64_t freq = 0;
@@ -387,7 +418,7 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
       .setOptLevel(CodeGenOpt::Aggressive);
 #else
       .setOptLevel(CodeGenOpt::Aggressive)
-      .setMCJITMemoryManager(make_unique<SectionMemoryManager>())
+      .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
       .setUseOrcMCJITReplacement(true);
 #endif
 
