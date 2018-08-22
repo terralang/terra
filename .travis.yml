@@ -30,6 +30,7 @@ before_install:
       if [[ "$LLVM_CONFIG" = "llvm-config-6.0" ]]; then
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main"
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
         sudo apt-get update -y
         sudo apt-get install -y llvm-6.0-dev clang-6.0 libclang-6.0-dev llvm-6.0-dev
       else
