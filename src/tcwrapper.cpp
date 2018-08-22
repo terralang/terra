@@ -438,6 +438,9 @@ public:
             return true;
         }
         std::string InternalName = FuncName;
+
+        // Avoid mangle on LLVM 6 and macOS
+        #if !((LLVM_VERSION > 50) && __APPLE__)
         AsmLabelAttr * asmlabel = f->getAttr<AsmLabelAttr>();
         if(asmlabel) {
             InternalName = asmlabel->getLabel();
@@ -446,6 +449,8 @@ public:
                 InternalName.insert(InternalName.begin(), '\01');
             #endif
         }
+        #endif
+        
         CreateFunction(FuncName,InternalName,&typ);
         
         KeepLive(f);//make sure this function is live in codegen by creating a dummy reference to it (void) is to suppress unused warnings
