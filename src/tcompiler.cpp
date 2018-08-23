@@ -71,6 +71,17 @@ TERRALIB_FUNCTIONS(DEF_LIBFUNCTION)
 static llvm_shutdown_obj llvmshutdownobj;
 #endif
 
+#if LLVM_VERSION < 38
+#define TERRA_DUMP_FUNCTION(t) (t)->dump()
+#define TERRA_DUMP_TYPE(t) (t)->dump()
+#elif LLVM_VERSION == 38
+#define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#else
+#define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), nullptr)
+#define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#endif
+
 struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit * CU;
     terra_State * T;
@@ -693,11 +704,7 @@ class Types {
         st->setBody(entry_types);
         VERBOSE_ONLY(T) {
             printf("Struct Layout Is:\n");
-            #if LLVM_VERSION < 38
-            st->dump();
-            #else
-            st->print(llvm::errs(), false);
-            #endif
+            TERRA_DUMP_TYPE(st);
             printf("\nEnd Layout\n");
         }
     }
@@ -1363,13 +1370,7 @@ struct FunctionEmitter {
                         }
                         CU->fpm->run(*scc[i]);
                         VERBOSE_ONLY(T) {
-                            #if LLVM_VERSION < 38
-                            scc[i]->dump();
-                            #elif LLVM_VERSION == 38
-                            scc[i]->print(llvm::errs(), true);
-                            #else
-                            scc[i]->print(llvm::errs(), nullptr);
-                            #endif
+                            TERRA_DUMP_FUNCTION(scc[i]);
                         }
                     }
                 }
@@ -1440,13 +1441,7 @@ struct FunctionEmitter {
         assert(breakpoints.size() == 0);
         
         VERBOSE_ONLY(T) {
-            #if LLVM_VERSION < 38
-            fstate->func->dump();
-            #elif LLVM_VERSION == 38
-            fstate->func->print(llvm::errs(), true);
-            #else
-            fstate->func->print(llvm::errs(), nullptr);
-            #endif
+            TERRA_DUMP_FUNCTION(fstate->func);
         }
         verifyFunction(*fstate->func);
         
@@ -2012,11 +2007,7 @@ if(baseT->isIntegerTy()) { \
                     Constant * ptrint = ConstantInt::get(CU->getDataLayout().getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
                     r = ConstantExpr::getIntToPtr(ptrint, typ->type);
                 } else {
-                    #if LLVM_VERSION < 38
-                    typ->type->dump();
-                    #else
-                    typ->type->print(llvm::errs(), false);
-                    #endif
+                    TERRA_DUMP_TYPE(typ->type);
                     assert(!"NYI - constant load\n");
                 }
                 lua_pop(L,1); // remove pointer
@@ -2827,13 +2818,7 @@ static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     Function * fn = (Function*) lua_touserdata(L,1); assert(fn);
     void * addr = lua_touserdata(L,2); assert(fn);
-    #if LLVM_VERSION < 38
-    fn->dump();
-    #elif LLVM_VERSION == 38
-    fn->print(llvm::errs(), true);
-    #else
-    fn->print(llvm::errs(), nullptr);
-    #endif
+    TERRA_DUMP_FUNCTION(fn);
     if(T->C->functioninfo.count(addr)) {
         TerraFunctionInfo & fi = T->C->functioninfo[addr];
         printf("assembly for function at address %p\n",addr);
@@ -3138,10 +3123,6 @@ static int terra_dumpmodule(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,1);
     if(CU)
-        #if LLVM_VERSION < 38
-        CU->M->dump();
-        #else
-        CU->M->print(llvm::errs(), nullptr);
-        #endif
+        TERRA_DUMP_FUNCTION(CU->M);
     return 0;
 }
