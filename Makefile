@@ -71,6 +71,7 @@ CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 ifneq ($(LLVM_VERSION), 32)
@@ -102,7 +103,11 @@ endif
 #  but this can be a problem if third-party-libraries that also need LLVM are
 #  used - allow the user to request that some/all of the LLVM components be
 #  included and re-exported in their entirety
-LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+ifeq "$(LLVMVERGT4)" "1"
+    LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
+else
+	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+endif
 ifneq ($(REEXPORT_LLVM_COMPONENTS),)
   REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
   ifneq ($(findstring $(UNAME), Linux FreeBSD),)

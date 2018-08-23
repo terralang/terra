@@ -23,8 +23,9 @@
 #if LLVM_VERSION >= 35
 #include "llvm/MC/MCContext.h"
 #endif
+#if LLVM_VERSION < 50
 #include "llvm/Support/MemoryObject.h"
-
+#endif
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -86,6 +87,7 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm) {
     PMB.populateModulePassManager(W);
 }
 
+#if LLVM_VERSION < 60
 struct SimpleMemoryObject : public MemoryObject {
   uint64_t getBase() const { return 0; }
   uint64_t getExtent() const { return ~0ULL; }
@@ -94,6 +96,7 @@ struct SimpleMemoryObject : public MemoryObject {
     return 0;
   }
 };
+#endif
 
 void llvmutil_disassemblefunction(void * data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
@@ -367,8 +370,12 @@ void llvmutil_optimizemodule(Module * M, TargetMachine * TM) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
+#if LLVM_VERSION < 50
     PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0);
-    
+#else
+    PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0, false);
+#endif
+
 #if LLVM_VERSION >= 35
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
@@ -396,7 +403,7 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix, S
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::string * err) {
 #if LLVM_VERSION >= 34
     bool executionFailed = false;
-    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,0,0,0,err,&executionFailed);
+    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,nullptr,{},0,err,&executionFailed);
     if(executionFailed)
         return -1;
     #ifndef _WIN32
