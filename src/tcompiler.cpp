@@ -74,12 +74,15 @@ static llvm_shutdown_obj llvmshutdownobj;
 #if LLVM_VERSION < 38
 #define TERRA_DUMP_FUNCTION(t) (t)->dump()
 #define TERRA_DUMP_TYPE(t) (t)->dump()
+#define TERRA_DUMP_MODULE(t) (t)->dump()
 #elif LLVM_VERSION == 38
 #define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), true)
 #define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
 #else
 #define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), nullptr)
 #define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
 #endif
 
 struct DisassembleFunctionListener : public JITEventListener {
@@ -3123,6 +3126,6 @@ static int terra_dumpmodule(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,1);
     if(CU)
-        TERRA_DUMP_FUNCTION(CU->M);
+        TERRA_DUMP_MODULE(CU->M);
     return 0;
 }
