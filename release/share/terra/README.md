@@ -110,7 +110,7 @@ Terra supports the following LLVM versions:
   * LLVM 3.7
   * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
   * LLVM 3.9 (used frequently)
-  * LLVM 6.0 (tested in Travis, not yet tested for performance)
+  * LLVM 6.0 (tested in Travis)
 
 ### Windows ###
 
