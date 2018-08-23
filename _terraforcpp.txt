@@ -539,18 +539,18 @@ Operators
 Overloading
     
     int max(int a, int b) {
-        return (a < b) ? a : b;
+        return (a > b) ? a : b;
     }
     float max(float a, float b) {
-        return (a < b) ? a : b;
+        return (a > b) ? a : b;
     }
     ###
     max = terralib.overloadedfunction("max" { 
         terra(a : int, b : int) 
-            return terralib.select( a < b, a, b) 
+            return terralib.select( a > b, a, b)
         end,
         terra(a : float, b : float) 
-            return terralib.select( a < b, a, b)
+            return terralib.select( a > b, a, b)
         end
     })
 
