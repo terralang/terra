@@ -105,10 +105,10 @@ If the binary releases are not appropriate, then you can also build Terra from s
 Terra supports the following LLVM versions:
 
   * LLVM 3.4
-  * LLVM 3.5 (tested in Travis, supports debug info)
+  * LLVM 3.5 (tested in Travis, supports debug info, supports CUDA)
   * LLVM 3.6
   * LLVM 3.7
-  * LLVM 3.8 (used frequently, tested in Travis)
+  * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
   * LLVM 3.9 (used frequently)
   * LLVM 6.0 (tested in Travis, not yet tested for performance)
 
