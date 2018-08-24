@@ -174,7 +174,11 @@ class TerraSectionMemoryManager : public SectionMemoryManager {
 
     public:
 
+#if LLVM_VERSION > 50
     TerraSectionMemoryManager(TerraCompilationUnit * CU_in, MemoryMapper *MM = nullptr) : SectionMemoryManager(MM) {
+#else
+    TerraSectionMemoryManager(TerraCompilationUnit * CU_in) : SectionMemoryManager() {
+#endif
         CU = CU_in;
     }
 
@@ -3063,7 +3067,7 @@ static int terra_linkllvmimpl(lua_State * L) {
     }
     #if LLVM_VERSION == 36
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
-    #elif LLVM_VERSION >= 60
+    #elif LLVM_VERSION >= 50
     Expected<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #elif LLVM_VERSION >= 37
     ErrorOr<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
@@ -3082,7 +3086,7 @@ static int terra_linkllvmimpl(lua_State * L) {
                 terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
             #endif
         } else {
-        #if LLVM_VERSION >= 60
+        #if LLVM_VERSION >= 50
             std::string Msg;
             raw_string_ostream S((Msg));
             logAllUnhandledErrors(mm.takeError(), S, "");
