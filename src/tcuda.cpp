@@ -115,7 +115,8 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     std::stringstream device;
     device << "-arch=compute_" << major << minor;
     std::string deviceopt = device.str();
-    
+
+#if LLVM_VERSION < 50
     std::string llvmir;
     {
         llvm::raw_string_ostream output(llvmir);
@@ -159,6 +160,51 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     CUDA_DO(T->cuda->nvvmGetCompiledResultSize(prog, &size));
     buf->resize(size);
     CUDA_DO(T->cuda->nvvmGetCompiledResult(prog, &(*buf)[0]));
+#else
+	std::stringstream cpu;
+    cpu << "sm_" << major << minor;
+    std::string cpuopt = cpu.str();
+	
+	auto Features = "";
+
+    std::string Error;
+    auto Target = llvm::TargetRegistry::lookupTarget("nvptx64-nvidia-cuda", Error);
+
+    // Print an error and exit if we couldn't find the requested target.
+    // This generally occurs if we've forgotten to initialise the
+    // TargetRegistry or we have a bogus target triple.
+    if (!Target) {
+        llvm::errs() << Error;
+        return;
+    }
+
+	llvm::TargetOptions opt;
+	auto RM = llvm::Optional<llvm::Reloc::Model>();
+	auto TargetMachine = Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
+	M->setDataLayout(TargetMachine->createDataLayout());
+	
+    llvm::SmallString<2048> dest;
+    llvm::raw_svector_ostream str_dest(dest);
+	
+	llvm::legacy::PassManager pass;
+	auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
+
+	if (TargetMachine->addPassesToEmitFile(pass, str_dest, FileType)) {
+		llvm::errs() << "TargetMachine can't emit a file of this type\n";
+		return;
+	}
+
+	pass.run(*M);
+	buf->resize(dest.size());
+
+    {
+		std::stringstream outs;
+		outs << dest.size() << std::endl;
+		printf("[CUDA] Result size: %s\n", outs.str().c_str());
+	}
+
+    (*buf) = dest.str();
+#endif
 }
 
 //cuda doesn't like llvm generic names, so we replace non-identifier symbols here
