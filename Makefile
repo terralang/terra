@@ -121,10 +121,10 @@ else
 endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm >/dev/null 2>&1; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lcurses 
 endif
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 >/dev/null 2>&1; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lz
 endif
 
