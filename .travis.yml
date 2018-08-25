@@ -57,7 +57,7 @@ before_install:
       ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/clang clang-3.5
       
       curl -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
-      tar xf clang+llvm-5.0.1-final-x86_64-apple-darwin.tar.xz
+      tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
       ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
       ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
 
