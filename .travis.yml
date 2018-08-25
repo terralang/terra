@@ -18,6 +18,8 @@ matrix:
   exclude:
     - os: osx
       compiler: gcc
+    - os: osx
+      env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
 # blacklist some branches
 branches:
   only:
