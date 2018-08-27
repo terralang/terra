@@ -1671,7 +1671,7 @@ do
             local min,max
             if not s then
                 min = 0ULL
-                max = 2ULL ^ (bits - 1)
+                max = -1ULL
             else
                 min = 2LL ^ (bits - 1)
                 max = min - 1
