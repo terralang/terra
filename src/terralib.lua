@@ -1651,12 +1651,12 @@ do
     --map from luajit ffi ctype objects to corresponding terra type
     types.ctypetoterra = {}
     
-    local function globaltype(name, typ, min, max)
+    local function globaltype(name, typ, min_v, max_v)
         typ.name = typ.name or name
         rawset(_G,name,typ)
         types[name] = typ
-        if min then typ.min = ffi.cast(typ:cstring(), min) end
-        if max then typ.max = ffi.cast(typ:cstring(), max) end
+        if min_v then function typ:min() return terra.cast(self, min_v) end end
+        if max_v then function typ:max() return terra.cast(self, max_v) end end
     end
     
     --initialize integral types
