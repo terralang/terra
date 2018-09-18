@@ -444,7 +444,9 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
     if (!CU->ee)
         terra_reporterror(CU->T,"llvm: %s\n",err.c_str());
     CU->jiteventlistener = new DisassembleFunctionListener(CU);
+#if LLVM_VERSION < 50
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
+#endif
 }
 
 int terra_compilerinit(struct terra_State * T) {
@@ -636,6 +638,7 @@ class Types {
         return true;
     }
     StructType * CreateStruct(Obj * typ) {
+#if LLVM_VERSION < 50
         //check to see if it was initialized externally first
         if(typ->boolean("llvm_definingfunction")) {
             const char * name = typ->string("llvm_definingfunction");
@@ -645,6 +648,7 @@ class Types {
             assert(st);
             return st;
         }
+#endif
         std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;

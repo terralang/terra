@@ -107,7 +107,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     CUDA_DO(T->cuda->nvvmVersion(&nmajor,&nminor));
     int nversion = nmajor*10 + nminor;
     if(nversion >= 12)
-        M->setTargetTriple("nvptx64-unknown-cuda");
+        M->setTargetTriple("nvptx64-nvidia-cuda");
     else
         M->setTargetTriple(""); //clear these because nvvm doesn't like them
     M->setDataLayout(""); //nvvm doesn't like data layout either
@@ -165,7 +165,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     cpu << "sm_" << major << minor;
     std::string cpuopt = cpu.str();
 	
-	auto Features = "";
+	auto Features = "+ptx60";
 
     std::string Error;
     auto Target = llvm::TargetRegistry::lookupTarget("nvptx64-nvidia-cuda", Error);
@@ -193,15 +193,15 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
 		llvm::errs() << "TargetMachine can't emit a file of this type\n";
 		return;
 	}
-
-	pass.run(*M);
+    
+    pass.run(*M);
 	buf->resize(dest.size());
 
-    {
-		std::stringstream outs;
-		outs << dest.size() << std::endl;
-		printf("[CUDA] Result size: %s\n", outs.str().c_str());
-	}
+    // {
+	// 	std::stringstream outs;
+	// 	outs << dest.size() << std::endl;
+	// 	printf("[CUDA] Result size: %s\n", outs.str().c_str());
+	// }
 
     (*buf) = dest.str();
 #endif

@@ -455,6 +455,8 @@ public:
                 InternalName.insert(InternalName.begin(), '\01');
             }
             #endif
+            // Uncomment for mangling issue debugging
+            // llvm::errs() << "[mangle] " << FuncName << "=" << InternalName << "\n";
         }
 
         CreateFunction(FuncName,InternalName,&typ);
