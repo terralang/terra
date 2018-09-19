@@ -165,7 +165,7 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     cpu << "sm_" << major << minor;
     std::string cpuopt = cpu.str();
 	
-	auto Features = "+ptx60";
+	auto Features = "";
 
     std::string Error;
     auto Target = llvm::TargetRegistry::lookupTarget("nvptx64-nvidia-cuda", Error);
@@ -178,6 +178,20 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
         return;
     }
 
+    llvm::SmallString<2048> ErrMsg;
+    auto MB = llvm::MemoryBuffer::getFile(libdevice);
+    auto E_LDEVICE = llvm::parseBitcodeFile(MB->get()->getMemBufferRef(), M->getContext());
+
+    if (auto Err = E_LDEVICE.takeError()) {
+        llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(), "[CUDA Error] ");
+        return;
+    }
+    
+    auto &LDEVICE = *E_LDEVICE;
+
+    llvm::Linker Linker(*M);
+    Linker.linkInModule(std::move(LDEVICE));
+
 	llvm::TargetOptions opt;
 	auto RM = llvm::Optional<llvm::Reloc::Model>();
 	auto TargetMachine = Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
@@ -186,15 +200,23 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
     llvm::SmallString<2048> dest;
     llvm::raw_svector_ostream str_dest(dest);
 	
-	llvm::legacy::PassManager pass;
+	llvm::PassManagerBuilder PMB;
+    PMB.OptLevel = 3;
+    PMB.SizeLevel = 0;
+    PMB.LoopVectorize = false;
 	auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
 
-	if (TargetMachine->addPassesToEmitFile(pass, str_dest, FileType)) {
+    llvm::legacy::PassManager PM;
+    TargetMachine->adjustPassManager(PMB);
+    
+    PMB.populateModulePassManager(PM);
+
+	if (TargetMachine->addPassesToEmitFile(PM, str_dest, FileType)) {
 		llvm::errs() << "TargetMachine can't emit a file of this type\n";
 		return;
 	}
     
-    pass.run(*M);
+    PM.run(*M);
 	buf->resize(dest.size());
 
     // {

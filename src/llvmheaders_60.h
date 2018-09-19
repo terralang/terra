@@ -24,6 +24,9 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Object/SymbolSize.h"
 
+#include "llvm/Bitcode/BitcodeReader.h"
+#include "llvm/Support/Error.h"
+
 #define LLVM_PATH_TYPE std::string
 #define RAW_FD_OSTREAM_NONE sys::fs::F_None
 #define RAW_FD_OSTREAM_BINARY sys::fs::F_None
