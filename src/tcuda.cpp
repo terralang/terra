@@ -189,12 +189,17 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
 
     auto &LDEVICE = *E_LDEVICE;
 
-    llvm::Linker Linker(*M);
-    Linker.linkInModule(std::move(LDEVICE));
 
     llvm::TargetOptions opt;
     auto RM = llvm::Optional<llvm::Reloc::Model>();
     auto TargetMachine = Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
+
+    LDEVICE->setTargetTriple("nvptx64-nvidia-cuda");
+    LDEVICE->setDataLayout(TargetMachine->createDataLayout());
+
+    llvm::Linker Linker(*M);
+    Linker.linkInModule(std::move(LDEVICE));
+
     M->setDataLayout(TargetMachine->createDataLayout());
 
     llvm::SmallString<2048> dest;
