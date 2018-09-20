@@ -16,16 +16,13 @@
 #include "llvm/Linker/Linker.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 
 #include "clang/Rewrite/Core/Rewriter.h"
 #include "clang/Rewrite/Frontend/Rewriters.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Object/SymbolSize.h"
-
-#include "llvm/Bitcode/BitcodeReader.h"
-#include "llvm/Support/Error.h"
 
 #define LLVM_PATH_TYPE std::string
 #define RAW_FD_OSTREAM_NONE sys::fs::F_None

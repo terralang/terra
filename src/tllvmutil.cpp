@@ -87,7 +87,7 @@ void llvmutil_addoptimizationpasses(PassManagerBase * fpm) {
     PMB.populateModulePassManager(W);
 }
 
-#if LLVM_VERSION < 60
+#if LLVM_VERSION < 50
 struct SimpleMemoryObject : public MemoryObject {
   uint64_t getBase() const { return 0; }
   uint64_t getExtent() const { return ~0ULL; }

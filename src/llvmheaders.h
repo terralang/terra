@@ -64,6 +64,8 @@
 #include "llvmheaders_38.h"
 #elif LLVM_VERSION == 39
 #include "llvmheaders_39.h"
+#elif LLVM_VERSION == 50
+#include "llvmheaders_50.h"
 #elif LLVM_VERSION == 60
 #include "llvmheaders_60.h"
 #else

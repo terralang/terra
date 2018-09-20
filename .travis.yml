@@ -11,12 +11,15 @@ env:
   matrix:
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
+  - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0
 
 matrix:
   exclude:
     - os: osx
       compiler: gcc
+    - os: osx
+      env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
 # blacklist some branches
 branches:
   only:
@@ -31,8 +34,14 @@ before_install:
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main"
         sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-        sudo apt-get update -y
+        for i in {1..5}; do sudo apt-get update -y && break || sleep 15; done
         sudo apt-get install -y llvm-6.0-dev clang-6.0 libclang-6.0-dev llvm-6.0-dev
+      elif [[ "$LLVM_CONFIG" = "llvm-config-5.0" ]]; then
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-5.0 main"
+        sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+        for i in {1..5}; do sudo apt-get update -y && break || sleep 15; done
+        sudo apt-get install -y llvm-5.0-dev clang-5.0 libclang-5.0-dev llvm-5.0-dev
       else
         sudo apt-get install -qq clang-3.5 libclang-3.5-dev llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev
       fi
@@ -48,6 +57,11 @@ before_install:
       tar xf clang+llvm-3.5.2-x86_64-apple-darwin.tar.xz
       ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/llvm-config llvm-config-3.5
       ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/clang clang-3.5
+      
+      curl -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
+      tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
+      ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
+      ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
 
       curl -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
       tar xf clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz

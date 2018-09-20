@@ -455,6 +455,8 @@ public:
                 InternalName.insert(InternalName.begin(), '\01');
             }
             #endif
+            // Uncomment for mangling issue debugging
+            // llvm::errs() << "[mangle] " << FuncName << "=" << InternalName << "\n";
         }
 
         CreateFunction(FuncName,InternalName,&typ);
@@ -496,7 +498,7 @@ public:
             0));
         }
         F->setParams(params);
-        #if LLVM_VERSION >= 50
+        #if LLVM_VERSION >= 60
         CompoundStmt * stmts = CompoundStmt::Create(*Context, outputstmts, SourceLocation(), SourceLocation());
         #elif LLVM_VERSION >= 33
         CompoundStmt * stmts = new (*Context) CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
