@@ -83,9 +83,9 @@ before_install:
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7.0
       fi
       
-      curl -O https://raw.githubusercontent.com/develar/7zip-bin/master/mac/7za
-      chmod +x ./7za
-      mv ./7za ./7z
+      curl -O https://homebrew.bintray.com/bottles/p7zip-16.02_1.el_capitan.bottle.tar.gz
+      tar xf p7zip-16.02_1.el_capitan.bottle.tar.gz
+      ln -s p7zip/16.02_1/bin/7z 7z
       export PATH=$PWD:$PATH
     fi
 script:
