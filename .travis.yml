@@ -87,7 +87,7 @@ before_install:
     fi
 script:
   - |
-    if [ "$(uname)" = "Linux" ] && [ "$LLVM_CONFIG" != "llvm-config-7.0" ]; then
+    if [ "$(uname)" = "Linux" ] && [ "$LLVM_CONFIG" = "llvm-config-7.0" ]; then
       make LLVM_CONFIG=$(which llvm-config-7) CLANG=$(which clang-7) test
     else
       make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
