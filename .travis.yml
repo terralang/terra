@@ -31,7 +31,7 @@ before_install:
   - |
     if [[ "$(uname)" = "Linux" ]]; then
       sudo apt-get update -qq
-      sudo apt-get install wget p7zip
+      sudo apt-get install wget p7zip-full p7zip-rar
       if [[ "$LLVM_CONFIG" = "llvm-config-7.0" ]]; then
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"
