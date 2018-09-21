@@ -2933,7 +2933,11 @@ static bool SaveObject(TerraCompilationUnit * CU, Module * M, const std::string 
             return true;
         }
     } else if(filekind == "bitcode") {
+#if LLVM_VERSION < 70
         llvm::WriteBitcodeToFile(M,dest);
+#else
+        llvm::WriteBitcodeToFile(*M, dest);
+#endif
     } else if(filekind == "llvmir") {
         dest << *M;
     }
