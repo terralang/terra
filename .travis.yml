@@ -37,7 +37,7 @@ before_install:
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"
         sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
         for i in {1..5}; do sudo apt-get update -y && break || sleep 15; done
-        sudo apt-get install -y llvm-7.0-dev clang-7.0 libclang-7.0-dev llvm-7.0-dev
+        sudo apt-get install -y llvm-7-dev clang-7 libclang-7-dev llvm-7-dev
       elif [[ "$LLVM_CONFIG" = "llvm-config-6.0" ]]; then
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main"
