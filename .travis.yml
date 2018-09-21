@@ -31,7 +31,7 @@ before_install:
   - |
     if [[ "$(uname)" = "Linux" ]]; then
       sudo apt-get update -qq
-      sudo apt-get install wget
+      sudo apt-get install wget p7zip
       if [[ "$LLVM_CONFIG" = "llvm-config-7.0" ]]; then
         wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
         sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"
@@ -82,7 +82,10 @@ before_install:
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7.0
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7.0
       fi
-
+      
+      curl -O https://raw.githubusercontent.com/develar/7zip-bin/master/mac/7za
+      chmod +x ./7za
+      mv ./7za ./7z
       export PATH=$PWD:$PATH
     fi
 script:
