@@ -216,10 +216,17 @@ void moduleToPTX(terra_State * T, llvm::Module * M, int major, int minor, std::s
 
     PMB.populateModulePassManager(PM);
 
+    #if LLVM_VERSION >= 70
+    if (TargetMachine->addPassesToEmitFile(PM, str_dest, nullptr, FileType)) {
+        llvm::errs() << "TargetMachine can't emit a file of this type\n";
+        return;
+    }
+    #else
     if (TargetMachine->addPassesToEmitFile(PM, str_dest, FileType)) {
         llvm::errs() << "TargetMachine can't emit a file of this type\n";
         return;
     }
+    #endif
 
     PM.run(*M);
     buf->resize(dest.size());
