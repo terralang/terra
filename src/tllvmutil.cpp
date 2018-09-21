@@ -191,9 +191,16 @@ bool llvmutil_emitobjfile(Module * Mod, TargetMachine * TM, bool outputobjectfil
     #else
     emitobjfile_t & destf = dest;
     #endif
+
+    #if LLVM_VERSION >= 70
+    if (TM->addPassesToEmitFile(pass, destf, nullptr, ft)) {
+        return true;
+    }
+    #else
     if (TM->addPassesToEmitFile(pass, destf, ft)) {
         return true;
     }
+    #endif
 
     pass.run(*Mod);
     
@@ -403,7 +410,18 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix, S
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::string * err) {
 #if LLVM_VERSION >= 34
     bool executionFailed = false;
+    #if LLVM_VERSION >= 70
+    std::vector<llvm::StringRef> argsRef;
+    int args_ptr = 0;
+    while (args[args_ptr] != NULL) {
+        argsRef.push_back(llvm::StringRef(args[args_ptr]));
+        args_ptr++;
+    }
+
+    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program, argsRef, llvm::Optional<ArrayRef<llvm::StringRef>>(), {}, 0, err, &executionFailed);
+    #else
     llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,nullptr,{},0,err,&executionFailed);
+    #endif
     if(executionFailed)
         return -1;
     #ifndef _WIN32
