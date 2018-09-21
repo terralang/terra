@@ -55,8 +55,8 @@ before_install:
       fi
 
       curl -O -L https://jaist.dl.sourceforge.net/project/p7zip/p7zip/16.02/p7zip_16.02_x86_linux_bin.tar.bz2
-      
-      ln -s p7zip_16.02/bin/7z 7z
+      tar xf p7zip_16.02_x86_linux_bin.tar.bz2
+      export PATH=$PWD/p7zip_16.02/bin:$PATH
       export PATH=$PWD:$PATH
     fi
   - |
@@ -90,7 +90,7 @@ before_install:
       
       curl -L -O https://homebrew.bintray.com/bottles/p7zip-16.02_1.el_capitan.bottle.tar.gz
       tar xf p7zip-16.02_1.el_capitan.bottle.tar.gz
-      ln -s p7zip/16.02_1/lib/p7zip/7z 7z
+      export PATH=$PWD/p7zip/16.02_1/lib/p7zip:$PATH
       export PATH=$PWD:$PATH
     fi
 script:
