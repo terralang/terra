@@ -53,6 +53,11 @@ before_install:
       else
         sudo apt-get install -qq clang-3.5 libclang-3.5-dev llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev
       fi
+
+      curl -O -L https://jaist.dl.sourceforge.net/project/p7zip/p7zip/16.02/p7zip_16.02_x86_linux_bin.tar.bz2
+      
+      ln -s p7zip_16.02/bin/7z 7z
+      export PATH=$PWD:$PATH
     fi
   - |
     if [[ "$(uname)" = "Darwin" ]]; then
@@ -83,9 +88,9 @@ before_install:
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7.0
       fi
       
-      curl -O https://homebrew.bintray.com/bottles/p7zip-16.02_1.el_capitan.bottle.tar.gz
+      curl -L -O https://homebrew.bintray.com/bottles/p7zip-16.02_1.el_capitan.bottle.tar.gz
       tar xf p7zip-16.02_1.el_capitan.bottle.tar.gz
-      ln -s p7zip/16.02_1/bin/7z 7z
+      ln -s p7zip/16.02_1/lib/p7zip/7z 7z
       export PATH=$PWD:$PATH
     fi
 script:
