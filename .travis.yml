@@ -82,8 +82,13 @@ before_install:
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7.0
         ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7.0
       fi
-      
+
       export PATH=$PWD:$PATH
     fi
 script:
-  - make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+  - |
+    if [ "$(uname)" = "Linux" ] && [ "$LLVM_CONFIG" != "llvm-config-7.0" ]; then
+      make LLVM_CONFIG=$(which llvm-config-7) CLANG=$(which clang-7) test
+    else
+      make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+    fi
