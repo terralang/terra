@@ -20,6 +20,6 @@ for line in io.lines() do
     local archivename = archivepath:match("/([^/]*)%.a$")
     if not exists( ("%s/%s/%s"):format(destination,archivename,objectfile) ) then
         exe("mkdir -p %s/%s",destination,archivename) 
-        exe("cd %s/%s; 7z x -aou %s %s",destination,archivename,archivepath,objectfile)
+        exe("cd %s/%s; 7z x -aou %s %s > /dev/null",destination,archivename,archivepath,objectfile)
     end
 end 
