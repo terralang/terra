@@ -68,6 +68,8 @@
 #include "llvmheaders_50.h"
 #elif LLVM_VERSION == 60
 #include "llvmheaders_60.h"
+#elif LLVM_VERSION == 70
+#include "llvmheaders_70.h"
 #else
 #error "unsupported LLVM version"
 //for OSX code completion
