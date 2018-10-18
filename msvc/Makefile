@@ -25,6 +25,10 @@ LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
 TERRA_DIR=C:\Users\zdevito\terra
 !ENDIF
 
+!IFNDEF TERRA_VERSION
+TERRA_VERSION=unknown
+!ENDIF
+
 # Set this if you want to enable CUDA.
 # CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
 !IFDEF CUDA_DIR
@@ -72,7 +76,7 @@ LINK=link
 
 LUAJIT = $(LUAJIT_DIR)\src\luajit.exe
 
-CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG \
+CPPFLAGS = /MP8 /nologo /EHsc /w /MD /Zi /D_CRT_SECURE_NO_DEPRECATE /DNOMINMAX /DTERRA_LLVM_HEADERS_HAVE_NDEBUG /DTERRA_VERSION_STRING="\"$(TERRA_VERSION)\"" \
            /I$(LUAJIT_DIR)\src /I$(SRC) /I$(BUILD) /I$(TERRA_DIR)\release\include\terra /I$(LLVM_DIR)\include /I$(TERRA_DIR)\msvc \
            /DLLVM_VERSION=$(LLVM_VERSION_SHORT) \
            $(CUDA_INCLUDES)
