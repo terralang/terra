@@ -1,14 +1,29 @@
-os: Visual Studio 2015
-
 environment:
   matrix:
-    - LLVM_VERSION: 6.0.1
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 3.5.0
+      LLVM_VERSION_SHORT: 35
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
+      LLVM_VERSION: 3.5.0
+      LLVM_VERSION_SHORT: 35
+      VS_MAJOR_VERSION: 12
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
+      LLVM_VERSION: 3.8.1
+      LLVM_VERSION_SHORT: 38
+      VS_MAJOR_VERSION: 12
 
 install:
-  - appveyor DownloadFile https://github.com/Mx7f/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt.7z
-  - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt.7z
-  - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt
+  # Hopefully temporary lines
+  - if /I "%LLVM_VERSION_SHORT%" LSS "50" (set BINARY_SOURCE_USER=elliottslaughter)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "50" (set BINARY_SOURCE_USER=Mx7f)
+  - appveyor DownloadFile https://github.com/%BINARY_SOURCE_USER%/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
+  - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
+  - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
   - appveyor DownloadFile http://luajit.org/download/LuaJIT-2.0.5.zip
@@ -23,7 +38,9 @@ install:
   - dir
 
 build_script:
-  - call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64
+  # There is probably a better way to do this...
+  - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
+  - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
   - cd msvc
   - nmake
   - cd ..

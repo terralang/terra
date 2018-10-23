@@ -33,12 +33,47 @@ CUDA_INCLUDES=/DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\in
 CUDA_INCLUDES=
 !ENDIF
 
+!IFNDEF VS_MAJOR_VERSION
+VS_MAJOR_VERSION=14
+!ENDIF
+
+!IFNDEF VS_MINOR_VERSION
+VS_MINOR_VERSION=0
+!ENDIF
+
+VC_VERSION=$(VS_MAJOR_VERSION)$(VS_MINOR_VERSION)
+
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
 
-#Ideally, generate this lib list (sans the last line) by reading all libs in the llvm/lib dir
+#Ideally, generate the clang/llvm lib list by reading all libs in the llvm/lib dir
+!IF $(LLVM_VERSION_SHORT)==60
 LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib clangCodeGen.lib clangCrossTU.lib clangDriver.lib clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib clangFrontend.lib clangFrontendTool.lib clangHandleCXX.lib clangIndex.lib clangLex.lib clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib clangTooling.lib clangToolingASTDiff.lib clangToolingCore.lib clangToolingRefactor.lib libclang.lib LLVMAArch64AsmParser.lib LLVMAArch64AsmPrinter.lib LLVMAArch64CodeGen.lib LLVMAArch64Desc.lib LLVMAArch64Disassembler.lib LLVMAArch64Info.lib LLVMAArch64Utils.lib LLVMAMDGPUAsmParser.lib LLVMAMDGPUAsmPrinter.lib LLVMAMDGPUCodeGen.lib LLVMAMDGPUDesc.lib LLVMAMDGPUDisassembler.lib LLVMAMDGPUInfo.lib LLVMAMDGPUUtils.lib LLVMAnalysis.lib LLVMARMAsmParser.lib LLVMARMAsmPrinter.lib LLVMARMCodeGen.lib LLVMARMDesc.lib LLVMARMDisassembler.lib LLVMARMInfo.lib LLVMARMUtils.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBinaryFormat.lib LLVMBitReader.lib LLVMBitWriter.lib LLVMBPFAsmParser.lib LLVMBPFAsmPrinter.lib LLVMBPFCodeGen.lib LLVMBPFDesc.lib LLVMBPFDisassembler.lib LLVMBPFInfo.lib LLVMCodeGen.lib LLVMCore.lib LLVMCoroutines.lib LLVMCoverage.lib LLVMDebugInfoCodeView.lib LLVMDebugInfoDWARF.lib LLVMDebugInfoMSF.lib LLVMDebugInfoPDB.lib LLVMDemangle.lib LLVMDlltoolDriver.lib LLVMExecutionEngine.lib LLVMFuzzMutate.lib LLVMGlobalISel.lib LLVMHexagonAsmParser.lib LLVMHexagonCodeGen.lib LLVMHexagonDesc.lib LLVMHexagonDisassembler.lib LLVMHexagonInfo.lib LLVMInstCombine.lib LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipo.lib LLVMIRReader.lib LLVMLanaiAsmParser.lib LLVMLanaiAsmPrinter.lib LLVMLanaiCodeGen.lib LLVMLanaiDesc.lib LLVMLanaiDisassembler.lib LLVMLanaiInfo.lib LLVMLibDriver.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib LLVMMCDisassembler.lib LLVMMCJIT.lib LLVMMCParser.lib LLVMMipsAsmParser.lib LLVMMipsAsmPrinter.lib LLVMMipsCodeGen.lib LLVMMipsDesc.lib LLVMMipsDisassembler.lib LLVMMipsInfo.lib LLVMMIRParser.lib LLVMMSP430AsmPrinter.lib LLVMMSP430CodeGen.lib LLVMMSP430Desc.lib LLVMMSP430Info.lib LLVMNVPTXAsmPrinter.lib LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMObjectYAML.lib LLVMOption.lib LLVMOrcJIT.lib LLVMPasses.lib LLVMPowerPCAsmParser.lib LLVMPowerPCAsmPrinter.lib LLVMPowerPCCodeGen.lib LLVMPowerPCDesc.lib LLVMPowerPCDisassembler.lib LLVMPowerPCInfo.lib LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib LLVMSparcAsmParser.lib LLVMSparcAsmPrinter.lib LLVMSparcCodeGen.lib LLVMSparcDesc.lib LLVMSparcDisassembler.lib LLVMSparcInfo.lib LLVMSupport.lib LLVMSymbolize.lib LLVMSystemZAsmParser.lib LLVMSystemZAsmPrinter.lib LLVMSystemZCodeGen.lib LLVMSystemZDesc.lib LLVMSystemZDisassembler.lib LLVMSystemZInfo.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib LLVMVectorize.lib LLVMWindowsManifest.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib LLVMXCoreAsmPrinter.lib LLVMXCoreCodeGen.lib LLVMXCoreDesc.lib LLVMXCoreDisassembler.lib LLVMXCoreInfo.lib LLVMXRay.lib \
       $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib dbghelp.lib Version.lib
+!ELSE # Only tested for 3.5.1
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   \
+      clangBasic.lib clangCodeGen.lib clangDriver.lib                           \
+      clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib                 \
+      clangFrontend.lib clangFrontendTool.lib clangIndex.lib clangLex.lib       \
+      clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib    \
+      clangSerialization.lib clangStaticAnalyzerCheckers.lib                    \
+      clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib               \
+      clangTooling.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib    \
+      LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib          \
+      LLVMDebugInfo.lib LLVMExecutionEngine.lib LLVMInstCombine.lib             \
+      LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipa.lib LLVMipo.lib       \
+      LLVMIRReader.lib LLVMJIT.lib LLVMLineEditor.lib LLVMLinker.lib            \
+      LLVMLTO.lib LLVMMC.lib LLVMMCAnalysis.lib LLVMMCDisassembler.lib          \
+      LLVMMCJIT.lib LLVMMCParser.lib LLVMNVPTXAsmPrinter.lib                    \
+      LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib                  \
+      LLVMObjCARCOpts.lib LLVMObject.lib LLVMOption.lib LLVMProfileData.lib     \
+      LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib               \
+      LLVMSupport.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib    \
+      LLVMVectorize.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib              \
+      LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib                \
+      LLVMX86Info.lib LLVMX86Utils.lib                                          \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
+!ENDIF
 
 LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
 
@@ -95,13 +130,13 @@ $(TERRA_DIR)\release\bin\terra.dll: $(BUILD)\terra.obj
 	$(LINK) /nologo /MACHINE:X64 /DLL /DEBUG /PDB:terralib.pdb /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
 	move terra.lib ..\lib\terra.lib
 
-REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC140.CRT
+REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC$(VC_VERSION).CRT
 
 $(TERRA_DIR)\release\bin\terra.exe: $(TERRA_DIR)\release\bin\terra.dll $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll release\bin
 	copy $(LUAJIT_DIR)\src\lua51.lib release\lib
-	copy "$(REDIST)\msvcp140.dll" release\bin
+	copy "$(REDIST)\msvcp$(VC_VERSION).dll" release\bin
 	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c $(TERRA_DIR)\release\lib\terra.lib $(LUAJIT_DIR)\src\lua51.lib
 
 clean:
