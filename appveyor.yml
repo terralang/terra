@@ -1,16 +1,14 @@
-os: Visual Studio 2013
+os: Visual Studio 2015
 
 environment:
   matrix:
-    - LLVM_VERSION: 3.5.2
-      LLVM_VERSION_SHORT: 35
-    # - LLVM_VERSION: 3.8.1
-    #   LLVM_VERSION_SHORT: 38
+    - LLVM_VERSION: 6.0.1
+      LLVM_VERSION_SHORT: 60
 
 install:
-  - appveyor DownloadFile https://github.com/elliottslaughter/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt.7z
-  - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt.7z
-  - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc12-msvcrt
+  - appveyor DownloadFile https://github.com/Mx7f/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt.7z
+  - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt.7z
+  - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc14-msvcrt
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
   - appveyor DownloadFile http://luajit.org/download/LuaJIT-2.0.5.zip
@@ -25,7 +23,7 @@ install:
   - dir
 
 build_script:
-  - call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64
+  - call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64
   - cd msvc
   - nmake
   - cd ..
