@@ -8,10 +8,10 @@ environment:
       LLVM_VERSION: 3.5.2
       LLVM_VERSION_SHORT: 35
       VS_MAJOR_VERSION: 12
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
       LLVM_VERSION: 3.8.1
       LLVM_VERSION_SHORT: 38
-      VS_MAJOR_VERSION: 14
+      VS_MAJOR_VERSION: 12
 
 install:
   # Hopefully temporary lines
