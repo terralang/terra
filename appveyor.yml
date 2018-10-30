@@ -1,10 +1,6 @@
 environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-      LLVM_VERSION: 7.0.0
-      LLVM_VERSION_SHORT: 70
-      VS_MAJOR_VERSION: 14
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
       VS_MAJOR_VERSION: 14
@@ -12,14 +8,18 @@ environment:
       LLVM_VERSION: 5.0.2
       LLVM_VERSION_SHORT: 50
       VS_MAJOR_VERSION: 14
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-      LLVM_VERSION: 4.0.1
-      LLVM_VERSION_SHORT: 40
-      VS_MAJOR_VERSION: 14
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
       LLVM_VERSION: 3.5.2
       LLVM_VERSION_SHORT: 35
       VS_MAJOR_VERSION: 12
+#    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+#      LLVM_VERSION: 7.0.0
+#      LLVM_VERSION_SHORT: 70 Currently unsupported by terr
+#      VS_MAJOR_VERSION: 14
+#    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+#      LLVM_VERSION: 4.0.1 Currently unsupported by terra
+#      LLVM_VERSION_SHORT: 40
+#      VS_MAJOR_VERSION: 14
 
 install:
   # Hopefully temporary lines
