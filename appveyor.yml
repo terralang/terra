@@ -1,22 +1,30 @@
 environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 5.0.2
+      LLVM_VERSION_SHORT: 50
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 4.0.1
+      LLVM_VERSION_SHORT: 40
       VS_MAJOR_VERSION: 14
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
       LLVM_VERSION: 3.5.2
       LLVM_VERSION_SHORT: 35
       VS_MAJOR_VERSION: 12
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
-      LLVM_VERSION: 3.8.1
-      LLVM_VERSION_SHORT: 38
-      VS_MAJOR_VERSION: 12
 
 install:
   # Hopefully temporary lines
-  - if /I "%LLVM_VERSION_SHORT%" LSS "50" (set BINARY_SOURCE_USER=elliottslaughter)
-  - if /I "%LLVM_VERSION_SHORT%" GEQ "50" (set BINARY_SOURCE_USER=Mx7f)
+  - if /I "%LLVM_VERSION_SHORT%" LSS "40" (set BINARY_SOURCE_USER=elliottslaughter)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "40" (set BINARY_SOURCE_USER=Mx7f)
   - appveyor DownloadFile https://github.com/%BINARY_SOURCE_USER%/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
   - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
   - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
