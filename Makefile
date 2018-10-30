@@ -24,7 +24,7 @@ LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
 LUAJIT_PREFIX ?= build
 
 # same with clang
-CLANG ?= $(shell which clang-3.5 clang | head -1)
+CLANG ?= $(shell which "$(shell $(LLVM_CONFIG) --bindir)/clang" clang-3.5 clang | head -1)
 
 CXX ?= $(CLANG)++
 CC ?= $(CLANG)
@@ -47,7 +47,7 @@ WGET = wget -O
 LUA_TARGET = linux
 endif
 
-ifneq ($(TERRA_RPATH),)
+ifneq ($(strip $(TERRA_RPATH)),)
 TERRA_RPATH_FLAGS = -Wl,-rpath $(TERRA_RPATH)
 endif
 
@@ -55,11 +55,11 @@ endif
 # Sanity Checks
 ###########################
 
-ifeq (,$(wildcard $(CLANG)))
+ifeq (,$(wildcard $(shell which $(CLANG) | head -1)))
     $(error clang could not be found; please set the CLANG and LLVM_CONFIG variables)
 endif
 
-ifeq (,$(wildcard $(LLVM_CONFIG)))
+ifeq (,$(wildcard $(shell which $(LLVM_CONFIG) | head -1)))
     $(error llvm-config could not be found; please set the CLANG and LLVM_CONFIG variables)
 endif
 
@@ -67,7 +67,8 @@ endif
 # Rules for building Lua/JIT
 ############################
 
-ifneq ($(TERRA_USE_PUC_LUA),)
+TERRA_USE_PUC_LUA ?=
+ifneq ($(strip $(TERRA_USE_PUC_LUA)),)
 
 LUA_VERSION=lua-5.1.5
 LUA_TAR = $(LUA_VERSION).tar.gz
@@ -77,9 +78,6 @@ LUA_LIB = $(LUA_DIR)/lib/liblua.a
 LUA_INCLUDE = $(LUA_DIR)/include
 LUA = $(LUA_DIR)/bin/lua
 FLAGS += -DTERRA_USE_PUC_LUA
-
-build/$(LUA_TAR):
-	$(WGET) build/$(LUA_TAR) $(LUA_URL)
 
 $(LUA_LIB): build/$(LUA_TAR)
 	(cd build; tar -xf $(LUA_TAR))
@@ -94,25 +92,22 @@ else
 
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
 #LUAJIT_VERSION_BASE =2.1
-#LUAJIT_VERSION_EXTRA =.0-beta2
+#LUAJIT_VERSION_EXTRA =.0-beta3
 
 LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .4
+LUAJIT_VERSION_EXTRA ?= .5
 LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
-LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
+LUA_TAR ?= $(LUAJIT_VERSION).tar.gz
+LUA_DIR ?= build/$(LUAJIT_VERSION)
 LUA_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
 LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
 LUA ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
 
-build/$(LUAJIT_TAR):
-	$(WGET) build/$(LUAJIT_TAR) $(LUAJIT_URL)
-
-build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
-	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) $(PIC_FLAG)")
+$(LUA_LIB): build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) $(PIC_FLAG)")
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
@@ -288,11 +283,7 @@ build/%.o:	src/%.c $(PACKAGE_DEPS)
 download: build/$(LUA_TAR)
 
 build/$(LUA_TAR):
-ifeq ($(UNAME), Darwin)
-	curl $(LUA_URL) -o build/$(LUA_TAR)
-else
-	wget $(LUA_URL) -O build/$(LUA_TAR)
-endif
+	$(WGET) $(LUA_URL) -o build/$(LUA_TAR)
 
 build/lib/libluajit-5.1.a: build/$(LUA_TAR)
 	(cd build; tar -xf $(LUA_TAR))
