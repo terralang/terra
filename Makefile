@@ -283,7 +283,7 @@ build/%.o:	src/%.c $(PACKAGE_DEPS)
 download: build/$(LUA_TAR)
 
 build/$(LUA_TAR):
-	$(WGET) $(LUA_URL) -o build/$(LUA_TAR)
+	$(WGET) build/$(LUA_TAR) $(LUA_URL)
 
 build/lib/libluajit-5.1.a: build/$(LUA_TAR)
 	(cd build; tar -xf $(LUA_TAR))
