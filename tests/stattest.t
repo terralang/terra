@@ -1,4 +1,10 @@
-if terralib.os == "Windows" then
+-- WARNING: any changes to this file need to change this constant to match!
+local stattest_t_file_size = 480
+
+local ffi = require("ffi")
+-- Windows doesn't have stat() and FreeBSD's version of struct stat uses
+--  bit fields, which terra doesn't seem to handle
+if terralib.os == "Windows" or terralib.os == "BSD" then
   return
 end
 
@@ -8,4 +14,5 @@ terra dostat()
 	C.stat("stattest.t",&s)
 	return s.st_size
 end
-assert(tonumber(dostat()) == 197)
+
+assert(dostat() == stattest_t_file_size)

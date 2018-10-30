@@ -145,13 +145,22 @@ LD = ld
 FLAGS += -Wall -g $(PIC_FLAG)
 LFLAGS = -g
 
+# The -E flag is BSD-specific. It is supported (though undocumented)
+# on certain newer versions of GNU Sed, but not all. Check for -E
+# support and otherwise fall back to the GNU Sed flag -r.
+SED_E = sed -E
+ifeq ($(shell sed -E '' </dev/null >/dev/null 2>&1 && echo yes || echo no),no)
+SED_E = sed -r
+endif
+
 FLAGS += -I build -I $(LUA_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
 FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -O0 -fno-common -Wcast-qual
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
-LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
@@ -170,9 +179,9 @@ CPPFLAGS += -std=c++11
 endif
 
 
-ifeq ($(UNAME), Linux)
+ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared $(PIC_FLAG)
-WHOLE_ARCHIVE = -Wl,-export-dynamic -Wl,--whole-archive $(1) -Wl,--no-whole-archive
+WHOLE_ARCHIVE += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
 DYNFLAGS = -undefined dynamic_lookup -dynamiclib -single_module $(PIC_FLAG) -install_name "@rpath/terra.so"
 WHOLE_ARCHIVE =  -Wl,-force_load,$(1)
@@ -190,18 +199,40 @@ ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
 LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
-LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+# by default, Terra includes only the pieces of the LLVM libraries it needs,
+#  but this can be a problem if third-party-libraries that also need LLVM are
+#  used - allow the user to request that some/all of the LLVM components be
+#  included and re-exported in their entirety
+ifeq "$(LLVMVERGT4)" "1"
+    LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
+else
+	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+endif
+ifneq ($(REEXPORT_LLVM_COMPONENTS),)
+  REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
+  ifneq ($(findstring $(UNAME), Linux FreeBSD),)
+    LLVM_LIBRARY_FLAGS += -Wl,--whole-archive $(REEXPORT_LIBS) -Wl,--no-whole-archive
+  else
+    LLVM_LIBRARY_FLAGS += $(REEXPORT_LIBS:%=-Wl,-force_load,%)
+  endif
+  LLVM_LIBRARY_FLAGS += $(filter-out $(REEXPORT_LIBS),$(LLVM_LIBS))
+else
+  LLVM_LIBRARY_FLAGS += $(LLVM_LIBS)
+endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
-    SUPPORT_LIBRARY_FLAGS += -lcurses
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm >/dev/null 2>&1; echo $$?), 0)
+    SUPPORT_LIBRARY_FLAGS += -lcurses 
 endif
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 >/dev/null 2>&1; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lz
 endif
 
 ifeq ($(UNAME), Linux)
 SUPPORT_LIBRARY_FLAGS += -ldl -pthread
+endif
+ifeq ($(UNAME), FreeBSD)
+SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
 PACKAGE_DEPS += $(LUA_LIB)
@@ -240,6 +271,9 @@ LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 
+.PHONY:	all clean download purge test release install
+all:	$(EXECUTABLE) $(DYNLIBRARY)
+
 test:	all
 	(cd tests; ./run)
 
@@ -251,12 +285,25 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
 
-release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB)
-	cp $(LUA_INCLUDE)/$*.h $@
+download: build/$(LUA_TAR)
 
+build/$(LUA_TAR):
+ifeq ($(UNAME), Darwin)
+	curl $(LUA_URL) -o build/$(LUA_TAR)
+else
+	wget $(LUA_URL) -O build/$(LUA_TAR)
+endif
+
+build/lib/libluajit-5.1.a: build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+
+release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
+	cp $(LUA_INCLUDE)/$*.h $@
+    
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/llvm_objects/llvm_list $(LUA) src/unpacklibraries.lua build/llvm_objects
 	# include all luajit objects, since the entire lua interface is used in terra
@@ -339,7 +386,7 @@ build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
-#if we are cleaning, then don't include dependencies (which would require the header files are built)
-ifeq ($(findstring $(MAKECMDGOALS),purge clean release),)
+#if we are cleaning, then don't include dependencies (which would require the header files are built)	
+ifeq ($(findstring $(MAKECMDGOALS),download purge clean release),)
 -include $(DEPENDENCIES)
 endif

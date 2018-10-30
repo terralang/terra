@@ -5,6 +5,7 @@ _Zach DeVito_ (zdevito at cs dot stanford dot edu)
 
 [terralang.org](http://terralang.org)
 [![Build Status](https://travis-ci.org/zdevito/terra.svg?branch=develop)](https://travis-ci.org/zdevito/terra)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/zdevito/terra?branch=master&svg=true)](https://ci.appveyor.com/project/zdevito/terra/branch/master)
 
 Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua).
 
@@ -97,12 +98,24 @@ Expect it to print a lot of junk out. At the end it will summarize the results:
 Building Terra
 ==============
 
-If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.3 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM, Clang (the C/C++ frontend for LLVM), and LuaJIT 2.0.5 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
 
+### Supported LLVM Versions ###
+
+The current recommended version of LLVM is **6.0**. The following versions are also supported:
+
+  * LLVM 3.4
+  * LLVM 3.5 (tested in Travis, supports debug info, supports CUDA)
+  * LLVM 3.6
+  * LLVM 3.7
+  * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
+  * LLVM 3.9 (used frequently)
+  * LLVM 5.0 (tested in Travis)
+  * LLVM 6.0 (used frequently, tested in Travis, supports CUDA)
 
 ### Windows ###
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang, as well as a copy of the LuaJIT sources.
 
 
 ### Linux/OSX ###
@@ -124,10 +137,11 @@ Now run make in the `terra` directory to download LuaJIT and build Terra:
 
 If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
 
-    LLVM_CONFIG = $(shell which llvm-config)
-    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
-    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
-    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
+    LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
+    LLVM_PREFIX ?= $(shell $(LLVM_CONFIG) --prefix)
+    CLANG ?= $(shell which clang-3.5 clang | head -1)
+    CXX ?= $(CLANG)++
+    CC  ?= $(CLANG)
 
 If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
 
@@ -484,7 +498,7 @@ You can call these power functions from a Terra function:
         return mymath.pow3(3)
     end
 
-Let's examine what is happens when this function is compiled. The Terra compiler will resolve the `mymath` symbol to the Lua table holding the power functions. It will then see the select operator (`math.pow3`). Because `mymath` is a Lua table, the Terra compiler will perform this select operator at compile time, and resolve `mymath.pow3` to the third Terra function constructed inside the loop.  It will then insert a direct call to that function inside `doit`. This behavior is a form of _partial execution_. In general, Terra will resolve any chain of select operations `a.b.c.d` on Lua tables at compile time. This behavior enables Terra to use Lua tables to organize code into different namespaces. There is no need for a Terra-specific namespace mechanism!
+Let's examine what happens when this function is compiled. The Terra compiler will resolve the `mymath` symbol to the Lua table holding the power functions. It will then see the select operator (the dot in `mymath.pow3`). Because `mymath` is a Lua table, the Terra compiler will perform this select operator at compile time, and resolve `mymath.pow3` to the third Terra function constructed inside the loop. It will then insert a direct call to that function inside `doit`. This behavior is a form of _partial execution_. In general, Terra will resolve any chain of select operations `a.b.c.d` on Lua tables at compile time. This behavior enables Terra to use Lua tables to organize code into different namespaces. There is no need for a Terra-specific namespace mechanism!
 
 Recall how we can include C files:
 
@@ -878,7 +892,7 @@ Meta-programming
 
 In this guide we've already encountered instances of meta-programming, such as using a Lua loop to create an array of  Terra `pow` functions. In fact, Terra includes several operators that it make it possible to generate _any_ code at runtime. For instance, you can implement an entire compiler by parsing an input string and constructing the Terra functions that implement the parsed code.
 
-The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
+The operators we provide are adapted from [multi-stage programming](https://pdfs.semanticscholar.org/1726/703918e320dff60e013f76fa2a3bd22bc7b8.pdf). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
 
 ### Escapes ###
 

@@ -533,6 +533,14 @@ end
 function T.terrafunction:setinlined(v)
     assert(self:isdefined(), "attempting to set the inlining state of an undefined function")
     self.definition.alwaysinline = not not v
+    assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
+           "setinlined(true) and setoptimized(false) are incompatible")
+end
+function T.terrafunction:setoptimized(v)
+    assert(self:isdefined(), "attempting to set the optimization state of an undefined function")
+    self.definition.dontoptimize = not v
+    assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
+           "setinlined(true) and setoptimized(false) are incompatible")
 end
 function T.terrafunction:disas()
     print("definition ", self:gettype())
@@ -757,6 +765,7 @@ end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
+terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
 terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
@@ -851,6 +860,8 @@ function T.quote:asvalue()
             end
             return t
         elseif e:is "var" then return e.symbol
+        elseif e:is "luaobject" then
+             return e.value
         else
             local runconstantprop = function()
                 return terra.constant(self):get()
@@ -1615,12 +1626,16 @@ do
     function types.istype(t)
         return T.Type:isclassof(t)
     end
-
-
-    local function globaltype(name, typ)
+    
+    --map from luajit ffi ctype objects to corresponding terra type
+    types.ctypetoterra = {}
+    
+    local function globaltype(name, typ, min_v, max_v)
         typ.name = typ.name or name
         rawset(_G,name,typ)
         types[name] = typ
+        if min_v then function typ:min() return terra.cast(self, min_v) end end
+        if max_v then function typ:max() return terra.cast(self, max_v) end end
     end
 
     --initialize integral types
@@ -1628,18 +1643,27 @@ do
     types.integraltypes = List()
     for _,size in ipairs(integer_sizes) do
         for _,s in ipairs{true,false} do
-            local name = "int"..tostring(size * 8)
+            local bits = size * 8
+            local name = "int"..tostring(bits)
             if not s then
                 name = "u"..name
             end
+            local min,max
+            if not s then
+                min = 0ULL
+                max = -1ULL
+            else
+                min = 2LL ^ (bits - 1)
+                max = min - 1
+            end
             local typ = T.primitive("integer",size,s)
-            globaltype(name,typ)
+            globaltype(name,typ,min,max)
             types.integraltypes:insert(typ) -- luajit ffi will need to pre-register these to make typeof work
         end
-    end
-
-    globaltype("float", T.primitive("float",4,true))
-    globaltype("double",T.primitive("float",8,true))
+    end  
+    
+    globaltype("float", T.primitive("float",4,true), -math.huge, math.huge)
+    globaltype("double",T.primitive("float",8,true), -math.huge, math.huge)
     globaltype("bool", T.primitive("logical",1,false))
 
     types.error,T.error.name = T.error,"<error>"
@@ -3510,7 +3534,7 @@ end)
 local function createattributetable(q)
     local attr = q:asvalue()
     if type(attr) ~= "table" then
-        error("attributes must be a table")
+        error("attributes must be a table, not a " .. type(attr))
     end
     return T.attr(attr.nontemporal and true or false,
                   type(attr.align) == "number" and attr.align or nil,
@@ -3982,11 +4006,16 @@ function T.quote:__tostring() return self:prettystring(false) end
 
 local allowedfilekinds = { object = true, executable = true, bitcode = true, llvmir = true, sharedlibrary = true, asm = true }
 local mustbefile = { sharedlibrary = true, executable = true }
-function compilationunit:saveobj(filename,filekind,arguments)
+function compilationunit:saveobj(filename,filekind,arguments,optimize)
     if filekind ~= nil and type(filekind) ~= "string" then
         --filekind is missing, shift arguments to the right
-        filekind,arguments = nil,filekind
+        filekind,arguments,optimize = nil,filekind,arguments
     end
+
+    if optimize == nil then
+        optimize = true
+    end
+
     if filekind == nil and filename ~= nil then
         --infer filekind from string
         if filename:match("%.o$") then
@@ -4009,19 +4038,19 @@ function compilationunit:saveobj(filename,filekind,arguments)
     if filename == nil and mustbefile[filekind] then
         error(filekind .. " must be written to a file")
     end
-    return terra.saveobjimpl(filename,filekind,self,arguments or {})
+    return terra.saveobjimpl(filename,filekind,self,arguments or {},optimize)
 end
 
-function terra.saveobj(filename,filekind,env,arguments,target)
+function terra.saveobj(filename,filekind,env,arguments,target,optimize)
     if type(filekind) ~= "string" then
-        filekind,env,arguments,target = nil,filekind,env,arguments
+        filekind,env,arguments,target,optimize = nil,filekind,env,arguments,target
     end
     local cu = terra.newcompilationunit(target or terra.nativetarget,false)
     for k,v in pairs(env) do
         if not T.globalvalue:isclassof(v) then error("expected terra global or function but found "..terra.type(v)) end
         cu:addvalue(k,v)
     end
-    local r = cu:saveobj(filename,filekind,arguments)
+    local r = cu:saveobj(filename,filekind,arguments,optimize)
     cu:free()
     return r
 end
@@ -4029,20 +4058,23 @@ end
 
 -- configure path variables
 terra.cudahome = os.getenv("CUDA_HOME") or (terra.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
-terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"};
-                       Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"};
+terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"}; 
+                       Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"}; 
                        Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[terra.os]
-for name,path in pairs(terra.cudalibpaths) do
-	path = path:gsub("%$CUDA_HOME",terra.cudahome)
-	if path:match("%*") and terra.os == "Windows" then
-		local F = io.popen(('dir /b /s "%s" 2> nul'):format(path))
-		if F then
-			path = F:read("*line") or path
-			F:close()
+-- OS's that are not supported by CUDA will have an undefined value here
+if terra.cudalibpaths then
+	for name,path in pairs(terra.cudalibpaths) do
+		path = path:gsub("%$CUDA_HOME",terra.cudahome)
+		if path:match("%*") and terra.os == "Windows" then
+			local F = io.popen(('dir /b /s "%s" 2> nul'):format(path))
+			if F then
+				path = F:read("*line") or path
+				F:close()
+			end
 		end
+		terra.cudalibpaths[name] = path
 	end
-	terra.cudalibpaths[name] = path
-end
+end                       
 
 terra.systemincludes = List()
 if terra.os == "Windows" then
@@ -4197,7 +4229,7 @@ function terra.type(t)
 end
 
 function terra.linklibrary(filename)
-    assert(not filename:match(".bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
+    assert(not filename:match("%.bc$"), "linklibrary no longer supports llvm bitcode, use terralib.linkllvm instead.")
     terra.linklibraryimpl(filename)
 end
 function terra.linkllvm(filename,target,fromstring)

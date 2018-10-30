@@ -20,8 +20,8 @@ for i = 1,8 do
 	dat[i-1] = i
 end
 
-if terralib.llvmversion == 31 then
-	print("ignoring...")
+if ffi.os ~= "Linux" or os.execute("grep avx /proc/cpuinfo") ~= "" then
+	print("ignoring (machine does not support AVX)...")
 else
 	foobar:compile()
 	local test = require("test")

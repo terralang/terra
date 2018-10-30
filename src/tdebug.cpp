@@ -21,9 +21,11 @@
 
 using namespace llvm;
 
+#ifdef DEBUG_INFO_WORKING
 static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
     return point < inst || (!isNextInst && point == inst);
 }
+#endif
 static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
     (void)pointisbeforeinstruction; 
     #if defined(DEBUG_INFO_WORKING) && LLVM_VERSION < 38
@@ -153,8 +155,13 @@ static void printstacktrace(void * uap, void * data) {
         rip = (void*) uc->uc_mcontext.gregs[REG_RIP];
         rbp = (void*) uc->uc_mcontext.gregs[REG_RBP];
 #else
+#ifdef __FreeBSD__
+        rip = (void*)uc->uc_mcontext.mc_rip;
+        rbp = (void*)uc->uc_mcontext.mc_rbp;
+#else
         rip = (void*)uc->uc_mcontext->__ss.__rip;
         rbp = (void*)uc->uc_mcontext->__ss.__rbp;
+#endif
 #endif
     }
 #else
