@@ -9,7 +9,7 @@
 
 -include Makefile.inc
 
-# customizable install prefixes
+# Set PREFIX to customize the location of the Terra installation.
 PREFIX ?= /usr/local
 INSTALL_BINARY_DIR ?= $(PREFIX)/bin
 INSTALL_LIBRARY_DIR ?= $(PREFIX)/lib
@@ -17,17 +17,20 @@ INSTALL_SHARE_DIR ?= $(PREFIX)/share
 INSTALL_INCLUDE_DIR ?= $(PREFIX)/include
 INSTALL_LUA_LIBRARY_DIR ?= $(PREFIX)/lib
 
-# Debian packages name llvm-config with a version number - list them here in preference order
+# Set LLVM_CONFIG to control which LLVM installation is used to build Terra.
 LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
-#luajit will be downloaded automatically (it's much smaller than llvm)
-#to override this, set LUAJIT_PREFIX to the home of an already installed luajit
-LUAJIT_PREFIX ?= build
 
-# same with clang
-CLANG ?= $(shell which "$(shell $(LLVM_CONFIG) --bindir)/clang" clang-3.5 clang | head -1)
+# By default, use Clang from the same LLVM install directory.
+CLANG ?= $(shell $(LLVM_CONFIG) --bindir)/clang
 
-CXX ?= $(CLANG)++
-CC ?= $(CLANG)
+# Set CUDA_HOME to control which CUDA installation is used to build Terra.
+# If this path does not exist, Terra will not be built with CUDA enabled.
+CUDA_HOME ?= /usr/local/cuda
+ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
+
+# LuaJIT will be downloaded automatically (it's much smaller than LLVM).
+# To override this, set LUA_PREFIX to the home of an already installed LuaJIT.
+LUA_PREFIX ?= $(abspath build)
 
 PIC_FLAG ?= -fPIC
 FLAGS=$(CFLAGS)
@@ -68,46 +71,41 @@ endif
 ############################
 
 TERRA_USE_PUC_LUA ?=
-ifneq ($(strip $(TERRA_USE_PUC_LUA)),)
+ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
 
+# PUC Lua
 LUA_VERSION=lua-5.1.5
 LUA_TAR = $(LUA_VERSION).tar.gz
 LUA_URL = https://www.lua.org/ftp/$(LUA_TAR)
 LUA_DIR = build/$(LUA_VERSION)
-LUA_LIB = $(LUA_DIR)/lib/liblua.a
-LUA_INCLUDE = $(LUA_DIR)/include
-LUA = $(LUA_DIR)/bin/lua
+LUA_LIB = $(LUA_PREFIX)/lib/liblua.a
+LUA_INCLUDE = $(LUA_PREFIX)/include
+LUA = $(LUA_PREFIX)/bin/lua
 FLAGS += -DTERRA_USE_PUC_LUA
-
-$(LUA_LIB): build/$(LUA_TAR)
-	(cd build; tar -xf $(LUA_TAR))
-	(cd $(LUA_DIR); make $(LUA_TARGET) && make local)
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
-	$(LUA_DIR)/bin/luac -o $@ $<
+	$(LUA_PREFIX)/bin/luac -o $@ $<
 
 
 else
 
+# LuaJIT
+
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
-#LUAJIT_VERSION_BASE =2.1
-#LUAJIT_VERSION_EXTRA =.0-beta3
+#LUA_VERSION_BASE =2.1
+#LUA_VERSION_EXTRA =.0-beta3
 
-LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .5
-LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUA_TAR ?= $(LUAJIT_VERSION).tar.gz
-LUA_DIR ?= build/$(LUAJIT_VERSION)
-LUA_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
-LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
-LUA ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
-
-$(LUA_LIB): build/$(LUA_TAR)
-	(cd build; tar -xf $(LUA_TAR))
-	(cd $(LUA_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) $(PIC_FLAG)")
+LUA_VERSION_BASE ?= 2.0
+LUA_VERSION_EXTRA ?= .5
+LUA_VERSION ?= LuaJIT-$(LUA_VERSION_BASE)$(LUA_VERSION_EXTRA)
+LUA_EXECUTABLE ?= luajit-$(LUA_VERSION_BASE)$(LUA_VERSION_EXTRA)
+LUA_URL ?= http://luajit.org/download/$(LUA_VERSION).tar.gz
+LUA_TAR ?= $(LUA_VERSION).tar.gz
+LUA_DIR ?= build/$(LUA_VERSION)
+LUA_LIB ?= $(LUA_PREFIX)/lib/libluajit-5.1.a
+LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUA_PREFIX)/include/luajit-$(LUA_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUA_PREFIX)/include/lua.h || echo $(LUA_PREFIX)/include/luajit-$(LUA_VERSION_BASE)/lua.h))
+LUA ?= $(LUA_PREFIX)/bin/$(LUA_EXECUTABLE)
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
@@ -128,12 +126,8 @@ else
 CLANG_PREFIX ?= $(LLVM_PREFIX)
 endif
 
-CUDA_HOME ?= /usr/local/cuda
-ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
-
 .SUFFIXES:
 .SECONDARY:
-
 
 AR = ar
 LD = ld
@@ -285,9 +279,15 @@ download: build/$(LUA_TAR)
 build/$(LUA_TAR):
 	$(WGET) build/$(LUA_TAR) $(LUA_URL)
 
-build/lib/libluajit-5.1.a: build/$(LUA_TAR)
+ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
+$(LUA_LIB): build/$(LUA_TAR)
 	(cd build; tar -xf $(LUA_TAR))
-	(cd $(LUA_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC")
+	(cd $(LUA_DIR); make $(LUA_TARGET) install INSTALL_TOP="$(LUA_PREFIX)" CC="$(CC) $(PIC_FLAG)")
+else
+$(LUA_LIB): build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); make install PREFIX="$(LUA_PREFIX)" CC="$(CC)" STATIC_CC="$(CC) $(PIC_FLAG)")
+endif
 
 release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
 	cp $(LUA_INCLUDE)/$*.h $@

@@ -4113,7 +4113,8 @@ local defaultpath
 if terra.os == "Windows" then
     defaultpath = ".\\?.t;"..terra.terrahome.."\\include\\?.t"
 else
-    defaultpath = ("./?.t;%s/%s?.t;%s/%s?/init.t"):format(terra.terrahome,terra.luadir,terra.terrahome,terra.luadir)
+    print(terra.terrahome,terra.luadir,terra.terrahome,terra.luadir)
+    defaultpath = ("./?.t;%s/%s?.t;%s/%s?/init.t"):format(terra.terrahome,terra.luadir or "",terra.terrahome,terra.luadir or "")
 end
 
 package.terrapath = defaultpath
