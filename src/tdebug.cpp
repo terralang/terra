@@ -281,7 +281,7 @@ int terra_debuginit(struct terra_State * T) {
     void * lookupsymbol = createclosure((uint8_t*)T->C->MB.base()+CLOSURE_MAX_SIZE,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
     void * lookupline =   createclosure((uint8_t*)T->C->MB.base()+2*CLOSURE_MAX_SIZE,(void*)terra_lookupline,4,(void**)&T->C,1);
     
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(T->L,"terra");
     lua_getfield(T->L, -1, "initdebugfns");
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
     lua_pushlightuserdata(T->L, (void*)terra_backtrace);

@@ -309,7 +309,7 @@ int terra_toptx(lua_State * L) {
 }
 
 int terra_cudainit(struct terra_State * T) {
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(T->L,"terra");
     lua_getfield(T->L,-1,"cudalibpaths");
     lua_getfield(T->L,-1,"nvvm");
     const char * libnvvmpath = lua_tostring(T->L,-1);

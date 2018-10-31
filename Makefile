@@ -74,7 +74,7 @@ TERRA_USE_PUC_LUA ?=
 ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
 
 # PUC Lua
-LUA_VERSION=lua-5.1.5
+LUA_VERSION=lua-5.2.4
 LUA_TAR = $(LUA_VERSION).tar.gz
 LUA_URL = https://www.lua.org/ftp/$(LUA_TAR)
 LUA_DIR = build/$(LUA_VERSION)
@@ -82,6 +82,7 @@ LUA_LIB = $(LUA_PREFIX)/lib/liblua.a
 LUA_INCLUDE = $(LUA_PREFIX)/include
 LUA = $(LUA_PREFIX)/bin/lua
 FLAGS += -DTERRA_USE_PUC_LUA
+FLAGS += -DLUA_COMPAT_ALL # For Lua 5.2+
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)

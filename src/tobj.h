@@ -111,7 +111,7 @@ public:
     }
     const char * asstring(const char * field) {
         push();
-        lua_getfield(L, LUA_GLOBALSINDEX, "tostring");
+        lua_getglobal(L, "tostring");
         lua_getfield(L,-2,field);
         lua_call(L,1,1);
         const char * r = luaL_checkstring(L,-1);
@@ -156,7 +156,7 @@ public:
     }
     T_Kind kind(const char * field) {
         push();
-        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getglobal(L,"terra");
         lua_getfield(L,-1,"kinds");
         lua_getfield(L,-3,field);
         lua_gettable(L,-2);
@@ -200,7 +200,7 @@ public:
         return r;
     }
     void dump() {
-        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getglobal(L,"terra");
         lua_getfield(L,-1,"printraw");
         push();
         lua_call(L, 1, 0);
@@ -208,12 +208,12 @@ public:
         lua_pop(L,1);
     }
     void print() {
-        lua_getfield(L,LUA_GLOBALSINDEX,"print");
+        lua_getglobal(L,"print");
         push();
         lua_call(L,1,0);
     }
     void newlist(Obj * lst) {
-        lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+        lua_getglobal(L,"terra");
         lua_getfield(L,-1,"newlist");
         lua_remove(L,-2);
         lua_call(L, 0, 1);

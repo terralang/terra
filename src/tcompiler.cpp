@@ -253,7 +253,7 @@ static void AddLLVMOptions(int N,...) {
 //useful for debugging GC problems. You can attach it to
 static int terra_gcdebug(lua_State * L) {
     lua_newuserdata(L,sizeof(void*));
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_getfield(L,-1,"llvm_gcdebugmetatable");
     lua_setmetatable(L,-3);
     lua_pop(L,1); //the 'terra' table
@@ -485,7 +485,7 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
 int terra_compilerinit(struct terra_State * T) {
     if(!OneTimeInit(T))
         return LUA_ERRRUN;
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(T->L,"terra");
 
     #define REGISTER_FN(name,isclo) RegisterFunction(T,#name,isclo,terra_##name);
     TERRALIB_FUNCTIONS(REGISTER_FN)
@@ -3067,7 +3067,7 @@ static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker) {
         return linker->isEmpty();
     #endif
 #else
-	lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
+	lua_getglobal(T->L, "terra");
 	lua_getfield(T->L, -1, "getvclinker");
 	lua_call(T->L, 0, 3);
 	*linker = LLVM_PATH_TYPE(lua_tostring(T->L,-3));
