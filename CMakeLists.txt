@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
 project(Terra)
 
 list(INSERT CMAKE_MODULE_PATH 0 "${Terra_SOURCE_DIR}/cmake/Modules")
@@ -12,6 +12,7 @@ find_package(CUDA)
 list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
 
 include(GetLuaJIT)
+include(ExtractLLVM)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

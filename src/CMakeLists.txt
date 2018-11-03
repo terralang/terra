@@ -127,12 +127,20 @@ endif()
 
 set_target_properties(TerraObjectFiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-add_dependencies(TerraObjectFiles LuaJIT)
-add_dependencies(TerraObjectFiles LLVMObjectFiles)
 add_dependencies(TerraObjectFiles TerraGeneratedFiles)
 
-add_library(TerraLibrary STATIC $<TARGET_OBJECTS:TerraObjectFiles>)
-add_library(TerraLibraryShared SHARED $<TARGET_OBJECTS:TerraObjectFiles>)
+add_library(TerraLibrary
+  STATIC
+    $<TARGET_OBJECTS:TerraObjectFiles>
+    $<TARGET_OBJECTS:LLVMObjectFiles>
+    $<TARGET_OBJECTS:LuaJITObjectFiles>
+)
+add_library(TerraLibraryShared
+  SHARED
+    $<TARGET_OBJECTS:TerraObjectFiles>
+    $<TARGET_OBJECTS:LLVMObjectFiles>
+    $<TARGET_OBJECTS:LuaJITObjectFiles>
+)
 
 set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
@@ -140,23 +148,10 @@ set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 
-# target_link_libraries(TerraLibrary PRIVATE ${CLANG_LIBRARIES})
-# target_link_libraries(TerraLibrary PRIVATE ${LLVM_AVAILABLE_LIBS})
-target_link_libraries(TerraLibrary PRIVATE ${ALL_LLVM_OBJECTS})
-target_link_libraries(TerraLibrary PRIVATE ${LUAJIT_OBJECTS})
 
-if(APPLE)
-elseif(UNIX)
-  target_link_libraries(TerraLibraryShared PRIVATE -Wl,-export-dynamic -Wl,--whole-archive)
-endif()
-# target_link_libraries(TerraLibraryShared PRIVATE ${CLANG_LIBRARIES})
-# target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_AVAILABLE_LIBS})
-target_link_libraries(TerraLibraryShared PRIVATE ${ALL_LLVM_OBJECTS})
-target_link_libraries(TerraLibraryShared PRIVATE ${LUAJIT_OBJECTS})
-if(APPLE)
-elseif(UNIX)
-  target_link_libraries(TerraLibraryShared PRIVATE -Wl,--no-whole-archive)
-endif()
+target_link_libraries(TerraLibrary PRIVATE ${LLVM_SYSTEM_LIBRARIES})
+
+target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_SYSTEM_LIBRARIES})
 
 install(TARGETS TerraLibrary TerraLibraryShared
   DESTINATION ${PROJECT_SOURCE_DIR}/release/lib
