@@ -35,11 +35,8 @@ foreach(LLVM_LIB ${LLVM_LIBRARIES} ${CLANG_LIBRARIES})
 endforeach()
 
 add_custom_target(
-  LLVMObjects
+  LLVMObjectFiles
   DEPENDS ${ALL_LLVM_OBJECTS}
 )
 
-add_library(LLVMObjectFiles OBJECT IMPORTED GLOBAL)
-add_dependencies(LLVMObjectFiles LLVMObjects)
-set_property(TARGET LLVMObjectFiles PROPERTY IMPORTED_OBJECTS ${ALL_LLVM_OBJECTS})
 get_property(LLVM_SYSTEM_LIBRARIES TARGET LLVMSupport PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES)

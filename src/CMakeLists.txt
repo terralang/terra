@@ -132,22 +132,34 @@ add_dependencies(TerraObjectFiles TerraGeneratedFiles)
 add_library(TerraLibrary
   STATIC
     $<TARGET_OBJECTS:TerraObjectFiles>
-    $<TARGET_OBJECTS:LLVMObjectFiles>
-    $<TARGET_OBJECTS:LuaJITObjectFiles>
+    ${ALL_LLVM_OBJECTS}
+    ${LUAJIT_OBJECTS}
 )
 add_library(TerraLibraryShared
   SHARED
     $<TARGET_OBJECTS:TerraObjectFiles>
-    $<TARGET_OBJECTS:LLVMObjectFiles>
-    $<TARGET_OBJECTS:LuaJITObjectFiles>
+    ${ALL_LLVM_OBJECTS}
+    ${LUAJIT_OBJECTS}
 )
+
+set_source_files_properties(
+  ${ALL_LLVM_OBJECTS}
+  ${LUAJIT_OBJECTS}
+  PROPERTIES
+    EXTERNAL_OBJECT true
+    GENERATED true)
+
+add_dependencies(TerraLibrary LuaJIT)
+add_dependencies(TerraLibrary LLVMObjectFiles)
+
+add_dependencies(TerraLibraryShared LuaJIT)
+add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
 set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
 set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
-
 
 target_link_libraries(TerraLibrary PRIVATE ${LLVM_SYSTEM_LIBRARIES})
 
