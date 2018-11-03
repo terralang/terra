@@ -13,6 +13,7 @@ env:
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
+  - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1
 
