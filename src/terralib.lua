@@ -1651,28 +1651,38 @@ do
     --map from luajit ffi ctype objects to corresponding terra type
     types.ctypetoterra = {}
     
-    local function globaltype(name, typ)
+    local function globaltype(name, typ, min_v, max_v)
         typ.name = typ.name or name
         rawset(_G,name,typ)
         types[name] = typ
+        if min_v then function typ:min() return terra.cast(self, min_v) end end
+        if max_v then function typ:max() return terra.cast(self, max_v) end end
     end
     
     --initialize integral types
     local integer_sizes = {1,2,4,8}
     for _,size in ipairs(integer_sizes) do
         for _,s in ipairs{true,false} do
-            local name = "int"..tostring(size * 8)
+            local bits = size * 8
+            local name = "int"..tostring(bits)
             if not s then
                 name = "u"..name
             end
+            local min,max
+            if not s then
+                min = 0ULL
+                max = -1ULL
+            else
+                min = 2LL ^ (bits - 1)
+                max = min - 1
+            end
             local typ = T.primitive("integer",size,s)
-            globaltype(name,typ)
-            typ:cstring() -- force registration of integral types so calls like terra.typeof(1LL) work
+            globaltype(name,typ,min,max)
         end
     end  
     
-    globaltype("float", T.primitive("float",4,true))
-    globaltype("double",T.primitive("float",8,true))
+    globaltype("float", T.primitive("float",4,true), -math.huge, math.huge)
+    globaltype("double",T.primitive("float",8,true), -math.huge, math.huge)
     globaltype("bool", T.primitive("logical",1,false))
     
     types.error,T.error.name = T.error,"<error>"

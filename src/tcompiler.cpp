@@ -29,8 +29,13 @@ extern "C" {
 #include "tobj.h"
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
+
+#if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#else
+#include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
+#endif
+
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
 #include "tllvmutil.h"
@@ -64,6 +69,20 @@ TERRALIB_FUNCTIONS(DEF_LIBFUNCTION)
 
 #ifdef PRINT_LLVM_TIMING_STATS
 static llvm_shutdown_obj llvmshutdownobj;
+#endif
+
+#if LLVM_VERSION < 38
+#define TERRA_DUMP_FUNCTION(t) (t)->dump()
+#define TERRA_DUMP_TYPE(t) (t)->dump()
+#define TERRA_DUMP_MODULE(t) (t)->dump()
+#elif LLVM_VERSION == 38
+#define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
+#else
+#define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), nullptr)
+#define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
+#define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
 #endif
 
 struct DisassembleFunctionListener : public JITEventListener {
@@ -148,6 +167,41 @@ struct DisassembleFunctionListener : public JITEventListener {
     }
 #endif
 };
+
+
+#if LLVM_VERSION > 40
+class TerraSectionMemoryManager : public SectionMemoryManager {
+
+    public:
+
+#if LLVM_VERSION > 50
+    TerraSectionMemoryManager(TerraCompilationUnit * CU_in, MemoryMapper *MM = nullptr) : SectionMemoryManager(MM) {
+#else
+    TerraSectionMemoryManager(TerraCompilationUnit * CU_in) : SectionMemoryManager() {
+#endif
+        CU = CU_in;
+    }
+
+    TerraSectionMemoryManager(const TerraSectionMemoryManager &) = delete;
+    void operator=(const TerraSectionMemoryManager &) = delete;
+
+    void notifyObjectLoaded (ExecutionEngine *EE, const object::ObjectFile &obj) override {
+        auto size_map = llvm::object::computeSymbolSizes(obj);
+        for(auto & S : size_map) {
+            object::SymbolRef sym = S.first;
+            auto name = sym.getName();
+            auto type = sym.getType();
+            // printf("notify: %s %d %#010llx\n", cantFail(std::move(name)).data(), cantFail(std::move(type)), S.second);
+            if(name && type)
+                static_cast<DisassembleFunctionListener*>(CU->jiteventlistener)->InitializeDebugData(name.get(),type.get(),S.second);
+        }
+    }
+
+    private:
+
+    TerraCompilationUnit * CU;
+};
+#endif
 
 static double CurrentTimeInSeconds() {
 #ifdef _WIN32
@@ -302,7 +356,20 @@ int terra_inittarget(lua_State * L) {
     if(!TheTarget) {
         luaL_error(L,"failed to initialize target for LLVM Triple: %s (%s)",TT->Triple.c_str(),err.c_str());
     }
-    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,Reloc::PIC_,CodeModel::Default,CodeGenOpt::Aggressive);
+    TT->tm = TheTarget->createTargetMachine(TT->Triple, TT->CPU, TT->Features, options,
+#if defined(__linux__) || defined(__unix__) || (LLVM_VERSION < 50)
+        Reloc::PIC_,
+#else
+        Optional<Reloc::Model>(),
+#endif
+#if defined(__powerpc64__)
+        // On PPC the small model is limited to 16bit offsets
+        CodeModel::Medium,
+#else
+        // Use small model so that we can use signed 32bits offset in the function and GV tables
+        CodeModel::Small,
+#endif
+    CodeGenOpt::Aggressive);
     TT->external = new Module("external",*TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -365,13 +432,21 @@ static void InitializeJIT(TerraCompilationUnit * CU) {
       .setUseMCJIT(CU->T->options.usemcjit)
 #endif
       .setTargetOptions(CU->TT->tm->Options)
-	  .setOptLevel(CodeGenOpt::Aggressive);
+#if LLVM_VERSION < 50
+      .setOptLevel(CodeGenOpt::Aggressive);
+#else
+      .setOptLevel(CodeGenOpt::Aggressive)
+      .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
+      .setUseOrcMCJITReplacement(true);
+#endif
 
     CU->ee = eb.create();
     if (!CU->ee)
         terra_reporterror(CU->T,"llvm: %s\n",err.c_str());
     CU->jiteventlistener = new DisassembleFunctionListener(CU);
+#if LLVM_VERSION < 50
     CU->ee->RegisterJITEventListener(CU->jiteventlistener);
+#endif
 }
 
 int terra_compilerinit(struct terra_State * T) {
@@ -563,6 +638,7 @@ class Types {
         return true;
     }
     StructType * CreateStruct(Obj * typ) {
+#if LLVM_VERSION < 50
         //check to see if it was initialized externally first
         if(typ->boolean("llvm_definingfunction")) {
             const char * name = typ->string("llvm_definingfunction");
@@ -572,6 +648,7 @@ class Types {
             assert(st);
             return st;
         }
+#endif
         std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
@@ -638,7 +715,7 @@ class Types {
         st->setBody(entry_types);
         VERBOSE_ONLY(T) {
             printf("Struct Layout Is:\n");
-            st->dump();
+            TERRA_DUMP_TYPE(st);
             printf("\nEnd Layout\n");
         }
     }
@@ -1304,7 +1381,7 @@ struct FunctionEmitter {
                         }
                         CU->fpm->run(*scc[i]);
                         VERBOSE_ONLY(T) {
-                            scc[i]->dump();
+                            TERRA_DUMP_FUNCTION(scc[i]);
                         }
                     }
                 }
@@ -1375,7 +1452,7 @@ struct FunctionEmitter {
         assert(breakpoints.size() == 0);
         
         VERBOSE_ONLY(T) {
-            fstate->func->dump();
+            TERRA_DUMP_FUNCTION(fstate->func);
         }
         verifyFunction(*fstate->func);
         
@@ -1941,7 +2018,7 @@ if(baseT->isIntegerTy()) { \
                     Constant * ptrint = ConstantInt::get(CU->getDataLayout().getIntPtrType(*CU->TT->ctx), *(const intptr_t*)data);
                     r = ConstantExpr::getIntToPtr(ptrint, typ->type);
                 } else {
-                    typ->type->dump();
+                    TERRA_DUMP_TYPE(typ->type);
                     assert(!"NYI - constant load\n");
                 }
                 lua_pop(L,1); // remove pointer
@@ -2652,6 +2729,7 @@ static int terra_llvmsizeof(lua_State * L) {
 static void * GetGlobalValueAddress(TerraCompilationUnit * CU, StringRef Name) {
     if(CU->T->options.debug > 1)
         return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
+
     return (void*)CU->ee->getGlobalValueAddress(Name);
 }
 static bool MCJITShouldCopy(GlobalValue * G, void * data) {
@@ -2751,7 +2829,7 @@ static int terra_disassemble(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     Function * fn = (Function*) lua_touserdata(L,1); assert(fn);
     void * addr = lua_touserdata(L,2); assert(fn);
-    fn->dump();
+    TERRA_DUMP_FUNCTION(fn);
     if(T->C->functioninfo.count(addr)) {
         TerraFunctionInfo & fi = T->C->functioninfo[addr];
         printf("assembly for function at address %p\n",addr);
@@ -2993,16 +3071,35 @@ static int terra_linkllvmimpl(lua_State * L) {
     }
     #if LLVM_VERSION == 36
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
+    #elif LLVM_VERSION >= 50
+    Expected<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #elif LLVM_VERSION >= 37
     ErrorOr<std::unique_ptr<Module>> mm = parseBitcodeFile(mb.get()->getMemBufferRef(),*TT->ctx);
     #else
     ErrorOr<Module *> mm = parseBitcodeFile(mb.get().get(),*TT->ctx);
     #endif
     if(!mm) {
-        if(fromstring)
-            terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
-	else
-	    terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
+        if(fromstring) {
+            #if LLVM_VERSION >= 50
+                std::string Msg;
+                raw_string_ostream S((Msg));
+                logAllUnhandledErrors(mm.takeError(), S, "");
+                S.flush();
+                terra_reporterror(T, "linkllvm: %s\n", S.str().c_str());
+            #else
+                terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
+            #endif
+        } else {
+        #if LLVM_VERSION >= 50
+            std::string Msg;
+            raw_string_ostream S((Msg));
+            logAllUnhandledErrors(mm.takeError(), S, "");
+            S.flush();
+            terra_reporterror(T, "linkllvm(%s): %s\n", filename, S.str().c_str());
+        #else
+	        terra_reporterror(T, "linkllvm(%s): %s\n", filename, mm.getError().message().c_str());
+        #endif
+        }
     }
     #if LLVM_VERSION >= 37
     Module * M = mm.get().release();
@@ -3037,6 +3134,6 @@ static int terra_dumpmodule(lua_State * L) {
     terra_State * T = terra_getstate(L, 1); (void)T;
     TerraCompilationUnit * CU = (TerraCompilationUnit*) terra_tocdatapointer(L,1);
     if(CU)
-        CU->M->dump();
+        TERRA_DUMP_MODULE(CU->M);
     return 0;
 }

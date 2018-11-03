@@ -102,14 +102,16 @@ If the binary releases are not appropriate, then you can also build Terra from s
 
 ### Supported LLVM Versions ###
 
-Terra supports the following LLVM versions:
+The current recommended version of LLVM is **6.0**. The following versions are also supported:
 
   * LLVM 3.4
-  * LLVM 3.5 (tested in Travis, supports debug info)
+  * LLVM 3.5 (tested in Travis, supports debug info, supports CUDA)
   * LLVM 3.6
   * LLVM 3.7
-  * LLVM 3.8 (used frequently, tested in Travis)
+  * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
   * LLVM 3.9 (used frequently)
+  * LLVM 5.0 (tested in Travis)
+  * LLVM 6.0 (used frequently, tested in Travis, supports CUDA)
 
 ### Windows ###
 
@@ -890,7 +892,7 @@ Meta-programming
 
 In this guide we've already encountered instances of meta-programming, such as using a Lua loop to create an array of  Terra `pow` functions. In fact, Terra includes several operators that it make it possible to generate _any_ code at runtime. For instance, you can implement an entire compiler by parsing an input string and constructing the Terra functions that implement the parsed code.
 
-The operators we provide are adapted from [multi-stage programming](http://www.cs.rice.edu/~taha/MSP/). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
+The operators we provide are adapted from [multi-stage programming](https://pdfs.semanticscholar.org/1726/703918e320dff60e013f76fa2a3bd22bc7b8.pdf). An _escape_ allows you to splice the result of a Lua expression into Terra. A _quote_ allows you to generate a new Terra statement or expression which can then be spliced into Terra code using an escape. _Symbol_ objects allow you to create unique names at compile time. Finally, a _macro_ can be used like a function call in Terra code but will be evaluated at compile-time. We'll look at each of these operators in detail.
 
 ### Escapes ###
 
