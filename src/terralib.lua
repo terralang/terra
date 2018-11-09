@@ -1649,12 +1649,21 @@ do
                 name = "u"..name
             end
             local min,max
+            -- Hack: The syntax below doesn't parse in Lua 5.1-5.2, so
+            -- wrapping it in a conditional eval is the only way to
+            -- guard against parse errors.
+            local function eval(program)
+              local obj = loadstring(program)
+              if obj then
+                return obj()
+              end
+            end
             if not s then
-                min = 0ULL
-                max = -1ULL
+                min = eval("return 0ULL")
+                max = eval("return -1ULL")
             else
-                min = 2LL ^ (bits - 1)
-                max = min - 1
+                min = eval("return 2LL ^ (" .. tostring(bits) .. " - 1)")
+                max = min and min - 1
             end
             local typ = T.primitive("integer",size,s)
             globaltype(name,typ,min,max)
