@@ -3,6 +3,8 @@ local ffi = require("ffi")
 local asdl = require("asdl")
 local List = asdl.List
 
+terra.os = ffi.os
+
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
     local converageloader = loadfile("coverageinfo.lua")
