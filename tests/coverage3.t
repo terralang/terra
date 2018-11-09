@@ -1,7 +1,7 @@
 -- FIXME: Test currently fails on Windows
 -- https://github.com/zdevito/terra/issues/287
 local ffi = require("ffi")
-if ffi.os == "Windows" then
+if terralib.os == "Windows" then
     os.exit()
 end
 

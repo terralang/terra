@@ -3,7 +3,7 @@ local ffi = require("ffi")
 local function getcommand()
     local prefix = terralib and terralib.terrahome and
                    terralib.terrahome .."/bin/terra" or "../terra"
-    if ffi.os == "Windows" then
+    if terralib.os == "Windows" then
         prefix = "cmd /c " .. prefix:gsub("[/\\]","\\\\")
     end
     return prefix

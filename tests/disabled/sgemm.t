@@ -157,7 +157,7 @@ terra my_sgemm(gettime : {} -> double, M : int, N : int, K : int, alpha : float,
 end
 
 ffi = require("ffi")
-if ffi.os ~= "Linux" or os.execute("grep avx /proc/cpuinfo") ~= "" then
+if terralib.os ~= "Linux" or os.execute("grep avx /proc/cpuinfo") ~= "" then
 	print("ignoring (machine does not support AVX)...")
 else
 	my_sgemm:compile()
