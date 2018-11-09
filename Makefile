@@ -74,10 +74,11 @@ TERRA_USE_PUC_LUA ?=
 ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
 
 # PUC Lua
-LUA_VERSION=lua-5.2.4
-LUA_TAR = $(LUA_VERSION).tar.gz
+LUA_VERSION ?= 5.1.5
+LUA_BASENAME = lua-$(strip $(LUA_VERSION))
+LUA_TAR = $(LUA_BASENAME).tar.gz
 LUA_URL = https://www.lua.org/ftp/$(LUA_TAR)
-LUA_DIR = build/$(LUA_VERSION)
+LUA_DIR = build/$(LUA_BASENAME)
 LUA_LIB = $(LUA_PREFIX)/lib/liblua.a
 LUA_INCLUDE = $(LUA_PREFIX)/include
 LUA = $(LUA_PREFIX)/bin/lua
