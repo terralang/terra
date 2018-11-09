@@ -303,7 +303,7 @@ build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 
 build/lua_objects/lj_obj.o:    $(LUA_LIB)
 	mkdir -p build/lua_objects
-	cd build/lua_objects; ar x $(realpath $(LUA_LIB))
+	cd build/lua_objects; ar x $(realpath $(LUA_LIB)); rm -f lctype.o
 
 $(LIBRARY):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
 	mkdir -p release/lib
