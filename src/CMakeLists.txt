@@ -182,30 +182,40 @@ list(APPEND TERRA_EXE_SRC
   linenoise.cpp linenoise.h
 )
 
-add_executable(TerraExecutable
-  ${TERRA_EXE_SRC}
-  # No portable way to use --whole-archive, so just list all the objects again
-  # https://gitlab.kitware.com/cmake/cmake/issues/16947
-  $<TARGET_OBJECTS:TerraObjectFiles>
-  ${ALL_LLVM_OBJECTS}
-  ${LUAJIT_OBJECTS}
-)
-
-add_dependencies(TerraExecutable LuaJIT)
-add_dependencies(TerraExecutable LLVMObjectFiles)
+add_executable(TerraExecutable ${TERRA_EXE_SRC})
 
 set_target_properties(TerraExecutable PROPERTIES OUTPUT_NAME terra)
-
-target_link_libraries(TerraExecutable PRIVATE ${LLVM_SYSTEM_LIBRARIES})
-
-if(APPLE)
-  target_link_libraries(TerraExecutable PRIVATE -pagezero_size 10000 -image_base 100000000)
-endif()
 
 target_include_directories(TerraExecutable
   PRIVATE
     "${PROJECT_SOURCE_DIR}/release/include/terra"
 )
+
+if(APPLE)
+  set_target_properties(TerraExecutable
+    PROPERTIES
+      # Makes LuaJIT happy (otherwise luaL_newstate returns NULL). Has to be
+      # set as a property otherwise target_link_libraries thinks the arguments
+      # are libraries.
+      LINK_FLAGS "-pagezero_size 10000 -image_base 100000000"
+  )
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
+      TerraLibrary # for transitive dependencies
+  )
+  add_dependencies(TerraExecutable TerraLibrary)
+elseif(UNIX)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      -Wl,-export-dynamic
+      -Wl,--whole-archive
+      TerraLibrary
+      -Wl,--no-whole-archive
+  )
+else()
+  target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
+endif()
 
 install(TARGETS TerraExecutable
   DESTINATION ${PROJECT_SOURCE_DIR}/release/bin
