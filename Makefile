@@ -83,7 +83,7 @@ ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared -fPIC
 TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.so"
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.dylib"
 TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
@@ -170,7 +170,11 @@ LIBRARY = release/lib/libterra.a
 LIBRARY_NOLUA = release/lib/libterra_nolua.a
 LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
+ifeq ($(UNAME), Darwin)
+DYNLIBRARY = release/lib/terra.dylib
+else
 DYNLIBRARY = release/lib/terra.so
+endif
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 BIN2C = build/bin2c
 
