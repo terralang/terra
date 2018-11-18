@@ -118,7 +118,7 @@ target_compile_options(TerraObjectFiles
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
-if(${LLVM_ENABLE_ASSERTIONS} EQUAL 0)
+if(NOT ${LLVM_ENABLE_ASSERTIONS})
   target_compile_definitions(TerraObjectFiles
     PRIVATE
       TERRA_LLVM_HEADERS_HAVE_NDEBUG
@@ -204,7 +204,6 @@ if(APPLE)
       -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
       TerraLibrary # for transitive dependencies
   )
-  add_dependencies(TerraExecutable TerraLibrary)
 elseif(UNIX)
   target_link_libraries(TerraExecutable
     PRIVATE
