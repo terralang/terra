@@ -177,6 +177,7 @@ static bool pushterrahome(lua_State * L) {
             char exe_path[PATH_MAX];
               ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path));
             if(len > 0) {
+                lua_pushstring(L, exe_path);
                 lua_pushstring(L, dirname(dirname(exe_path)));
                 return true;
             }
@@ -185,6 +186,7 @@ static bool pushterrahome(lua_State * L) {
 #endif
     if (info.dli_fname) {
             char * full = realpath(info.dli_fname, NULL);
+            lua_pushstring(L, full);
             lua_pushstring(L, dirname(dirname(full))); //TODO: dirname not reentrant
             free(full);
             return true;
@@ -200,6 +202,7 @@ static bool pushterrahome(lua_State * L) {
     char path[MAX_PATH];
     VirtualQuery((void *)terra_init, &mbi, sizeof(mbi));
     GetModuleFileNameA((HINSTANCE)mbi.AllocationBase, path, MAX_PATH);
+    lua_pushstring(L, path);
     PathRemoveFileSpecA(path);
     PathRemoveFileSpecA(path);
     lua_pushstring(L, path);
@@ -210,8 +213,10 @@ static bool pushterrahome(lua_State * L) {
 
 static void setterrahome(lua_State * L) {
     lua_getfield(L, LUA_GLOBALSINDEX, "terra");
-    if (pushterrahome(L))
-        lua_setfield(L, -2, "terrahome");
+    if (pushterrahome(L)) {
+        lua_setfield(L, -3, "terrahome");
+        lua_setfield(L, -2, "terraexecutable");
+    }
     lua_pop(L, 1);
 }
 

@@ -9,12 +9,11 @@ else
 end
 
 local function getcommand(file)
-    local prefix = terralib and terralib.terrahome and 
-                   terralib.terrahome .."/bin/terra" or "../terra"
+    local exe = terralib.terraexecutable
     if ffi.os == "Windows" then
-        prefix = "cmd /c " .. prefix:gsub("[/\\]","\\\\")
+        exe = "cmd /c " .. exe:gsub("[/\\]","\\\\")
     end
-    return prefix
+    return exe
 end
 
 local passed = {}

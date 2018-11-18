@@ -11,10 +11,13 @@ find_package(CUDA)
 # library) even though LLVMLTO (a static library) is already on the list.
 list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
 
+include(GNUInstallDirs)
 include(GetLuaJIT)
 include(ExtractLLVM)
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+enable_testing()
 
 add_subdirectory(src)

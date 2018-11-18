@@ -89,8 +89,8 @@ before_install:
 script:
   - |
     if [[ $USE_CMAKE -eq 1 ]]; then
-      (cd build && cmake .. && make install)
-      (cd tests && ./run)
+      (cd build && cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install && make install)
+      (cd tests && ../install/bin/terra ./run)
     else
       make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
     fi

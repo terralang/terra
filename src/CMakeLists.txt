@@ -169,10 +169,6 @@ if(APPLE)
   target_link_libraries(TerraLibraryShared PRIVATE -single_module)
 endif()
 
-install(TARGETS TerraLibrary TerraLibraryShared
-  DESTINATION ${PROJECT_SOURCE_DIR}/release/lib
-)
-
 ###
 ### Terra Executable
 ###
@@ -189,6 +185,7 @@ set_target_properties(TerraExecutable PROPERTIES OUTPUT_NAME terra)
 target_include_directories(TerraExecutable
   PRIVATE
     "${PROJECT_SOURCE_DIR}/release/include/terra"
+    ${PROJECT_BINARY_DIR}
 )
 
 if(APPLE)
@@ -216,8 +213,21 @@ else()
   target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
 endif()
 
-install(TARGETS TerraExecutable
-  DESTINATION ${PROJECT_SOURCE_DIR}/release/bin
+install(
+  TARGETS TerraLibrary TerraLibraryShared TerraExecutable
+  EXPORT TerraExports
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink ${PROJECT_SOURCE_DIR}/release/bin/terra ${PROJECT_SOURCE_DIR}/terra )")
+install(
+  FILES ${PROJECT_SOURCE_DIR}/release/include/terra/terra.h
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/terra
+)
+
+
+add_test(NAME terra
+  COMMAND ${Legion_TEST_LAUNCHER} $<TARGET_FILE:TerraExecutable> ${PROJECT_SOURCE_DIR}/tests/run
+  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
+)
