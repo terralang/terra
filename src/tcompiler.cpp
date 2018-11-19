@@ -1278,7 +1278,7 @@ struct FunctionEmitter {
     Locals * locals;
     
     IRBuilder<> * B;
-    std::vector<std::pair<BasicBlock *,int> > breakpoints; //stack of basic blocks where a break statement should go
+    std::vector<std::pair<BasicBlock *,size_t> > breakpoints; //stack of basic blocks where a break statement should go
     
     #ifdef DEBUG_INFO_WORKING
     DIBuilder * DB;
