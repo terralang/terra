@@ -23,6 +23,8 @@ matrix:
       compiler: gcc
     - os: osx
       env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
+    - os: osx
+      env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1
 # blacklist some branches
 branches:
   only:
