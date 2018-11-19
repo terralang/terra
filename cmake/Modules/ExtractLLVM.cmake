@@ -12,9 +12,20 @@ foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
   endif()
 endforeach()
 
-# LLVM doesn't provide these as a list, so we have to make it ourselves.
-string(REGEX MATCHALL "[^ ;]+" LLVM_DEFINITIONS_LIST "${LLVM_DEFINITIONS}")
-list(APPEND ALL_LLVM_DEFINITIONS ${LLVM_DEFINITIONS_LIST})
+if("${LLVM_DEFINITIONS}" STREQUAL "@LLVM_DEFINITIONS@")
+  # Some versions of LLVM produce broken CMake configurations, so
+  # provide default definitions when this is the case.
+  list(APPEND ALL_LLVM_DEFINITIONS
+    -D_GNU_SOURCE
+    -D__STDC_CONSTANT_MACROS
+    -D__STDC_FORMAT_MACROS
+    -D__STDC_LIMIT_MACROS
+  )
+else()
+  # LLVM doesn't provide these as a list, so we have to make it ourselves.
+  string(REGEX MATCHALL "[^ ;]+" LLVM_DEFINITIONS_LIST "${LLVM_DEFINITIONS}")
+  list(APPEND ALL_LLVM_DEFINITIONS ${LLVM_DEFINITIONS_LIST})
+endif()
 
 foreach(LLVM_LIB_PATH ${LLVM_LIBRARIES} ${CLANG_LIBRARIES})
   get_filename_component(LLVM_LIB_NAME "${LLVM_LIB_PATH}" NAME)
