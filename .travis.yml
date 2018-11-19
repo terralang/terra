@@ -76,7 +76,7 @@ before_install:
         tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
         ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
         ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
-        export CMAKE_PREFIX_PATH=$PWD/clang+llvm-5.0.1-x86_64-apple-darwin
+        export CMAKE_PREFIX_PATH=$PWD/clang+llvm-5.0.1-final-x86_64-apple-darwin
       elif [[ "$LLVM_CONFIG" = "llvm-config-3.8" ]]; then
         curl -O http://releases.llvm.org/3.8.0/clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
         tar xf clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
