@@ -226,8 +226,15 @@ install(
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/terra
 )
 
-
-add_test(NAME terra
-  COMMAND ${Legion_TEST_LAUNCHER} $<TARGET_FILE:TerraExecutable> ${PROJECT_SOURCE_DIR}/tests/run
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
+file(GLOB TERRA_TESTS
+  RELATIVE ${PROJECT_SOURCE_DIR}/tests
+  ${PROJECT_SOURCE_DIR}/tests/*.t
+  ${PROJECT_SOURCE_DIR}/tests/fails/*.t
 )
+
+foreach(TERRA_TEST ${TERRA_TESTS})
+  add_test(NAME ${TERRA_TEST}
+    COMMAND $<TARGET_FILE:TerraExecutable> ${TERRA_TEST}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
+  )
+endforeach()
