@@ -38,7 +38,7 @@
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/Support/DynamicLibrary.h"
 
-#if LLVM_VERSION > 40
+#if LLVM_VERSION >= 40
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #else
