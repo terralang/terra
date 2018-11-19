@@ -114,11 +114,6 @@ target_include_directories(TerraObjectFiles
 target_compile_definitions(TerraObjectFiles
   PRIVATE
     LLVM_VERSION=${LLVM_VERSION_MAJOR}${LLVM_VERSION_MINOR}
-    # FIXME: Find portable ways to do all these
-    _GNU_SOURCE
-    __STDC_CONSTANT_MACROS
-    __STDC_FORMAT_MACROS
-    __STDC_LIMIT_MACROS
 )
 
 target_compile_options(TerraObjectFiles
@@ -128,8 +123,17 @@ target_compile_options(TerraObjectFiles
     -Wcast-qual
     $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
     $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
-    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    # LLVM provides these as flags, so we have to put them here.
+    ${ALL_LLVM_DEFINITIONS}
 )
+
+if(NOT ${LLVM_ENABLE_RTTI})
+  target_compile_options(TerraObjectFiles
+    PRIVATE
+      # FIXME: Find portable ways to do all these
+      $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+  )
+endif()
 
 if(NOT ${LLVM_ENABLE_ASSERTIONS})
   target_compile_definitions(TerraObjectFiles

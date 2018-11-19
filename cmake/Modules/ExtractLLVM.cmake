@@ -12,6 +12,10 @@ foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
   endif()
 endforeach()
 
+# LLVM doesn't provide these as a list, so we have to make it ourselves.
+string(REGEX MATCHALL "[^ ;]+" LLVM_DEFINITIONS_LIST "${LLVM_DEFINITIONS}")
+list(APPEND ALL_LLVM_DEFINITIONS ${LLVM_DEFINITIONS_LIST})
+
 foreach(LLVM_LIB_PATH ${LLVM_LIBRARIES} ${CLANG_LIBRARIES})
   get_filename_component(LLVM_LIB_NAME "${LLVM_LIB_PATH}" NAME)
   execute_process(
