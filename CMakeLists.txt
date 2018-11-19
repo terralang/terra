@@ -12,6 +12,7 @@ find_package(CUDA)
 list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
 
 include(GNUInstallDirs)
+include(BuildDirs)
 include(GetLuaJIT)
 include(ExtractLLVM)
 

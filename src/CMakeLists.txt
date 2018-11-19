@@ -15,6 +15,7 @@ add_custom_command(
     LuaJIT
   COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua" ${PROJECT_BINARY_DIR}/clangpaths.h ${CLANG_EXECUTABLE} ${CUDA_INCLUDE_DIRS}
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+  VERBATIM
 )
 
 add_custom_command(
@@ -45,14 +46,26 @@ foreach(LUA_SRC ${TERRA_LIB_LUA_SRC})
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_GEN}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" LuaJIT
     COMMAND ${LUAJIT_EXECUTABLE} -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" -t h - | sed "s/char/unsigned char/" > "${PROJECT_BINARY_DIR}/${LUA_GEN}"
+    VERBATIM
   )
 endforeach()
+
+# This header isn't generated but needs to be relocated to fit the
+# build directory structure.
+add_custom_command(
+  OUTPUT ${PROJECT_BINARY_DIR}/include/terra/terra.h
+  DEPENDS
+    ${PROJECT_SOURCE_DIR}/release/include/terra/terra.h
+  COMMAND "${CMAKE_COMMAND}" -E copy "${PROJECT_SOURCE_DIR}/release/include/terra/terra.h" "${PROJECT_BINARY_DIR}/include/terra/"
+  VERBATIM
+)
 
 add_custom_target(
   TerraGeneratedFiles
   DEPENDS
-    "${PROJECT_BINARY_DIR}/clangpaths.h"
-    "${PROJECT_BINARY_DIR}/internalizedfiles.h"
+    ${PROJECT_BINARY_DIR}/clangpaths.h
+    ${PROJECT_BINARY_DIR}/internalizedfiles.h
+    ${PROJECT_BINARY_DIR}/include/terra/terra.h
     ${TERRA_LIB_LUA_GEN}
 )
 
@@ -80,7 +93,7 @@ list(APPEND TERRA_LIB_SRC
   tinternalizedfiles.cpp
   lj_strscan.c     lj_strscan.h
 
-  ${PROJECT_SOURCE_DIR}/release/include/terra/terra.h
+  ${PROJECT_BINARY_DIR}/include/terra/terra.h
 )
 
 list(APPEND TERRA_BIN_SRC
@@ -92,8 +105,8 @@ add_library(TerraObjectFiles OBJECT ${TERRA_LIB_SRC})
 
 target_include_directories(TerraObjectFiles
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/release/include/terra"
     ${PROJECT_BINARY_DIR}
+    ${PROJECT_BINARY_DIR}/include/terra
     ${LLVM_INCLUDE_DIRS}
     ${CLANG_INCLUDE_DIRS}
 )
@@ -149,9 +162,11 @@ set_source_files_properties(
     EXTERNAL_OBJECT true
     GENERATED true)
 
+add_dependencies(TerraLibrary BuildDirs)
 add_dependencies(TerraLibrary LuaJIT)
 add_dependencies(TerraLibrary LLVMObjectFiles)
 
+add_dependencies(TerraLibraryShared BuildDirs)
 add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
@@ -160,6 +175,9 @@ set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
 set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
+
+set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
 target_link_libraries(TerraLibrary PRIVATE ${LLVM_SYSTEM_LIBRARIES})
 
@@ -181,11 +199,12 @@ list(APPEND TERRA_EXE_SRC
 add_executable(TerraExecutable ${TERRA_EXE_SRC})
 
 set_target_properties(TerraExecutable PROPERTIES OUTPUT_NAME terra)
+set_target_properties(TerraExecutable PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/bin")
 
 target_include_directories(TerraExecutable
   PRIVATE
-    "${PROJECT_SOURCE_DIR}/release/include/terra"
     ${PROJECT_BINARY_DIR}
+    ${PROJECT_BINARY_DIR}/include/terra
 )
 
 if(APPLE)
@@ -222,7 +241,7 @@ install(
 )
 
 install(
-  FILES ${PROJECT_SOURCE_DIR}/release/include/terra/terra.h
+  FILES ${PROJECT_BINARY_DIR}/include/terra/terra.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/terra
 )
 
