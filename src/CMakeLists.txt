@@ -162,11 +162,9 @@ set_source_files_properties(
     EXTERNAL_OBJECT true
     GENERATED true)
 
-add_dependencies(TerraLibrary BuildDirs)
 add_dependencies(TerraLibrary LuaJIT)
 add_dependencies(TerraLibrary LLVMObjectFiles)
 
-add_dependencies(TerraLibraryShared BuildDirs)
 add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 

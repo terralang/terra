@@ -13,23 +13,28 @@ set(LUAJIT_OBJECT_DIR "${PROJECT_BINARY_DIR}/lua_objects")
 set(LUAJIT_LIBRARY "${LUAJIT_INSTALL_PREFIX}/lib/libluajit-5.1.a")
 set(LUAJIT_EXECUTABLE "${LUAJIT_INSTALL_PREFIX}/bin/luajit-${LUAJIT_VERSION_BASE}${LUAJIT_VERSION_EXTRA}")
 
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_OBJECT_DIR}"
+)
+
 file(DOWNLOAD "${LUAJIT_URL}" "${LUAJIT_TAR}")
 
 # Since we need the list of objects at configure time, best we can do
 # (without building LuaJIT right this very second) is to guess based
 # on the source files contained in the release tarball.
 execute_process(
-  COMMAND ${CMAKE_COMMAND} -E tar tzf ${LUAJIT_TAR}
-  OUTPUT_VARIABLE LUAJIT_TAR_CONTENTS)
+  COMMAND "${CMAKE_COMMAND}" -E tar tzf "${LUAJIT_TAR}"
+  OUTPUT_VARIABLE LUAJIT_TAR_CONTENTS
+)
 
 string(REGEX MATCHALL
-  LuaJIT-[0-9.]+/src/l[ij][b_][A-Za-z0-9_]+[.]c
+  "[^/\n]+/src/l[ij][b_][^\n]+[.]c"
   LUAJIT_SOURCES
   ${LUAJIT_TAR_CONTENTS})
 
 foreach(LUAJIT_SOURCE ${LUAJIT_SOURCES})
   string(REGEX MATCH
-    [A-Za-z0-9_]+[.]c
+    "[^/\n]+[.]c"
     LUAJIT_SOURCE_BASENAME
     ${LUAJIT_SOURCE})
   string(REGEX REPLACE
@@ -60,19 +65,13 @@ add_custom_command(
   VERBATIM
 )
 
-add_custom_command(
-  OUTPUT ${LUAJIT_OBJECT_DIR}
-  COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_OBJECT_DIR}"
-  VERBATIM
-)
-
 foreach(LUAJIT_OBJECT ${LUAJIT_OBJECT_BASENAMES})
   list(APPEND LUAJIT_OBJECTS "${LUAJIT_OBJECT_DIR}/${LUAJIT_OBJECT}")
 endforeach()
 
 add_custom_command(
   OUTPUT ${LUAJIT_OBJECTS}
-  DEPENDS ${LUAJIT_LIBRARY} ${LUAJIT_OBJECT_DIR}
+  DEPENDS ${LUAJIT_LIBRARY}
   COMMAND "${CMAKE_AR}" x "${LUAJIT_LIBRARY}"
   WORKING_DIRECTORY ${LUAJIT_OBJECT_DIR}
   VERBATIM
@@ -87,7 +86,6 @@ foreach(LUAJIT_HEADER ${LUAJIT_HEADER_BASENAMES})
     OUTPUT ${PROJECT_BINARY_DIR}/include/terra/${LUAJIT_HEADER}
     DEPENDS
       ${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}
-      ${PROJECT_BINARY_DIR}/include/terra
     COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}" "${PROJECT_BINARY_DIR}/include/terra/"
     VERBATIM
   )
