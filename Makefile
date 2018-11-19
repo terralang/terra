@@ -252,9 +252,10 @@ $(BIN2C):	src/bin2c.c
 
 
 #rule for packaging lua code into a header file
-# fix narrowing warnings by using unsigned char
-build/%.h:	src/%.lua $(PACKAGE_DEPS)
-	$(LUAJIT) -bg $< -t h - | sed "s/char/unsigned char/" > $@
+build/%.bc:	src/%.lua $(PACKAGE_DEPS)
+	$(LUAJIT) -bg $< $@
+build/%.h:	build/%.bc $(PACKAGE_DEPS)
+	$(LUAJIT) src/genheader.lua $< $@
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
