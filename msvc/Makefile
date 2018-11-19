@@ -1,28 +1,28 @@
 
 # Edit these three paths to your 
 # (1) LLVM install (should have bin/ include/ and lib/ directories)
-# (2) LuaJIT 2.0.3 download directory (does not need to be built)
+# (2) LuaJIT 2.0.5 download directory (does not need to be built)
 # (3) directory where you downloaded the Terra source
 # all paths must be ABSOLUTE
 
 !IFNDEF LLVM_DIR
-LLVM_DIR=C:\Users\zdevito\LLVM
+LLVM_DIR=D:\Projects\llvm-6.0.1.src\build\install
 !ENDIF
 
 !IFNDEF LLVM_VERSION
-LLVM_VERSION=3.5.0
+LLVM_VERSION=6.0.1
 !ENDIF
 
 !IFNDEF LLVM_VERSION_SHORT
-LLVM_VERSION_SHORT=35
+LLVM_VERSION_SHORT=60
 !ENDIF
 
 !IFNDEF LUAJIT_DIR
-LUAJIT_DIR=C:\Users\zdevito\LuaJIT-2.0.4
+LUAJIT_DIR=D:\Projects\LuaJIT-2.0.5
 !ENDIF
 
 !IFNDEF TERRA_DIR
-TERRA_DIR=C:\Users\zdevito\terra
+TERRA_DIR=D:\Projects\terra
 !ENDIF
 
 !IFNDEF TERRA_VERSION
@@ -30,17 +30,40 @@ TERRA_VERSION=unknown
 !ENDIF
 
 # Set this if you want to enable CUDA.
-# CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v6.5
+# CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2
 !IFDEF CUDA_DIR
 CUDA_INCLUDES=/DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
 !ELSE
 CUDA_INCLUDES=
 !ENDIF
 
+!IFNDEF VS_MAJOR_VERSION
+VS_MAJOR_VERSION=14
+!ENDIF
+
+!IFNDEF VS_MINOR_VERSION
+VS_MINOR_VERSION=0
+!ENDIF
+
+VC_VERSION=$(VS_MAJOR_VERSION)$(VS_MINOR_VERSION)
+
 SRC = $(TERRA_DIR)\src
 BUILD = $(TERRA_DIR)\build
 
-
+#Ideally, generate the clang/llvm lib list by reading all libs in the llvm/lib dir
+!IF $(LLVM_VERSION_SHORT)==70
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib clangCodeGen.lib clangCrossTU.lib clangDriver.lib clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib clangFrontend.lib clangFrontendTool.lib clangHandleCXX.lib clangHandleLLVM.lib clangIndex.lib clangLex.lib clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib clangTooling.lib clangToolingASTDiff.lib clangToolingCore.lib clangToolingInclusions.lib clangToolingRefactor.lib libclang.lib LLVMAggressiveInstCombine.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBinaryFormat.lib LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMCoroutines.lib LLVMCoverage.lib LLVMDebugInfoCodeView.lib LLVMDebugInfoDWARF.lib LLVMDebugInfoMSF.lib LLVMDebugInfoPDB.lib LLVMDemangle.lib LLVMDlltoolDriver.lib LLVMExecutionEngine.lib LLVMFuzzMutate.lib LLVMGlobalISel.lib LLVMInstCombine.lib LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipo.lib LLVMIRReader.lib LLVMLibDriver.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib LLVMMCDisassembler.lib LLVMMCJIT.lib LLVMMCParser.lib LLVMMIRParser.lib LLVMNVPTXAsmPrinter.lib LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMObjectYAML.lib LLVMOption.lib LLVMOrcJIT.lib LLVMPasses.lib LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib LLVMSupport.lib LLVMSymbolize.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib LLVMVectorize.lib LLVMWindowsManifest.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib LLVMXRay.lib \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib dbghelp.lib Version.lib
+!ELSE IF $(LLVM_VERSION_SHORT)==60
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib clangCodeGen.lib clangCrossTU.lib clangDriver.lib clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib clangFrontend.lib clangFrontendTool.lib clangHandleCXX.lib clangIndex.lib clangLex.lib clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib clangTooling.lib clangToolingASTDiff.lib clangToolingCore.lib clangToolingRefactor.lib libclang.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBinaryFormat.lib LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMCoroutines.lib LLVMCoverage.lib LLVMDebugInfoCodeView.lib LLVMDebugInfoDWARF.lib LLVMDebugInfoMSF.lib LLVMDebugInfoPDB.lib LLVMDemangle.lib LLVMDlltoolDriver.lib LLVMExecutionEngine.lib LLVMFuzzMutate.lib LLVMGlobalISel.lib LLVMInstCombine.lib LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipo.lib LLVMIRReader.lib LLVMLibDriver.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib LLVMMCDisassembler.lib LLVMMCJIT.lib LLVMMCParser.lib LLVMMIRParser.lib LLVMNVPTXAsmPrinter.lib LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMObjectYAML.lib LLVMOption.lib LLVMOrcJIT.lib LLVMPasses.lib LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib LLVMSupport.lib LLVMSymbolize.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib LLVMVectorize.lib LLVMWindowsManifest.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib LLVMXRay.lib \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib dbghelp.lib Version.lib
+!ELSE IF $(LLVM_VERSION_SHORT)==50
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib clangCodeGen.lib clangDriver.lib clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib clangFrontend.lib clangFrontendTool.lib clangIndex.lib clangLex.lib clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib clangTooling.lib clangToolingCore.lib clangToolingRefactor.lib libclang.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBinaryFormat.lib LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMCoroutines.lib LLVMCoverage.lib LLVMDebugInfoCodeView.lib LLVMDebugInfoDWARF.lib LLVMDebugInfoMSF.lib LLVMDebugInfoPDB.lib LLVMDemangle.lib LLVMDlltoolDriver.lib LLVMExecutionEngine.lib LLVMGlobalISel.lib LLVMInstCombine.lib LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipo.lib LLVMIRReader.lib LLVMLibDriver.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib LLVMMCDisassembler.lib LLVMMCJIT.lib LLVMMCParser.lib LLVMMIRParser.lib LLVMNVPTXAsmPrinter.lib LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMObjectYAML.lib LLVMOption.lib LLVMOrcJIT.lib LLVMPasses.lib LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib LLVMSupport.lib LLVMSymbolize.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib LLVMVectorize.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib LLVMXRay.lib \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib dbghelp.lib Version.lib
+!ELSE IF $(LLVM_VERSION_SHORT)==40
+LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib clangBasic.lib clangCodeGen.lib clangDriver.lib clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib clangFrontend.lib clangFrontendTool.lib clangIndex.lib clangLex.lib clangParse.lib clangRewrite.lib clangRewriteFrontend.lib clangSema.lib clangSerialization.lib clangStaticAnalyzerCheckers.lib clangStaticAnalyzerCore.lib clangStaticAnalyzerFrontend.lib clangTooling.lib clangToolingCore.lib libclang.lib LLVMAnalysis.lib LLVMAsmParser.lib LLVMAsmPrinter.lib LLVMBitReader.lib LLVMBitWriter.lib LLVMCodeGen.lib LLVMCore.lib LLVMCoroutines.lib LLVMCoverage.lib LLVMDebugInfoCodeView.lib LLVMDebugInfoDWARF.lib LLVMDebugInfoMSF.lib LLVMDebugInfoPDB.lib LLVMDemangle.lib LLVMExecutionEngine.lib LLVMGlobalISel.lib LLVMInstCombine.lib LLVMInstrumentation.lib LLVMInterpreter.lib LLVMipo.lib LLVMIRReader.lib LLVMLibDriver.lib LLVMLineEditor.lib LLVMLinker.lib LLVMLTO.lib LLVMMC.lib LLVMMCDisassembler.lib LLVMMCJIT.lib LLVMMCParser.lib LLVMMIRParser.lib LLVMNVPTXAsmPrinter.lib LLVMNVPTXCodeGen.lib LLVMNVPTXDesc.lib LLVMNVPTXInfo.lib LLVMObjCARCOpts.lib LLVMObject.lib LLVMObjectYAML.lib LLVMOption.lib LLVMOrcJIT.lib LLVMPasses.lib LLVMProfileData.lib LLVMRuntimeDyld.lib LLVMScalarOpts.lib LLVMSelectionDAG.lib LLVMSupport.lib LLVMSymbolize.lib LLVMTableGen.lib LLVMTarget.lib LLVMTransformUtils.lib LLVMVectorize.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib LLVMX86Info.lib LLVMX86Utils.lib LLVMXRay.lib \
+      $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib dbghelp.lib Version.lib
+!ELSE # Only tested for 3.5.2
 LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   \
       clangBasic.lib clangCodeGen.lib clangDriver.lib                           \
       clangDynamicASTMatchers.lib clangEdit.lib clangFormat.lib                 \
@@ -63,6 +86,7 @@ LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   
       LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib                \
       LLVMX86Info.lib LLVMX86Utils.lib                                          \
       $(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib
+!ENDIF
 
 LIBPATHS = /LIBPATH:"$(LLVM_DIR)\lib"
 
@@ -119,14 +143,13 @@ $(TERRA_DIR)\release\bin\terra.dll: $(BUILD)\terra.obj
 	$(LINK) /nologo /MACHINE:X64 /DLL /DEBUG /PDB:terralib.pdb /out:terra.dll /IMPLIB:terra.lib $(BUILD)/*.obj $(LIBS) $(LIBPATHS) $(EXPORTS)
 	move terra.lib ..\lib\terra.lib
 
-REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC120.CRT
+REDIST=$(VCINSTALLDIR)redist\x64\Microsoft.VC$(VC_VERSION).CRT
 
 $(TERRA_DIR)\release\bin\terra.exe: $(TERRA_DIR)\release\bin\terra.dll $(SRC)\main.cpp
 	cd $(TERRA_DIR)
 	copy $(LUAJIT_DIR)\src\lua51.dll release\bin
 	copy $(LUAJIT_DIR)\src\lua51.lib release\lib
-	copy "$(REDIST)\msvcp120.dll" release\bin
-	copy "$(REDIST)\msvcr120.dll" release\bin
+	copy "$(REDIST)\msvcp$(VC_VERSION).dll" release\bin
 	$(CPP) $(CPPFLAGS) /Fe:$@ $(SRC)\main.cpp $(TERRA_DIR)\msvc\ext\getopt.c $(TERRA_DIR)\msvc\ext\getopt_long.c $(TERRA_DIR)\release\lib\terra.lib $(LUAJIT_DIR)\src\lua51.lib
 
 clean:
