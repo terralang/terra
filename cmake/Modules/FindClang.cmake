@@ -36,7 +36,7 @@ FIND_AND_ADD_CLANG_LIB(clangBasic)
 find_path(CLANG_INCLUDE_DIRS clang/Basic/Version.h HINTS ${LLVM_INCLUDE_DIRS})
 
 find_program(CLANG_EXECUTABLE
-  clang clang-3.4 clang-3.5 clang-3.6 clang-3.7 clang-3.8 clang-3.9
+  clang clang-3.4 clang-3.5 clang-3.6 clang-3.7 clang-3.8 clang-3.9 clang-4.0 clang-5.0 clang-6.0 clang-7.0
   HINTS ${LLVM_TOOLS_BINARY_DIRS}
 )
 
