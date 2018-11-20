@@ -6,6 +6,19 @@ list(APPEND PACKAGE_DEPS
   ${LUAJIT_LIBRARIES}
 )
 
+if(TERRA_ENABLE_CUDA)
+  list(APPEND TERRA_CUDA_INCLUDE_DIRS
+    ${CUDA_INCLUDE_DIRS}
+    ${CUDA_TOOLKIT_ROOT_DIR}/nvvm/include
+  )
+  # FIXME: Find a portable way to do this.
+  foreach(TERRA_CUDA_INCLUDE_DIR ${TERRA_CUDA_INCLUDE_DIRS})
+    list(APPEND TERRA_CUDA_INCLUDE_DIR_FLAGS
+      "-I" "${TERRA_CUDA_INCLUDE_DIR}"
+    )
+  endforeach()
+endif()
+
 add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/clangpaths.h"
   DEPENDS
@@ -13,7 +26,7 @@ add_custom_command(
     ${PACKAGE_DEPS}
     "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua"
     LuaJIT
-  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua" ${PROJECT_BINARY_DIR}/clangpaths.h ${CLANG_EXECUTABLE} ${CUDA_INCLUDE_DIRS}
+  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua" ${PROJECT_BINARY_DIR}/clangpaths.h ${CLANG_EXECUTABLE} ${TERRA_CUDA_INCLUDE_DIR_FLAGS}
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   VERBATIM
 )
@@ -146,6 +159,17 @@ if(NOT ${LLVM_ENABLE_ASSERTIONS})
   target_compile_definitions(TerraObjectFiles
     PRIVATE
       TERRA_LLVM_HEADERS_HAVE_NDEBUG
+  )
+endif()
+
+if(TERRA_ENABLE_CUDA)
+  target_compile_definitions(TerraObjectFiles
+    PRIVATE
+      TERRA_ENABLE_CUDA
+  )
+  target_include_directories(TerraObjectFiles
+    PRIVATE
+      ${TERRA_CUDA_INCLUDE_DIRS}
   )
 endif()
 

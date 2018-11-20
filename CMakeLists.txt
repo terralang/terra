@@ -5,7 +5,15 @@ list(INSERT CMAKE_MODULE_PATH 0 "${Terra_SOURCE_DIR}/cmake/Modules")
 
 find_package(LLVM HINTS ${LLVM_HINTS} REQUIRED)
 find_package(Clang REQUIRED)
-find_package(CUDA)
+
+if(TERRA_ENABLE_CUDA OR NOT DEFINED TERRA_ENABLE_CUDA)
+  if(TERRA_ENABLE_CUDA)
+    find_package(CUDA REQUIRED)
+  else()
+    find_package(CUDA)
+  endif()
+endif()
+set(TERRA_ENABLE_CUDA ${CUDA_FOUND} CACHE BOOL "Build Terra with support for CUDA")
 
 # The official binary for 3.8 on macOS is buggy and lists LTO (a dynamic
 # library) even though LLVMLTO (a static library) is already on the list.
