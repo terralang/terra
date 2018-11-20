@@ -29,8 +29,12 @@ end
 
 if ffi.os ~= "Windows" then
     print(libpath)
-    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/terra.so"}
-    if require("ffi").os == "OSX" then
+    local libname = "terra.so"
+    if ffi.os == "OSX" then
+        libname = "terra.dylib"
+    end
+    local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/"..libname}
+    if ffi.os == "OSX" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
 
