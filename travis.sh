@@ -68,12 +68,12 @@ fi
 
 if [[ $USE_CMAKE -eq 1 ]]; then
   CMAKE_FLAGS=()
-  if [[ $STATIC_LLVM -eq 0 ]]; then
+  if [[ $STATIC_LLVM -ne 1 ]]; then
     CMAKE_FLAGS+=(
       -DTERRA_STATIC_LINK_LLVM=OFF
     )
   fi
-  if [[ $SLIB_INCLUDE_LLVM -eq 0 ]]; then
+  if [[ $SLIB_INCLUDE_LLVM -ne 1 ]]; then
     CMAKE_FLAGS+=(
       -DTERRA_SLIB_INCLUDE_LLVM=OFF
     )
