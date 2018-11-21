@@ -31,27 +31,33 @@ install:
   - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
-  - appveyor DownloadFile http://luajit.org/download/LuaJIT-2.0.5.zip
-  - 7z x LuaJIT-2.0.5.zip
-  - set LUAJIT_DIR=%CD%\LuaJit-2.0.5
+  - set CMAKE_PREFIX_PATH=%LLVM_DIR%
+
+  # - appveyor DownloadFile http://luajit.org/download/LuaJIT-2.0.5.zip
+  # - 7z x LuaJIT-2.0.5.zip
+  # - set LUAJIT_DIR=%CD%\LuaJit-2.0.5
 
   - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers2/cuda_9.2.148_windows -FileName cuda.exe)
   - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_9.2 cudart_9.2)
   - if /I "%USE_CUDA%" EQU "1" (set CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2)
 
-  - set TERRA_DIR=%CD%
-  - dir
+  # - set TERRA_DIR=%CD%
+  # - dir
 
   - ps: git describe --tags | ForEach-Object { $_ -replace "release-", "" } | Set-Content terra_version.txt
   - set /p TERRA_VERSION=<terra_version.txt
 
 build_script:
-  # There is probably a better way to do this...
-  - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
-  - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
-  - cd msvc
-  - build %LUAJIT_DIR% %LLVM_DIR%
+  - cd build
+  - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install
+  - cmake --build . --target INSTALL
   - cd ..
+  # # There is probably a better way to do this...
+  # - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
+  # - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
+  # - cd msvc
+  # - nmake
+  # - cd ..
 
   # Package for release
   - set TERRA_SHARE_PATH=%TERRA_DIR%\release\share\terra
@@ -66,7 +72,7 @@ build_script:
 
 test_script:
   - cd tests
-  - ..\release\bin\terra run
+  - ..\install\bin\terra run
   - cd ..
 
 artifacts:
