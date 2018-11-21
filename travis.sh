@@ -68,14 +68,24 @@ fi
 
 if [[ $USE_CMAKE -eq 1 ]]; then
   CMAKE_FLAGS=()
-  if [[ $STATIC_LLVM -ne 1 ]]; then
+  if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
     CMAKE_FLAGS+=(
       -DTERRA_STATIC_LINK_LLVM=OFF
     )
   fi
-  if [[ $SLIB_INCLUDE_LLVM -ne 1 ]]; then
+  if [[ -n $SLIB_INCLUDE_LLVM && $SLIB_INCLUDE_LLVM -eq 0 ]]; then
     CMAKE_FLAGS+=(
       -DTERRA_SLIB_INCLUDE_LLVM=OFF
+    )
+  fi
+  if [[ -n $STATIC_LUAJIT && $STATIC_LUAJIT -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_STATIC_LINK_LUAJIT=OFF
+    )
+  fi
+  if [[ -n $SLIB_INCLUDE_LUAJIT && $SLIB_INCLUDE_LUAJIT -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
     )
   fi
 
