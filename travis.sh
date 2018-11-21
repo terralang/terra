@@ -67,6 +67,13 @@ if [[ "$(uname)" = "Darwin" ]]; then
 fi
 
 if [[ $USE_CMAKE -eq 1 ]]; then
+  CMAKE_FLAGS=()
+  if [[ $STATIC_LINK -eq 0 ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_STATIC_LINK_LLVM=OFF
+  )
+  fi
+
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install
   make install -j2
