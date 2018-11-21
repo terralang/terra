@@ -75,7 +75,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   fi
 
   pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install
+  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   make install -j2
   ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
