@@ -13,9 +13,7 @@ elseif(NOT DEFINED TERRA_ENABLE_CUDA)
 endif()
 set(TERRA_ENABLE_CUDA ${CUDA_FOUND} CACHE BOOL "Build Terra with support for CUDA")
 
-# The official binary for 3.8 on macOS is buggy and lists LTO (a dynamic
-# library) even though LLVMLTO (a static library) is already on the list.
-list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
+set(TERRA_STATIC_LINK_LLVM ON CACHE BOOL "Statically link Terra against LLVM")
 
 include(GNUInstallDirs)
 include(BuildDirs)

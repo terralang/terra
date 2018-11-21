@@ -212,9 +212,17 @@ set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
-target_link_libraries(TerraLibrary PRIVATE ${LLVM_SYSTEM_LIBRARIES})
+target_link_libraries(TerraLibrary
+  PRIVATE
+    ${ALL_LLVM_LIBRARIES}
+    ${LLVM_SYSTEM_LIBRARIES}
+)
 
-target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_SYSTEM_LIBRARIES})
+target_link_libraries(TerraLibraryShared
+  PRIVATE
+    ${ALL_LLVM_LIBRARIES}
+    ${LLVM_SYSTEM_LIBRARIES}
+)
 
 if(APPLE)
   target_link_libraries(TerraLibraryShared PRIVATE -single_module)
