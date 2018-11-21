@@ -252,6 +252,7 @@ if(APPLE)
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
   )
+  add_dependencies(TerraExecutable TerraLibrary)
 elseif(UNIX)
   target_link_libraries(TerraExecutable
     PRIVATE
