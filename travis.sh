@@ -73,6 +73,11 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_STATIC_LINK_LLVM=OFF
     )
   fi
+  if [[ $SLIB_INCLUDE_LLVM -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_SLIB_INCLUDE_LLVM=OFF
+    )
+  fi
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"

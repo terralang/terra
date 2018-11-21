@@ -14,6 +14,11 @@ endif()
 set(TERRA_ENABLE_CUDA ${CUDA_FOUND} CACHE BOOL "Build Terra with support for CUDA")
 
 set(TERRA_STATIC_LINK_LLVM ON CACHE BOOL "Statically link Terra against LLVM")
+set(TERRA_SLIB_INCLUDE_LLVM ON CACHE BOOL "Include LLVM in Terra static libraries")
+
+if(TERRA_SLIB_INCLUDE_LLVM AND NOT TERRA_STATIC_LINK_LLVM)
+  message(ERROR "TERRA_SLIB_INCLUDE_LLVM requires TERRA_STATIC_LINK_LLVM to be set")
+endif()
 
 include(GNUInstallDirs)
 include(BuildDirs)

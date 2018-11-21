@@ -17,7 +17,7 @@ endif()
 # library) even though LLVMLTO (a static library) is already on the list.
 list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
 
-if(TERRA_STATIC_LINK_LLVM)
+if(TERRA_SLIB_INCLUDE_LLVM)
   set(LLVM_OBJECT_DIR "${PROJECT_BINARY_DIR}/llvm_objects")
 
   execute_process(
@@ -60,6 +60,40 @@ if(TERRA_STATIC_LINK_LLVM)
 
   # Don't link libraries, since we're using the extracted object files.
   list(APPEND ALL_LLVM_LIBRARIES)
+elseif(TERRA_STATIC_LINK_LLVM)
+  foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
+    get_property(LLVM_LIB_TYPE TARGET ${LLVM_LIB} PROPERTY TYPE)
+    if(${LLVM_LIB_TYPE} STREQUAL STATIC_LIBRARY)
+      get_property(LLVM_LIB TARGET ${LLVM_LIB} PROPERTY LOCATION)
+      list(APPEND LLVM_LIBRARIES ${LLVM_LIB})
+    endif()
+  endforeach()
+
+  if(UNIX AND NOT APPLE)
+    list(APPEND ALL_LLVM_LIBRARIES
+      -Wl,-export-dynamic
+      -Wl,--whole-archive
+    )
+  endif()
+
+  foreach(LLVM_LIB_PATH ${LLVM_LIBRARIES} ${CLANG_LIBRARIES})
+    if(APPLE)
+      list(APPEND ALL_LLVM_LIBRARIES "-Wl,-force_load,${LLVM_LIB_PATH}")
+    else()
+      list(APPEND ALL_LLVM_LIBRARIES "${LLVM_LIB_PATH}")
+    endif()
+  endforeach()
+
+  if(UNIX AND NOT APPLE)
+    list(APPEND ALL_LLVM_LIBRARIES
+      -Wl,--no-whole-archive
+    )
+  endif()
+
+  message("ALL_LLVM_LIBRARIES ${ALL_LLVM_LIBRARIES}")
+
+  # Don't extract individual object files.
+  list(APPEND ALL_LLVM_OBJECTS)
 else()
   foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
     get_property(LLVM_LIB_TYPE TARGET ${LLVM_LIB} PROPERTY TYPE)

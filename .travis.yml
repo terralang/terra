@@ -13,12 +13,15 @@ env:
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1 STATIC_LLVM=0
+  - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0
   - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0
   - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1 STATIC_LLVM=0
+  - LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1 STATIC_LLVM=0
+  - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0
 
 matrix:
   exclude:
@@ -30,6 +33,8 @@ matrix:
       env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1
     - os: osx
       env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1 STATIC_LLVM=0
+    - os: osx
+      env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0
 
 script:
   - ./travis.sh

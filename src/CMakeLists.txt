@@ -212,12 +212,6 @@ set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
-target_link_libraries(TerraLibrary
-  PRIVATE
-    ${ALL_LLVM_LIBRARIES}
-    ${LLVM_SYSTEM_LIBRARIES}
-)
-
 target_link_libraries(TerraLibraryShared
   PRIVATE
     ${ALL_LLVM_LIBRARIES}
@@ -259,7 +253,8 @@ if(APPLE)
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
-      TerraLibrary # for transitive dependencies
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
   )
 elseif(UNIX)
   target_link_libraries(TerraExecutable
@@ -268,9 +263,16 @@ elseif(UNIX)
       -Wl,--whole-archive
       TerraLibrary
       -Wl,--no-whole-archive
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
   )
 else()
-  target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      TerraLibrary
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
+  )
 endif()
 
 install(
