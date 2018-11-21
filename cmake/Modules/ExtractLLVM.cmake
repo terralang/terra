@@ -13,6 +13,10 @@ else()
   list(APPEND ALL_LLVM_DEFINITIONS ${LLVM_DEFINITIONS_LIST})
 endif()
 
+# The official binary for 3.8 on macOS is buggy and lists LTO (a dynamic
+# library) even though LLVMLTO (a static library) is already on the list.
+list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
+
 if(TERRA_STATIC_LINK_LLVM)
   set(LLVM_OBJECT_DIR "${PROJECT_BINARY_DIR}/llvm_objects")
 
