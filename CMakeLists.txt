@@ -5,6 +5,7 @@ list(INSERT CMAKE_MODULE_PATH 0 "${Terra_SOURCE_DIR}/cmake/Modules")
 
 find_package(LLVM HINTS ${LLVM_HINTS} REQUIRED)
 find_package(Clang REQUIRED)
+find_package(Git) # for version number
 
 if(TERRA_ENABLE_CUDA)
   find_package(CUDA REQUIRED)
@@ -18,6 +19,7 @@ set(TERRA_ENABLE_CUDA ${CUDA_FOUND} CACHE BOOL "Build Terra with support for CUD
 list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
 
 include(GNUInstallDirs)
+include(VersionNumber)
 include(BuildDirs)
 include(GetLuaJIT)
 include(ExtractLLVM)

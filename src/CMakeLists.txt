@@ -173,6 +173,11 @@ if(TERRA_ENABLE_CUDA)
   )
 endif()
 
+target_compile_definitions(TerraObjectFiles
+  PRIVATE
+    ${TERRA_VERSION_DEFINITIONS}
+)
+
 set_target_properties(TerraObjectFiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_dependencies(TerraObjectFiles TerraGeneratedFiles)
@@ -238,6 +243,11 @@ target_include_directories(TerraExecutable
   PRIVATE
     ${PROJECT_BINARY_DIR}
     ${PROJECT_BINARY_DIR}/include/terra
+)
+
+target_compile_definitions(TerraExecutable
+  PRIVATE
+    ${TERRA_VERSION_DEFINITIONS}
 )
 
 if(APPLE)

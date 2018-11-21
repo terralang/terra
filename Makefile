@@ -49,6 +49,10 @@ ifeq ($(shell sed -E '' </dev/null >/dev/null 2>&1 && echo yes || echo no),no)
 SED_E = sed -r
 endif
 
+TERRA_VERSION_RAW=$(shell git describe --tags 2>/dev/null || echo unknown)
+TERRA_VERSION=$(shell echo "$(TERRA_VERSION_RAW)" | $(SED_E) 's/^release-//' | $(SED_E) 's/-/./' | $(SED_E) 's/-/./')
+FLAGS += -DTERRA_VERSION_STRING="\"$(TERRA_VERSION)\""
+
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
 #LUAJIT_VERSION_BASE =2.1
 #LUAJIT_VERSION_EXTRA =.0-beta2

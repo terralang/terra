@@ -41,6 +41,9 @@ install:
   - set TERRA_DIR=%CD%
   - dir
 
+  - ps: git describe --tags | ForEach-Object { $_ -replace "release-", "" } | ForEach-Object { [regex]$pattern = "-"; $pattern.replace($_, ".", 2) } | Set-Content terra_version.txt
+  - set /p TERRA_VERSION=<terra_version.txt
+
 build_script:
   # There is probably a better way to do this...
   - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)

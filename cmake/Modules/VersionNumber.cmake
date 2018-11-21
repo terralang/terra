@@ -1,0 +1,23 @@
+if(GIT_FOUND)
+  execute_process(
+    COMMAND "${GIT_EXECUTABLE}" describe --tags
+    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    RESULT_VARIABLE HAS_TERRA_VERSION
+    OUTPUT_VARIABLE TERRA_VERSION
+    ERROR_QUIET
+  )
+endif()
+
+if(HAS_TERRA_VERSION EQUAL 0)
+  string(STRIP "${TERRA_VERSION}" TERRA_VERSION)
+  string(REGEX REPLACE "^(release-)" ""
+    TERRA_VERSION "${TERRA_VERSION}"
+  )
+  string(REGEX REPLACE "^([^-]*)-([^-]*)-(.*)$" "\\1.\\2.\\3"
+    TERRA_VERSION "${TERRA_VERSION}"
+  )
+else()
+  set(TERRA_VERSION unknown)
+endif()
+
+set(TERRA_VERSION_DEFINITIONS "TERRA_VERSION_STRING=\"${TERRA_VERSION}\"")

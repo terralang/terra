@@ -339,6 +339,7 @@ static int docall (lua_State *L, int narg, int clear) {
 static void print_welcome() {
     printf("\n"
            "Terra -- A low-level counterpart to Lua\n"
+           "Release " TERRA_VERSION_STRING "\n"
            "\n"
            "Stanford University\n"
            "zdevito@stanford.edu\n"
