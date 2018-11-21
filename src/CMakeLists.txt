@@ -254,6 +254,12 @@ if(APPLE)
   )
   add_dependencies(TerraExecutable TerraLibrary)
 elseif(UNIX)
+  if(NOT TERRA_STATIC_LINK_LLVM OR NOT TERRA_STATIC_LINK_LUAJIT)
+    target_link_libraries(TerraExecutable
+      PRIVATE
+        "-Wl,-rpath,$ORIGIN/../lib"
+    )
+  endif()
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-export-dynamic
