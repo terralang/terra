@@ -90,8 +90,6 @@ elseif(TERRA_STATIC_LINK_LLVM)
     )
   endif()
 
-  message("ALL_LLVM_LIBRARIES ${ALL_LLVM_LIBRARIES}")
-
   # Don't extract individual object files.
   list(APPEND ALL_LLVM_OBJECTS)
 else()
