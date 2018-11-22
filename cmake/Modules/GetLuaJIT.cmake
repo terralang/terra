@@ -35,12 +35,9 @@ string(CONCAT
 
 file(DOWNLOAD "${LUAJIT_URL}" "${LUAJIT_TAR}")
 
-add_custom_command(
-  OUTPUT ${LUAJIT_SOURCE_DIR} ${LUAJIT_INSTALL_PREFIX}
-  DEPENDS ${LUAJIT_TAR}
+execute_process(
   COMMAND "${CMAKE_COMMAND}" -E tar xzf "${LUAJIT_TAR}"
   WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
-  VERBATIM
 )
 
 foreach(LUAJIT_HEADER ${LUAJIT_HEADER_BASENAMES})
@@ -66,12 +63,7 @@ if(WIN32)
     VERBATIM
   )
 
-  add_custom_command(
-    OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-    DEPENDS ${LUAJIT_INSTALL_PREFIX}
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-    VERBATIM
-  )
+  file(MAKE_DIRECTORY "${LUAJIT_INSTALL_PREFIX}/lua/jit")
 
   execute_process(
     COMMAND "${CMAKE_COMMAND}" -E tar tzf "${LUAJIT_TAR}"
@@ -90,13 +82,8 @@ if(WIN32)
       LUAJIT_SOURCE_NAME
       ${LUAJIT_SOURCE_PATH}
     )
-    add_custom_command(
-      OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
-      DEPENDS
-        ${LUAJIT_EXECUTABLE}
-        "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-      COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_INSTALL_PREFIX}/jit/${LUAJIT_SOURCE_NAME}" "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
-      VERBATIM
+    file(COPY "${LUAJIT_INSTALL_PREFIX}/jit/${LUAJIT_SOURCE_NAME}"
+      DESTINATION "${LUAJIT_INSTALL_PREFIX}/lua/jit/"
     )
     list(APPEND LUAJIT_LUA_SOURCES
       "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
@@ -118,13 +105,19 @@ foreach(LUAJIT_HEADER ${LUAJIT_HEADER_BASENAMES})
 endforeach()
 
 foreach(LUAJIT_HEADER ${LUAJIT_HEADER_BASENAMES})
-  add_custom_command(
-    OUTPUT ${PROJECT_BINARY_DIR}/include/terra/${LUAJIT_HEADER}
-    DEPENDS
-      ${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}
-    COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}" "${PROJECT_BINARY_DIR}/include/terra/"
-    VERBATIM
-  )
+  if(WIN32)
+    file(COPY "${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}"
+      DESTINATION "${PROJECT_BINARY_DIR}/include/terra/"
+    )
+  else()
+    add_custom_command(
+      OUTPUT ${PROJECT_BINARY_DIR}/include/terra/${LUAJIT_HEADER}
+      DEPENDS
+        ${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}
+      COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_INCLUDE_DIR}/${LUAJIT_HEADER}" "${PROJECT_BINARY_DIR}/include/terra/"
+      VERBATIM
+    )
+  endif()
   install(
     FILES ${PROJECT_BINARY_DIR}/include/terra/${LUAJIT_HEADER}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/terra
@@ -133,10 +126,7 @@ endforeach()
 
 if(TERRA_SLIB_INCLUDE_LUAJIT)
   set(LUAJIT_OBJECT_DIR "${PROJECT_BINARY_DIR}/lua_objects")
-
-  execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_OBJECT_DIR}"
-  )
+  file(MAKE_DIRECTORY "${LUAJIT_OBJECT_DIR}")
 
   # Since we need the list of objects at configure time, best we can do
   # (without building LuaJIT right this very second) is to guess based
@@ -228,7 +218,6 @@ endif()
 add_custom_target(
   LuaJIT
   DEPENDS
-    ${LUAJIT_LUA_SOURCES}
     ${LUAJIT_STATIC_LIBRARY}
     ${LUAJIT_SHARED_LIBRARY_PATHS}
     ${LUAJIT_SHARED_LIBRARY_BUILD_PATHS}
