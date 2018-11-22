@@ -49,7 +49,7 @@ install:
 
 build_script:
   - cd build
-  - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DTERRA_SLIB_INCLUDE_LLVM=OFF -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
+  - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DTERRA_SLIB_INCLUDE_LLVM=OFF -DTERRA_SLIB_INCLUDE_LUAJIT=OFF -DCMAKE_GENERATOR_PLATFORM=x64
   - cmake --build . --target INSTALL
   - cd ..
   # # There is probably a better way to do this...

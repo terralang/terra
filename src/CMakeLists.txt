@@ -256,8 +256,20 @@ endif()
 
 list(APPEND TERRA_EXE_SRC
   main.cpp
-  linenoise.cpp linenoise.h
 )
+
+if(WIN32)
+  list(APPEND TERRA_EXE_SRC
+    ${PROJECT_SOURCE_DIR}/msvc/ext/getopt.c ${PROJECT_SOURCE_DIR}/msvc/ext/getopt.h
+    ${PROJECT_SOURCE_DIR}/msvc/ext/getopt_long.c
+    ${PROJECT_SOURCE_DIR}/msvc/ext/inttypes.h
+    ${PROJECT_SOURCE_DIR}/msvc/ext/setjmp.h
+  )
+else()
+  list(APPEND TERRA_EXE_SRC
+    linenoise.cpp linenoise.h
+  )
+endif()
 
 add_executable(TerraExecutable ${TERRA_EXE_SRC})
 
@@ -269,6 +281,13 @@ target_include_directories(TerraExecutable
     ${PROJECT_BINARY_DIR}
     ${PROJECT_BINARY_DIR}/include/terra
 )
+
+if(WIN32)
+  target_include_directories(TerraExecutable
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/msvc
+  )
+endif()
 
 target_compile_definitions(TerraExecutable
   PRIVATE
