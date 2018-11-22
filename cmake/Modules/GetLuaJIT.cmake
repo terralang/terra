@@ -69,8 +69,16 @@ if(WIN32)
   foreach(LUAJIT_JIT_LUA_PATH ${LUAJIT_JIT_LUA_PATHS})
     get_filename_component(LUAJIT_JIT_LUA_NAME "${LUAJIT_JIT_LUA_PATH}" NAME)
     add_custom_command(
+      OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit"
+      DEPENDS ${LUAJIT_SOURCE_DIR}
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_INSTALL_PREFIX}/lua/jit"
+      VERBATIM
+    )
+    add_custom_command(
       OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_JIT_LUA_NAME}"
-      DEPENDS ${LUAJIT_EXECUTABLE}
+      DEPENDS
+        ${LUAJIT_EXECUTABLE}
+        "${LUAJIT_INSTALL_PREFIX}/lua/jit"
       COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_JIT_LUA_PATH}" "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_JIT_LUA_NAME}"
       VERBATIM
     )
