@@ -125,23 +125,51 @@ target_include_directories(TerraObjectFiles
     ${CLANG_INCLUDE_DIRS}
 )
 
+if(WIN32)
+  target_include_directories(TerraObjectFiles
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/msvc
+  )
+endif()
+
 target_compile_definitions(TerraObjectFiles
   PRIVATE
     LLVM_VERSION=${LLVM_VERSION_MAJOR}${LLVM_VERSION_MINOR}
 )
 
+if(WIN32)
+  target_compile_options(TerraObjectFiles
+    PRIVATE
+      # FIXME: Find portable ways to do all these
+      /MP8    # parallel build
+      /nologo
+      /EHsc   # extern "C" functions don't throw exceptions
+      /w      # disable warnings
+      /MD     # use thread-safe version of MSVCRT.lib
+      /Zi     # debug info
+  )
+  target_compile_definitions(TerraObjectFiles
+    PRIVATE
+      NOMINMAX
+  )
+else()
+  target_compile_options(TerraObjectFiles
+    PRIVATE
+      # FIXME: Find portable ways to do all these
+      -fno-common
+      -Wcast-qual
+      $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
+      $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
+  )
+endif()
+
 target_compile_options(TerraObjectFiles
   PRIVATE
-    # FIXME: Find portable ways to do all these
-    -fno-common
-    -Wcast-qual
-    $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
-    $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
     # LLVM provides these as flags, so we have to put them here.
     ${ALL_LLVM_DEFINITIONS}
 )
 
-if(NOT ${LLVM_ENABLE_RTTI})
+if(NOT WIN32 AND NOT ${LLVM_ENABLE_RTTI})
   target_compile_options(TerraObjectFiles
     PRIVATE
       # FIXME: Find portable ways to do all these

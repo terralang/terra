@@ -36,7 +36,7 @@ string(CONCAT
 file(DOWNLOAD "${LUAJIT_URL}" "${LUAJIT_TAR}")
 
 add_custom_command(
-  OUTPUT ${LUAJIT_SOURCE_DIR}
+  OUTPUT ${LUAJIT_SOURCE_DIR} ${LUAJIT_INSTALL_PREFIX}
   DEPENDS ${LUAJIT_TAR}
   COMMAND "${CMAKE_COMMAND}" -E tar xzf "${LUAJIT_TAR}"
   WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
@@ -65,25 +65,41 @@ if(WIN32)
     WORKING_DIRECTORY ${LUAJIT_SOURCE_DIR}/src
     VERBATIM
   )
-  file(GLOB LUAJIT_JIT_LUA_PATHS "${LUAJIT_SOURCE_DIR}/src/jit/*.lua")
-  foreach(LUAJIT_JIT_LUA_PATH ${LUAJIT_JIT_LUA_PATHS})
-    get_filename_component(LUAJIT_JIT_LUA_NAME "${LUAJIT_JIT_LUA_PATH}" NAME)
-    add_custom_command(
-      OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-      DEPENDS ${LUAJIT_SOURCE_DIR}
-      COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-      VERBATIM
+
+  add_custom_command(
+    OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit"
+    DEPENDS ${LUAJIT_INSTALL_PREFIX}
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${LUAJIT_INSTALL_PREFIX}/lua/jit"
+    VERBATIM
+  )
+
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E tar tzf "${LUAJIT_TAR}"
+    OUTPUT_VARIABLE LUAJIT_TAR_CONTENTS
+  )
+
+  string(REGEX MATCHALL
+    "[^\\\\/\r\n]+/src/jit/[^\\\\/\r\n]+[.]lua"
+    LUAJIT_LUA_SOURCE_PATHS
+    ${LUAJIT_TAR_CONTENTS}
+  )
+
+  foreach(LUAJIT_SOURCE_PATH ${LUAJIT_LUA_SOURCE_PATHS})
+    string(REGEX MATCH
+      "[^\\\\/\r\n]+[.]lua"
+      LUAJIT_SOURCE_NAME
+      ${LUAJIT_SOURCE_PATH}
     )
     add_custom_command(
-      OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_JIT_LUA_NAME}"
+      OUTPUT "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
       DEPENDS
         ${LUAJIT_EXECUTABLE}
         "${LUAJIT_INSTALL_PREFIX}/lua/jit"
-      COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_JIT_LUA_PATH}" "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_JIT_LUA_NAME}"
+      COMMAND "${CMAKE_COMMAND}" -E copy "${LUAJIT_INSTALL_PREFIX}/jit/${LUAJIT_SOURCE_NAME}" "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
       VERBATIM
     )
-    list(APPEND LUAJIT_JIT_LUA_SOURCES
-      "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_JIT_LUA_NAME}"
+    list(APPEND LUAJIT_LUA_SOURCES
+      "${LUAJIT_INSTALL_PREFIX}/lua/jit/${LUAJIT_SOURCE_NAME}"
     )
   endforeach()
 else()
@@ -212,13 +228,13 @@ endif()
 add_custom_target(
   LuaJIT
   DEPENDS
+    ${LUAJIT_LUA_SOURCES}
     ${LUAJIT_STATIC_LIBRARY}
     ${LUAJIT_SHARED_LIBRARY_PATHS}
     ${LUAJIT_SHARED_LIBRARY_BUILD_PATHS}
     ${LUAJIT_EXECUTABLE}
     ${LUAJIT_HEADERS}
     ${LUAJIT_OBJECTS}
-    ${LUAJIT_JIT_LUA_SOURCES}
 )
 
 mark_as_advanced(
