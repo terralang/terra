@@ -67,8 +67,30 @@ if [[ "$(uname)" = "Darwin" ]]; then
 fi
 
 if [[ $USE_CMAKE -eq 1 ]]; then
+  CMAKE_FLAGS=()
+  if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_STATIC_LINK_LLVM=OFF
+    )
+  fi
+  if [[ -n $SLIB_INCLUDE_LLVM && $SLIB_INCLUDE_LLVM -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_SLIB_INCLUDE_LLVM=OFF
+    )
+  fi
+  if [[ -n $STATIC_LUAJIT && $STATIC_LUAJIT -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_STATIC_LINK_LUAJIT=OFF
+    )
+  fi
+  if [[ -n $SLIB_INCLUDE_LUAJIT && $SLIB_INCLUDE_LUAJIT -eq 0 ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
+    )
+  fi
+
   pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install
+  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   make install -j2
   ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd

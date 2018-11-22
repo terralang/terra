@@ -2,10 +2,6 @@
 ### Terra Generated Source Files
 ###
 
-list(APPEND PACKAGE_DEPS
-  ${LUAJIT_LIBRARIES}
-)
-
 if(TERRA_ENABLE_CUDA)
   list(APPEND TERRA_CUDA_INCLUDE_DIRS
     ${CUDA_INCLUDE_DIRS}
@@ -23,7 +19,6 @@ add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/clangpaths.h"
   DEPENDS
     dummy.c
-    ${PACKAGE_DEPS}
     "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua"
     LuaJIT
   COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua" ${PROJECT_BINARY_DIR}/clangpaths.h ${CLANG_EXECUTABLE} ${TERRA_CUDA_INCLUDE_DIR_FLAGS}
@@ -34,7 +29,6 @@ add_custom_command(
 add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/internalizedfiles.h"
   DEPENDS
-    ${PACKAGE_DEPS}
     "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua"
     "${PROJECT_SOURCE_DIR}/lib/std.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
@@ -217,9 +211,12 @@ set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
-target_link_libraries(TerraLibrary PRIVATE ${LLVM_SYSTEM_LIBRARIES})
-
-target_link_libraries(TerraLibraryShared PRIVATE ${LLVM_SYSTEM_LIBRARIES})
+target_link_libraries(TerraLibraryShared
+  PRIVATE
+    ${LUAJIT_LIBRARIES}
+    ${ALL_LLVM_LIBRARIES}
+    ${LLVM_SYSTEM_LIBRARIES}
+)
 
 if(APPLE)
   target_link_libraries(TerraLibraryShared PRIVATE -single_module)
@@ -261,18 +258,36 @@ if(APPLE)
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
-      TerraLibrary # for transitive dependencies
+      ${LUAJIT_LIBRARIES}
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
   )
+  add_dependencies(TerraExecutable TerraLibrary)
 elseif(UNIX)
+  if(NOT TERRA_STATIC_LINK_LLVM OR NOT TERRA_STATIC_LINK_LUAJIT)
+    target_link_libraries(TerraExecutable
+      PRIVATE
+        "-Wl,-rpath,$ORIGIN/../lib"
+    )
+  endif()
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-export-dynamic
       -Wl,--whole-archive
       TerraLibrary
       -Wl,--no-whole-archive
+      ${LUAJIT_LIBRARIES}
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
   )
 else()
-  target_link_libraries(TerraExecutable PRIVATE TerraLibrary)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      TerraLibrary
+      ${LUAJIT_LIBRARIES}
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
+  )
 endif()
 
 install(
