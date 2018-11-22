@@ -101,6 +101,10 @@ else()
       list(APPEND ALL_LLVM_LIBRARIES ${LLVM_LIB})
     endif()
   endforeach()
+  list(LENGTH ALL_LLVM_LIBRARIES NUM_LLVM_LIBRARIES)
+  if(NUM_LLVM_LIBRARIES EQUAL 0)
+    message(FATAL_ERROR "Terra was configured to dynamically link LLVM, but no LLVM dynamic libraries are available")
+  endif()
 
   # For now, statically link Clang.
   list(APPEND ALL_LLVM_LIBRARIES ${CLANG_LIBRARIES})
