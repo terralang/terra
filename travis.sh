@@ -63,6 +63,16 @@ if [[ $(uname) = Darwin ]]; then
     ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/clang clang-3.5
   fi
 
+  if [[ $USE_CUDA -eq 1 ]]; then
+    curl -o cuda.dmg -L https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda_9.2.148_mac
+    hdiutil attach cuda.dmg
+    # This is probably the "correct" way to do it, but it times out on Travis.
+    # /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/MacOS/CUDAMacOSXInstaller --accept-eula --silent --no-window --install-package=cuda-toolkit
+    brew install gnu-tar
+    sudo gtar xf /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/Resources/payload/cuda_mac_installer_tk.tar.gz -C / --no-overwrite-dir --no-same-owner
+    hdiutil detach /Volumes/CUDAMacOSXInstaller
+  fi
+
   export PATH=$PWD:$PATH
 fi
 
