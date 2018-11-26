@@ -45,3 +45,14 @@ matrix:
 
 script:
   - ./travis.sh
+
+deploy:
+  provider: releases
+  api_key:
+    secure: wbTcInINzAAQMNJ1DSyfst4Ezi6sznd6Ba/fQBQ96t4iOKjcJLrLhU7Zycz2heSnq9ADcU5igwVoOK7FVMc70IiX0SAYNdXYnYbmMWbJsIYyJAz8LdZTqTBb4F959FXnyhVfoEq4yahsJxEydrH9Wxt9Ld9CuI16PInvs2KtoXqVksFMqMm0o0921eVY8bMZmiiK4OAwe5ruUN3JM5NxKTs43qoxmBF/BfQb3UchOyOyWwZV6k/wu6yMjypUsTvDNfhyxfw+jw7qiPJCEG2Fbjy9/4zlb7kISWo+fje2hqSc7QeJ7HvkGLYGuUaXCwGGQBCUfqwawPCW2dQ399ztKaDKjWZ9GXXYGD+B6QYaQF1HFB3k8Wabw/q0dhV8wo63ToJLwl7jZq7sLu49Ggwuq1yfAf6D/3wnD7w44kujtZVzDvXRnxyqc0PnUAXLWL6NgHUssPV7lXWp2vv2fpQD2af28WVD7gkUstvCEno0v89T9B9G+0V2ffQOXOsVbZ7SAlYJZOg3/RpMXynEDlmI1kO+ynoyRXnmfEkyoytBgSqRiLeiVsyct+tUYD1+g4ZK4zYD6Bb292fdrkrEUf2d7a4E4PZ2tUn+wlwpboLoPKPez+SP+QrDkNQvRUwIK2Y6oZQ85VoPmon5GHN2+YLSxmZhapmILeQDfQcWasDtVYA=
+  file-glob: true
+  file: terra-*.zip
+  on:
+    repo: zdevito/terra
+    tags: true
+  skip_cleanup: true

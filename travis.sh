@@ -3,15 +3,15 @@
 set -e
 set -x
 
-if [[ "$(uname)" = "Linux" ]]; then
+if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ "$LLVM_CONFIG" = "llvm-config-6.0" ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
-  elif [[ "$LLVM_CONFIG" = "llvm-config-5.0" ]]; then
+  elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
     sudo apt-get install -qq llvm-5.0-dev clang-5.0 libclang-5.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
-  elif [[ "$LLVM_CONFIG" = "llvm-config-3.8" ]]; then
+  elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-3.8 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
@@ -37,20 +37,20 @@ if [[ "$(uname)" = "Linux" ]]; then
   fi
 fi
 
-if [[ "$(uname)" = "Darwin" ]]; then
-  if [[ "$LLVM_CONFIG" = "llvm-config-6.0" ]]; then
+if [[ $(uname) = Darwin ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     curl -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-6.0
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/clang clang-6.0
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-6.0.0-x86_64-apple-darwin
-  elif [[ "$LLVM_CONFIG" = "llvm-config-5.0" ]]; then
+  elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
     curl -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
     ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-5.0.1-final-x86_64-apple-darwin
-  elif [[ "$LLVM_CONFIG" = "llvm-config-3.8" ]]; then
+  elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
     curl -O http://releases.llvm.org/3.8.0/clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-3.8.0-x86_64-apple-darwin/bin/llvm-config llvm-config-3.8
@@ -100,4 +100,9 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   popd
 else
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+
+  # Only deploy Makefile-based builds, and only with LLVM 6.
+  if [[ $LLVM_CONFIG = llvm-config-6.0 && ( ( $USE_CUDA -eq 1 && $CC = gcc ) || $(uname) = Darwin ) ]]; then
+    make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) release
+  fi
 fi
