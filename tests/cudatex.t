@@ -2,6 +2,10 @@ if not terralib.cudacompile then
 	print("CUDA not enabled, not performing test...")
 	return
 end
+if os.getenv("CI") then
+	print("Running in CI environment without a GPU, not performing test...")
+	return
+end
 
 local tid = cudalib.nvvm_read_ptx_sreg_tid_x--terralib.intrinsic("llvm.nvvm.read.ptx.sreg.tid.x",{} -> int)
 

@@ -4,36 +4,36 @@ set -e
 set -x
 
 if [[ "$(uname)" = "Linux" ]]; then
-  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-  sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
   sudo apt-get update -qq
-  sudo apt-get install -qq wget
   if [[ "$LLVM_CONFIG" = "llvm-config-6.0" ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-6.0 main"
-    sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev llvm-6.0-dev libedit-dev
+    sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
   elif [[ "$LLVM_CONFIG" = "llvm-config-5.0" ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo apt-add-repository -y "deb https://apt.llvm.org/trusty/ llvm-toolchain-trusty-5.0 main"
-    sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -qq llvm-5.0-dev clang-5.0 libclang-5.0-dev llvm-5.0-dev libedit-dev
+    sudo apt-get install -qq llvm-5.0-dev clang-5.0 libclang-5.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
   elif [[ "$LLVM_CONFIG" = "llvm-config-3.8" ]]; then
-    sudo apt-add-repository -y "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-3.8 main"
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-3.8 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo bash -c "echo 'Package: *' >> /etc/apt/preferences.d/llvm-600"
     sudo bash -c "echo 'Pin: origin apt.llvm.org' >> /etc/apt/preferences.d/llvm-600"
     sudo bash -c "echo 'Pin-Priority: 600' >> /etc/apt/preferences.d/llvm-600"
     cat /etc/apt/preferences.d/llvm-600
     apt-cache policy llvm-3.8-dev
-    sudo apt-get install -qq llvm-3.8-dev clang-3.8 libclang-3.8-dev llvm-3.8-dev libedit-dev
+    # Travis has LLVM pre-installed, and it's on the wrong version...
+    sudo apt-get autoremove -y llvm-3.8
+    sudo apt-get install -y llvm-3.8-dev clang-3.8 libclang-3.8-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/share/llvm-3.8
   else
     sudo apt-get install -qq llvm-3.5-dev clang-3.5 libclang-3.5-dev
+  fi
+
+  if [[ $USE_CUDA -eq 1 ]]; then
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-repo-ubuntu1604_9.2.148-1_amd64.deb
+    sudo dpkg -i cuda-repo-ubuntu1604_9.2.148-1_amd64.deb
+    sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
+    sudo apt-get update -qq
+    sudo apt-get install -qq cuda-toolkit-9.2
   fi
 fi
 
