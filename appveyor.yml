@@ -77,7 +77,7 @@ deploy:
   description: '$(APPVEYOR_REPO_TAG_NAME)'
   provider: GitHub
   auth_token:
-    secure: todo
+    secure: Ses4fC83u3cpP3EQTbkUWWiB9a4RKLErjLoR+3GzkDtPxYWKTRGAQkY80YyUgv+H
   artifact: terra_release
   force_update: true
   on:
