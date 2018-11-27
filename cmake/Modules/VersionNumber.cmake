@@ -13,9 +13,6 @@ if(HAS_TERRA_VERSION EQUAL 0)
   string(REGEX REPLACE "^(release-)" ""
     TERRA_VERSION "${TERRA_VERSION}"
   )
-  string(REGEX REPLACE "^([^-]*)-([^-]*)-(.*)$" "\\1.\\2.\\3"
-    TERRA_VERSION "${TERRA_VERSION}"
-  )
 else()
   set(TERRA_VERSION unknown)
 endif()
