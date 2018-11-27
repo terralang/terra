@@ -52,7 +52,32 @@ build_script:
   - nmake
   - cd ..
 
+  # Package for release
+  - set TERRA_SHARE_PATH=%TERRA_DIR%\release\share\terra
+  - ps: |
+        If($Env:LLVM_VERSION_SHORT -eq 60) {
+          git ls-tree HEAD -r tests --name-only | ForEach-Object { $dir = "$Env:TERRA_SHARE_PATH\$(Split-Path -Path $_)"; If(!(Test-Path "$dir")) { New-Item -Path "$dir" -ItemType Directory }; Copy-Item $_ "$dir" }
+          $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
+          Rename-Item release "$Env:RELEASE_NAME"
+          7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
+          Rename-Item "$Env:RELEASE_NAME" release
+        }
+
 test_script:
   - cd tests
   - ..\release\bin\terra run
   - cd ..
+
+artifacts:
+  - path: 'terra-*.zip'
+    name: terra_release
+
+deploy:
+  description: '$(APPVEYOR_REPO_TAG_NAME)'
+  provider: GitHub
+  auth_token:
+    secure: todo
+  artifact: terra_release
+  force_update: true
+  on:
+    appveyor_repo_tag: true
