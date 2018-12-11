@@ -22,6 +22,10 @@ env:
   - LLVM_CONFIG=llvm-config-7 CLANG=clang-7 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
   - LLVM_CONFIG=llvm-config-7 CLANG=clang-7 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0 SLIB_INCLUDE_LUAJIT=0 USE_CUDA=1
 
+  # test external projects
+  - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 EXTERNAL_TEST=regent
+  - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 EXTERNAL_TEST=rigel
+
 matrix:
   exclude:
     - os: osx

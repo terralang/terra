@@ -114,8 +114,9 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     )
   fi
 
+  export TERRA_INSTALL_PREFIX=$PWD/install
   pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
+  cmake .. -DCMAKE_INSTALL_PREFIX=$TERRA_INSTALL_PREFIX "${CMAKE_FLAGS[@]}"
   make install -j2
   ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
@@ -123,11 +124,24 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   pushd tests
   ../install/bin/terra ./run
   popd
+
 else
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+  export TERRA_INSTALL_PREFIX=$PWD/release
 
   # Only deploy Makefile-based builds, and only with LLVM 6.
   if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
     make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) release
   fi
+fi
+
+if [[ $EXTERNAL_TEST = regent ]]; then
+    git clone -b master https://github.com/StanfordLegion/legion.git
+    cd legion/language
+    ./install.py --with-terra=$TERRRA_INSTALL_PREFIX
+elif [[ $EXTERNAL_TEST = rigel ]]; then
+    export PATH="$PATH:$TERRRA_INSTALL_PREFIX/bin"
+    git clone https://github.com/jameshegarty/rigel.git
+    cd rigel/examples
+    make terra
 fi
