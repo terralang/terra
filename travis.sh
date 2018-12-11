@@ -137,8 +137,8 @@ fi
 
 if [[ $EXTERNAL_TEST = regent ]]; then
     git clone -b master https://github.com/StanfordLegion/legion.git
-    cd legion/language
-    ./install.py --with-terra=$TERRRA_INSTALL_PREFIX
+    cd legion
+    TERRA_DIR=$TERRRA_INSTALL_PREFIX ./test.py --test=regent
 elif [[ $EXTERNAL_TEST = rigel ]]; then
     export PATH="$PATH:$TERRRA_INSTALL_PREFIX/bin"
     git clone https://github.com/jameshegarty/rigel.git
