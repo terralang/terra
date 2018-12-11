@@ -126,8 +126,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   popd
 
 else
-  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
   export TERRA_INSTALL_PREFIX=$PWD/release
+  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
 
   # Only deploy Makefile-based builds, and only with LLVM 6.
   if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
@@ -140,8 +140,10 @@ if [[ $EXTERNAL_TEST = regent ]]; then
     cd legion
     TERRA_DIR=$TERRRA_INSTALL_PREFIX ./test.py --test=regent
 elif [[ $EXTERNAL_TEST = rigel ]]; then
-    export PATH="$PATH:$TERRRA_INSTALL_PREFIX/bin"
     git clone https://github.com/jameshegarty/rigel.git
     cd rigel/examples
+    mkdir bin
+    ln -s "$TERRRA_INSTALL_PREFIX/../build/bin/luajit" bin/luajit
+    export PATH="$PATH:$TERRRA_INSTALL_PREFIX/bin:$PWD/bin"
     make terra
 fi
