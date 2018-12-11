@@ -138,7 +138,11 @@ fi
 if [[ $EXTERNAL_TEST = regent ]]; then
     git clone -b master https://github.com/StanfordLegion/legion.git
     cd legion
-    TERRA_DIR=$TERRA_INSTALL_PREFIX ./test.py --test=regent
+    export REALM_SYNTHETIC_CORE_MAP=
+    export SHORT=1 # skip expensive tests
+    export THREADS=2
+    export TERRA_DIR=$TERRA_INSTALL_PREFIX
+    ./test.py --test=regent
 elif [[ $EXTERNAL_TEST = rigel ]]; then
     git clone https://github.com/jameshegarty/rigel.git
     cd rigel/examples
