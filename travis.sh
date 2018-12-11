@@ -138,12 +138,12 @@ fi
 if [[ $EXTERNAL_TEST = regent ]]; then
     git clone -b master https://github.com/StanfordLegion/legion.git
     cd legion
-    TERRA_DIR=$TERRRA_INSTALL_PREFIX ./test.py --test=regent
+    TERRA_DIR=$TERRA_INSTALL_PREFIX ./test.py --test=regent
 elif [[ $EXTERNAL_TEST = rigel ]]; then
     git clone https://github.com/jameshegarty/rigel.git
     cd rigel/examples
     mkdir bin
-    ln -s "$TERRRA_INSTALL_PREFIX/../build/bin/luajit" bin/luajit
-    export PATH="$PATH:$TERRRA_INSTALL_PREFIX/bin:$PWD/bin"
+    ln -s "$TERRA_INSTALL_PREFIX/../build/bin/luajit" bin/luajit
+    export PATH="$PATH:$TERRA_INSTALL_PREFIX/bin:$PWD/bin"
     make terra
 fi
