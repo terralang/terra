@@ -1944,7 +1944,7 @@ local function semanticcheck(diag,parameters,block)
                     checkdeferredpassed(e,scopeposition,state.position)
                 else assert(state.kind == "undefinedlabel")
                     state.gotos:insert(e)
-                    state.positions:insert(getscopeposition())
+                    state.positions:insert(position)
                 end
                 labelstates[label] = state
             elseif e:is "breakstat" then
@@ -3405,7 +3405,7 @@ function terra.includecstring(code,cargs,target)
     assert(terra.istarget(target),"expected a target or nil to specify the native target")
     local result = terra.registercfile(target,code,args,headerprovider)
     local general,tagged,errors,macros = result.general,result.tagged,result.errors,result.macros
-    local mt = { __index = includetableindex, errors = result.errors }
+    local mt = { __index = includetableindex, errors = errors }
     local function addtogeneral(tbl)
         for k,v in pairs(tbl) do
             if not general[k] then
