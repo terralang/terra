@@ -28,7 +28,7 @@ function List:map(fn,...)
     return l
 end
 function List:insertall(elems)
-    for i,e in ipairs(elems) do
+    for _,e in ipairs(elems) do
         self:insert(e)
     end
 end
@@ -150,9 +150,9 @@ local function parseAll(text)
         until not nextif("|")
         if nextif("attributes") then
             local attributes = parseFields()
-            for i,ctor in ipairs(sum.constructors) do 
+            for _,ctor in ipairs(sum.constructors) do
                 ctor.fields = ctor.fields or List()
-                for i,a in ipairs(attributes) do
+                for _,a in ipairs(attributes) do
                     ctor.fields:insert(a)
                 end
             end
@@ -314,7 +314,7 @@ function Context:DefineClass(name,unique,fields)
         local names = List()
         local checks = List()
         local tns = List()
-        for i,f in ipairs(fields) do
+        for _,f in ipairs(fields) do
             names:insert(f.name)
             tns:insert(f.list and f.type.."*" or f.type)
             checks:insert(self:GetCheckForField(unique,f))
@@ -368,11 +368,11 @@ function Context:DefineClass(name,unique,fields)
         end
         function class:__tostring()
             local members = List()
-            for i,f in ipairs(fields) do
+            for _,f in ipairs(fields) do
                 local v,r = self[f.name]
                 if f.list then
                     local elems = List()
-                    for i,e in ipairs(self[f.name]) do
+                    for _,e in ipairs(self[f.name]) do
                         elems:insert(tostring(e))
                     end
                     r = "{"..elems:concat(",").."}"
@@ -410,18 +410,18 @@ end
 function Context:Define(text)
     local defs = parseAll(text)
     -- register all new type names
-    for i,d in ipairs(defs) do
+    for _,d in ipairs(defs) do
         self:DeclareClass(d.name)
         if d.type.kind == "sum" then
-            for i,c in ipairs(d.type.constructors) do
+            for _,c in ipairs(d.type.constructors) do
                 self:DeclareClass(c.name)
             end
         end
     end
-    for i,d in ipairs(defs) do
+    for _,d in ipairs(defs) do
         if d.type.kind == "sum" then
             local parent = self:DefineClass(d.name,false,nil)
-            for i,c in ipairs(d.type.constructors) do
+            for _,c in ipairs(d.type.constructors) do
                 local child = self:DefineClass(c.name,c.unique,c.fields)
                 parent.members[child] = true --mark that any subclass is a member of its parent 
                 child.kind = basename(c.name)
