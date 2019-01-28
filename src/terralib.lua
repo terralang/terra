@@ -1023,7 +1023,6 @@ end
 
 function terra.defineobjects(fmt,envfn,...)
     local cmds = terralib.newlist()
-    local nargs = 2
     for i = 1, #fmt do --collect declaration/definition commands
         local c = fmt:sub(i,i)
         local name,tree = select(2*i - 1,...)
@@ -3744,7 +3743,6 @@ function prettystring(toptree,breaklines)
     
     local function makeprectable(...)
         local lst = {...}
-        local sz = #lst
         local tbl = {}
         for i = 1,#lst,2 do
             tbl[lst[i]] = lst[i+1]

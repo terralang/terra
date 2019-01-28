@@ -1,6 +1,5 @@
 --See Copyright Notice in ../LICENSE.txt
 --usage: genclangpaths.lua output /path/to/clang  [addition args to parse]
-local ffi = require("ffi")
 local outputfile,clang = unpack(arg)
 local handle = assert(io.popen(clang .. " -v src/dummy.c -o build/dummy.o 2>&1", "r"))
 local theline
