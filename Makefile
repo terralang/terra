@@ -191,6 +191,9 @@ all:	$(EXECUTABLE) $(DYNLIBRARY)
 test:	all
 	(cd tests; ./run)
 
+luacheck:
+	luacheck --config .luacheckrc src
+
 variants:	$(LIBRARY_VARIANTS)
 
 build/%.o:	src/%.cpp $(PACKAGE_DEPS)
