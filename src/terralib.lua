@@ -3391,8 +3391,8 @@ function terra.includecstring(code,cargs,target)
         args:insert(clangresourcedirectory.."/include")
     end
     for _,path in ipairs(terra.systemincludes) do
-    	args:insert("-internal-isystem")
-    	args:insert(path)
+        args:insert("-internal-isystem")
+        args:insert(path)
     end
     
     if cargs then
@@ -4059,7 +4059,7 @@ terra.systemincludes = List()
 if ffi.os == "Windows" then
     -- this is the reason we can't have nice things
     local function registrystring(key,value,default)
-    	local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
+	local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
 		local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
 		return result or default
 	end
