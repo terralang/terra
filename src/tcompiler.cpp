@@ -326,12 +326,23 @@ int terra_inittarget(lua_State * L) {
     
     if(!lua_isnil(L, 3))
         TT->Features = lua_tostring(L,3);
-    else
+    else {
+// LLVM 3.8 generates invalid AVX instructions on Skylake processors
+// detect that situation and force AVX off in that case
 #ifdef DISABLE_AVX
         TT->Features = "-avx";
 #else
+#if LLVM_VERSION == 38
+        std::string cpu_name = llvm::sys::getHostCPUName();
+        if(cpu_name == "skylake")
+            TT->Features = "-avx";
+        else
+            TT->Features = HostHasAVX() ? "+avx" : "";
+#else
         TT->Features = HostHasAVX() ? "+avx" : "";
 #endif
+#endif
+    }
     
     TargetOptions options;
     DEBUG_ONLY(T) {
