@@ -65,10 +65,13 @@ if [[ $(uname) = Darwin ]]; then
 
   if [[ $USE_CUDA -eq 1 ]]; then
     curl -o cuda.dmg -L https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda_9.2.148_mac
+    echo "defb095aa002301f01b2f41312c9b1630328847800baa1772fe2bbb811d5fa9f  cuda.dmg" | shasum -c -a 256
     hdiutil attach cuda.dmg
     # This is probably the "correct" way to do it, but it times out on Travis.
     # /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/MacOS/CUDAMacOSXInstaller --accept-eula --silent --no-window --install-package=cuda-toolkit
-    brew install gnu-tar
+    # There is a bug in GNU Tar 1.31 which causes a crash; stick to 1.30 for now.
+    brew tap elliottslaughter/tap
+    brew install gnu-tar@1.30
     sudo gtar xf /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/Resources/payload/cuda_mac_installer_tk.tar.gz -C / --no-overwrite-dir --no-same-owner
     hdiutil detach /Volumes/CUDAMacOSXInstaller
   fi
