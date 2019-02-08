@@ -524,7 +524,7 @@ static void read_string (LexState *ls, int del, SemInfo *seminfo) {
 
 static void dump_stack(lua_State * L, int elem) {
     lua_pushvalue(L,elem);
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_getfield(L,-1,"tree");
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L,-4);

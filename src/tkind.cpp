@@ -18,7 +18,7 @@ const char * tkindtostr(T_Kind k) {
 
 void terra_kindsinit(terra_State * T) {
     lua_State * L = T->L;
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_newtable(L);
     for(int i = 0; i < T_NUM_KINDS; i++) {
         lua_pushnumber(L,i);

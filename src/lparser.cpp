@@ -420,7 +420,7 @@ static void open_mainfunc (LexState *ls, FuncState *fs, BlockCnt *bl) {
 
 static void dump_stack(lua_State * L, int elem) {
     lua_pushvalue(L,elem);
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_getfield(L,-1,"tree");
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L,-4);
@@ -668,12 +668,16 @@ static void Name_print(Name * name, LexState * ls) {
 
 static void print_captured_locals(LexState * ls, TerraCnt * tc);
 
+/* print_stack not used anywhere right now - comment out to eliminate
+   compiler warning */
+#if 0
 static void print_stack(lua_State * L, int idx) {
     lua_pushvalue(L,idx);
-    lua_getfield(L,LUA_GLOBALSINDEX,"print");
+    lua_getglobal(L,"print");
     lua_insert(L,-2);
     lua_call(L,1,0);
 }
+#endif
 
 //store the lua object on the top of the stack to to the _G.terra._trees table, returning its index in the table
 static int store_value(LexState * ls) {
@@ -1398,7 +1402,11 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
     std::stringstream ss;
     ss << "@$terra$" << getstr(ls->source) << "$terra$" << begintoken.seminfo.linebegin;
+#if LUA_VERSION_NUM < 502
     if(lua_load(ls->L, expr_reader, &data, ss.str().c_str()) != 0) {
+#else
+    if(lua_load(ls->L, expr_reader, &data, ss.str().c_str(), "r") != 0) {
+#endif
         //we already parsed this buffer, so this should rarely cause an error
         //we need to find the line number in the error string, add it to where we began this line,
         //and then report the error with the correct line number
@@ -1697,7 +1705,7 @@ static void dump(LexState * ls) {
     lua_State * L = ls->L;
     printf("object is:\n");
     int tree = lua_gettop(L);
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_getfield(L,-1,"tree");
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L, tree);
@@ -2262,7 +2270,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   lua_newtable(L); /* lua state for lexer */
   lua_rawset(L,LUA_REGISTRYINDEX);
 
-  lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
+  lua_getglobal(L,"terra"); //TA_TERRA_OBJECT
   int to = lua_gettop(L);
 
   lua_pushvalue(L,-1);

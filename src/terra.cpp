@@ -78,7 +78,7 @@ terra_State * terra_getstate(lua_State * L, int upvalue) {
 }
 
 static terra_State * getterra(lua_State * L) {
-    lua_getfield(L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(L,"terra");
     lua_getfield(L,-1,"__terrastate");
     terra_State * T = (terra_State *) lua_touserdata(L, -1);
     T->L = L;
@@ -200,7 +200,7 @@ static bool pushcalculatedterrahome(lua_State * L) {
 #endif
 
 static void setterradefaultpaths(lua_State * L) {
-    lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+    lua_getglobal(L, "terra");
 
 #ifndef TERRA_HOME
     if (pushcalculatedterrahome(L)) {
@@ -240,7 +240,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
     lua_insert(L, -2);
     lua_setfield(L, -2, "__terrastate"); //reference to our T object, so that we can load it from the lua state on other API calls
     
-    lua_setfield(T->L,LUA_GLOBALSINDEX,"terra"); //create global terra object
+    lua_setglobal(T->L,"terra"); //create global terra object
     terra_kindsinit(T); //initialize lua mapping from T_Kind to/from string
     setterradefaultpaths(T->L); //find the location of support files such as the clang resource directory
     
@@ -249,7 +249,7 @@ int terra_initwithoptions(lua_State * L, terra_Options * options) {
         return err;
     }
     
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(T->L,"terra");
     err = terra_registerinternalizedfiles(L,-1);
     if(err) {
         return err;

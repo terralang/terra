@@ -9,7 +9,7 @@
 
 -include Makefile.inc
 
-# customizable install prefixes
+# Set PREFIX to customize the location of the Terra installation.
 PREFIX ?= /usr/local
 INSTALL_BINARY_DIR ?= $(PREFIX)/bin
 INSTALL_LIBRARY_DIR ?= $(PREFIX)/lib
@@ -17,17 +17,20 @@ INSTALL_SHARE_DIR ?= $(PREFIX)/share
 INSTALL_INCLUDE_DIR ?= $(PREFIX)/include
 INSTALL_LUA_LIBRARY_DIR ?= $(PREFIX)/lib
 
-# Debian packages name llvm-config with a version number - list them here in preference order
+# Set LLVM_CONFIG to control which LLVM installation is used to build Terra.
 LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
-#luajit will be downloaded automatically (it's much smaller than llvm)
-#to override this, set LUAJIT_PREFIX to the home of an already installed luajit
-LUAJIT_PREFIX ?= build
 
-# same with clang
-CLANG ?= $(shell which clang-3.5 clang | head -1)
+# By default, use Clang from the same LLVM install directory.
+CLANG ?= $(shell $(LLVM_CONFIG) --bindir)/clang
 
-CXX ?= $(CLANG)++
-CC ?= $(CLANG)
+# Set CUDA_HOME to control which CUDA installation is used to build Terra.
+# If this path does not exist, Terra will not be built with CUDA enabled.
+CUDA_HOME ?= /usr/local/cuda
+ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
+
+# LuaJIT will be downloaded automatically (it's much smaller than LLVM).
+# To override this, set LUA_PREFIX to the home of an already installed LuaJIT.
+LUA_PREFIX ?= $(abspath build)
 
 PIC_FLAG ?= -fPIC
 FLAGS=$(CFLAGS)
@@ -47,7 +50,7 @@ WGET = wget -O
 LUA_TARGET = linux
 endif
 
-ifneq ($(TERRA_RPATH),)
+ifneq ($(strip $(TERRA_RPATH)),)
 TERRA_RPATH_FLAGS = -Wl,-rpath $(TERRA_RPATH)
 endif
 
@@ -55,11 +58,11 @@ endif
 # Sanity Checks
 ###########################
 
-ifeq (,$(wildcard $(CLANG)))
+ifeq (,$(wildcard $(shell which $(CLANG) | head -1)))
     $(error clang could not be found; please set the CLANG and LLVM_CONFIG variables)
 endif
 
-ifeq (,$(wildcard $(LLVM_CONFIG)))
+ifeq (,$(wildcard $(shell which $(LLVM_CONFIG) | head -1)))
     $(error llvm-config could not be found; please set the CLANG and LLVM_CONFIG variables)
 endif
 
@@ -67,52 +70,44 @@ endif
 # Rules for building Lua/JIT
 ############################
 
-ifneq ($(TERRA_USE_PUC_LUA),)
+TERRA_USE_PUC_LUA ?=
+ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
 
-LUA_VERSION=lua-5.1.5
-LUA_TAR = $(LUA_VERSION).tar.gz
+# PUC Lua
+LUA_VERSION ?= 5.1.5
+LUA_BASENAME = lua-$(strip $(LUA_VERSION))
+LUA_TAR = $(LUA_BASENAME).tar.gz
 LUA_URL = https://www.lua.org/ftp/$(LUA_TAR)
-LUA_DIR = build/$(LUA_VERSION)
-LUA_LIB = $(LUA_DIR)/lib/liblua.a
-LUA_INCLUDE = $(LUA_DIR)/include
-LUA = $(LUA_DIR)/bin/lua
+LUA_DIR = build/$(LUA_BASENAME)
+LUA_LIB = $(LUA_PREFIX)/lib/liblua.a
+LUA_INCLUDE = $(LUA_PREFIX)/include
+LUA = $(LUA_PREFIX)/bin/lua
 FLAGS += -DTERRA_USE_PUC_LUA
-
-build/$(LUA_TAR):
-	$(WGET) build/$(LUA_TAR) $(LUA_URL)
-
-$(LUA_LIB): build/$(LUA_TAR)
-	(cd build; tar -xf $(LUA_TAR))
-	(cd $(LUA_DIR); make $(LUA_TARGET) && make local)
+FLAGS += -DLUA_COMPAT_ALL # For Lua 5.2+
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
-	$(LUA_DIR)/bin/luac -o $@ $<
+	$(LUA_PREFIX)/bin/luac -o $@ $<
 
 
 else
 
+# LuaJIT
+
 # Add the following lines to Makefile.inc to switch to LuaJIT-2.1 beta releases
-#LUAJIT_VERSION_BASE =2.1
-#LUAJIT_VERSION_EXTRA =.0-beta2
+#LUA_VERSION_BASE =2.1
+#LUA_VERSION_EXTRA =.0-beta3
 
-LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .4
-LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
-LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
-LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
-LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
-LUA_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
-LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
-LUA ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
-
-build/$(LUAJIT_TAR):
-	$(WGET) build/$(LUAJIT_TAR) $(LUAJIT_URL)
-
-build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
-	(cd build; tar -xf $(LUAJIT_TAR))
-	(cd $(LUAJIT_DIR); make install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) $(PIC_FLAG)")
+LUA_VERSION_BASE ?= 2.0
+LUA_VERSION_EXTRA ?= .5
+LUA_VERSION ?= LuaJIT-$(LUA_VERSION_BASE)$(LUA_VERSION_EXTRA)
+LUA_EXECUTABLE ?= luajit-$(LUA_VERSION_BASE)$(LUA_VERSION_EXTRA)
+LUA_URL ?= http://luajit.org/download/$(LUA_VERSION).tar.gz
+LUA_TAR ?= $(LUA_VERSION).tar.gz
+LUA_DIR ?= build/$(LUA_VERSION)
+LUA_LIB ?= $(LUA_PREFIX)/lib/libluajit-5.1.a
+LUA_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUA_PREFIX)/include/luajit-$(LUA_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUA_PREFIX)/include/lua.h || echo $(LUA_PREFIX)/include/luajit-$(LUA_VERSION_BASE)/lua.h))
+LUA ?= $(LUA_PREFIX)/bin/$(LUA_EXECUTABLE)
 
 #rule for packaging lua code into bytecode, put into a header file via geninternalizedfiles.lua
 build/%.bc:	src/%.lua $(PACKAGE_DEPS) $(LUA_LIB)
@@ -133,17 +128,21 @@ else
 CLANG_PREFIX ?= $(LLVM_PREFIX)
 endif
 
-CUDA_HOME ?= /usr/local/cuda
-ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
-
 .SUFFIXES:
 .SECONDARY:
-
 
 AR = ar
 LD = ld
 FLAGS += -Wall -g $(PIC_FLAG)
 LFLAGS = -g
+
+# The -E flag is BSD-specific. It is supported (though undocumented)
+# on certain newer versions of GNU Sed, but not all. Check for -E
+# support and otherwise fall back to the GNU Sed flag -r.
+SED_E = sed -E
+ifeq ($(shell sed -E '' </dev/null >/dev/null 2>&1 && echo yes || echo no),no)
+SED_E = sed -r
+endif
 
 FLAGS += -I build -I $(LUA_INCLUDE) -I release/include/terra  -I $(shell $(LLVM_CONFIG) --includedir) -I $(CLANG_PREFIX)/include
 
@@ -151,7 +150,8 @@ FLAGS += -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_
 CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
-LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | sed -E 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
@@ -170,9 +170,9 @@ CPPFLAGS += -std=c++11
 endif
 
 
-ifeq ($(UNAME), Linux)
+ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared $(PIC_FLAG)
-WHOLE_ARCHIVE = -Wl,-export-dynamic -Wl,--whole-archive $(1) -Wl,--no-whole-archive
+WHOLE_ARCHIVE += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
 DYNFLAGS = -undefined dynamic_lookup -dynamiclib -single_module $(PIC_FLAG) -install_name "@rpath/terra.so"
 WHOLE_ARCHIVE =  -Wl,-force_load,$(1)
@@ -190,18 +190,40 @@ ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
 LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
-LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --libs)
+# by default, Terra includes only the pieces of the LLVM libraries it needs,
+#  but this can be a problem if third-party-libraries that also need LLVM are
+#  used - allow the user to request that some/all of the LLVM components be
+#  included and re-exported in their entirety
+ifeq "$(LLVMVERGT4)" "1"
+    LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
+else
+	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+endif
+ifneq ($(REEXPORT_LLVM_COMPONENTS),)
+  REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
+  ifneq ($(findstring $(UNAME), Linux FreeBSD),)
+    LLVM_LIBRARY_FLAGS += -Wl,--whole-archive $(REEXPORT_LIBS) -Wl,--no-whole-archive
+  else
+    LLVM_LIBRARY_FLAGS += $(REEXPORT_LIBS:%=-Wl,-force_load,%)
+  endif
+  LLVM_LIBRARY_FLAGS += $(filter-out $(REEXPORT_LIBS),$(LLVM_LIBS))
+else
+  LLVM_LIBRARY_FLAGS += $(LLVM_LIBS)
+endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm 2>&1 >/dev/null; echo $$?), 0)
-    SUPPORT_LIBRARY_FLAGS += -lcurses
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm >/dev/null 2>&1; echo $$?), 0)
+    SUPPORT_LIBRARY_FLAGS += -lcurses 
 endif
-ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 2>&1 >/dev/null; echo $$?), 0)
+ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 >/dev/null 2>&1; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lz
 endif
 
 ifeq ($(UNAME), Linux)
 SUPPORT_LIBRARY_FLAGS += -ldl -pthread
+endif
+ifeq ($(UNAME), FreeBSD)
+SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
 PACKAGE_DEPS += $(LUA_LIB)
@@ -240,6 +262,9 @@ LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 
+.PHONY:	all clean download purge test release install
+all:	$(EXECUTABLE) $(DYNLIBRARY)
+
 test:	all
 	(cd tests; ./run)
 
@@ -251,12 +276,27 @@ build/%.o:	src/%.cpp $(PACKAGE_DEPS)
 build/%.o:	src/%.c $(PACKAGE_DEPS)
 	$(CC) $(FLAGS) $< -c -o $@
 
-release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB)
-	cp $(LUA_INCLUDE)/$*.h $@
+download: build/$(LUA_TAR)
 
+build/$(LUA_TAR):
+	$(WGET) build/$(LUA_TAR) $(LUA_URL)
+
+ifeq ($(strip $(TERRA_USE_PUC_LUA)),1)
+$(LUA_LIB): build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); make $(LUA_TARGET) install INSTALL_TOP="$(LUA_PREFIX)" CC="$(CC) $(PIC_FLAG)")
+else
+$(LUA_LIB): build/$(LUA_TAR)
+	(cd build; tar -xf $(LUA_TAR))
+	(cd $(LUA_DIR); make install PREFIX="$(LUA_PREFIX)" CC="$(CC)" STATIC_CC="$(CC) $(PIC_FLAG)")
+endif
+
+release/include/terra/%.h:  $(LUA_INCLUDE)/%.h $(LUA_LIB) 
+	cp $(LUA_INCLUDE)/$*.h $@
+    
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/llvm_objects/llvm_list $(LUA) src/unpacklibraries.lua build/llvm_objects
 	# include all luajit objects, since the entire lua interface is used in terra
@@ -264,7 +304,7 @@ build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 
 build/lua_objects/lj_obj.o:    $(LUA_LIB)
 	mkdir -p build/lua_objects
-	cd build/lua_objects; ar x $(realpath $(LUA_LIB))
+	cd build/lua_objects; ar x $(realpath $(LUA_LIB)); rm -f lctype.o
 
 $(LIBRARY):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS)) build/llvm_objects/llvm_list build/lua_objects/lj_obj.o
 	mkdir -p release/lib
@@ -339,7 +379,7 @@ build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
-#if we are cleaning, then don't include dependencies (which would require the header files are built)
-ifeq ($(findstring $(MAKECMDGOALS),purge clean release),)
+#if we are cleaning, then don't include dependencies (which would require the header files are built)	
+ifeq ($(findstring $(MAKECMDGOALS),download purge clean release),)
 -include $(DEPENDENCIES)
 endif

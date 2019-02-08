@@ -21,12 +21,14 @@
 
 using namespace llvm;
 
+#ifdef DEBUG_INFO_WORKING
 static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
     return point < inst || (!isNextInst && point == inst);
 }
+#endif
 static bool stacktrace_findline(terra_CompilerState * C, const TerraFunctionInfo * fi, uintptr_t ip, bool isNextInstr, StringRef * file, size_t * lineno) {
-    (void)pointisbeforeinstruction; 
     #if defined(DEBUG_INFO_WORKING) && LLVM_VERSION < 38
+    (void)pointisbeforeinstruction;
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> & LineStarts = fi->efd.LineStarts;
     size_t i;
     for(i = 0; i + 1 < LineStarts.size() && pointisbeforeinstruction(LineStarts[i + 1].Address, ip, isNextInstr); i++) {
@@ -153,8 +155,13 @@ static void printstacktrace(void * uap, void * data) {
         rip = (void*) uc->uc_mcontext.gregs[REG_RIP];
         rbp = (void*) uc->uc_mcontext.gregs[REG_RBP];
 #else
+#ifdef __FreeBSD__
+        rip = (void*)uc->uc_mcontext.mc_rip;
+        rbp = (void*)uc->uc_mcontext.mc_rbp;
+#else
         rip = (void*)uc->uc_mcontext->__ss.__rip;
         rbp = (void*)uc->uc_mcontext->__ss.__rbp;
+#endif
 #endif
     }
 #else
@@ -274,7 +281,7 @@ int terra_debuginit(struct terra_State * T) {
     void * lookupsymbol = createclosure((uint8_t*)T->C->MB.base()+CLOSURE_MAX_SIZE,(void*)terra_lookupsymbol,3,(void**)&T->C,1);
     void * lookupline =   createclosure((uint8_t*)T->C->MB.base()+2*CLOSURE_MAX_SIZE,(void*)terra_lookupline,4,(void**)&T->C,1);
     
-    lua_getfield(T->L,LUA_GLOBALSINDEX,"terra");
+    lua_getglobal(T->L,"terra");
     lua_getfield(T->L, -1, "initdebugfns");
     lua_pushlightuserdata(T->L, (void*)stacktracefn);
     lua_pushlightuserdata(T->L, (void*)terra_backtrace);
