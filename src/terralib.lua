@@ -53,7 +53,7 @@ ident =     escapedident(luaexpression expression) # removed during specializati
 field = recfield(ident key, tree value)
       | listfield(tree value)
 
-structbody = structentry(string key, luaexpression type)
+structbody = structentry(string key, luaexpression? annotation, luaexpression type)
            | structlist(structbody* entries)
 
 param = unevaluatedparam(ident name, luaexpression? type)
@@ -957,7 +957,12 @@ local function layoutstruct(st,tree,env)
         if not terra.types.istype(resolvedtype) then
             erroratlocation(v,"lua expression is not a terra type but ", terra.type(resolvedtype))
         end
-        return { field = v.key, type = resolvedtype }
+        local field = { field = v.key, type = resolvedtype }
+        local annotation = v.metatype and evalluaexpression(env,v.annotation)
+        if annotation then
+            invokeuserfunction(v, "invoking annotation function", false, annotation, field)
+        end
+        return field
     end
 
     local function getrecords(records)

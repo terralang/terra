@@ -612,6 +612,10 @@ static void constructor (LexState *ls) {
 static void structfield (LexState *ls) {
   Position p = getposition(ls);
   push_string(ls,str_checkname(ls));
+  if(testnext(ls,'(')) {
+      RETURNS_1(luaexpr(ls));
+      check_match(ls,')','(',p.linenumber);
+  } else push_nil(ls);
   checknext(ls, ':');
   RETURNS_1(terratype(ls));
   new_object(ls,"structentry",2,&p);
