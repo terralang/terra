@@ -1,9 +1,11 @@
 --See Copyright Notice in ../LICENSE.txt
 --usage: genclangpaths.lua output /path/to/clang  [addition args to parse]
 local outputfile,clang = unpack(arg)
-local handle = assert(io.popen(clang .. " -v src/dummy.c -o build/dummy.o 2>&1", "r"))
+print('"'..clang .. "\" -v src/dummy.c -o build/dummy.o 2>&1")
+local handle = assert(io.popen('"'..clang .. "\" -v src/dummy.c -o build/dummy.o 2>&1", "r"))
 local theline
 for s in handle:lines() do
+    print(s)
     if s:find("-cc1") then
         theline = s
         break
