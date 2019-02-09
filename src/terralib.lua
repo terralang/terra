@@ -987,7 +987,7 @@ local function layoutstruct(st,tree,env)
             erroratlocation(v,"lua expression is not a terra type but ", terra.type(resolvedtype))
         end
         local field = { field = v.key, type = resolvedtype }
-        local annotation = v.metatype and evalluaexpression(env,v.annotation)
+        local annotation = v.annotation and evalluaexpression(env,v.annotation)
         if annotation then
             invokeuserfunction(v, "invoking annotation function", false, annotation, field)
         end
