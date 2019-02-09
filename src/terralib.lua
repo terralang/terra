@@ -3365,6 +3365,29 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 end
 -- END TYPECHECKER
 
+-- ANNOTATIONS
+
+function terra.annotationcompose(...)
+    local anots = {...}
+    -- The current annotation API requires any annotation or metatype to imperatively modify the object
+    -- It doesn't require a return, so this is a side effect based composition rather than a pure one.
+    return function(obj)
+        for _, anot in ipairs(anots) do
+            anot(obj)
+        end
+    end
+end
+
+function terra.annotate(tbl)
+    return function(obj)
+        for k, v in pairs(tbl) do
+            obj[k] = v
+        end
+    end
+end
+
+-- END ANNOTATIONS
+
 -- INCLUDEC
 local function includetableindex(tbl,name)    --this is called when a table returned from terra.includec doesn't contain an entry
     local v = getmetatable(tbl).errors[name]  --it is used to report why a function or type couldn't be included
