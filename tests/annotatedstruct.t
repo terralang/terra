@@ -106,10 +106,16 @@ end
 terra bar()
     var x: foo
     x:init()
+    x.c = 1
 
     x.a = x.a + x.b * x.c
-
+    --terralib.printf("%d, %d\n", x.a_count, x.c_count)
+    --terralib.printf("%d, %d, %d\n", x.a, x.b, x.c)
     return pow(2, x.a)*pow(3, x.a_count)*pow(5, x.b)*pow(7, x.c)*pow(11, x.c_count)
 end
 
-assert(bar() == 163350)
+
+local test = require("test")
+--print(bar)
+--print(bar())
+test.eq(bar(), 50311800)
