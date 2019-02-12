@@ -32,7 +32,7 @@ local RegisterTemplate = [[
 static const char * headerfile_names[] = { %s, 0};
 static const uint8_t * headerfile_contents[] = { %s };
 static int headerfile_sizes[] = { %s };
-static int luafile_indices[] = { %s };
+static int luafile_indices[] = { %s, -1};
 ]]
 
 local function FormatContent(id,data)
@@ -74,7 +74,6 @@ for i,entry in ipairs(listoffiles) do
     EmitRegister(entry.name,contents)
 end
 
-table.insert(preloadlua, "-1")
 table.insert(output,RegisterTemplate:format(table.concat(names,","),table.concat(files,","),table.concat(sizes,","),table.concat(preloadlua,",")))
 
 local outputfile = io.open(outputfilename,"w")
