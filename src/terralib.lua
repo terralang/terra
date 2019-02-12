@@ -47,13 +47,8 @@ ident =     escapedident(luaexpression expression) # removed during specializati
 
 field = recfield(ident key, tree value)
       | listfield(tree value)
-<<<<<<< HEAD
-      
-structbody = structentry(string key, luaexpression type)
-=======
 
 structbody = structentry(string key, luaexpression? annotation, luaexpression type)
->>>>>>> d003f4c... first pass implementation of annotation syntax
            | structlist(structbody* entries)
 
 param = unevaluatedparam(ident name, luaexpression? type)
@@ -1490,10 +1485,10 @@ do
             end
             local function checkentry(e,results)
                 if type(e) == "table" then
-                    local f = e.field or e[1] 
+                    local f = e.field or e[1]
                     local t = e.type or e[2]
                     if terra.types.istype(t) and (type(f) == "string" or terra.islabel(f)) then
-                        e.type, e.field = t, f
+                        e.type, e.field = t, f -- modify in place to ensure that metadata is retained.
                         results:insert(e)
                         return
                     elseif terra.israwlist(e) then
