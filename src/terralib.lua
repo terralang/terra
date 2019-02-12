@@ -1493,7 +1493,8 @@ do
                     local f = e.field or e[1] 
                     local t = e.type or e[2]
                     if terra.types.istype(t) and (type(f) == "string" or terra.islabel(f)) then
-                        results:insert { type = t, field = f}
+                        e.type, e.field = t, f
+                        results:insert(e)
                         return
                     elseif terra.israwlist(e) then
                         local union = terra.newlist()
