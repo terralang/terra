@@ -5,16 +5,19 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+#include <vector>
 #include "terra.h"
 
 struct terra_CompilerState;
 struct terra_CUDAState;
+struct TerraTarget;
 
 typedef struct terra_State {
     struct lua_State * L;
     struct terra_CompilerState * C;
     struct terra_CUDAState * cuda;
     terra_Options options;
+    std::vector<TerraTarget *> targets;
 //for parser
     int nCcalls;
     char tstring_table; //&tstring_table is used as the key into the lua registry that maps strings in Lua to TString objects for the parser

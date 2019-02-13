@@ -22,6 +22,7 @@ struct TerraTarget {
     llvm::LLVMContext * ctx;
     llvm::Module * external; //module that holds IR for externally included things (from includec or linkllvm)
     size_t next_unused_id; //for creating names for dummy functions
+    size_t id;
 };
 
 struct TerraFunctionState { //compilation state
