@@ -402,4 +402,5 @@ function List:all(fn,...)
     return true
 end
 
+package.loaded["terralist"] = List
 return List
