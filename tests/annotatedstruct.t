@@ -49,31 +49,40 @@ end
 
 local function SpecialEntries(class)
     class.virtualEntries = terralib.newlist()
+    --terralib.printraw(class)
     for _, v in ipairs(class.entries) do
         if v.virtualEntries then
             class.virtualEntries:insertall(v.virtualEntries)
         end
     end
 
+    --print(#class.virtualEntries, "virtualEntries")
     if #class.virtualEntries > 0 then
         local namemap = {}
         for _, v in ipairs(class.virtualEntries) do
             namemap[v.field] = v
         end
-        class.metamethods.__entrymissing = function(obj, name)
+        class.metamethods.__entrymissing = macro(function(name, obj) -- at some point between master and develop this order switched.
+            --print("__entrymissing called:", obj, name)
             if namemap[name] then
                 return namemap[name].accessor(obj)
             end
             return --error("No such field "..tostring(name).." in struct")
+        end)
+    end
+
+    local function buildInitializers(self, entries)
+        local result = terralib.newlist()
+        for _, e in ipairs(entries) do
+            if e.init then
+                result:insert(quote self.[e.field] = e.init end)
+            end
         end
+        return result
     end
 
     terra class:init()
-        [class.entries:filter(
-            function(field) return field.init end
-        ):map(
-            function(field) return quote self.[field.field] = field.init end end
-        )]
+        [buildInitializers(`self, class.entries)]
     end
 end
 
@@ -82,6 +91,7 @@ local struct foo (SpecialEntries) {
     b (initialized(2)): int
     c (accessCounted): int
 }
+
 
 terra pow(b: int, p: int): int
     if b == 1 then
