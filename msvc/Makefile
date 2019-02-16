@@ -115,7 +115,7 @@ $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	copy lauxlib.h $(TERRA_DIR)\release\include\terra
 	copy luaconf.h $(TERRA_DIR)\release\include\terra
 
-$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralist.lua $(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h
+$(BUILD)\terralist.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralist.lua $(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
     $(LUAJIT) -bg $(SRC)\terralist.lua $(BUILD)\terralist.h
 	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
@@ -133,7 +133,7 @@ $(BUILD)\internalizedfiles.h:	$(LUAJIT)  $(SRC)\geninternalizedfiles.lua
 
 EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /EXPORT:terra_loadfile /EXPORT:terra_loadbuffer /EXPORT:terra_loadstring /EXPORT:terra_llvmshutdown
 
-$(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\internalizedfiles.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
+$(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\internalizedfiles.h $(BUILD)\terralist.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
 	cd $(BUILD)
 	$(CPP) $(CPPFLAGS) /c $(TERRALIB_SRC)
 
