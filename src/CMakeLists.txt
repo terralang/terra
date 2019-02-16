@@ -39,6 +39,7 @@ add_custom_command(
 )
 
 list(APPEND TERRA_LIB_LUA_SRC
+  terralist.lua
   terralib.lua
   strict.lua
   cudalib.lua
