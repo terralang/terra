@@ -109,9 +109,9 @@ static void push_string_before(LexState * ls, const char * str) {
 //this should eventually be optimized to use 'add_field' with tokens already on the stack
 static void add_field(LexState * ls, int table, const char * field) {
     if(ls->in_terra) {
-        table = (table < 0) ? (table + lua_gettop(ls->L) + 1) : table; //otherwise table is wrong once we modify the stack 
+        table = (table < 0) ? (table + lua_gettop(ls->L) + 1) : table; //otherwise table is wrong once we modify the stack
         //printf("consume field\n");
-        
+
         lua_setfield(ls->L,table,field);
     }
 }
@@ -150,16 +150,16 @@ static int new_object(LexState * ls, const char * k, int N, Position * p) {
     if(ls->in_terra) {
         luaX_globalgetfield(ls, TA_TYPE_TABLE, k);
         lua_insert(ls->L,-(N+1));
-        
+
         lua_pushcfunction(ls->L,newobjecterror);
         lua_insert(ls->L,-(N+2));
-        
+
         lua_pcall(ls->L,N,1,-(N+2));
-        
+
         table_setposition(ls, lua_gettop(ls->L) , *p);
-        
+
         lua_remove(ls->L,-2);
-        
+
         return lua_gettop(ls->L);
     } else return 0;
 }
@@ -417,7 +417,7 @@ static void dump_stack(lua_State * L, int elem) {
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L,-4);
     lua_call(L, 1, 0);
-        
+
     lua_pop(L,3);
 }
 
@@ -487,7 +487,7 @@ static void push_integer(LexState * ls, int64_t i) {
         *(int64_t*)data = i;
     }
 }
-static void push_nil(LexState * ls) { 
+static void push_nil(LexState * ls) {
     if(ls->in_terra)
         lua_pushnil(ls->L);
 }
@@ -495,8 +495,8 @@ static void push_nil(LexState * ls) {
 static void yindex (LexState *ls) {
   /* index -> '[' expr ']' */
   luaX_next(ls);  /* skip the '[' */
-  
-  RETURNS_1(expr(ls));  
+
+  RETURNS_1(expr(ls));
   //luaK_exp2val(ls->fs, v);
   checknext(ls, ']');
 }
@@ -537,7 +537,7 @@ static void recfield (LexState *ls, struct ConsControl *cc) {
       } else {
         /* oops! this wasn't a recfield, but a listfield with an escape */
         new_object(ls,"listfield",1,&pos);
-        return;        
+        return;
       }
     }
   }
@@ -600,10 +600,16 @@ static void constructor (LexState *ls) {
 static void structfield (LexState *ls) {
   Position p = getposition(ls);
   push_string(ls,str_checkname(ls));
+  int annotations = new_list(ls);
   if(testnext(ls,'(')) {
-      RETURNS_1(luaexpr(ls));
+      if (!testnext(ls, ')')) {
+          do {
+              RETURNS_1(luaexpr(ls));
+              add_entry(ls, annotations);
+          } while(testnext(ls, ','));
+      }
       check_match(ls,')','(',p.linenumber);
-  } else push_nil(ls);
+  }
   checknext(ls, ':');
   RETURNS_1(terratype(ls));
   new_object(ls,"structentry",3,&p);
@@ -629,10 +635,16 @@ static void structconstructor(LexState * ls) {
     // already parsed 'struct' or 'struct' name.
     //starting at '{' or '('
     Position p = getposition(ls);
+    int metatypes = new_list(ls);
     if(testnext(ls,'(')) {
-        RETURNS_1(luaexpr(ls));
+        if (!testnext(ls, ')')) {
+            do {
+                RETURNS_1(luaexpr(ls));
+                add_entry(ls, metatypes);
+            } while(testnext(ls, ','));
+        }
         check_match(ls,')','(',p.linenumber);
-    } else push_nil(ls);
+    }
     structbody(ls);
     new_object(ls,"structdef",2,&p);
 }
@@ -829,7 +841,7 @@ static void funcargs (LexState *ls, int line) {
 
 static void prefixexp (LexState *ls) {
   /* prefixexp -> NAME | '(' expr ')' */
-  
+
   switch (ls->t.token) {
     case '(': {
       int line = ls->linenumber;
@@ -929,9 +941,9 @@ static void print_captured_locals(LexState * ls, TerraCnt * tc) {
 
 static void doquote(LexState * ls, int isexp) {
     int isfullquote = ls->t.token == '`' || ls->t.token == TK_QUOTE;
-    
+
     check_no_terra(ls, isexp ? "`" : "quote");
-    
+
     TerraCnt tc;
     enterterra(ls, &tc);
     Token begin = ls->t;
@@ -957,7 +969,7 @@ static void doquote(LexState * ls, int isexp) {
         leaveblock(fs);
         new_object(ls,"letin",3,&p);
     }
-    
+
     luaX_patchbegin(ls,&begin);
     int id = store_value(ls);
     OutputBuffer_printf(&ls->output_buffer,"(terra.definequote(_G.terra._trees[%d],",id);
@@ -1011,7 +1023,7 @@ static void simpleexp (LexState *ls) {
         sprintf(buf,"%" PRIu64,ls->t.seminfo.i);
         push_string(ls,buf);
         add_field(ls,-2,"stringvalue");
-        
+
       } else {
         push_double(ls,ls->t.seminfo.r);
         push_literal(ls, buf);
@@ -1065,7 +1077,7 @@ static void simpleexp (LexState *ls) {
     }
     case TK_TERRA: {
         check_no_terra(ls,"nested terra functions");
-        
+
         TerraCnt tc;
         enterterra(ls, &tc);
         Token begin = ls->t;
@@ -1087,22 +1099,22 @@ static void simpleexp (LexState *ls) {
     case TK_STRUCT: {
         check_no_terra(ls,"struct declarations");
         Token begin = ls->t;
-        
+
         luaX_next(ls); //skip over struct, struct constructor expects it to be parsed already
-        
-        
+
+
         TerraCnt tc;
         enterterra(ls, &tc);
-        
+
         structconstructor(ls);
         int id = store_value(ls);
-    
+
         luaX_patchbegin(ls,&begin);
         OutputBuffer_printf(&ls->output_buffer,"terra.anonstruct(_G.terra._trees[%d],",id);
         print_captured_locals(ls,&tc);
         OutputBuffer_printf(&ls->output_buffer,")");
         luaX_patchend(ls,&begin);
-        
+
         leaveterra(ls);
         return;
     } break;
@@ -1118,7 +1130,7 @@ static void simpleexp (LexState *ls) {
 ** grep "ORDER OPR" if you change these enums  (ORDER OP)
 */
 typedef enum BinOpr {
-  OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD, 
+  OPR_ADD, OPR_SUB, OPR_MUL, OPR_DIV, OPR_MOD,
   OPR_POW, OPR_CONCAT,
   OPR_LSHIFT, OPR_RSHIFT,
   OPR_EQ, OPR_LT, OPR_LE,
@@ -1208,7 +1220,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
   uop = getunopr(ls->t.token);
   check_lua_operator(ls,ls->t.token);
   Token begintoken = ls->t;
-  
+
   if (uop != OPR_NOUNOPR) {
     Position p = getposition(ls);
     push_string(ls,luaX_token2rawstr(ls,ls->t.token));
@@ -1217,7 +1229,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
     int exps = new_list(ls);
     RETURNS_1(subexpr(ls, UNARY_PRIORITY));
     add_entry(ls,exps);
-    
+
     if(uop == OPR_ADDR) { //desugar &a to terra.types.pointer(a)
         const char * expstring = luaX_saveoutput(ls, &beginexp);
         luaX_patchbegin(ls, &begintoken);
@@ -1228,7 +1240,7 @@ static BinOpr subexpr (LexState *ls, int limit) {
   }
   else RETURNS_1(simpleexp(ls));
   /* expand while operators have priorities higher than `limit' */
-  
+
   op = getbinopr(ls->t.token);
   const char * lhs_string = NULL;
   if(op == OPR_FUNC_PTR) {
@@ -1243,13 +1255,13 @@ static BinOpr subexpr (LexState *ls, int limit) {
     int exps = new_list_before(ls);
     add_entry(ls,exps); //add prefix to operator list
     Position pos = getposition(ls);
-    
+
     const char * token = luaX_token2rawstr(ls,ls->t.token);
     luaX_next(ls);
     Token beginrhs = ls->t;
     /* read sub-expression with higher priority */
     RETURNS_1(nextop = subexpr(ls, priority[op].right));
-    
+
     if(lhs_string) { //desugar a -> b to terra.types.functype(a,b)
         const char * rhs_string = luaX_saveoutput(ls,&beginrhs);
         luaX_patchbegin(ls, &begintoken);
@@ -1258,11 +1270,11 @@ static BinOpr subexpr (LexState *ls, int limit) {
         lhs_string = NULL;
     }
     add_entry(ls,exps);
-    
+
     push_string_before(ls,token);
-    
+
     new_object(ls,"operator",2,&pos);
-    
+
     op = nextop;
   }
   leavelevel(ls);
@@ -1300,19 +1312,19 @@ const char * expr_reader(lua_State * L, void * data, size_t * size) {
 
 static void embeddedcode(LexState * ls, int isterra, int isexp) {
     assert(ls->in_terra);
-    
+
     //terra types are lua expressions.
     //to resolve them we stop processing terra code and start processing lua code
     //we capture the string of lua code and then evaluate it later to get the actual type
     Position pos = getposition(ls);
     Token begintoken = ls->t;
     int in_terra = ls->in_terra;
-    
+
     ls->in_terra = 0;
     FuncState * fs = ls->fs;
     BlockCnt bl;
     enterblock(ls->fs, &bl, 0);
-    
+
     if(isterra) {
         doquote(ls,isexp);
     } else if(isexp)
@@ -1321,7 +1333,7 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
         statlist(ls);
     leaveblock(fs);
     ls->in_terra = in_terra;
-    
+
     ExprReaderData data;
     data.step = (isexp || isterra) ? 0 : 1; //is the string we captured an expression? it is if we captured a quote (terra.definequote(...)) or a lua expression
     luaX_getoutput(ls, &begintoken, &data.data, &data.N);
@@ -1336,10 +1348,10 @@ static void embeddedcode(LexState * ls, int isterra, int isexp) {
             error++;
         char * aftererror;
         int lineoffset = strtol(error+1,&aftererror,10);
-        
+
         luaX_reporterror(ls, luaS_cstringf(ls->LP,"%s:%d: %s\n",getstr(ls->source),begintoken.seminfo.linebegin + lineoffset - 1,aftererror+1));
     }
-    
+
     push_boolean(ls, isexp);
     new_object(ls,"luaexpression",2,&pos);
 }
@@ -1368,11 +1380,11 @@ static void block (LexState *ls) {
   FuncState *fs = ls->fs;
   BlockCnt bl;
   Position p = getposition(ls);
-  
+
   enterblock(fs, &bl, 0);
   RETURNS_1(statlist(ls));
   leaveblock(fs);
-  
+
   new_object(ls,"block",1,&p);
 }
 
@@ -1452,11 +1464,11 @@ static void repeatstat (LexState *ls, int line) {
   luaX_next(ls);  /* skip REPEAT */
   int stmts = new_list(ls);
   Position pos = getposition(ls);
-  
+
   RETURNS_1(statlist(ls));
   check_match(ls, TK_UNTIL, TK_REPEAT, line);
   RETURNS_1(cond(ls));
-  
+
   leaveblock(fs);  /* finish scope */
   leaveblock(fs);  /* finish loop */
   new_object(ls,"repeatstat",2,&pos);
@@ -1503,7 +1515,7 @@ static void forlist (LexState *ls, TString *indexname, Position * p) {
   BlockCnt bl;
   if(indexname)
     definevariable(ls, indexname);
-  
+
   while (testnext(ls, ',')) {
     TString * name;
     if(vardecl(ls, 0, &name))
@@ -1527,9 +1539,9 @@ static void forstat (LexState *ls, Position * p) {
   BlockCnt bl;
   enterblock(fs, &bl, 1);  /* scope for loop and control variables */
   luaX_next(ls);  /* skip `for' */
-  
+
   vardecl(ls, 0, &varname);
-  
+
   switch (ls->t.token) {
     case '=': RETURNS_0(fornum(ls, varname, p)); break;
     case ',': case TK_IN: RETURNS_0(forlist(ls, varname,p)); break;
@@ -1561,7 +1573,7 @@ static void ifstat (LexState *ls, int line) {
     add_entry(ls,branches);
   }
   if (testnext(ls, TK_ELSE)) {
-    RETURNS_1(block(ls));  /* `else' part */ 
+    RETURNS_1(block(ls));  /* `else' part */
   } else push_nil(ls);
   check_match(ls, TK_END, TK_IF, line);
   new_object(ls,"ifstat",2,&p);
@@ -1572,7 +1584,7 @@ static void localfunc (LexState *ls) {
   definevariable(ls, name);
   body(ls, 0, ls->linenumber);  /* function created in next register */
   /* debug information will only see the variable after this point! */
-  
+
 }
 
 void print_name_list(LexState * ls, std::vector<Name> * definednames) {
@@ -1631,7 +1643,7 @@ static void dump(LexState * ls) {
     lua_getfield(L,-1,"printraw");
     lua_pushvalue(L, tree);
     lua_call(L, 1, 0);
-    
+
     lua_pop(L,2);
 }
 
@@ -1646,10 +1658,10 @@ static void funcstat (LexState *ls, int line) {
 static int terraname (LexState *ls, int islocal, int token, Name * name) {
   /* funcname -> NAME {fieldsel} [`:' NAME] */
   int ismethod = 0;
-  
+
   TString * vname = str_checkname(ls);
   Name_add(name,vname);
-  
+
   if(!islocal) {
     while(testnext(ls,'.')) {
       TString * vname = str_checkname(ls);
@@ -1661,7 +1673,7 @@ static int terraname (LexState *ls, int islocal, int token, Name * name) {
       Name_add(name,vname);
     }
   }
-  
+
   return ismethod;
 }
 
@@ -1681,15 +1693,15 @@ bool startsTerraStat(LexState * ls) {
 
 static void terrastats(LexState * ls, bool emittedlocal) {
     Token begin = ls->t;
-    
+
     std::vector<Name> names;
     std::vector<TDefn> defs;
     size_t nlocals = 0;
-    
+
     TerraCnt tc;
-    
+
     enterterra(ls, &tc);
-    
+
     bool islocal = emittedlocal;
     for(int idx = 0; true; idx++) {
         int token = ls->t.token;
@@ -1721,11 +1733,11 @@ static void terrastats(LexState * ls, bool emittedlocal) {
             break;
         islocal = testnext(ls, TK_LOCAL);
     }
-    
+
     leaveterra(ls);
-    
+
     luaX_patchbegin(ls,&begin);
-    
+
     //print the new local names (if any) and define them in the local context
     if(!emittedlocal && nlocals > 0)
         OutputBuffer_printf(&ls->output_buffer, "local ");
@@ -1742,7 +1754,7 @@ static void terrastats(LexState * ls, bool emittedlocal) {
     }
     if(nlocals > 0)
         OutputBuffer_putc(&ls->output_buffer, ';');
-        
+
     bool hasreturns = false;
     for(size_t i = 0; i < names.size(); i++) {
         if(names[i].data.size() == 1) {
@@ -1802,7 +1814,7 @@ static void statement (LexState *ls) {
   int line = p.linenumber;  /* may be needed for error messages */
 
   enterlevel(ls);
-  
+
   switch (ls->t.token) {
     case TK_IF: {  /* stat -> ifstat */
       RETURNS_1(ifstat(ls, line));
@@ -1858,10 +1870,10 @@ static void statement (LexState *ls) {
         check_terra(ls, "variables");
         luaX_next(ls); /* skip var */
         RETURNS_1(localstat(ls));
-        break;  
+        break;
     }
     case TK_DBCOLON: {  /* stat -> label */
-      
+
       luaX_next(ls);  /* skip double colon */
       RETURNS_1(labelstat(ls));
       break;
@@ -1887,7 +1899,7 @@ static void statement (LexState *ls) {
       lua_pushstring(ls->L, getstr(ls->t.seminfo.ts));
       ls->languageextensionsenabled++;
       ls->fs->bl->languageextensionsdefined++;
-      
+
       if(lua_pcall(ls->L, 3, 0, 0)) {
         const char * str = luaL_checkstring(ls->L,-1);
         luaX_reporterror(ls, str);
@@ -2022,33 +2034,33 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
     Token begin = ls->t;
     std::vector<Name> names;
     TerraCnt tc;
-    
+
     enterterra(ls, &tc); //specifically to capture local variables, not for other reasons
-    
+
     int top = lua_gettop(L);
     //setup call to the language
-    
+
     luaX_globalgetfield(ls, TA_TERRA_OBJECT,"runlanguage");
     luaX_globalgetfield(ls, TA_ENTRY_POINT_TABLE, getstr(ls->t.seminfo.ts));
-    
+
     lua_pushlightuserdata(ls->L,(void*)ls);
     lua_getfield(ls->L,-2,"keywordtable");
     lua_pushcclosure(ls->L,le_cur,2);
-    
+
     lua_pushlightuserdata(ls->L,(void*)ls);
     lua_getfield(ls->L,-3,"keywordtable");
     lua_pushcclosure(ls->L,le_lookahead,2);
-    
+
     lua_pushlightuserdata(ls->L,(void*)ls);
     lua_pushcclosure(ls->L,le_next,1);
 
     lua_pushlightuserdata(ls->L,(void*)ls);
     lua_pushcclosure(ls->L,le_embeddedcode,1);
-    
+
     lua_pushstring(ls->L,getstr(ls->source));
     lua_pushboolean(ls->L,isstatement);
     lua_pushboolean(ls->L,islocal);
-    
+
     if(lua_pcall(ls->L,8,3,0)) {
         const char * str = luaL_checkstring(ls->L,-1);
         if(ls->rethrow)
@@ -2056,7 +2068,7 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
         else /* add line information */
             luaX_syntaxerror(ls, str);
     }
-    
+
     /* register all references from user code */
     lua_pushnil(L);
     while (lua_next(L,-2) != 0) {
@@ -2065,11 +2077,11 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
         refvariable(ls, luaS_newlstr(ls->LP,str,len));
         lua_pop(L,1);
     }
-    
+
     lua_pop(L,1); /* remove _references list */
-    
+
     //put names returned into names object
-    
+
     lua_pushnil(L);
     while (lua_next(L, -2) != 0) {
         names.push_back(Name());
@@ -2083,16 +2095,16 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
         lua_pop(L, 1);
     }
     lua_pop(L,1); /* no longer need names, top of stack is now the user's function */
-    
+
     //object on top of stack
     int n = store_value(ls);
-    
+
     leaveterra(ls);
-    
+
     //patch the thing into place
-    
+
     luaX_patchbegin(ls,&begin);
-    
+
     if(isstatement && names.size() > 0) {
         print_name_list(ls, &names);
         if(islocal) {
@@ -2102,12 +2114,12 @@ static void languageextension(LexState * ls, int isstatement, int islocal) {
         }
         OutputBuffer_printf(&ls->output_buffer," = ");
     }
-    
+
     OutputBuffer_printf(&ls->output_buffer,"_G.terra._trees[%d](",n);
     print_captured_locals(ls,&tc);
     OutputBuffer_printf(&ls->output_buffer,")");
     luaX_patchend(ls,&begin);
-    
+
     assert(lua_gettop(L) == top);
 }
 
@@ -2128,7 +2140,7 @@ static void cleanup(LexState * ls) {
         ls->patchinfo.N = 0;
         ls->patchinfo.space = 0;
     }
-    
+
     //clear the registry index entry for our state
     lua_pushlightuserdata(ls->L,&ls->lextable);
     lua_pushnil(ls->L);
@@ -2138,18 +2150,18 @@ static void cleanup(LexState * ls) {
 int luaY_parser (terra_State *T, ZIO *z,
                     const char *name, int firstchar) {
   (void)dump; //suppress warning for unused debugging functions
-  (void)dump_stack; 
+  (void)dump_stack;
   (void)printtreesandnames;
   LexState lexstate;
   FuncState funcstate;
   //memset(&lexstate,0,sizeof(LexState));
   //memset(&funcstate,0,sizeof(FuncState));
-  
+
   Mbuffer * buff = (Mbuffer*) malloc(sizeof(Mbuffer));
   memset(buff,0,sizeof(Mbuffer));
-    
+
   luaX_pushtstringtable(T);
-  
+
   BlockCnt bl;
   bl.previous = NULL;
   lua_State * L = T->L;
@@ -2165,36 +2177,36 @@ int luaY_parser (terra_State *T, ZIO *z,
       abort();
   }
   lexstate.stacktop = lua_gettop(L);
-  
-  
+
+
   lua_pushlightuserdata(L,&lexstate.lextable);
   lua_newtable(L); /* lua state for lexer */
   lua_rawset(L,LUA_REGISTRYINDEX);
-  
+
   lua_getfield(L,LUA_GLOBALSINDEX,"terra"); //TA_TERRA_OBJECT
   int to = lua_gettop(L);
-  
+
   lua_pushvalue(L,-1);
   luaX_globalset(&lexstate, TA_TERRA_OBJECT);
-  
+
   lua_getfield(L,to,"_trees");
   luaX_globalset(&lexstate, TA_FUNCTION_TABLE);
-  
-  
+
+
   lua_getfield(L,to,"irtypes");
   luaX_globalset(&lexstate, TA_TYPE_TABLE);
-  
+
   lua_getfield(L,to,"newlist");
   luaX_globalset(&lexstate, TA_NEWLIST);
-  
+
   lua_newtable(L);
   luaX_globalset(&lexstate, TA_ENTRY_POINT_TABLE);
   lua_newtable(L);
   luaX_globalset(&lexstate, TA_LANGUAGES_TABLE);
   lexstate.languageextensionsenabled = 0;
-  
+
   lua_pop(L,1); /* remove gs and terra object from stack */
-  
+
   assert(lua_gettop(L) == lexstate.stacktop);
   try {
     luaX_setinput(T, &lexstate, z, tname, firstchar);
@@ -2216,7 +2228,7 @@ int luaY_parser (terra_State *T, ZIO *z,
   }
 
   assert(lua_gettop(L) == lexstate.stacktop);
-  
+
   /* all scopes should be correctly finished */
   OutputBuffer_putc(&lexstate.output_buffer,'\0');
   VERBOSE_ONLY(T) {
@@ -2226,10 +2238,9 @@ int luaY_parser (terra_State *T, ZIO *z,
   while(lexstate.output_buffer.data[lexstate.output_buffer.N-1] == '\0' && lexstate.output_buffer.N > 0) {
     lexstate.output_buffer.N--;
   }
-  
+
   int err = luaL_loadbuffer(L, lexstate.output_buffer.data, lexstate.output_buffer.N, name);
   cleanup(&lexstate);
-  
+
   return err;
 }
-

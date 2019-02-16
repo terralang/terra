@@ -87,7 +87,7 @@ local function SpecialEntries(class)
 end
 
 local struct foo (SpecialEntries) {
-    a (terralib.annotationcompose(initialized(1), accessCounted)): int
+    a (initialized(1), accessCounted): int
     b (initialized(2)): int
     c (accessCounted): int
 }
