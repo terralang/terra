@@ -5,12 +5,12 @@ set -x
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-7.0 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-7 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7.0 main"
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-7.0-dev clang-7.0 libclang-7.0-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/share/llvm-7.0
+    sudo apt-get install -y llvm-7-dev clang-7 libclang-7-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/share/llvm-7
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
@@ -44,11 +44,11 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-7.0 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-7 ]]; then
     curl -O http://releases.llvm.org/7.0.0/clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
-    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7.0
-    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7.0
+    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7
+    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-7.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     curl -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
