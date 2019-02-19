@@ -109,9 +109,10 @@ The current recommended version of LLVM is **6.0**. The following versions are a
   * LLVM 3.6
   * LLVM 3.7
   * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
-  * LLVM 3.9 (used frequently)
-  * LLVM 5.0 (tested in Travis)
+  * LLVM 3.9
+  * LLVM 5.0 (tested in Travis, supports CUDA)
   * LLVM 6.0 (used frequently, tested in Travis, supports CUDA)
+  * LLVM 7.0 (tested in Travis, supports CUDA, requires CMake)
 
 ### Windows ###
 

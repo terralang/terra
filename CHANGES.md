@@ -10,7 +10,7 @@ The following changes are included in this release:
 
 ## Added features
 
-  * Support for LLVM 3.8, 3.9, 5 and 6
+  * Support for LLVM 3.8, 3.9, 5, 6 and 7
   * Support for CUDA 9.2
   * Support for Visual Studio 2015 on Windows
   * Upgrade to LuaJIT 2.0.5 by default, experimental support for 2.1 betas
