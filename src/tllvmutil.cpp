@@ -411,14 +411,7 @@ int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char ** args, std::str
 #if LLVM_VERSION >= 34
     bool executionFailed = false;
     #if LLVM_VERSION >= 70
-    std::vector<llvm::StringRef> argsRef;
-    int args_ptr = 0;
-    while (args[args_ptr] != NULL) {
-        argsRef.push_back(llvm::StringRef(args[args_ptr]));
-        args_ptr++;
-    }
-
-    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program, argsRef, llvm::Optional<ArrayRef<llvm::StringRef>>(), {}, 0, err, &executionFailed);
+    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), llvm::None, {}, 0, err, &executionFailed);
     #else
     llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program,args,nullptr,{},0,err,&executionFailed);
     #endif
