@@ -10,7 +10,7 @@ if [[ $(uname) = Linux ]]; then
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-7-dev clang-7 libclang-7-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/share/llvm-7
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-7:/usr/share/llvm-7
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
