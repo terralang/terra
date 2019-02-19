@@ -297,6 +297,9 @@ static int terra_free(lua_State * L) {
     assert(T);
     terra_cudafree(T);
     terra_compilerfree(T->C);
+    for (TerraTarget * TT : T->targets) {
+        freetarget(TT);
+    }
     return 0;
 }
 
