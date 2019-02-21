@@ -136,7 +136,9 @@ else
 fi
 
 if [[ $EXTERNAL_TEST = regent ]]; then
-    sudo apt-get install -qq libblas-dev liblapack-dev
+    if [[ $(uname) = Linux ]]; then
+        sudo apt-get install -qq libblas-dev liblapack-dev
+    fi
     git clone -b master https://github.com/StanfordLegion/legion.git
     cd legion
     export REALM_SYNTHETIC_CORE_MAP=
