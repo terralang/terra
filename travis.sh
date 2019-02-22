@@ -155,8 +155,8 @@ elif [[ $EXTERNAL_TEST = rigel ]]; then
     make terra
 elif [[ $EXTERNAL_TEST = opt ]]; then
     git clone https://github.com/niessner/Opt.git opt
-    TERRAHOME=$TERRA_INSTALL_PREFIX
-    TERRA=$TERRA_INSTALL_PREFIX/bin/terra
+    export TERRAHOME=$TERRA_INSTALL_PREFIX
+    export TERRA=$TERRA_INSTALL_PREFIX/bin/terra
     pushd opt/API
     make
     popd
