@@ -45,10 +45,11 @@ const int HEADERPROVIDER_POS = 4;
 class IncludeCVisitor : public RecursiveASTVisitor<IncludeCVisitor>
 {
 public:
-    IncludeCVisitor(Obj * res, const std::string & livenessfunction_)
+    IncludeCVisitor(Obj * res, TerraTarget * TT_, const std::string & livenessfunction_)
         : resulttable(res),
           L(res->getState()),
           ref_table(res->getRefTable()),
+          TT(TT_),
           livenessfunction(livenessfunction_) {
         
         //create tables for errors messages, general namespace, and the tagged namespace
@@ -144,6 +145,8 @@ public:
                     size_t argpos = RegisterRecordType(Context->getRecordType(rd));
                     lua_pushstring(L,livenessfunction.c_str());
                     tt->setfield("llvm_definingfunction");
+                    lua_pushinteger(L,TT->id);
+                    tt->setfield("llvm_definingtarget");
                     lua_pushinteger(L,argpos);
                     tt->setfield("llvm_argumentposition");
                 }
@@ -556,13 +559,14 @@ public:
     Obj general; //name -> function or type in the general namespace
     Obj tagged; //name -> type in the tagged namespace (e.g. struct Foo)
     std::string error_message;
+    TerraTarget * TT;
     std::string livenessfunction;
 };
 
 class CodeGenProxy : public ASTConsumer {
 public:
-  CodeGenProxy(CodeGenerator * CG_, Obj * result, const std::string & livenessfunction)
-  : CG(CG_), Visitor(result,livenessfunction) {}
+  CodeGenProxy(CodeGenerator * CG_, Obj * result, TerraTarget * TT, const std::string & livenessfunction)
+  : CG(CG_), Visitor(result,TT,livenessfunction) {}
   CodeGenerator * CG;
   IncludeCVisitor Visitor;
   virtual ~CodeGenProxy() {}
@@ -904,9 +908,9 @@ static int dofile(terra_State * T, TerraTarget * TT, const char * code, const ch
 
     #if LLVM_VERSION < 37
     //CodeGenProxy codegenproxy(codegen,result,livenessfunction);
-    TheCompInst.setASTConsumer(new CodeGenProxy(codegen,result,livenessfunction));
+    TheCompInst.setASTConsumer(new CodeGenProxy(codegen,result,TT,livenessfunction));
     #else
-    TheCompInst.setASTConsumer(std::unique_ptr<ASTConsumer>(new CodeGenProxy(codegen,result,livenessfunction)));
+    TheCompInst.setASTConsumer(std::unique_ptr<ASTConsumer>(new CodeGenProxy(codegen,result,TT,livenessfunction)));
     #endif
     
     TheCompInst.createSema(clang::TU_Complete,NULL);

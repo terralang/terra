@@ -308,8 +308,10 @@ bool HostHasAVX() {
 int terra_inittarget(lua_State * L) {
     terra_State * T = terra_getstate(L, 1);
     TerraTarget * TT = new TerraTarget();
-    TT->nreferences = 1;
-    
+    TT->id = T->targets.size();
+    T->targets.push_back(TT);
+    TT->nreferences = 2;
+
     if(!lua_isnil(L, 1)) {
         TT->Triple = lua_tostring(L,1);
     } else {
@@ -488,7 +490,7 @@ int terra_compilerinit(struct terra_State * T) {
     }
     return 0;
 }
-static void freetarget(TerraTarget * TT) {
+void freetarget(TerraTarget * TT) {
     assert(TT->nreferences > 0);
     if(0 == --TT->nreferences) {
         delete TT->external;
@@ -649,17 +651,18 @@ class Types {
         return true;
     }
     StructType * CreateStruct(Obj * typ) {
-#if LLVM_VERSION < 50
         //check to see if it was initialized externally first
         if(typ->boolean("llvm_definingfunction")) {
             const char * name = typ->string("llvm_definingfunction");
-            Function * df = CU->TT->external->getFunction(name); assert(df);
+            size_t target_id = typ->number("llvm_definingtarget");
+            TerraTarget * TT = T->targets[target_id];
+            assert(TT);
+            Function * df = TT->external->getFunction(name); assert(df);
             int argpos = typ->number("llvm_argumentposition");
             StructType * st = cast<StructType>(df->getFunctionType()->getParamType(argpos)->getPointerElementType());
             assert(st);
             return st;
         }
-#endif
         std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
         name = (isreserved) ? std::string("$") + name : name;
@@ -2933,7 +2936,11 @@ static bool SaveObject(TerraCompilationUnit * CU, Module * M, const std::string 
             return true;
         }
     } else if(filekind == "bitcode") {
+#if LLVM_VERSION < 70
         llvm::WriteBitcodeToFile(M,dest);
+#else
+        llvm::WriteBitcodeToFile(*M, dest);
+#endif
     } else if(filekind == "llvmir") {
         dest << *M;
     }
