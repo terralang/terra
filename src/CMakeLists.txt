@@ -281,6 +281,12 @@ elseif(UNIX)
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
   )
+  if(EXISTS /usr/lib/libexecinfo.a) # on musl-libc systems like alpine, this is a separate Library
+    target_link_libraries(TerraExecutable
+    PRIVATE
+      -lexecinfo
+    )
+  endif()
 else()
   target_link_libraries(TerraExecutable
     PRIVATE
