@@ -3177,6 +3177,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     diag:reporterror(iterator,"expected a struct with a __for metamethod but found ",typ)
                     return s
                 end
+                local itersym = terra.newsymbol(typ, "__for_iter")
+                local itervar = newobject(s, T.allocvar, "__for_iter", itersym)
+                local iterref = newobject(s, T.var, "__for_iter", itersym)
+                iterref.type = typ
+                local iterAssign = asterraexpression(
+                    s,
+                    createassignment(s, List {itervar}, List {asterraexpression(s, iterator)}),
+                    "statement")                                  
                 local generator = typ.metamethods.__for
 
                 local function bodycallback(...)
@@ -3194,8 +3202,11 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return terra.newquote(stats)
                 end
 
-                local value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
-                return asterraexpression(s,value,"statement")
+                local value = asterraexpression(
+                    s,
+                    invokeuserfunction(s, "invoking __for", false, generator, iterref, bodycallback),
+                    "statement")
+                return asterraexpression(s,createstatementlist(s, List { iterAssign, value }),"statement")
             elseif s:is "ifstat" then
                 local br = s.branches:map(checkcondbranch)
                 local els = (s.orelse and checkblock(s.orelse))
@@ -4123,8 +4134,8 @@ end
 -- path to terra install, normally this is figured out based on the location of Terra shared library or binary
 local defaultterrahome = ffi.os == "Windows" and "C:\\Program Files\\terra" or "/usr/local"
 terra.terrahome = os.getenv("TERRA_HOME") or terra.terrahome or defaultterrahome
-local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;"..terra.terrahome.."\\include\\?.t;"
-                          or ";./?.t;"..terra.terrahome.."/share/terra/?.t;"
+local terradefaultpath =  ffi.os == "Windows" and ";.\\?.t;.\\?\\init.t;"..terra.terrahome.."\\include\\?.t;"
+                          or ";./?.t;./?/init.t;"..terra.terrahome.."/share/terra/?.t;"
 
 package.terrapath = (os.getenv("TERRA_PATH") or ";;"):gsub(";;",terradefaultpath)
 
