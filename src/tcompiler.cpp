@@ -711,10 +711,11 @@ class Types {
                 if(i + 1 == N || nextObj.number("allocation") != v.number("allocation")) {
                     std::vector<Type *> union_types;
                     assert(unionType);
-                    // Union types should be declared as a range of bytes with alignment padding at the end
-                    // and with bitcasts whenever the structure is accessed
-                    size_t diff = unionSz;
-                    union_types.push_back(ArrayType::get(Type::getInt8Ty(*CU->TT->ctx),diff));
+                    union_types.push_back(unionType);
+                    if(unionAlignSz < unionSz) { // the type with the largest alignment requirement is not the type with the largest size, pad this struct so that it will fit the largest type
+                        size_t diff = unionSz - unionAlignSz;
+                        union_types.push_back(ArrayType::get(Type::getInt8Ty(*CU->TT->ctx),diff));
+                    }
                     entry_types.push_back(StructType::get(*CU->TT->ctx,union_types));
                     unionAlign = 0;
                     unionType = NULL;
