@@ -1843,6 +1843,36 @@ if(baseT->isIntegerTy()) { \
         
         return addr;
     }
+
+  Value *emitStore(Obj* exp, Value* value, Value *addr) {
+    Obj type;
+    exp->obj("type", &type);
+    LoadInst *l = dyn_cast<LoadInst>(&*value);
+    if (getType(&type)->type->isAggregateType() && (type.kind("kind") == T_struct) && l) {
+      // create bitcasts of src and dest address
+      Ty->EnsureTypeIsComplete(&type);
+      Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
+
+      // addr_dst
+      Value *addr_dst = B->CreateBitCast(addr, t);
+
+      // addr_src
+      Value* addr_src = l->getOperand(0);
+      addr_src =  B->CreateBitCast(addr_src, t);
+
+      // size of bytes to copy
+      StructType *st = cast<StructType>(getType(&type)->type);
+      const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+      uint64_t size = sl->getSizeInBytes();
+      Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
+      // perform the copy
+      Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+      return m;
+    }
+    Value *st = B->CreateStore(value, addr);
+    return st;
+  }
+
     Value * emitIfElse(Obj * cond, Obj * a, Obj * b) {
         Value * condExp = emitExp(cond);
         Value * aExp = emitExp(a);
@@ -2646,7 +2676,7 @@ if(baseT->isIntegerTy()) { \
                         B->CreateStore(rhsexps[i],rhsvarV);
                         emitExp(&setter);
                     } else {
-                        B->CreateStore(rhsexps[i],emitExp(&lhs,false));
+                        emitStore(&lhs, rhsexps[i],emitExp(&lhs,false));
                     }
                 }
             } break;
