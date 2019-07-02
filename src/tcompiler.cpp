@@ -1866,7 +1866,11 @@ if(baseT->isIntegerTy()) { \
       uint64_t size = sl->getSizeInBytes();
       Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
       // perform the copy
+#if LLVM_VERSION <= 60
       Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+#else
+      Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
+#endif
       return m;
     }
     Value *st = B->CreateStore(value, addr);
