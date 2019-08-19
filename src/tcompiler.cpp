@@ -1049,6 +1049,26 @@ struct CCallingConv {
         }
     }
     
+    Value *emitStoreAgg(IRBuilder<> * B, Type *t1, Value* addr_src, Value *addr_dst) {
+        assert(t1->isAggregateType());
+        // create bitcasts of src and dest address
+        Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
+        addr_dst = B->CreateBitCast(addr_dst, t);
+        addr_src = B->CreateBitCast(addr_src, t);
+        // size of bytes to copy
+        StructType *st = cast<StructType>(t1);
+        const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+        uint64_t size = sl->getSizeInBytes();
+        Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
+        // perform the copy
+#if LLVM_VERSION <= 60
+        Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+#else
+        Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
+#endif
+        return m;
+    }
+
     Function * CreateFunction(Module * M, Obj * ftype, const Twine & name) {
         Classification * info = ClassifyFunction(ftype);
         Function * fn = Function::Create(info->fntype, Function::InternalLinkage, name, M);
@@ -1089,7 +1109,7 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     //TODO: check that LLVM optimizes this copy away
-                    B->CreateStore(B->CreateLoad(&*ai),v);
+                    emitStoreAgg(B, p->type->type, (B->CreateLoad(&*ai))->getOperand(0), v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1145,7 +1165,9 @@ struct CCallingConv {
                     break;
                 case C_AGGREGATE_MEM: {
                     Value * scratch = CreateAlloca(B,a->type->type);
-                    B->CreateStore(actual,scratch);
+                    LoadInst *l = dyn_cast<LoadInst>(actual);
+                    assert(l != NULL);
+                    emitStoreAgg(B, a->type->type, l->getOperand(0), scratch);
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
