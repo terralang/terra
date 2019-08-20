@@ -334,6 +334,12 @@ elseif(UNIX)
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
   )
+elseif(WIN32)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      TerraLibraryShared
+      ${LUAJIT_LIBRARIES}
+  )
 else()
   target_link_libraries(TerraExecutable
     PRIVATE
