@@ -52,6 +52,9 @@ build_script:
   - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DTERRA_SLIB_INCLUDE_LLVM=OFF -DTERRA_SLIB_INCLUDE_LUAJIT=OFF -DCMAKE_GENERATOR_PLATFORM=x64
   - cmake --build . --target INSTALL
   - cd ..
+  - cd install
+  - dir /s
+  - cd ..
   # # There is probably a better way to do this...
   # - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
   # - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
