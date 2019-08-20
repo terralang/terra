@@ -153,14 +153,4 @@ elif [[ $EXTERNAL_TEST = rigel ]]; then
     ln -s "$TERRA_INSTALL_PREFIX/../build/bin/luajit" bin/luajit
     export PATH="$PATH:$TERRA_INSTALL_PREFIX/bin:$PWD/bin"
     make terra
-elif [[ $EXTERNAL_TEST = opt ]]; then
-    git clone https://github.com/niessner/Opt.git opt
-    export TERRAHOME=$TERRA_INSTALL_PREFIX
-    export TERRA=$TERRA_INSTALL_PREFIX/bin/terra
-    pushd opt/API
-    make
-    popd
-    pushd opt/examples/image_warping
-    make CXX=$($LLVM_CONFIG --bindir)/clang++ LINK=$($LLVM_CONFIG --bindir)/clang++
-    popd
 fi

@@ -25,7 +25,6 @@ env:
   # test external projects
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 EXTERNAL_TEST=regent
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 EXTERNAL_TEST=rigel
-  - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 EXTERNAL_TEST=opt
 
 matrix:
   exclude:
