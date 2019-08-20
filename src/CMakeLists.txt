@@ -344,6 +344,13 @@ else()
   )
 endif()
 
+if(WIN32)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      shlwapi.lib dbghelp.lib version.lib
+  )
+endif()
+
 install(
   TARGETS TerraLibrary TerraLibraryShared TerraExecutable
   EXPORT TerraExports
