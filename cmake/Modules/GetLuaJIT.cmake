@@ -63,6 +63,11 @@ if(WIN32)
     VERBATIM
   )
 
+  install(
+    FILES ${LUAJIT_STATIC_LIBRARY} ${LUAJIT_SHARED_LIBRARY_PATHS}
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+  )
+
   file(MAKE_DIRECTORY "${LUAJIT_INSTALL_PREFIX}/lua/jit")
 
   execute_process(

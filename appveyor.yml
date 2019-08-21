@@ -55,6 +55,7 @@ build_script:
   - cd install
   - dir /s
   - cd ..
+  - dumpbin /dependents install\bin\terra.exe
   # # There is probably a better way to do this...
   # - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
   # - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
