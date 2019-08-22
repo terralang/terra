@@ -55,6 +55,9 @@ build_script:
   - cd install
   - dir /s
   - cd ..
+  - 7z a build.zip build
+  - 7z a install.zip install
+
   # - dumpbin /dependents install\bin\terra.exe
   # # There is probably a better way to do this...
   # - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
@@ -63,16 +66,16 @@ build_script:
   # - nmake
   # - cd ..
 
-  # Package for release
-  - set TERRA_SHARE_PATH=%TERRA_DIR%\release\share\terra
-  - ps: |
-        If($Env:LLVM_VERSION_SHORT -eq 60) {
-          git ls-tree HEAD -r tests --name-only | ForEach-Object { $dir = "$Env:TERRA_SHARE_PATH\$(Split-Path -Path $_)"; If(!(Test-Path "$dir")) { New-Item -Path "$dir" -ItemType Directory }; Copy-Item $_ "$dir" }
-          $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
-          Rename-Item release "$Env:RELEASE_NAME"
-          7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
-          Rename-Item "$Env:RELEASE_NAME" release
-        }
+  # # Package for release
+  # - set TERRA_SHARE_PATH=%TERRA_DIR%\release\share\terra
+  # - ps: |
+  #       If($Env:LLVM_VERSION_SHORT -eq 60) {
+  #         git ls-tree HEAD -r tests --name-only | ForEach-Object { $dir = "$Env:TERRA_SHARE_PATH\$(Split-Path -Path $_)"; If(!(Test-Path "$dir")) { New-Item -Path "$dir" -ItemType Directory }; Copy-Item $_ "$dir" }
+  #         $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
+  #         Rename-Item release "$Env:RELEASE_NAME"
+  #         7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
+  #         Rename-Item "$Env:RELEASE_NAME" release
+  #       }
 
 test_script:
   - cd tests
@@ -80,15 +83,19 @@ test_script:
   - cd ..
 
 artifacts:
-  - path: 'terra-*.zip'
-    name: terra_release
+  - path: build.zip
+  - path: install.zip
 
-deploy:
-  description: '$(APPVEYOR_REPO_TAG_NAME)'
-  provider: GitHub
-  auth_token:
-    secure: Ses4fC83u3cpP3EQTbkUWWiB9a4RKLErjLoR+3GzkDtPxYWKTRGAQkY80YyUgv+H
-  artifact: terra_release
-  force_update: true
-  on:
-    appveyor_repo_tag: true
+# artifacts:
+#   - path: 'terra-*.zip'
+#     name: terra_release
+
+# deploy:
+#   description: '$(APPVEYOR_REPO_TAG_NAME)'
+#   provider: GitHub
+#   auth_token:
+#     secure: Ses4fC83u3cpP3EQTbkUWWiB9a4RKLErjLoR+3GzkDtPxYWKTRGAQkY80YyUgv+H
+#   artifact: terra_release
+#   force_update: true
+#   on:
+#     appveyor_repo_tag: true
