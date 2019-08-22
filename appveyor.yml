@@ -77,10 +77,10 @@ build_script:
   #         Rename-Item "$Env:RELEASE_NAME" release
   #       }
 
-# test_script:
-#   - cd tests
-#   - ..\install\bin\terra run
-#   - cd ..
+test_script:
+  - cd tests
+  - ..\install\bin\terra run
+  - cd ..
 
 artifacts:
   - path: build.zip
