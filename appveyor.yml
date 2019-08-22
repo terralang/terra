@@ -78,9 +78,9 @@ build_script:
   #       }
 
 test_script:
-  - cd build
-  - ctest -C Debug
-  - cd ..
+  # - cd build
+  # - ctest -C Debug
+  # - cd ..
   - cd tests
   - ..\install\bin\terra run
   - cd ..
