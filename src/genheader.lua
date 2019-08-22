@@ -1,6 +1,6 @@
 local in_filename,out_filename = arg[1],arg[2]
 
-local in_file = io.open(in_filename)
+local in_file = io.open(in_filename, "rb")
 local contents = in_file:read("*all")
 in_file:close()
 
