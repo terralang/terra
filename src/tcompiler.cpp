@@ -1050,29 +1050,29 @@ struct CCallingConv {
     }
     
     Value *emitStoreAgg(IRBuilder<> * B, Type *t1, Value* src, Value *addr_dst) {
-         assert(t1->isAggregateType());
-         LoadInst *l = dyn_cast<LoadInst>(src);
-         if (t1->isStructTy() && l) {
-	   // create bitcasts of src and dest address
-	   Value* addr_src = l->getOperand(0);
-	   Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
-	   addr_dst = B->CreateBitCast(addr_dst, t);
-	   addr_src = B->CreateBitCast(addr_src, t);
-	   // size of bytes to copy
-	   StructType *st = cast<StructType>(t1);
-	   const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
-	   uint64_t size = sl->getSizeInBytes();
-	   Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
-	   // perform the copy
+        assert(t1->isAggregateType());
+        LoadInst *l = dyn_cast<LoadInst>(src);
+        if (t1->isStructTy() && l) {
+            // create bitcasts of src and dest address
+            Value* addr_src = l->getOperand(0);
+            Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
+            addr_dst = B->CreateBitCast(addr_dst, t);
+            addr_src = B->CreateBitCast(addr_src, t);
+            // size of bytes to copy
+            StructType *st = cast<StructType>(t1);
+            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+            uint64_t size = sl->getSizeInBytes();
+            Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
+            // perform the copy
 #if LLVM_VERSION <= 60
-	   Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+            Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
 #else
-	   Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
+            Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
 #endif
-	   return m;
-	 }
-	 else
-	   return (B->CreateStore(src, addr_dst));
+            return m;
+        }
+        else
+            return (B->CreateStore(src, addr_dst));
     }
 
     Function * CreateFunction(Module * M, Obj * ftype, const Twine & name) {
@@ -1872,7 +1872,7 @@ if(baseT->isIntegerTy()) { \
 
   Value *emitStore(Value* value, Value *addr, bool isVolatile, bool hasAlignment, int alignment) {
     LoadInst *l = dyn_cast<LoadInst>(&*value);
-    Type* t1=  value->getType();
+    Type *t1 = value->getType();
     if (t1->isStructTy() && l) {
       // create bitcasts of src and dest address
       Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
@@ -2252,18 +2252,16 @@ if(baseT->isIntegerTy()) { \
                 bool hasalignment = attr.hasfield("alignment");
                 int alignment=0;
                 if (hasalignment)
-		  alignment = attr.number("alignment");
+                    alignment = attr.number("alignment");
                 Value *s = emitStore(valueexp, addrexp, isvolatile, hasalignment, alignment);
                 StoreInst * store = dyn_cast<StoreInst>(s);
-                if (store) {
-		  if (attr.boolean("nontemporal")) {
+                if (store && attr.boolean("nontemporal")) {
                     #if LLVM_VERSION <= 35
                     auto list = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1);
                     #else
                     auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1));
                     #endif
                     store->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
-		  }
 		}
                 return Constant::getNullValue(typeOfValue(exp)->type);
             } break;
