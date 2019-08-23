@@ -91,8 +91,8 @@ end
 
 terra main()
   var config : Config
-  C.snprintf(&(config.BC.xBCLeftInflowProfile.u.File.FileDir[0]), 256, "%s", "String1111111111111111111111111111111111111111")
-  C.snprintf(&(config.BC.xBCLeftHeat.u.File.FileDir[0]),          256, "%s", "String2222222222222222222222222222222222222222")
+  C.memcpy(&(config.BC.xBCLeftInflowProfile.u.File.FileDir[0]), "String1111111111111111111111111111111111111111", 47)
+  C.memcpy(&(config.BC.xBCLeftHeat.u.File.FileDir[0]), "String2222222222222222222222222222222222222222", 47)
 
   var buffer = [&Config](C.malloc(terralib.sizeof(Config)))
   if buffer == nil then C.abort() end
