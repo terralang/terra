@@ -1049,6 +1049,32 @@ struct CCallingConv {
         }
     }
     
+    Value *emitStoreAgg(IRBuilder<> * B, Type *t1, Value* src, Value *addr_dst) {
+        assert(t1->isAggregateType());
+        LoadInst *l = dyn_cast<LoadInst>(src);
+        if (t1->isStructTy() && l) {
+            // create bitcasts of src and dest address
+            Value* addr_src = l->getOperand(0);
+            Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
+            addr_dst = B->CreateBitCast(addr_dst, t);
+            addr_src = B->CreateBitCast(addr_src, t);
+            // size of bytes to copy
+            StructType *st = cast<StructType>(t1);
+            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+            uint64_t size = sl->getSizeInBytes();
+            Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
+            // perform the copy
+#if LLVM_VERSION <= 60
+            Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+#else
+            Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
+#endif
+            return m;
+        }
+        else
+            return (B->CreateStore(src, addr_dst));
+    }
+
     Function * CreateFunction(Module * M, Obj * ftype, const Twine & name) {
         Classification * info = ClassifyFunction(ftype);
         Function * fn = Function::Create(info->fntype, Function::InternalLinkage, name, M);
@@ -1089,7 +1115,7 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     //TODO: check that LLVM optimizes this copy away
-                    B->CreateStore(B->CreateLoad(&*ai),v);
+                    emitStoreAgg(B, p->type->type, B->CreateLoad(&*ai), v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1112,11 +1138,11 @@ struct CCallingConv {
         } else if(C_PRIMITIVE == kind) {
             B->CreateRet(ConvertPrimitive(B,result,info->returntype.cctype,info->returntype.type->issigned));
         } else if(C_AGGREGATE_MEM == kind) {
-            B->CreateStore(result,&*function->arg_begin());
+            emitStoreAgg(B, info->returntype.type->type,result,&*function->arg_begin());
             B->CreateRetVoid();
         } else if(C_AGGREGATE_REG == kind) {
             Value * dest = CreateAlloca(B,info->returntype.type->type);
-            B->CreateStore(result,dest);
+            emitStoreAgg(B, info->returntype.type->type,result, dest);
             Value *  result = B->CreateBitCast(dest,Ptr(info->returntype.cctype));
             if(info->returntype.GetNumberOfTypesInParamList() == 1)
                 result = CreateConstGEP2_32(B,result, 0, 0);
@@ -1145,12 +1171,12 @@ struct CCallingConv {
                     break;
                 case C_AGGREGATE_MEM: {
                     Value * scratch = CreateAlloca(B,a->type->type);
-                    B->CreateStore(actual,scratch);
+                    emitStoreAgg(B, a->type->type, actual, scratch);
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
                     Value * scratch = CreateAlloca(B,a->type->type);
-                    B->CreateStore(actual,scratch);
+                    emitStoreAgg(B, a->type->type, actual, scratch);
                     Value * casted = B->CreateBitCast(scratch,Ptr(a->cctype));
                     int N = a->GetNumberOfTypesInParamList();
                     for(int j = 0; j < N; j++) {
@@ -1844,36 +1870,36 @@ if(baseT->isIntegerTy()) { \
         return addr;
     }
 
-  Value *emitStore(Obj* exp, Value* value, Value *addr) {
-    Obj type;
-    exp->obj("type", &type);
+  Value *emitStore(Value* value, Value *addr, bool isVolatile, bool hasAlignment, int alignment) {
     LoadInst *l = dyn_cast<LoadInst>(&*value);
-    if (getType(&type)->type->isAggregateType() && (type.kind("kind") == T_struct) && l) {
+    Type *t1 = value->getType();
+    if (t1->isStructTy() && l) {
       // create bitcasts of src and dest address
-      Ty->EnsureTypeIsComplete(&type);
       Type* t =  Type::getInt8PtrTy(*CU->TT->ctx);
-
       // addr_dst
       Value *addr_dst = B->CreateBitCast(addr, t);
-
       // addr_src
       Value* addr_src = l->getOperand(0);
       addr_src =  B->CreateBitCast(addr_src, t);
-
       // size of bytes to copy
-      StructType *st = cast<StructType>(getType(&type)->type);
+      StructType *st = cast<StructType>(t1);
       const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
       uint64_t size = sl->getSizeInBytes();
       Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx),size);
+      int al = hasAlignment ? alignment: sl->getAlignment();
       // perform the copy
 #if LLVM_VERSION <= 60
-      Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, sl->getAlignment());
+      Value* m = B->CreateMemCpy(addr_dst, addr_src,  size_v, al, isVolatile);
 #else
-      Value* m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src, sl->getAlignment(), size_v);
+      Value* m = B->CreateMemCpy(addr_dst, al, addr_src, sl->getAlignment(), size_v, isVolatile);
 #endif
       return m;
     }
-    Value *st = B->CreateStore(value, addr);
+    StoreInst *st = B->CreateStore(value, addr);
+    if (isVolatile)
+      st->setVolatile(true);
+    if (hasAlignment)
+      st->setAlignment(alignment);
     return st;
   }
 
@@ -2222,20 +2248,21 @@ if(baseT->isIntegerTy()) { \
                 exp->obj("value",&value);
                 Value * addrexp = emitExp(&addr);
                 Value * valueexp = emitExp(&value);
-                StoreInst * store = B->CreateStore(valueexp,addrexp);
-                if(attr.hasfield("alignment")) {
-                    int alignment = attr.number("alignment");
-                    store->setAlignment(alignment);
-                }
-                if(attr.boolean("nontemporal")) {
+                bool isvolatile = attr.boolean("isvolatile");
+                bool hasalignment = attr.hasfield("alignment");
+                int alignment=0;
+                if (hasalignment)
+                    alignment = attr.number("alignment");
+                Value *s = emitStore(valueexp, addrexp, isvolatile, hasalignment, alignment);
+                StoreInst * store = dyn_cast<StoreInst>(s);
+                if (store && attr.boolean("nontemporal")) {
                     #if LLVM_VERSION <= 35
                     auto list = ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1);
                     #else
                     auto list = ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(*CU->TT->ctx), 1));
                     #endif
                     store->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
-                };
-                store->setVolatile(attr.boolean("isvolatile"));
+		}
                 return Constant::getNullValue(typeOfValue(exp)->type);
             } break;
             case T_debuginfo: {
@@ -2680,7 +2707,7 @@ if(baseT->isIntegerTy()) { \
                         B->CreateStore(rhsexps[i],rhsvarV);
                         emitExp(&setter);
                     } else {
-                        emitStore(&lhs, rhsexps[i],emitExp(&lhs,false));
+                        emitStore(rhsexps[i],emitExp(&lhs,false), /* isVolatile */ false, /*hasAlignment*/ false, 0);
                     }
                 }
             } break;
