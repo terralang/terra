@@ -126,7 +126,7 @@ endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep setupterm >/dev/null 2>&1; echo $$?), 0)
-    SUPPORT_LIBRARY_FLAGS += -lcurses 
+    SUPPORT_LIBRARY_FLAGS += -lcurses
 endif
 ifeq ($(shell nm $(LLVM_PREFIX)/lib/libLLVMSupport.a | grep compress2 >/dev/null 2>&1; echo $$?), 0)
     SUPPORT_LIBRARY_FLAGS += -lz
@@ -143,7 +143,7 @@ PACKAGE_DEPS += $(LUAJIT_LIB)
 
 #makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
 ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 
+LFLAGS += -pagezero_size 10000 -image_base 100000000
 endif
 
 CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
@@ -158,7 +158,7 @@ FLAGS += -DTERRA_LLVM_HEADERS_HAVE_NDEBUG
 endif
 
 LIBOBJS = tkind.o tcompiler.o tllvmutil.o tcwrapper.o tinline.o terra.o lparser.o lstring.o lobject.o lzio.o llex.o lctype.o treadnumber.o tcuda.o tdebug.o tinternalizedfiles.o lj_strscan.o
-LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua
+LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua terralist.lua
 
 EXEOBJS = main.o linenoise.o
 
@@ -213,15 +213,15 @@ build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 	# MACOSX_DEPLOYMENT_TARGET is a workaround for https://github.com/LuaJIT/LuaJIT/issues/484
 	(cd $(LUAJIT_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC" MACOSX_DEPLOYMENT_TARGET=10.6)
 
-release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
+release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB)
 	cp $(LUAJIT_INCLUDE)/$*.h $@
-    
+
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
 	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
-	# include all luajit objects, since the entire lua interface is used in terra 
+	# include all luajit objects, since the entire lua interface is used in terra
 
 
 build/lua_objects/lj_obj.o:    $(LUAJIT_LIB)
@@ -245,7 +245,7 @@ $(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 	$(AR) -cq $@ $(addprefix build/, $(LIBOBJS))
 
 $(DYNLIBRARY):	$(LIBRARY)
-	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
+	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	mkdir -p release/bin release/lib
@@ -264,12 +264,12 @@ build/%.h:	build/%.bc $(PACKAGE_DEPS)
 
 #run clang on a C file to extract the header search paths for this architecture
 #genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
-#to configure the paths	
+#to configure the paths
 build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
 	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t
-	$(LUAJIT) src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
+	$(LUAJIT) src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$"
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
@@ -298,7 +298,7 @@ build/%.d:	src/%.cpp $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 build/%.d:	src/%.c $(PACKAGE_DEPS) $(GENERATEDHEADERS)
 	@$(CC) $(FLAGS) -w -MM -MT '$@ $(@:.d=.o)' $< -o $@
 
-#if we are cleaning, then don't include dependencies (which would require the header files are built)	
+#if we are cleaning, then don't include dependencies (which would require the header files are built)
 ifeq ($(findstring $(MAKECMDGOALS),download purge clean release),)
 -include $(DEPENDENCIES)
 endif

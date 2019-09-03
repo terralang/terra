@@ -1,40 +1,4 @@
-local List = {}
-List.__index = List
-for k,v in pairs(table) do
-    List[k] = v
-end
-setmetatable(List, { __call = function(self, lst)
-    if lst == nil then
-        lst = {}
-    end
-    return setmetatable(lst,self)
-end})
-function List:map(fn,...)
-    local l = List()
-    if type(fn) == "function" then
-        for i,v in ipairs(self) do
-            l[i] = fn(v,...)
-        end 
-    else
-        for i,v in ipairs(self) do
-            local sel = v[fn]
-            if type(sel) == "function" then
-                l[i] = sel(v,...)
-            else
-                l[i] = sel
-            end
-        end
-    end
-    return l
-end
-function List:insertall(elems)
-    for i,e in ipairs(elems) do
-        self:insert(e)
-    end
-end
-function List:isclassof(exp)
-    return getmetatable(exp) == self
-end
+local List = require 'terralist'
 
 local Context = {}
 function Context:__index(idx)
@@ -98,12 +62,12 @@ local function parseAll(text)
         next()
         return v
     end
-    
+
     local namespace = ""
     local function parseDefinedName()
         return namespace..expect("Ident")
     end
-    
+
     local function parseField()
         local  f = {}
         f.type = expect("Ident")
@@ -150,7 +114,7 @@ local function parseAll(text)
         until not nextif("|")
         if nextif("attributes") then
             local attributes = parseFields()
-            for i,ctor in ipairs(sum.constructors) do 
+            for i,ctor in ipairs(sum.constructors) do
                 ctor.fields = ctor.fields or List()
                 for i,a in ipairs(attributes) do
                     ctor.fields:insert(a)
@@ -159,7 +123,7 @@ local function parseAll(text)
         end
         return sum
     end
-    
+
     local function parseType()
         if cur == "(" then
             return parseProduct()
@@ -239,7 +203,7 @@ local function checkuniquelist(checkt,listcache)
     end
 end
 
-local defaultchecks = {} 
+local defaultchecks = {}
 for i in string.gmatch("nil number string boolean table thread userdata cdata function","(%S+)") do
     defaultchecks[i] = checkbuiltin(i)
 end
@@ -299,15 +263,15 @@ end
 function Context:DefineClass(name,unique,fields)
     local mt = {}
     local class = self.definitions[name]
-    
+
     if fields then
-        for _,f in ipairs(fields) do 
+        for _,f in ipairs(fields) do
             if f.namespace then -- resolve field type to fully qualified name
                 local fullname = f.namespace..f.type
                 if self.definitions[fullname] then
                     f.type = fullname
                 end
-                f.namespace = nil 
+                f.namespace = nil
             end
         end
         class.__fields = fields -- for reflection in user-defined behavior
@@ -319,7 +283,7 @@ function Context:DefineClass(name,unique,fields)
             tns:insert(f.list and f.type.."*" or f.type)
             checks:insert(self:GetCheckForField(unique,f))
         end
-        
+
         if unique then
             function mt:__call(...)
                 local node,key = self,"cache"
@@ -327,8 +291,8 @@ function Context:DefineClass(name,unique,fields)
                 for i = 1, #names do
                     local v = select(i,...)
                     local c,l = checks[i](v)
-                    if not c then 
-                       reporterr(i,name,tns[i],v,l) 
+                    if not c then
+                       reporterr(i,name,tns[i],v,l)
                     end
                     v = l or v -- use memoized list if it exists
                     obj[names[i]] = v
@@ -356,8 +320,8 @@ function Context:DefineClass(name,unique,fields)
                 for i = 1, #names do
                     local v = select(i,...)
                     local c,ii = checks[i](v)
-                    if not c then 
-                       reporterr(i,name,tns[i],v,ii) 
+                    if not c then
+                       reporterr(i,name,tns[i],v,ii)
                     end
                     obj[names[i]] = v
                 end
@@ -423,7 +387,7 @@ function Context:Define(text)
             local parent = self:DefineClass(d.name,false,nil)
             for i,c in ipairs(d.type.constructors) do
                 local child = self:DefineClass(c.name,c.unique,c.fields)
-                parent.members[child] = true --mark that any subclass is a member of its parent 
+                parent.members[child] = true --mark that any subclass is a member of its parent
                 child.kind = basename(c.name)
                 if not c.fields then --single value, just create it
                     self:_SetDefinition(c.name, setmetatable({},child))

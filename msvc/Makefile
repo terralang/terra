@@ -1,5 +1,5 @@
 
-# Edit these three paths to your 
+# Edit these three paths to your
 # (1) LLVM install (should have bin/ include/ and lib/ directories)
 # (2) LuaJIT 2.0.5 download directory (does not need to be built)
 # (3) directory where you downloaded the Terra source
@@ -115,8 +115,9 @@ $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	$(LUAJIT_DIR)\src\luajit.c
 	copy lauxlib.h $(TERRA_DIR)\release\include\terra
 	copy luaconf.h $(TERRA_DIR)\release\include\terra
 
-$(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h
+$(BUILD)\terralist.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h:	$(SRC)\terralist.lua $(SRC)\terralib.lua $(SRC)\strict.lua $(SRC)\cudalib.lua $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
+    $(LUAJIT) -bg $(SRC)\terralist.lua $(BUILD)\terralist.h
 	$(LUAJIT) -bg $(SRC)\terralib.lua $(BUILD)\terralib.h
 	$(LUAJIT) -bg $(SRC)\strict.lua $(BUILD)\strict.h
 	$(LUAJIT) -bg $(SRC)\cudalib.lua $(BUILD)\cudalib.h
@@ -128,11 +129,11 @@ $(BUILD)\clangpaths.h:	$(LUAJIT) $(SRC)\genclangpaths.lua
 
 $(BUILD)\internalizedfiles.h:	$(LUAJIT)  $(SRC)\geninternalizedfiles.lua
 	cd $(TERRA_DIR)
-	$(LUAJIT) src\geninternalizedfiles.lua  build\internalizedfiles.h $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" $(TERRA_DIR)\lib "%.t$$" 
+	$(LUAJIT) src\geninternalizedfiles.lua  build\internalizedfiles.h $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" $(TERRA_DIR)\lib "%.t$$"
 
 EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /EXPORT:terra_loadfile /EXPORT:terra_loadbuffer /EXPORT:terra_loadstring /EXPORT:terra_llvmshutdown
 
-$(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\internalizedfiles.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
+$(BUILD)\terra.obj:	$(BUILD)\clangpaths.h $(BUILD)\internalizedfiles.h $(BUILD)\terralist.h $(BUILD)\terralib.h $(BUILD)\strict.h $(BUILD)\cudalib.h $(TERRALIB_SRC)
 	cd $(BUILD)
 	$(CPP) $(CPPFLAGS) /c $(TERRALIB_SRC)
 
