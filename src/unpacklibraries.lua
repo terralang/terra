@@ -4,7 +4,7 @@ local function exe(cmd,...)
     cmd = string.format(cmd,...)
     local res = { os.execute(cmd) }
     if type(res[1]) == 'number' and res[1] ~= 0 or not res[1] then
-        print('Error during '..cmd..':', table.unpack(res))
+        print('Error during '..cmd..':', unpack(res))
         error("command failed: "..cmd)
     end
 end

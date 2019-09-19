@@ -55,7 +55,7 @@ local function EmitRegister(name,contents)
     table.insert(sizes,("\n%d"):format(#contents))
 end
 
-for i,entry in ipairs(listoffiles) do
+for _,entry in ipairs(listoffiles) do
     local file = io.open(entry.path)
     local contents = file:read("*all")
     file:close()
