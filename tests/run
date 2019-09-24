@@ -9,6 +9,8 @@ if ffi.os == "Windows" then
     -- These tests produce spurious output due to a bug in LLVM on windows
     table.insert(skip, "speed.t")
     table.insert(skip, "class2.t")
+    table.insert(skip, "benchmark_fannkuchredux.t")
+    table.insert(skip, "benchmark_nbody.t")
 else
     lscmd = "find . | cut -c 3-"
 end
