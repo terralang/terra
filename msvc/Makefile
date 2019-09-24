@@ -76,7 +76,7 @@ LIBS= clangAnalysis.lib clangARCMigrate.lib clangAST.lib clangASTMatchers.lib   
       LLVMVectorize.lib LLVMX86AsmParser.lib LLVMX86AsmPrinter.lib              \
       LLVMX86CodeGen.lib LLVMX86Desc.lib LLVMX86Disassembler.lib                \
       LLVMX86Info.lib LLVMX86Utils.lib                                          \
-      "$(LUAJIT_DIR)\src\lua51.lib Shlwapi.lib"
+      "$(LUAJIT_DIR)\src\lua51.lib" Shlwapi.lib
 !ENDIF
 
 !ENDIF
