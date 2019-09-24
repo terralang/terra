@@ -50,7 +50,7 @@ build_script:
   - if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
   - if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64)
   - cd msvc
-  - nmake
+  - build %LUAJIT_DIR% %LLVM_DIR%
   - cd ..
 
   # Package for release

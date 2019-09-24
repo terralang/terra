@@ -139,8 +139,11 @@ local terra run()
     main(2,array("what",N))
 end
 local args
-if terralib.os ~= "Windows" then
+if jit.os ~= "Windows" then
    args = {"-lm"}
+else
+   args = {"\\legacy_stdio_definitions.lib"}
 end
+
 terralib.saveobj("benchmark_nbody",{ main = main }, args )
 os.execute("./benchmark_nbody "..tostring(N))

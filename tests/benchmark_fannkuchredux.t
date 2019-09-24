@@ -146,5 +146,5 @@ end))
 
 local N = assert(tonumber((...) or 10))
 doit(N)
-terralib.saveobj("benchmark_fannkuchredux", { main = main } )
+terralib.saveobj("benchmark_fannkuchredux", { main = main }, (jit.os == "Windows" and {"\\legacy_stdio_definitions.lib"} or nil) )
 os.execute("./benchmark_fannkuchredux "..N)
