@@ -19,7 +19,7 @@ popd
 
 rem Older versions of visual studio are missing environment variables, so we polyfill them
 IF "%VCToolsVersion%"=="" SET VCToolsVersion=%VisualStudioVersion%
-IF "%VCTOOLSREDISTDIR%"=="" SET VCTOOLSREDISTDIR=%VCINSTALLDIR%redist
+IF "%VCTOOLSREDISTDIR%"=="" SET VCTOOLSREDISTDIR=%VCINSTALLDIR%redist\
 IF "%VSCMD_ARG_TGT_ARCH%"=="" SET VSCMD_ARG_TGT_ARCH=%Platform%
 
 SET VC_TOOLS_MAJOR=%VCToolsVersion:~0,2%
