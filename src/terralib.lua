@@ -4059,30 +4059,43 @@ end
 
 terra.systemincludes = List()
 if ffi.os == "Windows" then
-    -- this is the reason we can't have nice things
-    local function registrystring(key,value,default)
-    	local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
-		local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
-		return result or default
-	end
-	terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
-	local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
+    if os.getenv("VCToolsInstallDir") ~= nil then -- If terra is being run inside the developer console, use those environment variables instead
+        terra.vshome = os.getenv("VCToolsInstallDir")
+        terra.includepath = os.getenv("INCLUDE")
+      
+        function terra.getvclinker()
+          local linker = ([[%sbin\Host%s\%s\link.exe]]):format(terra.vshome, os.getenv("VSCMD_ARG_HOST_ARCH"), os.getenv("VSCMD_ARG_TGT_ARCH"))
+          local vclib = os.getenv("LIB")
+          local vcpath = terra.vcpath or os.getenv("Path")
+          vclib,vcpath = "LIB="..vclib,"Path="..vcpath
+          return linker,vclib,vcpath
+        end
+    else
+        -- this is the reason we can't have nice things
+        local function registrystring(key,value,default)
+            local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
+            local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
+            return result or default
+        end
+        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
+        local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
 
-	terra.systemincludes:insertall {
-		("%sVC/INCLUDE"):format(terra.vshome),
-		("%sVC/ATLMFC/INCLUDE"):format(terra.vshome),
-		("%sinclude/shared"):format(windowsdk),
-		("%sinclude/um"):format(windowsdk),
-		("%sinclude/winrt"):format(windowsdk),
-		("%s/include"):format(terra.cudahome)
-	}
+        terra.systemincludes:insertall {
+            ("%sVC/INCLUDE"):format(terra.vshome),
+            ("%sVC/ATLMFC/INCLUDE"):format(terra.vshome),
+            ("%sinclude/shared"):format(windowsdk),
+            ("%sinclude/um"):format(windowsdk),
+            ("%sinclude/winrt"):format(windowsdk),
+            ("%s/include"):format(terra.cudahome)
+        }
 
-    function terra.getvclinker() --get the linker, and guess the needed environment variables for Windows if they are not set ...
-        local linker = terra.vshome..[[VC\BIN\x86_amd64\link.exe]]
-        local vclib = terra.vclib or string.gsub([[%VC\LIB\amd64;%VC\ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vshome)
-        local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[VC\BIN;]]
-        vclib,vcpath = "LIB="..vclib,"Path="..vcpath
-        return linker,vclib,vcpath
+        function terra.getvclinker() --get the linker, and guess the needed environment variables for Windows if they are not set ...
+            local linker = terra.vshome..[[VC\BIN\x86_amd64\link.exe]]
+            local vclib = terra.vclib or string.gsub([[%VC\LIB\amd64;%VC\ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vshome)
+            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[VC\BIN;]]
+            vclib,vcpath = "LIB="..vclib,"Path="..vcpath
+            return linker,vclib,vcpath
+        end
     end
 end
 

@@ -16,6 +16,7 @@
 #define NOMINMAX
 #include <Windows.h>
 #include <imagehlp.h>
+#include <intrin.h>
 #endif
 
 
