@@ -4059,16 +4059,21 @@ end
 
 terra.systemincludes = List()
 if ffi.os == "Windows" then
-    if os.getenv("VCToolsInstallDir") ~= nil then -- If terra is being run inside the developer console, use those environment variables instead
+    if os.getenv("VCINSTALLDIR") ~= nil then -- If terra is being run inside the developer console, use those environment variables instead
         terra.vshome = os.getenv("VCToolsInstallDir")
+        if not terra.vshome then
+            terra.vshome = os.getenv("VCINSTALLDIR")
+            terra.vclinker = terra.vshome..[[BIN\x86_amd64\link.exe]]
+        else
+            terra.vclinker = ([[%sbin\Host%s\%s\link.exe]]):format(terra.vshome, os.getenv("VSCMD_ARG_HOST_ARCH"), os.getenv("VSCMD_ARG_TGT_ARCH"))
+        end
         terra.includepath = os.getenv("INCLUDE")
       
         function terra.getvclinker()
-          local linker = ([[%sbin\Host%s\%s\link.exe]]):format(terra.vshome, os.getenv("VSCMD_ARG_HOST_ARCH"), os.getenv("VSCMD_ARG_TGT_ARCH"))
           local vclib = os.getenv("LIB")
           local vcpath = terra.vcpath or os.getenv("Path")
           vclib,vcpath = "LIB="..vclib,"Path="..vcpath
-          return linker,vclib,vcpath
+          return terra.vclinker,vclib,vcpath
         end
     else
         -- this is the reason we can't have nice things
@@ -4077,7 +4082,7 @@ if ffi.os == "Windows" then
             local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
             return result or default
         end
-        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
+        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\]])
         local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
 
         terra.systemincludes:insertall {

@@ -17,6 +17,10 @@ pushd ..
 SET TERRA_DIR=%CD%
 popd
 
+rem Older versions of visual studio are missing environment variables, so we polyfill them
+IF "%VCToolsVersion%"=="" SET VCToolsVersion=%VisualStudioVersion%
+IF "%VCTOOLSREDISTDIR%"=="" SET VCTOOLSREDISTDIR=%VCINSTALLDIR%redist
+
 SET VC_TOOLS_MAJOR=%VCToolsVersion:~0,2%
 SET VC_TOOLS_MINOR=%VCToolsVersion:~3,1%
 
