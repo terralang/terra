@@ -1,5 +1,5 @@
 
-local c = terralib.includec("mytest.h")
+local c = terralib.includec("mytest.h",{"-I."})
 
 terra foo()
     var a : int = 3

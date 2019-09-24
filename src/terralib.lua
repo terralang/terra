@@ -4082,7 +4082,7 @@ if ffi.os == "Windows" then
             local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
             return result or default
         end
-        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\]])
+        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\]])
         local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
 
         terra.systemincludes:insertall {
