@@ -137,7 +137,7 @@ EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /E
 	move terra.lib ..\lib\terra.lib
 
 !IFNDEF MSVC_REDIST_PATH
-MSVC_REDIST_PATH=Microsoft.VC142.CRT\msvcp140_2.dll
+MSVC_REDIST_PATH=Microsoft.VC142.CRT\msvcp140.dll
 !ENDIF
 
 ..\release\bin\terra.exe: "$(TERRA_DIR)\release\bin\terra.dll" "$(SRC)\main.cpp"
