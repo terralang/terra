@@ -1,9 +1,14 @@
 #!../terra
 local ffi = require("ffi")
 
+local skip = { }
 local lscmd
 if ffi.os == "Windows" then
     lscmd = "cmd /c dir /b /s"
+    
+    -- These tests produce spurious output due to a bug in LLVM on windows
+    table.insert(skip, "speed.t")
+    table.insert(skip, "class2.t")
 else
     lscmd = "find . | cut -c 3-"
 end
@@ -16,6 +21,7 @@ local function getcommand(file)
     end
     return prefix
 end
+
 
 local passed = {}
 local failed = {}
@@ -31,14 +37,21 @@ for line in io.popen(lscmd):lines() do
     end
     local file = line:match("^([^/]*%.t)$") or line:match("^(fails/[^/]*%.t)$")
     if file then
-        print(file .. ":")
-        local execstring = getcommand(file) .. " " .. file
-        local result = os.execute(execstring)
-        if type(result) == "number" and result == 0 or result == true then
-            table.insert(passed,file)
-        else
-            --error("fail")
-            table.insert(failed,file)
+        local run = true
+        for _, s in ipairs(skip) do
+            run = run and (s ~= file)
+        end
+        
+        if run then
+            print(file .. ":")
+            local execstring = getcommand(file) .. " " .. file
+            local result = os.execute(execstring)
+            if type(result) == "number" and result == 0 or result == true then
+                table.insert(passed,file)
+            else
+                --error("fail")
+                table.insert(failed,file)
+            end
         end
     end
 end
