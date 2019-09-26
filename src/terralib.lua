@@ -557,6 +557,7 @@ function T.terrafunction:disas()
     terra.disassemble(terra.jitcompilationunit:addvalue(self),self:compile())
 end
 function T.terrafunction:printstats()
+    self:compile()
     print("definition ", self:gettype())
     for k,v in pairs(self.stats) do
         print("",k,v)
