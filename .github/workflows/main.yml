@@ -1,0 +1,13 @@
+name: CI
+on: [push]
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-16.04
+    steps:
+      - run: ./travis.sh
+        env:
+          LLVM_CONFIG: llvm-config-6.0
+          CLANG: clang-6.0
+          USE_CMAKE: 1
