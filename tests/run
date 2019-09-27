@@ -19,7 +19,7 @@ local function getcommand(file)
     local prefix = terralib and terralib.terrahome and 
                    terralib.terrahome .."/bin/terra" or "../terra"
     if ffi.os == "Windows" then
-        prefix = "cmd /c " .. prefix:gsub("[/\\]","\\\\")
+        prefix = "cmd /c \"" .. prefix:gsub("[/\\]","\\\\") .. "\""
     end
     return prefix
 end
