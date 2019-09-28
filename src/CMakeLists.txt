@@ -359,6 +359,16 @@ if(WIN32)
     PRIVATE
       shlwapi.lib dbghelp.lib version.lib
   )
+  target_link_options(TerraExecutable
+    PRIVATE
+      /EXPORT:terra_init
+      /EXPORT:terra_initwithoptions
+      /EXPORT:terra_load
+      /EXPORT:terra_loadfile
+      /EXPORT:terra_loadbuffer
+      /EXPORT:terra_loadstring
+      /EXPORT:terra_llvmshutdown
+  )
 endif()
 
 install(
