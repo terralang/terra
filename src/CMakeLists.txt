@@ -230,7 +230,6 @@ add_dependencies(TerraLibrary LLVMObjectFiles)
 add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
-set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
 set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra_s)
