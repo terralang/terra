@@ -146,5 +146,10 @@ end))
 
 local N = assert(tonumber((...) or 10))
 doit(N)
-terralib.saveobj("benchmark_fannkuchredux", { main = main }, (jit.os == "Windows" and {"\\legacy_stdio_definitions.lib"} or nil) )
-os.execute("./benchmark_fannkuchredux "..N)
+if jit.os == "Windows" then
+  terralib.saveobj("benchmark_fannkuchredux.exe", { main = main }, {"\\legacy_stdio_definitions.lib"})
+  os.execute("benchmark_fannkuchredux.exe "..N)
+else
+  terralib.saveobj("benchmark_fannkuchredux", { main = main })
+  os.execute("./benchmark_fannkuchredux "..N)
+end
