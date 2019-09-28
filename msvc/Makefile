@@ -33,8 +33,10 @@ TERRA_VERSION=unknown
 # CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2
 !IFDEF CUDA_DIR
 CUDA_INCLUDES=/DTERRA_ENABLE_CUDA /I"$(CUDA_DIR)\include" /I"$(CUDA_DIR)\nvvm\include"
+CUDA_DIR_INCLUDE=-I "$(CUDA_DIR:\=/)/include"
 !ELSE
 CUDA_INCLUDES=
+CUDA_DIR_INCLUDE=
 !ENDIF
 
 SRC = $(TERRA_DIR)\src
@@ -117,7 +119,7 @@ $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	"$(LUAJIT_DIR)\src\luajit.c"
 
 "$(BUILD)\clangpaths.h":	$(LUAJIT) "$(SRC)\genclangpaths.lua"
 	cd "$(TERRA_DIR)"
-	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang -I "$(CUDA_DIR:\=/)/include"
+	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang $(CUDA_DIR_INCLUDE)
 
 "$(BUILD)\internalizedfiles.h":	$(LUAJIT)  "$(SRC)\geninternalizedfiles.lua"
 	cd "$(TERRA_DIR)"
