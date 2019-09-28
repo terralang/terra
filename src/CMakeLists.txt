@@ -233,7 +233,7 @@ add_dependencies(TerraLibraryShared LLVMObjectFiles)
 set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
-set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
+set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra_s)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 
 set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
