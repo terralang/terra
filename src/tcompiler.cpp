@@ -1388,6 +1388,11 @@ struct FunctionEmitter {
                     fstate->func->ADDFNATTR(NoInline);
                 }
             }
+            if(funcobj->hasfield("noreturn")) {
+                if(funcobj->boolean("noreturn")) {
+                    fstate->func->ADDFNATTR(NoReturn);
+                }
+            }
 
             if(!isextern) {
                 if(CU->optimize) {

@@ -552,6 +552,10 @@ function T.terrafunction:setoptimized(v)
     assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
            "setinlined(true) and setoptimized(false) are incompatible")
 end
+function T.terrafunction:setnoreturn(v)
+    assert(self:isdefined(), "attempting to set the noreturn state of an undefined function")
+    self.definition.noreturn = not not v
+end
 function T.terrafunction:disas()
     print("definition ", self:gettype())
     terra.disassemble(terra.jitcompilationunit:addvalue(self),self:compile())
