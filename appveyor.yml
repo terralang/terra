@@ -52,6 +52,9 @@ build_script:
   - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DTERRA_SLIB_INCLUDE_LLVM=OFF -DTERRA_SLIB_INCLUDE_LUAJIT=OFF -DCMAKE_GENERATOR_PLATFORM=x64
   - cmake --build . --target INSTALL --config Release
   - cd ..
+  - cd build
+  - dir /s
+  - cd ..
   - cd install
   - dir /s
   - cd ..
