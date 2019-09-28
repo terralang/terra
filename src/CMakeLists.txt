@@ -204,12 +204,14 @@ set_target_properties(TerraObjectFiles PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_dependencies(TerraObjectFiles TerraGeneratedFiles)
 
-add_library(TerraLibrary
-  STATIC
-    $<TARGET_OBJECTS:TerraObjectFiles>
-    ${ALL_LLVM_OBJECTS}
-    ${LUAJIT_OBJECTS}
-)
+if(TERRA_STATIC_LIB)
+  add_library(TerraLibrary
+    STATIC
+      $<TARGET_OBJECTS:TerraObjectFiles>
+      ${ALL_LLVM_OBJECTS}
+      ${LUAJIT_OBJECTS}
+  )
+endif()
 add_library(TerraLibraryShared
   SHARED
     $<TARGET_OBJECTS:TerraObjectFiles>
@@ -224,19 +226,24 @@ set_source_files_properties(
     EXTERNAL_OBJECT true
     GENERATED true)
 
-add_dependencies(TerraLibrary LuaJIT)
-add_dependencies(TerraLibrary LLVMObjectFiles)
+if(TERRA_STATIC_LIB)
+  add_dependencies(TerraLibrary LuaJIT)
+  add_dependencies(TerraLibrary LLVMObjectFiles)
+
+  set_target_properties(TerraLibrary PROPERTIES PREFIX "")
+
+  set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
+
+  set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
+endif()
 
 add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
-set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
-set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 
-set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
 
 target_link_libraries(TerraLibraryShared
@@ -301,7 +308,15 @@ target_compile_definitions(TerraExecutable
     ${TERRA_VERSION_DEFINITIONS}
 )
 
-if(APPLE)
+if(NOT TERRA_STATIC_LIB)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      TerraSharedLibrary
+      ${LUAJIT_LIBRARIES}
+      ${ALL_LLVM_LIBRARIES}
+      ${LLVM_SYSTEM_LIBRARIES}
+  )
+elseif(APPLE)
   set_target_properties(TerraExecutable
     PROPERTIES
       # Makes LuaJIT happy (otherwise luaL_newstate returns NULL). Has to be
@@ -344,10 +359,13 @@ else()
   )
 endif()
 
-if(WIN32)
-  target_link_libraries(TerraExecutable
-    PRIVATE
-      shlwapi.lib dbghelp.lib version.lib
+if(TERRA_STATIC_LIB)
+  install(
+    TARGETS TerraLibrary
+    EXPORT TerraExports
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
   )
 endif()
 
