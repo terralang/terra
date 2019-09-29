@@ -33,7 +33,7 @@ add_custom_command(
     "${PROJECT_SOURCE_DIR}/lib/std.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
     LuaJIT
-  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" lib "%.t$"
+  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   VERBATIM
 )
@@ -125,23 +125,52 @@ target_include_directories(TerraObjectFiles
     ${CLANG_INCLUDE_DIRS}
 )
 
+if(WIN32)
+  target_include_directories(TerraObjectFiles
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/msvc
+  )
+endif()
+
 target_compile_definitions(TerraObjectFiles
   PRIVATE
     LLVM_VERSION=${LLVM_VERSION_MAJOR}${LLVM_VERSION_MINOR}
 )
 
+if(WIN32)
+  target_compile_options(TerraObjectFiles
+    PRIVATE
+      # FIXME: Find portable ways to do all these
+      /MP8    # parallel build
+      /nologo
+      /EHsc   # extern "C" functions don't throw exceptions
+      /w      # disable warnings
+      /MD     # use thread-safe version of MSVCRT.lib
+      /Zi     # debug info
+  )
+  target_compile_definitions(TerraObjectFiles
+    PRIVATE
+      _CRT_SECURE_NO_DEPRECATE
+      NOMINMAX
+  )
+else()
+  target_compile_options(TerraObjectFiles
+    PRIVATE
+      # FIXME: Find portable ways to do all these
+      -fno-common
+      -Wcast-qual
+      $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
+      $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
+  )
+endif()
+
 target_compile_options(TerraObjectFiles
   PRIVATE
-    # FIXME: Find portable ways to do all these
-    -fno-common
-    -Wcast-qual
-    $<$<COMPILE_LANGUAGE:CXX>:-Woverloaded-virtual>
-    $<$<COMPILE_LANGUAGE:CXX>:-fvisibility-inlines-hidden>
     # LLVM provides these as flags, so we have to put them here.
     ${ALL_LLVM_DEFINITIONS}
 )
 
-if(NOT ${LLVM_ENABLE_RTTI})
+if(NOT WIN32 AND NOT ${LLVM_ENABLE_RTTI})
   target_compile_options(TerraObjectFiles
     PRIVATE
       # FIXME: Find portable ways to do all these
@@ -202,10 +231,9 @@ add_dependencies(TerraLibrary LLVMObjectFiles)
 add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
-set_target_properties(TerraLibrary PROPERTIES PREFIX "")
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
 
-set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra)
+set_target_properties(TerraLibrary PROPERTIES OUTPUT_NAME terra_s)
 set_target_properties(TerraLibraryShared PROPERTIES OUTPUT_NAME terra)
 
 set_target_properties(TerraLibrary PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/lib")
@@ -222,14 +250,47 @@ if(APPLE)
   target_link_libraries(TerraLibraryShared PRIVATE -single_module)
 endif()
 
+if(WIN32)
+  target_link_libraries(TerraLibraryShared
+    PRIVATE
+      shlwapi.lib dbghelp.lib version.lib
+  )
+
+  list(APPEND TERRA_EXPORTS
+    /EXPORT:terra_init
+    /EXPORT:terra_initwithoptions
+    /EXPORT:terra_load
+    /EXPORT:terra_loadfile
+    /EXPORT:terra_loadbuffer
+    /EXPORT:terra_loadstring
+    /EXPORT:terra_llvmshutdown
+  )
+  target_link_options(TerraLibraryShared
+    PRIVATE
+      ${TERRA_EXPORTS}
+  )
+endif()
+
 ###
 ### Terra Executable
 ###
 
 list(APPEND TERRA_EXE_SRC
   main.cpp
-  linenoise.cpp linenoise.h
 )
+
+if(WIN32)
+  list(APPEND TERRA_EXE_SRC
+    ${PROJECT_SOURCE_DIR}/msvc/ext/getopt.c ${PROJECT_SOURCE_DIR}/msvc/ext/getopt.h
+    ${PROJECT_SOURCE_DIR}/msvc/ext/getopt_long.c
+    ${PROJECT_SOURCE_DIR}/msvc/ext/inttypes.h
+    ${PROJECT_SOURCE_DIR}/msvc/ext/setjmp.h
+  )
+else()
+  list(APPEND TERRA_EXE_SRC
+    linenoise.cpp linenoise.h
+  )
+endif()
 
 add_executable(TerraExecutable ${TERRA_EXE_SRC})
 
@@ -241,6 +302,13 @@ target_include_directories(TerraExecutable
     ${PROJECT_BINARY_DIR}
     ${PROJECT_BINARY_DIR}/include/terra
 )
+
+if(WIN32)
+  target_include_directories(TerraExecutable
+    PRIVATE
+      ${PROJECT_SOURCE_DIR}/msvc
+  )
+endif()
 
 target_compile_definitions(TerraExecutable
   PRIVATE
@@ -287,6 +355,17 @@ else()
       ${LUAJIT_LIBRARIES}
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
+  )
+endif()
+
+if(WIN32)
+  target_link_libraries(TerraExecutable
+    PRIVATE
+      shlwapi.lib dbghelp.lib version.lib
+  )
+  target_link_options(TerraExecutable
+    PRIVATE
+      ${TERRA_EXPORTS}
   )
 endif()
 

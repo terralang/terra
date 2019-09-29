@@ -138,12 +138,12 @@ local N = (...) or "1000000"
 local terra run()
     main(2,array("what",N))
 end
-local args
+
 if jit.os ~= "Windows" then
-   args = {"-lm"}
+  terralib.saveobj("benchmark_nbody",{ main = main }, {"-lm"} )
+  os.execute("./benchmark_nbody "..tostring(N))
 else
-   args = {"\\legacy_stdio_definitions.lib"}
+  terralib.saveobj("benchmark_nbody.exe",{ main = main }, {"\\legacy_stdio_definitions.lib"} )
+  os.execute("benchmark_nbody.exe "..tostring(N))
 end
 
-terralib.saveobj("benchmark_nbody",{ main = main }, args )
-os.execute("./benchmark_nbody "..tostring(N))
