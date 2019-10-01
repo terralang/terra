@@ -1,10 +1,11 @@
 local C = terralib.includecstring[[
 
 #include <math.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 ]]
+
+C.printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true))
 
 pi = 3.141592653589793
 solar_mass = (4 * pi * pi)

@@ -857,6 +857,8 @@ static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
     //in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
     //the linker will then delete it because it is not used.
     //switching it to WeakODR means that the linker will keep it even if it is not used
+    std::vector<llvm::Constant*> usedArray;
+
     for(llvm::Module::iterator it = M->begin(), end = M->end();
         it != end;
         ++it) {
@@ -864,15 +866,29 @@ static void optimizemodule(TerraTarget * TT, llvm::Module * M) {
         if(fn->hasAvailableExternallyLinkage()) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
         }
+    #ifdef _WIN32 // On windows, the optimizer will delete LinkOnce functions that are unused
+        usedArray.push_back(fn);
+    #endif
     #if LLVM_VERSION >= 35
         if(fn->hasDLLImportStorageClass()) //clear dll import linkage because it messes up the jit on window
             fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
     #else
         if(fn->hasDLLImportLinkage()) //clear dll import linkage because it messes up the jit on window
             fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-        
     #endif
     }
+
+    if(usedArray.size() > 0) {
+      auto* i8PtrType = llvm::Type::getInt8PtrTy(M->getContext());
+      for(auto& elem : usedArray)
+        elem = llvm::ConstantExpr::getBitCast(elem, i8PtrType);
+
+      auto* arrayType = llvm::ArrayType::get(i8PtrType, usedArray.size());
+      auto* llvmUsed = new llvm::GlobalVariable(*M, arrayType, false, llvm::GlobalValue::AppendingLinkage,
+        llvm::ConstantArray::get(arrayType, usedArray), "llvm.used");
+      llvmUsed->setSection("llvm.metadata");
+    }
+
     M->setTargetTriple(TT->Triple); //suppress warning that occur due to unmatched os versions
     PassManager opt;
     llvmutil_addtargetspecificpasses(&opt, TT->tm);

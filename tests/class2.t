@@ -45,6 +45,4 @@ end
 local test = require("test")
 test.eq(foo(),9)
 
-terralib.saveobj("class2", "executable", {
-	main = terra() S.printf("foo() = %d\n", foo()) end,
-}, (jit.os == "Windows" and "\\legacy_stdio_definitions.lib" or nil))
+terralib.saveobj("class2", "executable", {main = terra() S.printf("foo() = %d\n", foo()) end})
