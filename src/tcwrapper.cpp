@@ -648,6 +648,27 @@ public:
 #endif
 };
 
+#if LLVM_VERSION > 70
+class LuaProvidedFile : public llvm::vfs::File {
+private:
+    std::string Name;
+    llvm::vfs::Status Status;
+    StringRef Buffer;
+
+public:
+    LuaProvidedFile(const std::string &Name_, const llvm::vfs::Status &Status_,
+                    const StringRef &Buffer_)
+            : Name(Name_), Status(Status_), Buffer(Buffer_) {}
+    virtual ~LuaProvidedFile() override {}
+    virtual llvm::ErrorOr<llvm::vfs::Status> status() override { return Status; }
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
+            const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
+            bool IsVolatile) override {
+        return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
+    }
+    virtual std::error_code close() override { return std::error_code(); }
+};
+#else
 class LuaProvidedFile : public clang::vfs::File {
 private:
     std::string Name;
@@ -661,7 +682,7 @@ public:
     virtual ~LuaProvidedFile() override {}
     virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
 #if LLVM_VERSION >= 36
-    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer> > getBuffer(
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
             const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
             bool IsVolatile) override {
         return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
@@ -681,6 +702,7 @@ public:
     virtual void setName(StringRef Name_) override { Name = Name_; }
 #endif
 };
+#endif
 
 #if LLVM_VERSION < 50
 static llvm::sys::TimeValue ZeroTime() {
@@ -695,6 +717,99 @@ static llvm::sys::TimePoint<> ZeroTime() {
     return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
 }
 #endif
+
+#if LLVM_VERSION > 70
+class LuaOverlayFileSystem : public llvm::vfs::FileSystem {
+private:
+    IntrusiveRefCntPtr<llvm::vfs::FileSystem> RFS;
+    lua_State *L;
+
+public:
+    LuaOverlayFileSystem(lua_State *L_) : RFS(llvm::vfs::getRealFileSystem()), L(L_) {}
+
+    bool GetFile(const llvm::Twine &Path, llvm::vfs::Status *status,
+                 StringRef *contents) {
+        lua_pushvalue(L, HEADERPROVIDER_POS);
+        lua_pushstring(L, Path.str().c_str());
+        lua_call(L, 1, 1);
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            return false;
+        }
+        llvm::sys::fs::file_type filetype = llvm::sys::fs::file_type::directory_file;
+        int64_t size = 0;
+        lua_getfield(L, -1, "kind");
+        const char *kind = lua_tostring(L, -1);
+        if (strcmp(kind, "file") == 0) {
+            filetype = llvm::sys::fs::file_type::regular_file;
+            lua_getfield(L, -2, "contents");
+            const char *data = (const char *)lua_touserdata(L, -1);
+            if (!data) {
+                data = lua_tostring(L, -1);
+            }
+            if (!data) {
+                lua_pop(L, 3);  // pop table,kind,contents
+                return false;
+            }
+            lua_getfield(L, -3, "size");
+            size = (lua_isnumber(L, -1)) ? lua_tonumber(L, -1) : ::strlen(data);
+            *contents = StringRef(data, size);
+            lua_pop(L, 2);  // pop contents, size
+        }
+        *status = llvm::vfs::Status(Path.str(), llvm::vfs::getNextVirtualUniqueID(),
+                                    ZeroTime(), 0, 0, size, filetype,
+                                    llvm::sys::fs::all_all);
+        lua_pop(L, 2);  // pop table, kind
+        return true;
+    }
+    virtual ~LuaOverlayFileSystem() {}
+
+    virtual llvm::ErrorOr<llvm::vfs::Status> status(const llvm::Twine &Path) override {
+        static const std::error_code noSuchFileErr =
+                std::make_error_code(std::errc::no_such_file_or_directory);
+        llvm::ErrorOr<llvm::vfs::Status> RealStatus = RFS->status(Path);
+        if (RealStatus || RealStatus.getError() != noSuchFileErr) return RealStatus;
+        llvm::vfs::Status Status;
+        StringRef Buffer;
+        if (GetFile(Path, &Status, &Buffer)) {
+            return Status;
+        }
+        return llvm::errc::no_such_file_or_directory;
+    }
+
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::vfs::File>> openFileForRead(
+            const llvm::Twine &Path) override {
+        llvm::ErrorOr<std::unique_ptr<llvm::vfs::File>> ec = RFS->openFileForRead(Path);
+        if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
+        llvm::vfs::Status Status;
+        StringRef Buffer;
+        if (GetFile(Path, &Status, &Buffer)) {
+            return std::unique_ptr<llvm::vfs::File>(
+                    new LuaProvidedFile(Path.str(), Status, Buffer));
+        }
+        return llvm::errc::no_such_file_or_directory;
+    }
+
+    virtual llvm::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
+                                                    std::error_code &EC) override {
+        printf("BUGBUG: unexpected call to directory iterator in C header include. "
+               "report this a bug on github.com/zdevito/terra");  // as far as I can tell
+                                                                  // this isn't used by
+                                                                  // the things we are
+                                                                  // using, so I am
+                                                                  // leaving it unfinished
+                                                                  // until this changes.
+        return RFS->dir_begin(Dir, EC);
+    }
+
+    llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {
+        return std::string("cwd");
+    }
+    std::error_code setCurrentWorkingDirectory(const Twine &Path) override {
+        return std::error_code();
+    }
+};
+#else
 class LuaOverlayFileSystem : public clang::vfs::FileSystem {
 private:
     IntrusiveRefCntPtr<vfs::FileSystem> RFS;
@@ -769,9 +884,9 @@ public:
         return llvm::errc::no_such_file_or_directory;
     }
 #else
-    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > openFileForRead(
+    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> openFileForRead(
             const llvm::Twine &Path) override {
-        llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > ec = RFS->openFileForRead(Path);
+        llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> ec = RFS->openFileForRead(Path);
         if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
         clang::vfs::Status Status;
         StringRef Buffer;
@@ -802,6 +917,7 @@ public:
     }
 #endif
 };
+#endif
 
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const char **argbegin, const char **argend,
@@ -832,7 +948,11 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
 
+#if LLVM_VERSION < 80
     llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#else
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#endif
     TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
     FileManager &FileMgr = TheCompInst->getFileManager();

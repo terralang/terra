@@ -90,6 +90,7 @@ struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit *CU;
     terra_State *T;
     DisassembleFunctionListener(TerraCompilationUnit *CU_) : CU(CU_), T(CU_->T) {}
+#if LLVM_VERSION < 80
     virtual void NotifyFunctionEmitted(const Function &f, void *data, size_t sz,
                                        const EmittedFunctionDetails &EFD) {
         TerraFunctionInfo &fi = T->C->functioninfo[data];
@@ -99,6 +100,8 @@ struct DisassembleFunctionListener : public JITEventListener {
         fi.size = sz;
         DEBUG_ONLY(T) { fi.efd = EFD; }
     }
+#endif
+
 #if LLVM_VERSION >= 34
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if (type == object::SymbolRef::ST_Function) {
