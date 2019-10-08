@@ -718,7 +718,7 @@ static llvm::sys::TimePoint<> ZeroTime() {
 }
 #endif
 
-#if LLVM_VERSION > 70
+#if LLVM_VERSION >= 80
 class LuaOverlayFileSystem : public llvm::vfs::FileSystem {
 private:
     IntrusiveRefCntPtr<llvm::vfs::FileSystem> RFS;
