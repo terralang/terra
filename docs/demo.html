@@ -1,0 +1,270 @@
+---
+layout: post
+title: Try Terra
+---
+<link rel="stylesheet" href="stylesheets/codemirror.css">
+<script src="javascripts/codemirror.js"></script>
+<script src="javascripts/lua.js"></script>
+<h1 id='installing_terra'>Try Terra</h1>
+<div class="example" id="hello.t" >
+-- This top-level code is plain Lua code.
+function printhello()
+    -- This is a plain Lua function
+    print("Hello, Lua!")
+end
+printhello()
+
+-- Terra is backwards compatible with C
+-- we'll use C's io library in our example.
+C = terralib.includec("stdio.h")
+
+-- The keyword 'terra' introduces
+-- a new Terra function.
+terra hello(argc : int, argv : &rawstring)
+    -- Here we call a C function from Terra
+    C.printf("Hello, Terra!\n")
+    return 0
+end
+
+-- You can call Terra functions directly from Lua
+hello(0,nil)
+</div>
+
+<div class="example" id="vectors.t">
+
+-- Implements a SIMD-vectorized SAXPY operator
+-- from BLAS
+local V = 4
+-- Create a 4-wide vector type
+local floatV = vector(float,V)
+terra saxpy(x : &float, y : &float, n : uint, a : float)
+	for i = 0,n,V do
+	 -- Load x and y as vectors 
+	 -- (assuming correct alignment and 'n' divisible by 4)
+  	 var xv = @[&floatV](x + i)
+     var yv = @[&floatV](y + i)
+     -- Perform vector arithmetic
+     var r = a*xv + yv
+     -- Store x vector back into memory
+  	 @[&floatV](x + i) = r
+  end
+end
+
+C = terralib.includecstring [[
+    #include "stdio.h"
+    #include "stdlib.h"
+]]
+terra saxpytest()
+  var x = [&float](C.malloc(sizeof(float) * 32))
+  var y = [&float](C.malloc(sizeof(float) * 32))
+  for i = 0,32 do
+  	x[i],y[i] = i,i
+  end
+  saxpy(x,y,32,4)
+  for i = 0,32 do
+     C.printf("x[%d] = %f\n",i,x[i])
+  end
+  C.free(x)
+  C.free(y)
+end
+
+--Verify that the generated code uses SSE instructions
+print("disassembling ...")
+saxpy:disas()
+
+print("testing saxpy...")
+saxpytest()
+</div>
+
+<div class="example" id="pow.t">
+--generate a power function for a specific N (e.g. N = 3)
+function makePowN(N)
+    local function emit(a,N)
+        if N == 0 then return 1
+      else return `a*[emit(a,N-1)]
+      end
+    end
+    return terra(a : double)
+        return [emit(a,N)]
+    end
+end
+
+--use it to fill in a table of functions
+local mymath = {}
+for n = 1,10 do
+    mymath["pow"..n] = makePowN(n)
+end
+print(mymath.pow3(2)) -- 8
+</div>
+
+<div class="example" id="templating.t">
+C = terralib.includec("stdlib.h")
+function MakeArray(T)
+    --create a new Struct type that contains a pointer 
+    --to a list of T's and a size N
+    local struct ArrayT {
+        --&T is a pointer to T
+        data : &T;
+        N : int;
+    } 
+    --add some methods to the type
+    terra ArrayT:init(N : int)
+        -- the syntax [&T](...) is a cast,
+        -- the C equivalent is (T*)(...)
+        self.data = [&T](C.malloc(sizeof(T)*N))
+        self.N = N
+    end
+    terra ArrayT:get(i : int)
+        return self.data[i]
+    end
+    terra ArrayT:set(i : int, v : T)
+        self.data[i] = v
+    end
+    --return the type as a 
+    return ArrayT
+end
+
+IntArray = MakeArray(int)
+DoubleArray = MakeArray(double)
+
+terra UseArrays()
+    var ia : IntArray
+    var da : DoubleArray
+    ia:init(1) 
+    da:init(1)
+    ia:set(0,3)
+    da:set(0,4.5)
+    return ia:get(0) + da:get(0)
+end
+print(UseArrays())
+</div>
+
+<div class="example" id="bfcompiler.t" >
+local C = terralib.includec("stdio.h")
+
+local function compile(code,N)
+	local function body(data,ptr)
+		local stmts = terralib.newlist()
+		local jumpstack = {}
+		for i = 1,#code do
+			local c = code:sub(i,i)
+			local stmt
+			if c == ">" then
+				stmt = quote ptr = ptr + 1 end
+			elseif c == "<" then
+				stmt = quote ptr = ptr - 1 end
+			elseif c == "+" then
+				stmt = quote data[ptr] = data[ptr] + 1 end
+			elseif c == "-" then
+				stmt = quote data[ptr] = data[ptr] - 1 end
+			elseif c == "." then
+				stmt = quote C.putchar(data[ptr]) end
+			elseif c == "," then
+				stmt = quote data[ptr] = C.getchar() end
+			elseif c == "[" then
+				local target = { before = symbol(), 
+				                 after = symbol() }
+				table.insert(jumpstack,target)
+				stmt = quote 
+					::[target.before]:: 
+					if data[ptr] == 0 then
+						goto [target.after]
+					end
+				end
+			elseif c == "]" then
+				local target = table.remove(jumpstack)
+				assert(target)
+				stmt = quote 
+					goto [target.before]
+					:: [target.after] ::
+				end
+			else
+				error("unknown character "..c)
+			end
+			stmts:insert(stmt)
+		end
+		return stmts
+	end
+	return terra()
+		var data : int[N]
+		for i = 0, N do
+			data[i] = 0
+		end
+		var ptr = 0;
+		[ body(data,ptr) ]
+	end
+end
+
+local helloworld = "++++++++++[>+++++++>++++++++++>+++>+<<<<-]>++.>+.+++++++..+++.>++.<<+++++++++++++++.>.+++.------.--------.>+.>."
+
+local fn = compile(helloworld,256)
+
+fn()
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+<div style="float:right;">
+<select id="examples" onchange="updatecontent()">
+</select>
+</div>
+<br/>
+<div id="editor">
+</div>
+<script>
+var codemirror = CodeMirror(document.getElementById("editor"), {
+  value: "",
+  lineNumbers: true,
+  lineWrapping: false,
+  smartIndent: false,
+  tabSize: 2,
+  mode:  "lua"
+});
+function updatecontent() {
+	var o = document.getElementById("examples")
+	var name = o.options[o.selectedIndex].value
+	var content = document.getElementById(name).textContent
+	codemirror.setValue(content.replace(/^\n/,""))
+	codemirror.setCursor(codemirror.lineCount(),0)
+	codemirror.focus()
+}
+function finishresult(data) {
+	var r = document.getElementById("result")
+	var code = document.createElement("code")
+	code.textContent = atob(data)
+	var pre = document.createElement("pre")
+	pre.appendChild(code)
+	r.innerHTML = ""
+	r.appendChild(pre)
+}
+function execute() {
+	var script = document.createElement("script")
+	script.type = "text/javascript"
+	var data = btoa(codemirror.getValue())
+	script.src = "http://candela.stanford.edu:4001/" + data 
+	document.getElementById("result").appendChild(script)
+}
+var selector = document.getElementById("examples")
+var examples = document.getElementsByClassName("example")
+for (var i = 0; i < examples.length; i++) {
+	var o = document.createElement("option")
+	o.textContent = examples[i].id
+	selector.appendChild(o)
+}
+updatecontent()
+</script>
+<br>
+<button type="button" style="float:right;" onclick="execute()">Execute</button>
+<br>
+<br>
+<hr>
+<div id="result"></div>
