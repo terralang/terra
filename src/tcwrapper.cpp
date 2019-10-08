@@ -648,7 +648,7 @@ public:
 #endif
 };
 
-#if LLVM_VERSION > 70
+#if LLVM_VERSION >= 80
 class LuaProvidedFile : public llvm::vfs::File {
 private:
     std::string Name;
