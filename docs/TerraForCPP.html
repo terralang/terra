@@ -1,0 +1,1247 @@
+---
+layout: post
+title: Terra
+---
+<p> Terra-Lua Equivalents for C/C++ Programmers
+ </p>
+<p> The semantics of Terra are very close to C/C++, but because of its close integration with Lua, the same things might be written a different way. This quick reference sheet shows C++ snippets with equivalent Lua-Terra snippets to make it easier to learn how to program in Terra. A third column shows how to meta-program constructs when applicable.
+ </p>
+<p> Content based on <a href="http://www.pa.msu.edu/~duxbury/courses/phy480/Cpp_refcard.pdf">C++ Quick Reference</a>
+Add a pull request want an additional example that isn't shown here. </p>
+<h1>Contexts</h1>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// function/global declaration context:
+typedef int MyInt;
+MyInt x;
+
+int f() {
+    // C++ code context:
+    MyInt bar = x + 1;
+//  ~~~~~ C++ type context
+
+    return bar;
+}
+
+struct S {
+    // struct definition context:
+    int a;
+ // ~~~ type context
+    float b;
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- Lua context (any Lua code here)
+MyInt = int -- assignment to Lua variable 'MyInt'
+x = global(MyInt)
+
+terra f()
+    -- Terra context
+    var bar : MyInt = x + 1
+    --        ~~~~~ _Lua_ context, any Lua can go here,
+    --  but it needs to evaluate to a Terra type
+    return bar
+end
+
+struct S {
+    a : int
+    --  ~~~ _Lua_ context, evaluates to a Terra type
+    b : float
+}
+
+-- Meta-programming Lua-Terra creates additional places
+-- where the context changes.
+
+function g() return `4+5 end
+--                  ~~~~ Terra context, a quote creates a 
+--                       Terra expression from Lua
+
+terra h()
+    var baz = [ g() ]
+    --        ~~~~~~~ Lua context, an escape breaks
+    --  into Lua and evaluates to a Terra expression
+end
+
+</code></pre></div>
+</div>
+<h1>Preprocessor</h1>
+<p> Using multiple files.
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#include "myfile.h"
+
+
+void f() {
+    myfunction();
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local myfile = require("myfile")
+-- use Lua's require to load another Lua file
+-- Terra functions can be stored in a table myfiles
+terra f()
+    myfile.myfunction()
+end
+</code></pre></div>
+</div>
+<p> Using C functions
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#include &ltstdio.h&gt
+#include &ltmalloc.h&gt
+int main() {
+    printf("hello, world\n");
+}
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local C = terralib.includecstring [[
+    #include&ltstdio.h&gt
+    #include&ltmalloc.h
+]]
+-- can also use terralib.includec("stdio.h") for single file
+-- C is a table of functions (C.printf) and types (C.FILE)
+...
+terra hello()
+    C.printf("hello, world\n")
+end
+
+</code></pre></div>
+</div>
+<p> Preprocessor Macro Equivalents
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#define X (3+3)
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local X = `3+3
+-- Lua variables can hold values that get substituted into Terra functions
+-- the quotation (`) creates a Terra expression directly from Lua
+</code></pre></div>
+</div>
+<p> Macro functions
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#define F(a,b) a + b
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local F = macro(function(a,b)
+    return `a + b
+end)
+</code></pre></div>
+</div>
+<p> Conditional Compilation
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Use #ifdef to control how functions are defined
+#ifdef __WIN32
+    char * getOS() { return "Windows"; }
+#else
+    char * getOS() { return "Linux"; }
+#endif
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- use Lua to control how a Terra function is defined
+if terralib.os == "Windows" then
+    terra getOS() return "Windows" end
+else
+    terra getOS() return "Linux" end
+end
+</code></pre></div>
+</div>
+<h1>Literals</h1>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>255, 0377, 0xff
+2147483647LL, 0x7ffffffful
+123.0, 1.23e2
+"strings\n"
+'a'
+"hello" "world"
+true, false // booleans
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>255, 0377, 0xff
+2147483647LL, 0x7fffffffULL -- these match LuaJIT literals for long numbers
+123.0, 1.23e2 
+"strings\n" or 'strings\n' or [[strings\n]] -- match Lua strings
+("a")[0] -- no built in literal for char, so index a string (or make a function that )
+[ "hello".."world" ] -- escape to Lua and concat the strings there
+true, false
+</code></pre></div>
+</div>
+<h1>Declarations and Type Constructors</h1>
+<p> Declaring variables
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>void f() {
+    int x;
+    int y = 255;
+    auto z = 255;
+}
+
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra f() {
+    var x
+    var y : int = 255
+    var z = 255
+end
+
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>x = symbol(int)
+y = symbol(int)
+z = symbol(int)
+local zdeclare = quote 
+  var [z] = 255
+end
+terra f() 
+    var [x]
+    var [y]
+    [zdeclare]
+    return x + y + z
+end
+
+</code></pre></div>
+</div>
+<p> Sizing integer types
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>short s; long l;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var s : int16, l : int64
+</code></pre></div>
+</div>
+<p> Non-integer primitive types
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>char c = 'a'; 
+float f; double d; 
+bool b;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var c : int8 = ('a')[0] 
+var f :float, d : double 
+var b : bool
+</code></pre></div>
+</div>
+<p> Multiple Declarations
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int a = 1,b = 2,c = 3;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var a : int,b : int,c : int = 1,2,3
+</code></pre></div>
+</div>
+<p> Arrays
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int a[10];
+int a[]={0,1,2};
+
+
+float a[]={0,1,2};
+
+
+int a[2][3]={ {1,2,3},{4,5,6} }; 
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var a : int[10];
+var a : int[3] = array(0,1,2)
+-- 'array' is an expression
+-- not an initializer like C++
+var a = arrayof([float],0,1,2) 
+-- use arrayof to specify a type different
+-- from the expressions used to initialize it
+var a : (int[3])[2] = array(array(1,2,3),array(4,5,6)); 
+</code></pre></div>
+</div>
+<p> Pointers
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int* p; 
+
+char * s ="hello";
+
+void* p = NULL;
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var p : &int 
+-- read & as 'address of', so &int is an 'address of int'
+var s : rawstring = "hello" 
+-- rawstring == &int8 
+var p : &opaque = nil
+-- opaque replaces void in pointers
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>Vec3& r = v;
+
+r.x
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var r : &Vec3 = &v
+-- references do not exist
+r.x
+-- instead '.' works like -&gt on pointers
+</code></pre></div>
+</div>
+<p> Typedefs
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>typedef String char*;
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local String = &int8 
+-- typedefs are just assignments in Lua
+-- because Terra types are Lua values
+</code></pre></div>
+</div>
+<p> Const
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>const int c = 3;
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var c = 3
+-- const doesn't exist for variables
+</code></pre></div>
+</div>
+<p> Enum
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+
+
+
+
+
+
+
+
+enum weekend {SAT,SUN};
+weekend f() {
+    return SAT
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- doesn't exist, replicate it with meta-programming
+local function Enum(...)
+    local t = { type = int }
+    for i,name in ipairs({...}) do
+         -- make 0-based to match C++
+        t[name] = i - 1
+    end
+    return t
+end
+weekend = Enum("SAT","SUN")
+terra f() : weekend.type
+    return weekend.SAT
+end
+</code></pre></div>
+</div>
+<h1>Globals</h1>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+
+int x = 3;
+const int x = 3;
+int x[] = { 3,4, 5};
+const int x[] = { 3,4,5};
+void f() {
+}
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- Lua functions construct
+-- Terra constants
+x = global(int)
+x = constant(int,3)
+x = global(int,`array(3,4,5))
+x = constant(int,`array(3,4,5))
+terra f()
+end
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>-- you can create tables of constants
+sin_values = {}
+N = 32
+for i = 1,N do
+    sin_values[i] = 
+        math.sin( 2 * math.pi * (i-1)/N))
+end
+-- constant table of sin values embedded in code
+sin_table = constant(`arrayof(float,sin_values))
+</code></pre></div>
+</div>
+<h1>Storage Classes</h1>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+
+int x;
+static int y;
+
+static void g() {
+    return x + y;
+}
+void f() {
+    static int z = 0;
+    return g();
+}
+extern int w;
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- exposed/private symbols are specified 
+-- by the 'saveobj' call
+x = global(int)
+y = global(int)
+
+terra g() 
+    return x + y
+end
+terra f()
+    return g()
+end
+-- only x and f are exposed as symbols
+-- but y and g will be included internally 
+-- since they are used
+terralib.saveobj("out.o", { x = x, f = f}) 
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+
+
+
+
+
+void f() {
+    static int z = 0;
+    return z;
+}
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no direct 'static' equivalent
+-- for function variables
+-- but you can control the
+-- lexical scope of globals
+-- using Lua 'do' and 'end'
+do
+    local z = global(int,0)
+    terra f()
+        return z
+    end
+end
+
+
+</code></pre></div>
+</div>
+<h1>Statements</h1>
+<p> Assignments
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x = y;
+x += y;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x = y
+x = x + y -- no += like Lua
+</code></pre></div>
+</div>
+<p> Declarations
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int x;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var x : int
+</code></pre></div>
+</div>
+<p> Semi-Colons
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+x = y; y = z;
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- Optional for clarity
+x = y; y = z;
+
+</code></pre></div>
+</div>
+<p> Blocks
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>void f() {
+    {
+        printf("hi\n");
+        printf("hi\n");
+        printf("hi\n");
+    }
+}
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra f()
+    do
+        C.printf("hi\n")
+        C.printf("hi\n")
+        C.printf("hi\n")
+    end
+end
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local stats = { 
+    `C.printf("hi\n"),
+    `C.printf("hi\n"),
+    `C.printf("hi\n")
+}
+terra f()
+    do
+        [stats]
+    end
+end
+</code></pre></div>
+</div>
+<p> Conditionals
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>if (x) { &ltstatements&gt }
+else if (y) { &ltstatements&gt }
+else { &ltstatement&gt }
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>if x then &ltstatements&gt 
+elseif y then &ltstatements&gt
+else &ltstatements&gt end
+</code></pre></div>
+</div>
+<p> Loops
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>while(x) {
+    &ltstatements&gt
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>while x do 
+    &ltstatements&gt
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>for(x; y; z;) { 
+    &ltstatements&gt
+}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x; 
+while y do 
+    &ltstatements&gt
+    z; 
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>for(int i = 0; i &lt 100; i++) {
+    &ltstatements&gt
+}
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>for i = 0,100 do 
+    -- note [0,100) bounds
+    &ltstatements&gt
+end 
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>do { 
+    &ltstatements&gt
+} while(b);
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>repeat 
+    &ltstatements&gt
+until ~b
+</code></pre></div>
+</div>
+<p> Switch
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>//NYI, use if statements
+switch(x) {
+    case X1: a;
+    case X2 : b;
+    default: c;
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no switch statements yet, use if
+if x == X1 then a
+elseif x == X2 then b
+else c
+end
+
+</code></pre></div>
+</div>
+<p> Control Flow
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>break;
+return;
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>break
+return
+-- note: break/return must
+-- end the block
+</code></pre></div>
+</div>
+<p> Exceptions
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>try { x; }
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no exceptions, avoiding complexity    
+</code></pre></div>
+</div>
+<h1>Functions</h1>
+<p> Defining functions
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int f(int x, int y) { 
+
+
+    return x + y; 
+}
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra f(x : int, y : int): int 
+    -- :int return is optional
+    -- for non-recursive functions
+    return x + y 
+end
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local args = {symbol(int),symbol(int)}
+terra f([args])
+    var s = 0
+    escape
+      for _,a in ipairs(args) do
+        emit quote
+          s = s + a
+        end
+      end
+    end
+    return s
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>void f() {
+} // no returns
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra f() : {} -- empty tuple means void
+end
+</code></pre></div>
+</div>
+<p> Declaring functions
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int f(int x, int y);
+
+void g();
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra f :: {int,int} -&gt int
+--         ~~~~~~~~~~~~~~~~ function type
+terra g :: {} -&gt {}
+           ~~    ~~ empty tuple for void/no-args
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local args = {int,int}
+local ret = int
+local type = args -&gt reg
+local void = {} -&gt {}
+terra f :: type
+terra g :: void
+</code></pre></div>
+</div>
+<p> Inlining
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>inline void f();
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>f :: {} -&gt {}
+f:setinlined(true) 
+-- actually equivalent to __alwaysinline__
+</code></pre></div>
+</div>
+<p> Operators
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>struct T {};
+T operator+(T x, T y) {
+}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>struct T {}
+terra T.metamethods.__add(x : T, y : T)
+end 
+-- always associated with a lhs type
+-- 'T'
+</code></pre></div>
+</div>
+<p> Overloading
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+int max(int a, int b) {
+    return (a &gt b) ? a : b;
+}
+float max(float a, float b) {
+    return (a &gt b) ? a : b;
+}
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>max = terralib.overloadedfunction("max" { 
+    terra(a : int, b : int) 
+        return terralib.select( a &gt b, a, b) 
+    end,
+    terra(a : float, b : float) 
+        return terralib.select( a &gt b, a, b)
+    end
+})
+</code></pre></div>
+</div>
+<h1>Expressions</h1>
+<p> Basically same semantics as C++: From the Quick Reference "Operators are grouped by precedence, highest first. Unary operators and assignment evaluate right to left. All
+others are left to right. Precedence does not affect order of evaluation, which is undefined. There are no run time checks for arrays out of bounds, invalid pointers, etc. " </p>
+<p> Working with namespaces
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>namespace N {
+    void f() {}
+}
+void g() {
+    N::f()
+}
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local N = {}
+N.f = terra() end
+
+terra g()
+    N.f()
+end
+-- when N is just a Lua table
+-- N.f is replaced with the value
+-- N["f"] in the terra code
+</code></pre></div>
+</div>
+<p> Pointers and members
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>&x
+*p
+t.x
+
+p-&gtx
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>&x
+@p
+t.x
+
+p.x -- '.' works like -&gt
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>&[&ltluaexp&gt]
+@[&ltluaexp&gt]
+t.[("xyz"):sub(1,1)]
+--~~~~~~~~~~~~~~~~~ any lua exp resulting in a string
+p.["x"]
+--~~~~~ same here
+</code></pre></div>
+</div>
+<p> Array index and function calls
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>void g(int* a, int i, T t) {
+    a[i]
+    f(x,y)
+    t(x,y)
+}
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra g(a : &int, i : int, t : T)
+    a[i]
+    f(a,i)
+    t(a,i)
+end
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local 
+terra g(a : &int, i : int, t : T)
+    a[i]
+    escape
+      local args = { a, i }
+      emit quote
+        f([args])
+        t([args])
+      end
+    end
+end
+</code></pre></div>
+</div>
+<p> Updates
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x++,++x
+x--,--x
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- Do not exist
+-- use statements
+x = x + 1
+</code></pre></div>
+</div>
+<p> RTTI
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>typeid(x)
+dynamic_cast&ltT&gt(x)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no build-in equivalents, you can build your own:
+local nextid = 0
+local function addtypeid(T)
+    T.entries:insert(1,{"_typeid",int})
+    T.metamethods._typeid = nextid
+    terra T:init()
+        self._typeid = nextid
+    end
+    nextid = nextid + 1
+end
+terra typeid(v : &opaque)
+    -- extract first member
+    var typeid = @[&int](v)
+    return typeid
+end
+local function dynamic_cast(T)
+    local tid = T.metamethods._typeid
+    return terra(v : &opaque)
+        var id = typeid(v)
+        if id == tid then
+            return [&T](v)
+        end
+        return nil
+    end
+end
+dynamic_cast = terralib.memoize(dynamic_cast)
+struct A { 
+    a : int
+}
+struct B {
+    a : float
+}
+addtypeid(A)
+addtypeid(B)
+C = terralib.includec("stdio.h")
+terra f(v : &opaque)
+    var a = [dynamic_cast(A)](v)
+    var b = [dynamic_cast(B)](v)
+    if a ~= nil then
+        C.printf("A\n")
+    elseif b ~= nil then
+        C.printf("B\n")
+    end
+end
+terra g()
+    var a : A
+    var b : B
+    a:init()
+    b:init()
+    f(&a)
+    f(&b)
+end
+
+</code></pre></div>
+</div>
+<p> Casts
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>(T) x
+(T*) x
+
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>[T](x)
+[&T](x)
+-- you are applying the 
+-- Terra type 'T' like a function.
+-- Because type constructors like '&T'
+-- are Lua expressions, you need to use
+-- an escape '[T]' in general
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local PT = &int
+terra f(a : &opaque) : PT
+    return PT(a)
+end
+
+
+
+</code></pre></div>
+</div>
+<p> Sizeof
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>sizeof(T)
+sizeof(t)
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>sizeof(T)
+sizeof([(`t):gettype()])
+</code></pre></div>
+</div>
+<p> Allocation
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>new T //malloc, use a std.t metatype, or build your own
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>[&T](C.malloc(sizeof(T)))
+
+
+</code></pre></div>
+</div>
+<p> Arithmetic
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>-x
++x //DNE
+x * y
+x / y
+x % y
+x + y 
+x - y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-x
+x -- no '+' prefix
+x * y
+x / y
+x % y
+x + y -- also pointers
+x - y -- also pointers
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local plus = "+"
+terra two()
+    return operator(plus,1,2)
+end
+
+
+
+</code></pre></div>
+</div>
+<p> Comparisons
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x &lt y
+x &lt= y
+x &gt y
+x &gt= y
+x == y
+x != y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x &lt y
+x &lt= y
+x &gt y
+x &gt= y
+x == y
+x ~= y
+</code></pre></div>
+</div>
+<p> Logical and Bitwise Operators
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>~x
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>not x -- bitwise for integers
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>!x
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>not b -- logical for booleans
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x &lt&lt y
+x &gt&gt y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x &lt&lt y
+x &gt&gt y
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x && y
+x || y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>b and d -- logical 'and' for booleans
+b or d -- short circuits
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x & y
+x | y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x and y -- bitwise 'and' for integers
+x or y  -- _no_ short circuit
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x ^ y
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>x ^ y
+</code></pre></div>
+</div>
+<p> Other Stuff
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>x ? y : z
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.select(x,y,z) -- _no_ short circuit
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>throw x; // no exceptions, consider using longjmp,setjmp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no exceptions
+-- consider longjmp, setjmp
+</code></pre></div>
+</div>
+<p> Templates
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Overload f for all types
+template &ltclass T&gt 
+T f(T t) {
+}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>function f(T)
+    return terra(t : T) : T
+    end
+end
+-- only generate one function per unique 'T'
+f = terralib.memoize(f)
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Class with type parameter T
+template &ltclass T&gt 
+class X { 
+  T myt;
+  void foo(T t) {
+    myt = t;
+  } 
+};
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>function X(T)
+    local struct X {
+        myt : T
+    }
+    terra X:foo(t : T)
+        self.myt = t
+    end
+    return X
+end
+-- only generate one struct per unique 'T'
+X = terralib.memoize(X)
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// An object of type "X of int"
+X&ltint&gt x;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>
+var x : X(int)
+</code></pre></div>
+</div>
+<p> Namespaces
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>namespace N {class T {};}
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>N = {} -- lua table
+struct N.T {}
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>N = {}
+local struct mystruct {}
+N["T"] = mystruct
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>// Use name T in namespace N
+N::T t;
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- access T in the table N
+var t : N.T
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Meta-programmed</small><pre class="highlight"><code>local key = "T"
+terra f()
+    var t :  N[key]
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>using N::T;
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>local T = N.T
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>using namespace N;
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- merge N with global environment
+for name,value in pairs(N) do
+    _G[name] = value
+end
+</code></pre></div>
+</div>
+<p> C Library Usage
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>
+int main() {
+    printf("hello, world\n")
+}
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>C = terralib.includec("stdio.h")
+terra main()
+    C.printf("hello, world\n")
+end
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int * a = (int*)malloc(10*sizeof(int))
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>var a = [&int](malloc(10*sizeof(int)))
+</code></pre></div>
+</div>
+<p> Offline Compiler Usage
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>int main() {
+}
+-- shell
+$ cc -o main.o main.cpp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terra main()
+end
+terralib.saveobj("main.o", 
+    { main = main })
+--   ~~~~~~~~~~~~~~~ table of exported functions
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>$ cc -o main -lfoo main.cpp
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.saveobj("main",
+    { main = main}, {"-lfoo"})
+--                  ~~~~~~~~~
+--                  extra linker args
+</code></pre></div>
+</div>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>$ cc -shared  -o libmain.so main.cpp
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.saveobj("libmain.so",
+    { main = main })
+</code></pre></div>
+</div>
+<p> C Libraries
+ </p>
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>#include &ltmylib.h&gt
+int main() {
+    mylib_myfunction();
+}
+-- shell:
+$ cc -I mylibinclude main.cpp libmylib.so -o main -
+
+
+
+
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>terralib.includepath = "mylibinclude;"..terralib.includepath
+C = terralib.includec("mylib.h")
+terralib.linklibrary("libmylib.so")
+terra main ()
+    C.mylib_myfunction()
+end
+-- or, for offline use:
+terralib.saveobj("main",{main = main},
+    {"libmylib.so"})
+--  ~~~~~~~~~~~~~~~ extra linker args
+</code></pre></div>
+</div>

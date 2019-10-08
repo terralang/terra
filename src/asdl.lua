@@ -1,40 +1,4 @@
-local List = {}
-List.__index = List
-for k,v in pairs(table) do
-    List[k] = v
-end
-setmetatable(List, { __call = function(self, lst)
-    if lst == nil then
-        lst = {}
-    end
-    return setmetatable(lst,self)
-end})
-function List:map(fn,...)
-    local l = List()
-    if type(fn) == "function" then
-        for i,v in ipairs(self) do
-            l[i] = fn(v,...)
-        end 
-    else
-        for i,v in ipairs(self) do
-            local sel = v[fn]
-            if type(sel) == "function" then
-                l[i] = sel(v,...)
-            else
-                l[i] = sel
-            end
-        end
-    end
-    return l
-end
-function List:insertall(elems)
-    for i,e in ipairs(elems) do
-        self:insert(e)
-    end
-end
-function List:isclassof(exp)
-    return getmetatable(exp) == self
-end
+local List = require("terralist")
 
 local Context = {}
 function Context:__index(idx)

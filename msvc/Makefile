@@ -110,12 +110,13 @@ $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	"$(LUAJIT_DIR)\src\luajit.c"
 	copy lauxlib.h "$(TERRA_DIR)\release\include\terra"
 	copy luaconf.h "$(TERRA_DIR)\release\include\terra"
 
-"$(BUILD)\terralib.h" "$(BUILD)\strict.h" "$(BUILD)\cudalib.h":	"$(SRC)\terralib.lua" "$(SRC)\strict.lua" "$(SRC)\cudalib.lua" $(LUAJIT) "$(TERRA_DIR)\release\include\terra\lua.h"
+"$(BUILD)\terralib.h" "$(BUILD)\strict.h" "$(BUILD)\cudalib.h" "$(BUILD)\asdl.h" "$(BUILD)\terralist.h":	"$(SRC)\terralib.lua" "$(SRC)\strict.lua" "$(SRC)\cudalib.lua" "$(SRC)\asdl.lua" "$(SRC)\terralist.lua" $(LUAJIT) "$(TERRA_DIR)\release\include\terra\lua.h"
 	set LUA_PATH=$(LUAJIT_DIR)\src\?.lua
 	$(LUAJIT) -bg "$(SRC)\terralib.lua" "$(BUILD)\terralib.h"
 	$(LUAJIT) -bg "$(SRC)\strict.lua" "$(BUILD)\strict.h"
 	$(LUAJIT) -bg "$(SRC)\cudalib.lua" "$(BUILD)\cudalib.h"
 	$(LUAJIT) -bg "$(SRC)\asdl.lua" "$(BUILD)\asdl.h"
+	$(LUAJIT) -bg "$(SRC)\terralist.lua" "$(BUILD)\terralist.h"
 
 "$(BUILD)\clangpaths.h":	$(LUAJIT) "$(SRC)\genclangpaths.lua"
 	cd "$(TERRA_DIR)"

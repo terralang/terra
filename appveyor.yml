@@ -52,7 +52,7 @@ install:
 
 build_script:
   - if /I "%USE_CMAKE%" EQU "1" (cd build)
-  - if /I "%USE_CMAKE%" EQU "1" (cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DTERRA_SLIB_INCLUDE_LLVM=OFF -DTERRA_SLIB_INCLUDE_LUAJIT=OFF -DCMAKE_GENERATOR_PLATFORM=x64)
+  - if /I "%USE_CMAKE%" EQU "1" (cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DCMAKE_GENERATOR_PLATFORM=x64)
   - if /I "%USE_CMAKE%" EQU "1" (cmake --build . --target INSTALL --config Release)
   - if /I "%USE_CMAKE%" EQU "1" (cd ..)
 

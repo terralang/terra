@@ -43,6 +43,7 @@ list(APPEND TERRA_LIB_LUA_SRC
   strict.lua
   cudalib.lua
   asdl.lua
+  terralist.lua
 )
 
 foreach(LUA_SRC ${TERRA_LIB_LUA_SRC})

@@ -1,0 +1,1024 @@
+Terra-Lua Equivalents for C/C++ Programmers
+
+The semantics of Terra are very close to C/C++, but because of its close integration with Lua, the same things might be written a different way. This quick reference sheet shows C++ snippets with equivalent Lua-Terra snippets to make it easier to learn how to program in Terra. A third column shows how to meta-program constructs when applicable.
+
+Content based on <a href="http://www.pa.msu.edu/~duxbury/courses/phy480/Cpp_refcard.pdf">C++ Quick Reference</a>
+Add a pull request want an additional example that isn't shown here.
+
+# Contexts
+
+    // function/global declaration context:
+    typedef int MyInt;
+    MyInt x;
+    
+    int f() {
+        // C++ code context:
+        MyInt bar = x + 1;
+    //  ~~~~~ C++ type context
+    
+        return bar;
+    }
+    
+    struct S {
+        // struct definition context:
+        int a;
+     // ~~~ type context
+        float b;
+    };
+    ###
+    -- Lua context (any Lua code here)
+    MyInt = int -- assignment to Lua variable 'MyInt'
+    x = global(MyInt)
+    
+    terra f()
+        -- Terra context
+        var bar : MyInt = x + 1
+        --        ~~~~~ _Lua_ context, any Lua can go here,
+        --  but it needs to evaluate to a Terra type
+        return bar
+    end
+    
+    struct S {
+        a : int
+        --  ~~~ _Lua_ context, evaluates to a Terra type
+        b : float
+    }
+    
+    -- Meta-programming Lua-Terra creates additional places
+    -- where the context changes.
+    
+    function g() return `4+5 end
+    --                  ~~~~ Terra context, a quote creates a 
+    --                       Terra expression from Lua
+    
+    terra h()
+        var baz = [ g() ]
+        --        ~~~~~~~ Lua context, an escape breaks
+        --  into Lua and evaluates to a Terra expression
+    end
+    
+# Preprocessor
+
+Using multiple files.
+
+    #include "myfile.h"
+    
+    
+    void f() {
+        myfunction();
+    }
+    ###
+    local myfile = require("myfile")
+    -- use Lua's require to load another Lua file
+    -- Terra functions can be stored in a table myfiles
+    terra f()
+        myfile.myfunction()
+    end
+
+Using C functions
+
+    #include <stdio.h>
+    #include <malloc.h>
+    int main() {
+        printf("hello, world\n");
+    }
+    ###
+    local C = terralib.includecstring [[
+        #include<stdio.h>
+        #include<malloc.h
+    ]]
+    -- can also use terralib.includec("stdio.h") for single file
+    -- C is a table of functions (C.printf) and types (C.FILE)
+    ...
+    terra hello()
+        C.printf("hello, world\n")
+    end
+    
+Preprocessor Macro Equivalents
+
+    #define X (3+3)
+    ###
+    local X = `3+3
+    -- Lua variables can hold values that get substituted into Terra functions
+    -- the quotation (`) creates a Terra expression directly from Lua
+
+Macro functions
+
+    #define F(a,b) a + b
+    ###
+    local F = macro(function(a,b)
+        return `a + b
+    end)
+
+Conditional Compilation
+
+    // Use #ifdef to control how functions are defined
+    #ifdef __WIN32
+        char * getOS() { return "Windows"; }
+    #else
+        char * getOS() { return "Linux"; }
+    #endif
+    ###
+    -- use Lua to control how a Terra function is defined
+    if terralib.os == "Windows" then
+        terra getOS() return "Windows" end
+    else
+        terra getOS() return "Linux" end
+    end
+
+# Literals
+
+    255, 0377, 0xff
+    2147483647LL, 0x7ffffffful
+    123.0, 1.23e2
+    "strings\n"
+    'a'
+    "hello" "world"
+    true, false // booleans
+    ###
+    255, 0377, 0xff
+    2147483647LL, 0x7fffffffULL -- these match LuaJIT literals for long numbers
+    123.0, 1.23e2 
+    "strings\n" or 'strings\n' or [[strings\n]] -- match Lua strings
+    ("a")[0] -- no built in literal for char, so index a string (or make a function that )
+    [ "hello".."world" ] -- escape to Lua and concat the strings there
+    true, false
+
+# Declarations and Type Constructors
+
+Declaring variables
+    void f() {
+        int x;
+        int y = 255;
+        auto z = 255;
+    }
+    ###
+    terra f() {
+        var x
+        var y : int = 255
+        var z = 255
+    end
+    ###
+    x = symbol(int)
+    y = symbol(int)
+    z = symbol(int)
+    local zdeclare = quote 
+      var [z] = 255
+    end
+    terra f() 
+        var [x]
+        var [y]
+        [zdeclare]
+        return x + y + z
+    end
+    
+Sizing integer types
+    short s; long l;
+    ###
+    var s : int16, l : int64
+Non-integer primitive types
+    char c = 'a'; 
+    float f; double d; 
+    bool b;
+    ###
+    var c : int8 = ('a')[0] 
+    var f :float, d : double 
+    var b : bool
+Multiple Declarations
+    int a = 1,b = 2,c = 3;
+    ###
+    var a : int,b : int,c : int = 1,2,3
+Arrays
+    int a[10];
+    int a[]={0,1,2};
+    
+    
+    float a[]={0,1,2};
+    
+    
+    int a[2][3]={ {1,2,3},{4,5,6} }; 
+    ###
+    var a : int[10];
+    var a : int[3] = array(0,1,2)
+    -- 'array' is an expression
+    -- not an initializer like C++
+    var a = arrayof([float],0,1,2) 
+    -- use arrayof to specify a type different
+    -- from the expressions used to initialize it
+    var a : (int[3])[2] = array(array(1,2,3),array(4,5,6)); 
+Pointers
+    int* p; 
+    
+    char * s ="hello";
+    
+    void* p = NULL;
+    ###
+    var p : &int 
+    -- read & as 'address of', so &int is an 'address of int'
+    var s : rawstring = "hello" 
+    -- rawstring == &int8 
+    var p : &opaque = nil
+    -- opaque replaces void in pointers
+
+    Vec3& r = v;
+    
+    r.x
+    ###
+    var r : &Vec3 = &v
+    -- references do not exist
+    r.x
+    -- instead '.' works like -> on pointers
+
+Typedefs
+    typedef String char*;
+    ###
+    local String = &int8 
+    -- typedefs are just assignments in Lua
+    -- because Terra types are Lua values
+
+Const
+    const int c = 3;
+    ###
+    var c = 3
+    -- const doesn't exist for variables
+
+Enum
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    enum weekend {SAT,SUN};
+    weekend f() {
+        return SAT
+    }
+    ###
+    -- doesn't exist, replicate it with meta-programming
+    local function Enum(...)
+        local t = { type = int }
+        for i,name in ipairs({...}) do
+             -- make 0-based to match C++
+            t[name] = i - 1
+        end
+        return t
+    end
+    weekend = Enum("SAT","SUN")
+    terra f() : weekend.type
+        return weekend.SAT
+    end
+
+# Globals
+    
+    
+    int x = 3;
+    const int x = 3;
+    int x[] = { 3,4, 5};
+    const int x[] = { 3,4,5};
+    void f() {
+    }
+    ###
+    -- Lua functions construct
+    -- Terra constants
+    x = global(int)
+    x = constant(int,3)
+    x = global(int,`array(3,4,5))
+    x = constant(int,`array(3,4,5))
+    terra f()
+    end
+    ###
+    -- you can create tables of constants
+    sin_values = {}
+    N = 32
+    for i = 1,N do
+        sin_values[i] = 
+            math.sin( 2 * math.pi * (i-1)/N))
+    end
+    -- constant table of sin values embedded in code
+    sin_table = constant(`arrayof(float,sin_values))
+
+
+# Storage Classes
+    
+    
+    int x;
+    static int y;
+    
+    static void g() {
+        return x + y;
+    }
+    void f() {
+        static int z = 0;
+        return g();
+    }
+    extern int w;
+    ###
+    -- exposed/private symbols are specified 
+    -- by the 'saveobj' call
+    x = global(int)
+    y = global(int)
+    
+    terra g() 
+        return x + y
+    end
+    terra f()
+        return g()
+    end
+    -- only x and f are exposed as symbols
+    -- but y and g will be included internally 
+    -- since they are used
+    terralib.saveobj("out.o", { x = x, f = f}) 
+
+    
+    
+    
+    
+    
+    
+    void f() {
+        static int z = 0;
+        return z;
+    }
+    ###
+    -- no direct 'static' equivalent
+    -- for function variables
+    -- but you can control the
+    -- lexical scope of globals
+    -- using Lua 'do' and 'end'
+    do
+        local z = global(int,0)
+        terra f()
+            return z
+        end
+    end
+    
+    
+
+# Statements
+Assignments
+    x = y;
+    x += y;
+    ###
+    x = y
+    x = x + y -- no += like Lua
+Declarations
+    int x;
+    ###
+    var x : int
+Semi-Colons
+    
+    x = y; y = z;
+    ###
+    -- Optional for clarity
+    x = y; y = z;
+    
+Blocks
+    void f() {
+        {
+            printf("hi\n");
+            printf("hi\n");
+            printf("hi\n");
+        }
+    }
+    ###
+    terra f()
+        do
+            C.printf("hi\n")
+            C.printf("hi\n")
+            C.printf("hi\n")
+        end
+    end
+    ###
+    local stats = { 
+        `C.printf("hi\n"),
+        `C.printf("hi\n"),
+        `C.printf("hi\n")
+    }
+    terra f()
+        do
+            [stats]
+        end
+    end
+Conditionals
+    if (x) { <statements> }
+    else if (y) { <statements> }
+    else { <statement> }
+    ###
+    if x then <statements> 
+    elseif y then <statements>
+    else <statements> end
+Loops
+    while(x) {
+        <statements>
+    }
+    ###
+    while x do 
+        <statements>
+    end
+
+    for(x; y; z;) { 
+        <statements>
+    }
+    ###
+    x; 
+    while y do 
+        <statements>
+        z; 
+    end
+
+    for(int i = 0; i < 100; i++) {
+        <statements>
+    }
+    ###
+    for i = 0,100 do 
+        -- note [0,100) bounds
+        <statements>
+    end 
+
+    do { 
+        <statements>
+    } while(b);
+    ###
+    repeat 
+        <statements>
+    until ~b
+Switch
+    //NYI, use if statements
+    switch(x) {
+        case X1: a;
+        case X2 : b;
+        default: c;
+    }
+    ###
+    -- no switch statements yet, use if
+    if x == X1 then a
+    elseif x == X2 then b
+    else c
+    end
+Control Flow
+    break;
+    return;
+    ###
+    break
+    return
+    -- note: break/return must
+    -- end the block
+Exceptions
+    try { x; }
+    ###
+    -- no exceptions, avoiding complexity    
+
+# Functions
+Defining functions
+    int f(int x, int y) { 
+    
+    
+        return x + y; 
+    }
+    ###
+    terra f(x : int, y : int): int 
+        -- :int return is optional
+        -- for non-recursive functions
+        return x + y 
+    end
+    ###
+    local args = {symbol(int),symbol(int)}
+    terra f([args])
+        var s = 0
+        escape
+          for _,a in ipairs(args) do
+            emit quote
+              s = s + a
+            end
+          end
+        end
+        return s
+    end
+
+    void f() {
+    } // no returns
+    ###
+    terra f() : {} -- empty tuple means void
+    end
+Declaring functions
+    int f(int x, int y);
+    
+    void g();
+    ###
+    terra f :: {int,int} -> int
+    --         ~~~~~~~~~~~~~~~~ function type
+    terra g :: {} -> {}
+               ~~    ~~ empty tuple for void/no-args
+    ###
+    local args = {int,int}
+    local ret = int
+    local type = args -> reg
+    local void = {} -> {}
+    terra f :: type
+    terra g :: void
+Inlining
+    inline void f();
+    ###
+    f :: {} -> {}
+    f:setinlined(true) 
+    -- actually equivalent to __alwaysinline__
+
+Operators
+    struct T {};
+    T operator+(T x, T y) {
+    }
+    ###
+    struct T {}
+    terra T.metamethods.__add(x : T, y : T)
+    end 
+    -- always associated with a lhs type
+    -- 'T'
+Overloading
+    
+    int max(int a, int b) {
+        return (a > b) ? a : b;
+    }
+    float max(float a, float b) {
+        return (a > b) ? a : b;
+    }
+    ###
+    max = terralib.overloadedfunction("max" { 
+        terra(a : int, b : int) 
+            return terralib.select( a > b, a, b)
+        end,
+        terra(a : float, b : float) 
+            return terralib.select( a > b, a, b)
+        end
+    })
+
+# Expressions
+
+
+Basically same semantics as C++: From the Quick Reference "Operators are grouped by precedence, highest first. Unary operators and assignment evaluate right to left. All
+others are left to right. Precedence does not affect order of evaluation, which is undefined. There are no run time checks for arrays out of bounds, invalid pointers, etc. "
+
+
+Working with namespaces
+
+    namespace N {
+        void f() {}
+    }
+    void g() {
+        N::f()
+    }
+    ###
+    local N = {}
+    N.f = terra() end
+    
+    terra g()
+        N.f()
+    end
+    -- when N is just a Lua table
+    -- N.f is replaced with the value
+    -- N["f"] in the terra code
+
+Pointers and members
+    &x
+    *p
+    t.x
+    
+    p->x
+    ###
+    &x
+    @p
+    t.x
+    
+    p.x -- '.' works like ->
+    ###
+    &[<luaexp>]
+    @[<luaexp>]
+    t.[("xyz"):sub(1,1)]
+    --~~~~~~~~~~~~~~~~~ any lua exp resulting in a string
+    p.["x"]
+    --~~~~~ same here
+
+Array index and function calls
+
+    void g(int* a, int i, T t) {
+        a[i]
+        f(x,y)
+        t(x,y)
+    }
+    ###
+    terra g(a : &int, i : int, t : T)
+        a[i]
+        f(a,i)
+        t(a,i)
+    end
+    ###
+    local 
+    terra g(a : &int, i : int, t : T)
+        a[i]
+        escape
+          local args = { a, i }
+          emit quote
+            f([args])
+            t([args])
+          end
+        end
+    end
+
+Updates
+
+    x++,++x
+    x--,--x
+    ###
+    -- Do not exist
+    -- use statements
+    x = x + 1
+
+RTTI
+
+    typeid(x)
+    dynamic_cast<T>(x)
+    ###
+    -- no build-in equivalents, you can build your own:
+    local nextid = 0
+    local function addtypeid(T)
+        T.entries:insert(1,{"_typeid",int})
+        T.metamethods._typeid = nextid
+        terra T:init()
+            self._typeid = nextid
+        end
+        nextid = nextid + 1
+    end
+    terra typeid(v : &opaque)
+        -- extract first member
+        var typeid = @[&int](v)
+        return typeid
+    end
+    local function dynamic_cast(T)
+        local tid = T.metamethods._typeid
+        return terra(v : &opaque)
+            var id = typeid(v)
+            if id == tid then
+                return [&T](v)
+            end
+            return nil
+        end
+    end
+    dynamic_cast = terralib.memoize(dynamic_cast)
+    struct A { 
+        a : int
+    }
+    struct B {
+        a : float
+    }
+    addtypeid(A)
+    addtypeid(B)
+    C = terralib.includec("stdio.h")
+    terra f(v : &opaque)
+        var a = [dynamic_cast(A)](v)
+        var b = [dynamic_cast(B)](v)
+        if a ~= nil then
+            C.printf("A\n")
+        elseif b ~= nil then
+            C.printf("B\n")
+        end
+    end
+    terra g()
+        var a : A
+        var b : B
+        a:init()
+        b:init()
+        f(&a)
+        f(&b)
+    end
+    
+Casts
+    (T) x
+    (T*) x
+    ###
+    [T](x)
+    [&T](x)
+    -- you are applying the 
+    -- Terra type 'T' like a function.
+    -- Because type constructors like '&T'
+    -- are Lua expressions, you need to use
+    -- an escape '[T]' in general
+    ###
+    local PT = &int
+    terra f(a : &opaque) : PT
+        return PT(a)
+    end
+Sizeof
+    sizeof(T)
+    sizeof(t)
+    ###
+    sizeof(T)
+    sizeof([(`t):gettype()])
+
+Allocation
+
+    new T //malloc, use a std.t metatype, or build your own
+    ###
+    [&T](C.malloc(sizeof(T)))
+    
+    
+//    new T(x,y)
+//    new T[x]
+//    delete p
+//    delete [] p
+//    ###
+//    new T(x,y)
+//    new T[x]
+//    delete p
+//    delete [] p
+
+Arithmetic
+
+    -x
+    +x //DNE
+    x * y
+    x / y
+    x % y
+    x + y 
+    x - y
+    ###
+    -x
+    x -- no '+' prefix
+    x * y
+    x / y
+    x % y
+    x + y -- also pointers
+    x - y -- also pointers
+    ###
+    local plus = "+"
+    terra two()
+        return operator(plus,1,2)
+    end
+
+Comparisons
+    x < y
+    x <= y
+    x > y
+    x >= y
+    x == y
+    x != y
+    ###
+    x < y
+    x <= y
+    x > y
+    x >= y
+    x == y
+    x ~= y
+
+Logical and Bitwise Operators
+
+    ~x
+    ###
+    not x -- bitwise for integers
+
+    !x
+    ###
+    not b -- logical for booleans
+
+    x << y
+    x >> y
+    ###
+    x << y
+    x >> y
+
+    x && y
+    x || y
+    ###
+    b and d -- logical 'and' for booleans
+    b or d -- short circuits
+
+    x & y
+    x | y
+    ###
+    x and y -- bitwise 'and' for integers
+    x or y  -- _no_ short circuit
+
+    x ^ y
+    ###
+    x ^ y
+
+Other Stuff
+
+    x ? y : z
+    ###
+    terralib.select(x,y,z) -- _no_ short circuit
+
+    throw x; // no exceptions, consider using longjmp,setjmp
+    ###
+    -- no exceptions
+    -- consider longjmp, setjmp
+
+
+//# Object-Oriented Programming/Encapsulation
+//
+//
+//    class T { // A new type
+//
+//    // these don't exist, can be accomplished by hiding symbols,
+//    private: 
+//    protected: 
+//    public:
+//    friend void i(); // Global function i() has private access
+//    friend class U; // Members of class U have private access
+// 
+//    class Z {}; // Nested class T::Z, does not exist
+// 
+//     int x;
+//     void f(); 
+//     void g() {return;} // Inline member function
+//     void h() const; // Does not modify any data members
+//     int operator+(int y); // t+y means t.operator+(y)
+//     int operator-(); // -t means t.operator-()
+// 
+//     T(): x(1) {} // Constructor with initialization list
+//     T(const T& t): x(t.x) {} // Copy constructor
+//     T& operator=(const T& t) {x=t.x; return *this; } // Assignment operator
+//     ~T(); // Destructor (automatic cleanup routine) (defer operator here)
+// 
+//     explicit T(int a); // Allow t=T(3) but not t=3
+//     operator int() const {return x;} // Allows int(t)
+// 
+//     static int y; // Data shared by all T objects
+//     static void l(); // Shared code. May access y but not x
+//     typedef int V; // T::V means int
+//    };
+//
+//    void T::f() { // Code for member function f of class T
+//     this->x = x;
+//    } // this is address of self (means x=x;)
+//    int T::y = 2; // Initialization of static member (required)
+//    T::l(); // Call to static member
+//
+//    //None of this exists, but you can implement it if you want
+//    class T { 
+//     virtual void f(); // May be overridden at run time by derived
+//    class
+//     virtual void g()=0; }; // Must be overridden (pure virtual)
+//    class U: public T {}; // Derived class U inherits all members of base
+//    T
+//    class V: private T {}; // Inherited members of T become private
+//    class W: public T, public U {}; // Multiple inheritance
+//    class X: public virtual T {}; // Classes derived from X have base T
+//    directly
+//
+//
+//Copy/Assignment/Destructor: Terra does not do RAII, assignment is not overloadable, so no copy constructors exist.
+//
+
+Templates
+
+    // Overload f for all types
+    template <class T> 
+    T f(T t) {
+    }
+    ###
+    function f(T)
+        return terra(t : T) : T
+        end
+    end
+    -- only generate one function per unique 'T'
+    f = terralib.memoize(f)
+
+    // Class with type parameter T
+    template <class T> 
+    class X { 
+      T myt;
+      void foo(T t) {
+        myt = t;
+      } 
+    };
+    ###
+    function X(T)
+        local struct X {
+            myt : T
+        }
+        terra X:foo(t : T)
+            self.myt = t
+        end
+        return X
+    end
+    -- only generate one struct per unique 'T'
+    X = terralib.memoize(X)
+
+    // An object of type "X of int"
+    X<int> x;
+    ###
+    
+    var x : X(int)
+
+Namespaces
+
+    namespace N {class T {};}
+    ###
+    N = {} -- lua table
+    struct N.T {}
+    ###
+    N = {}
+    local struct mystruct {}
+    N["T"] = mystruct
+
+    // Use name T in namespace N
+    N::T t;
+    ###
+    -- access T in the table N
+    var t : N.T
+    ###
+    local key = "T"
+    terra f()
+        var t :  N[key]
+    end
+
+    using N::T;
+    ###
+    local T = N.T
+
+    using namespace N;
+    ###
+    -- merge N with global environment
+    for name,value in pairs(N) do
+        _G[name] = value
+    end
+
+//# Terra-specific Meta-Programming
+//
+//    `e
+//    quote s in e end
+//    [e]
+//    escape --implicitly defines local emit function
+//        ...
+//        emit()
+//    end
+//    struct Foo(Decorator) {
+//    }
+//
+
+C Library Usage
+    
+    int main() {
+        printf("hello, world\n")
+    }
+    ###
+    C = terralib.includec("stdio.h")
+    terra main()
+        C.printf("hello, world\n")
+    end
+
+    int * a = (int*)malloc(10*sizeof(int))
+    ###
+    var a = [&int](malloc(10*sizeof(int)))
+
+//
+//    printf,malloc,free,etc.
+//    dlopen
+//
+//
+Offline Compiler Usage
+
+    int main() {
+    }
+    -- shell
+    $ cc -o main.o main.cpp
+    ###
+    terra main()
+    end
+    terralib.saveobj("main.o", 
+        { main = main })
+    --   ~~~~~~~~~~~~~~~ table of exported functions
+
+    $ cc -o main -lfoo main.cpp
+    ###
+    terralib.saveobj("main",
+        { main = main}, {"-lfoo"})
+    --                  ~~~~~~~~~
+    --                  extra linker args
+
+    $ cc -shared  -o libmain.so main.cpp
+    ###
+    terralib.saveobj("libmain.so",
+        { main = main })
+
+C Libraries
+    #include <mylib.h>
+    int main() {
+        mylib_myfunction();
+    }
+    -- shell:
+    $ cc -I mylibinclude main.cpp libmylib.so -o main -
+    ###
+    terralib.includepath = "mylibinclude;"..terralib.includepath
+    C = terralib.includec("mylib.h")
+    terralib.linklibrary("libmylib.so")
+    terra main ()
+        C.mylib_myfunction()
+    end
+    -- or, for offline use:
+    terralib.saveobj("main",{main = main},
+        {"libmylib.so"})
+    --  ~~~~~~~~~~~~~~~ extra linker args
+

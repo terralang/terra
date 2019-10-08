@@ -1,0 +1,154 @@
+@import url(http://fonts.googleapis.com/css?family=Ubuntu:300,500,300italic);
+@import url(http://fonts.googleapis.com/css?family=Ubuntu+Condensed);
+
+body {
+  margin: 0px;
+  padding:50px;
+  font:16px/1.5 "Ubuntu", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color:#000;
+  font-weight: 300;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 10px 0;
+  color: #444;
+}
+
+p, ul, ol, table, dl {
+  margin: 10px 0;
+}
+
+h1, h2, h3 {
+  font-family: "Ubuntu Condensed", sans-serif;
+  line-height:1.1;
+}
+
+h1 {
+  font-size:28px;
+}
+h1.title {
+  font-size:72px;
+  letter-spacing: -4px;
+  font-weight: 400;
+}
+
+a {
+  color:#39c;
+  text-decoration:none;
+}
+
+a:hover {
+  color:#069;
+}
+
+a small {
+  font-size:11px;
+  color:#777;
+  margin-top:-0.6em;
+  display:block;
+}
+
+a:hover small {
+  color:#777;
+}
+
+.wrapper {
+  width:900px;
+  margin: 0 auto;
+}
+.title {
+  width: 188px;
+  padding-right: 70px;
+  margin: 0 auto;
+}
+.links {
+    max-width: 758px;
+    margin: 1em auto;
+}
+.links a {
+    padding: 4px;
+    margin-right: .7em;
+    margin-left: .7em;
+}
+.current {
+    background: #f8f8f8;
+    padding: 3px;
+    border-radius:5px;
+    border:1px solid #e5e5e5;
+}
+header {
+    font-size: 14px;
+}
+header p {
+    margin: 0px;
+}
+
+blockquote {
+  border-left:1px solid #e5e5e5;
+  margin:0;
+  padding:0 0 0 20px;
+  font-style:italic;
+}
+
+pre {
+  margin: 0;
+  width: max-content;
+  width: -webkit-max-content;
+  width: -moz-max-content;
+  padding:8px 15px;
+  background: #f8f8f8;  
+  border-radius:5px;
+  border:1px solid #e5e5e5;
+  overflow-x: auto;
+}
+
+table {
+  width:100%;
+  border-collapse:collapse;
+}
+
+th, td {
+  text-align:left;
+  padding:5px 10px;
+  border-bottom:1px solid #e5e5e5;
+}
+
+dt {
+  color:#444;
+  font-weight:500;
+}
+
+th {
+  color:#444;
+}
+
+img {
+  max-width:100%;
+}
+
+strong {
+  color:#444;
+  font-weight:500;
+}
+
+small {
+  font-size:11px;
+}
+
+hr {
+  border:0;
+  background:#e5e5e5;
+  height:1px;
+  margin:0 0 20px;
+}
+
+#introcode>pre {
+    margin: 0 auto;
+}
+
+@media print {
+  body {
+    padding:0.4in;
+    font-size:12pt;
+  }
+}
