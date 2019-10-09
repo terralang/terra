@@ -93,6 +93,7 @@ tree =
      | repeatstat(tree* statements, tree condition)
      | fornum(allocvar variable, tree initial, tree limit, tree? step, block body)
      | ifstat(ifbranch* branches, block? orelse)
+     | switchstat(tree condition, switchcase* cases, block? ordefault)
      | defer(tree expression)
      | select(tree value, number index, string fieldname) # typed version, fieldname for debugging
      | globalvalueref(string name, globalvalue value)
@@ -113,6 +114,7 @@ tree =
      
      # special purpose nodes, they only occur in specific locations, but are considered trees because they can contain typed trees
      | ifbranch(tree condition, block body)
+     | switchcase(tree condition, block body)
      | storelocation(number index, tree value) # for struct cast, value uses structvariable
 
 Type = primitive(string type, number bytes, boolean signed)
@@ -1969,6 +1971,9 @@ local function semanticcheck(diag,parameters,block)
             elseif e:is "ifbranch" then
                 visitnolocaldefers(e.condition,e.condition)
                 visit(e.body)
+            elseif e:is "switchcase" then
+                visitnolocaldefers(e.condition,e.condition)
+                visit(e.body)
             elseif e:is "fornum" then
                 visit(e.initial); visit(e.limit); visit(e.step)
                 visit(e.variable)
@@ -3065,6 +3070,19 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local body = checkblock(s.body)
         return copyobject(s,{condition = e, body = body})
     end
+    local function checkexpintegral(e)
+        local e = checkexp(re)
+        if not e.type:isintegral() then
+            diag:reporterror(e,"expected an integral expression but found ",e.type)
+            e.type = terra.types.error
+        end
+        return e
+    end
+    local function checkcasebranch(s)
+        local e = checkexpintegral(s.condition)
+        local body = checkblock(s.body)
+        return copyobject(s,{condition = e, body = body})
+    end
 
     local function checkformalparameterlist(paramlist, requiretypes)
         local evalparams = evaluateparameterlist(diag,env:combinedenv(),paramlist,requiretypes)
@@ -3195,6 +3213,11 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local br = s.branches:map(checkcondbranch)
                 local els = (s.orelse and checkblock(s.orelse))
                 return s:copy{ branches = br, orelse = els }
+            elseif s:is "switchstat" then
+                local cond = checkexpintegral(s.condition)
+                local br = s.cases:map(checkcasebranch)
+                local def = (s.ordefault and checkblock(s.ordefault))
+                return s:copy{ cases = br, ordefault = def }
             elseif s:is "repeatstat" then
                 local stmts = checkstmts(s.statements)
                 local e = checkcond(s.condition)
@@ -3718,6 +3741,21 @@ function prettystring(toptree,breaklines)
             if s.orelse then
                 begin(s.orelse,"else\n")
                 emitStmt(s.orelse)
+            end
+            begin(s,"end\n")
+        elseif s:is "switchstat" then
+            begin(s, "switch ")
+            emitExp(s.condition)
+            emit(" do\n")
+            for i,b in ipairs(s.cases) do
+                begin(b,"case ")
+                emitExp(b.condition)
+                emit(" then\n")
+                emitStmt(b.body)
+            end
+            if s.ordefault then
+                begin(s.ordefault,"default \n")
+                emitStmt(s.ordefault)
             end
             begin(s,"end\n")
         elseif s:is "defvar" then

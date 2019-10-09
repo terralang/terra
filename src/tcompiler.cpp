@@ -2292,6 +2292,9 @@ if(baseT->isIntegerTy()) { \
     Value * emitCond(Obj * cond) {
         return emitCond(emitExp(cond));
     }
+    llvm::ConstantInt* emitConstantInt(Obj * v) {
+      return dyn_cast<llvm::ConstantInt>(emitExp(v)); // TODO: collapse constants 
+    }
     Value * emitCond(Value * cond) {
         Type * resultType = Type::getInt1Ty(*CU->TT->ctx);
         if(cond->getType()->isVectorTy()) {
@@ -2317,6 +2320,20 @@ if(baseT->isIntegerTy()) { \
         
     }
     
+    void emitCaseBranch(Obj* casebranch, SwitchInst* sw, BasicBlock* footer) {
+      Obj caseindex, body;
+      casebranch->obj("condition", &caseindex);
+      casebranch->obj("body", &body);
+
+      BasicBlock* thenBB = createAndInsertBB("then");
+      sw->addCase(emitConstantInt(&caseindex), thenBB);
+      followsBB(thenBB);
+      setInsertBlock(thenBB);
+
+      emitStmt(&body);
+      B->CreateBr(footer);
+    }
+
 #ifdef DEBUG_INFO_WORKING
     DIFileP createDebugInfoForFile(const char * filename) {
         //checking the existence of a file once per function can be expensive,
@@ -2661,6 +2678,34 @@ if(baseT->isIntegerTy()) { \
                 B->CreateBr(footer);
                 followsBB(footer);
                 setInsertBlock(footer);
+            } break;
+            case T_switchstat:
+            {
+              Obj cond;
+              stmt->obj("condition", &cond);
+
+              BasicBlock* footer = createAndInsertBB("merge");
+              BasicBlock* dest = createAndInsertBB("default_block");
+              Value* condexpr = emitExp(&cond);
+              Obj cases;
+              stmt->obj("cases", &cases);
+              int N = cases.size();
+              SwitchInst* sw = B->CreateSwitch(condexpr, dest, N);
+              for(int i = 0; i < N; i++)
+              {
+                Obj casebranch;
+                cases.objAt(i, &casebranch);
+                emitCaseBranch(&casebranch, sw, footer);
+              }
+              followsBB(dest);
+              setInsertBlock(dest);
+
+              Obj ordefault;
+              if(stmt->obj("ordefault", &ordefault))
+                emitStmt(&ordefault);
+              B->CreateBr(footer);
+              followsBB(footer);
+              setInsertBlock(footer);
             } break;
             case T_repeatstat: {
                 Obj cond,statements;
