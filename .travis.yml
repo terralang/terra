@@ -9,6 +9,7 @@ compiler:
   - clang
 env:
   matrix:
+  - CHECK_CLANG_FORMAT=1
   - LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1
@@ -26,6 +27,8 @@ matrix:
   exclude:
     - os: osx
       compiler: gcc
+    - os: osx
+      env: CHECK_CLANG_FORMAT=1
     - os: osx
       env: LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
     - os: osx

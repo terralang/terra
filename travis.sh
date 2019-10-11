@@ -3,6 +3,14 @@
 set -e
 set -x
 
+if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
+    ./format.sh
+    git diff
+    git status
+    git diff-index --quiet HEAD
+    exit
+fi
+
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
   if [[ $LLVM_CONFIG = llvm-config-7 ]]; then
