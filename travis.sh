@@ -4,11 +4,22 @@ set -e
 set -x
 
 if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
+    if [[ $(uname) = Linux ]]; then
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-9 main"
+        for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+        sudo apt-get install -y clang-format-9
+        export PATH="/usr/lib/llvm-9/bin:$PATH"
+    else
+        exit 1
+    fi
+    which clang-format
+
     ./format.sh
-    git diff
     git status
+    git diff
     git diff-index --quiet HEAD
-    exit
+    exit 0
 fi
 
 if [[ $(uname) = Linux ]]; then
