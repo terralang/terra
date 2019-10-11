@@ -4153,13 +4153,13 @@ if ffi.os == "Windows" then
           end
           terra.vshome = terra.vshome .. "VC\\"
           terra.vsarch64 = "amd64" -- Before 2017, Visual Studio had it's own special architecture convention, because who needs standards
-          terra.vslinkpath = [[BIN\%s_%s\link.exe]]
+          terra.vslinkpath = [[BIN\%s_%s\]]
         else
           if terra.vshome[#terra.vshome] ~= '\\' then
             terra.vshome = terra.vshome .. "\\"
           end
           terra.vsarch64 = "x64"
-          terra.vslinkpath = [[bin\Host%s\%s\link.exe]]
+          terra.vslinkpath = [[bin\Host%s\%s\]]
         end
         
         terra.systemincludes:insertall {
@@ -4178,9 +4178,14 @@ if ffi.os == "Windows" then
               winarch = "arm64"
             end
             
-            local linker = terra.vshome..(terra.vslinkpath:format("x86", target))
+            local host = ffi.arch
+            if host == "x64" then
+              host = terra.vsarch64
+            end
+            
+            local linker = terra.vshome..(terra.vslinkpath:format(host, target)).."link.exe"
             local vclib = ([[%s\um\%s;%s\ucrt\%s;]]):format(terra.sdklib, winarch, terra.sdklib, winarch) .. ([[%sLIB\%s;%sATLMFC\LIB\%s;]]):format(terra.vshome, target, terra.vshome, target)
-            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[BIN;]]
+            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[BIN;]]..terra.vshome..(terra.vslinkpath:format(host, host))..";" -- deals with VS2017 cross-compile nonsense: https://github.com/rust-lang/rust/issues/31063
             vclib,vcpath = "LIB="..vclib,"Path="..vcpath
             return linker,vclib,vcpath
         end
