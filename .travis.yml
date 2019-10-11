@@ -25,6 +25,11 @@ env:
 
 matrix:
   exclude:
+    # Only need one copy of this test.
+    - os: linux
+      compiler: clang
+      env: CHECK_CLANG_FORMAT=1
+    # Various macOS tests seem to be broken.
     - os: osx
       compiler: gcc
     - os: osx
