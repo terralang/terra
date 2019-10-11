@@ -2918,7 +2918,7 @@ static int terra_disassemble(lua_State * L) {
     return 0;
 }
 
-static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker) {
+static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker, const char* target) {
 #ifndef _WIN32
     #if LLVM_VERSION >= 36
         *linker = *sys::findProgramByName("gcc");
@@ -2933,7 +2933,8 @@ static bool FindLinker(terra_State * T, LLVM_PATH_TYPE * linker) {
 #else
 	lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
 	lua_getfield(T->L, -1, "getvclinker");
-	lua_call(T->L, 0, 3);
+  lua_pushstring(T->L, target);
+  lua_call(T->L, 1, 3);
 	*linker = LLVM_PATH_TYPE(lua_tostring(T->L,-3));
 	const char * vclib = lua_tostring(T->L,-2);
 	const char * vcpath = lua_tostring(T->L,-1);
@@ -2962,7 +2963,9 @@ static bool SaveAndLink(TerraCompilationUnit * CU, Module * M, std::vector<const
     }
 	tmp.close();
     LLVM_PATH_TYPE linker;
-    if(FindLinker(CU->T,&linker)) {
+    std::string arch(CU->TT->Triple);
+    arch.erase(arch.find_first_of('-'));
+    if(FindLinker(CU->T,&linker, arch.c_str())) {
         unlink(tmpnamebuf);
         terra_pusherror(CU->T,"llvm: failed to find linker");
         return true;

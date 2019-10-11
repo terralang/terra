@@ -1,5 +1,15 @@
 environment:
   matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
+      USE_CMAKE: 1
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
+      USE_CMAKE: 1
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 7.0.0
       LLVM_VERSION_SHORT: 70

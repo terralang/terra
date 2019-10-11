@@ -4043,12 +4043,16 @@ end
 
 
 -- configure path variables
-terra.cudahome = os.getenv("CUDA_HOME") or (ffi.os == "Windows" and os.getenv("CUDA_PATH")) or "/usr/local/cuda"
+if ffi.os == "Windows" then
+  terra.cudahome = os.getenv("CUDA_PATH")
+else
+  terra.cudahome = os.getenv("CUDA_HOME") or "/usr/local/cuda"
+end
 terra.cudalibpaths = ({ OSX = {driver = "/usr/local/cuda/lib/libcuda.dylib", runtime = "$CUDA_HOME/lib/libcudart.dylib", nvvm =  "$CUDA_HOME/nvvm/lib/libnvvm.dylib"}; 
                        Linux =  {driver = "libcuda.so", runtime = "$CUDA_HOME/lib64/libcudart.so", nvvm = "$CUDA_HOME/nvvm/lib64/libnvvm.so"}; 
                        Windows = {driver = "nvcuda.dll", runtime = "$CUDA_HOME\\bin\\cudart64_*.dll", nvvm = "$CUDA_HOME\\nvvm\\bin\\nvvm64_*.dll"}; })[ffi.os]
 -- OS's that are not supported by CUDA will have an undefined value here
-if terra.cudalibpaths then
+if terra.cudalibpaths and terra.cudahome then
 	for name,path in pairs(terra.cudalibpaths) do
 		path = path:gsub("%$CUDA_HOME",terra.cudahome)
 		if path:match("%*") and ffi.os == "Windows" then
@@ -4074,38 +4078,126 @@ if ffi.os == "Windows" then
         end
         terra.includepath = os.getenv("INCLUDE")
       
-        function terra.getvclinker()
+        function terra.getvclinker(target)
           local vclib = os.getenv("LIB")
           local vcpath = terra.vcpath or os.getenv("Path")
           vclib,vcpath = "LIB="..vclib,"Path="..vcpath
           return terra.vclinker,vclib,vcpath
         end
     else
-        -- this is the reason we can't have nice things
-        local function registrystring(key,value,default)
-            local F = io.popen( ([[reg query "%s" /v "%s"]]):format(key,value) )
-            local result = F and F:read("*all"):match("REG_SZ%W*([^\n]*)\n")
-            return result or default
+        local function compareversion(form, a, b)
+          if (a == nil) or (b == nil) then return true end
+          
+          local alist = {}
+          for e in string.gmatch(a, form) do table.insert(alist, tonumber(e)) end
+          local blist = {}
+          for e in string.gmatch(b, form) do table.insert(blist, tonumber(e)) end
+          
+          for i=1,#alist do
+            if alist[i] ~= blist[i] then
+              return alist[i] > blist[i]
+            end
+          end
+          return false
         end
-        terra.vshome = registrystring([[HKLM\Software\WOW6432Node\Microsoft\VisualStudio\12.0]],"ShellFolder",[[C:\Program Files (x86)\Microsoft Visual Studio 12.0\]])
-        local windowsdk = registrystring([[HKLM\SOFTWARE\Wow6432Node\Microsoft\Microsoft SDKs\Windows\v8.1]],"InstallationFolder",[[C:\Program Files (x86)\Windows Kits\8.1\]])	
-
+        
+        -- First find the latest Windows SDK installed using the registry
+        local installedroots = [[SOFTWARE\Microsoft\Windows Kits\Installed Roots]]
+        local windowsdk = terra.queryregvalue(installedroots, "KitsRoot10")
+        if windowsdk == nil then
+          windowsdk = terra.queryregvalue(installedroots, "KitsRoot81")
+          if windowsdk == nil then
+            error "Can't find windows SDK version 8.1 or 10! Try running Terra in a Native Tools Developer Console instead."
+          end
+          
+          terra.systemincludes:insertall{ "shared", "um", "winrt" }
+          terra.systemincludes = terra.systemincludes:map(function(e) return windowsdk..[[include\]]..e end)
+          
+          local version = nil
+          for i, v in ipairs(terra.listsubdirectories(windowsdk .. "lib")) do
+            if compareversion("%d+", v, version) then
+              version = v
+            end
+          end
+          if version == nil then
+            error "Can't find valid version subdirectory in the SDK! Is the Windows 8.1 SDK installation corrupt?"
+          end
+          
+          terra.sdklib = windowsdk .. "lib\\" .. version
+        else
+          -- Find highest version. For sanity reasons, we assume the same version folders are in both lib/ and include/
+          local version = nil
+          for i, v in ipairs(terra.listsubdirectories(windowsdk .. "include")) do
+            if compareversion("%d+", v, version) then
+              version = v
+            end
+          end
+          if version == nil then
+            error "Can't find valid version subdirectory in the SDK! Is the SDK installation corrupt?"
+          end
+          
+          terra.systemincludes:insertall{ "ucrt", "shared", "um", "winrt" }
+          terra.systemincludes = terra.systemincludes:map(function(e) return windowsdk..version..[[\include\]]..e end)
+          terra.sdklib = windowsdk .. "lib\\" .. version
+        end
+        
+        terra.vshome = terra.findvisualstudiotoolchain()
+        if terra.vshome == nil then          
+          terra.vshome = terra.queryregvalue([[SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0]], "ShellFolder") or
+            terra.queryregvalue([[SOFTWARE\WOW6432Node\Microsoft\VisualStudio\12.0]], "ShellFolder") or
+            terra.queryregvalue([[SOFTWARE\WOW6432Node\Microsoft\VisualStudio\11.0]], "ShellFolder") or
+            terra.queryregvalue([[SOFTWARE\WOW6432Node\Microsoft\VisualStudio\10.0]], "ShellFolder")
+            
+          if terra.vshome == nil then
+            error "Can't find Visual Studio either via COM or the registry! Try running Terra in a Native Tools Developer Console instead."
+          end
+          terra.vshome = terra.vshome .. "VC\\"
+          terra.vsarch64 = "amd64" -- Before 2017, Visual Studio had it's own special architecture convention, because who needs standards
+          terra.vslinkpath = function(host, target)
+            if string.lower(host) == string.lower(target) then
+              return ([[BIN\%s\]]):format(host)
+            else
+              return ([[BIN\%s_%s\]]):format(host, target)
+            end
+          end
+        else
+          if terra.vshome[#terra.vshome] ~= '\\' then
+            terra.vshome = terra.vshome .. "\\"
+          end
+          terra.vsarch64 = "x64"
+          terra.vslinkpath = function(host, target) return ([[bin\Host%s\%s\]]):format(host, target) end
+        end
+        
         terra.systemincludes:insertall {
-            ("%sVC/INCLUDE"):format(terra.vshome),
-            ("%sVC/ATLMFC/INCLUDE"):format(terra.vshome),
-            ("%sinclude/shared"):format(windowsdk),
-            ("%sinclude/um"):format(windowsdk),
-            ("%sinclude/winrt"):format(windowsdk),
-            ("%s/include"):format(terra.cudahome)
+            ([[%sINCLUDE]]):format(terra.vshome),
+            ([[%sATLMFC\INCLUDE]]):format(terra.vshome)
         }
-
-        function terra.getvclinker() --get the linker, and guess the needed environment variables for Windows if they are not set ...
-            local linker = terra.vshome..[[VC\BIN\x86_amd64\link.exe]]
-            local vclib = terra.vclib or string.gsub([[%VC\LIB\amd64;%VC\ATLMFC\LIB\amd64;C:\Program Files (x86)\Windows Kits\8.1\lib\winv6.3\um\x64;]],"%%",terra.vshome)
-            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[VC\BIN;]]
+        
+        function terra.getvclinker(target) --get the linker, and guess the needed environment variables for Windows if they are not set ...
+            target = target or "x86_64"
+            local winarch = target
+            if target == "x86_64" then
+              target = terra.vsarch64
+              winarch = "x64" -- Unbelievably, Visual Studio didn't follow the Windows SDK convention until 2017+
+            elseif target == "aarch64" or target == "aarch64_be" then
+              target = "arm64"
+              winarch = "arm64"
+            end
+            
+            local host = ffi.arch
+            if host == "x64" then
+              host = terra.vsarch64
+            end
+            
+            local linker = terra.vshome..terra.vslinkpath(host, target).."link.exe"
+            local vclib = ([[%s\um\%s;%s\ucrt\%s;]]):format(terra.sdklib, winarch, terra.sdklib, winarch) .. ([[%sLIB\%s;%sATLMFC\LIB\%s;]]):format(terra.vshome, target, terra.vshome, target)
+            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[BIN;]]..terra.vshome..terra.vslinkpath(host, host)..";" -- deals with VS2017 cross-compile nonsense: https://github.com/rust-lang/rust/issues/31063
             vclib,vcpath = "LIB="..vclib,"Path="..vcpath
             return linker,vclib,vcpath
         end
+    end
+    if terra.cudahome then
+        terra.systemincludes:insertall{terra.cudahome.."\\include"}
     end
 end
 
