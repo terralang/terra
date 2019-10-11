@@ -72,7 +72,7 @@
 #include "llvmheaders_70.h"
 #else
 #error "unsupported LLVM version"
-//for OSX code completion
+// for OSX code completion
 #define LLVM_VERSION 60
 #include "llvmheaders_60.h"
 #endif
@@ -86,13 +86,13 @@
 #endif
 
 #if LLVM_VERSION >= 36
-#define UNIQUEIFY(T,x) (std::unique_ptr<T>(x))
+#define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))
 #define FD_ERRTYPE std::error_code
 #define FD_ISERR(x) (x)
 #define FD_ERRSTR(x) ((x).message().c_str())
 #define METADATA_ROOT_TYPE llvm::Metadata
 #else
-#define UNIQUEIFY(T,x) (x)
+#define UNIQUEIFY(T, x) (x)
 #define FD_ERRTYPE std::string
 #define FD_ISERR(x) (!(x).empty())
 #define FD_ERRSTR(x) ((x).c_str())
@@ -100,26 +100,25 @@
 #endif
 
 #if LLVM_VERSION >= 37
-using llvm::legacy::PassManager;
 using llvm::legacy::FunctionPassManager;
+using llvm::legacy::PassManager;
 typedef llvm::raw_pwrite_stream emitobjfile_t;
 typedef llvm::DIFile* DIFileP;
 #else
 #define DEBUG_INFO_WORKING
-using llvm::PassManager;
 using llvm::FunctionPassManager;
+using llvm::PassManager;
 typedef llvm::raw_ostream emitobjfile_t;
 typedef llvm::DIFile DIFileP;
 #endif
 
 #if LLVM_VERSION >= 38
-inline void LLVMDisposeMessage(char *Message) { free(Message); }
+inline void LLVMDisposeMessage(char* Message) { free(Message); }
 typedef llvm::legacy::PassManager PassManagerT;
 typedef llvm::legacy::FunctionPassManager FunctionPassManagerT;
 #else
 typedef PassManager PassManagerT;
 typedef FunctionPassManager FunctionPassManagerT;
 #endif
-
 
 #endif

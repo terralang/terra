@@ -9,6 +9,7 @@ compiler:
   - clang
 env:
   matrix:
+  - CHECK_CLANG_FORMAT=1
   - LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1
@@ -24,8 +25,15 @@ env:
 
 matrix:
   exclude:
+    # Only need one copy of this test.
+    - os: linux
+      compiler: clang
+      env: CHECK_CLANG_FORMAT=1
+    # Various macOS tests seem to be broken.
     - os: osx
       compiler: gcc
+    - os: osx
+      env: CHECK_CLANG_FORMAT=1
     - os: osx
       env: LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
     - os: osx
