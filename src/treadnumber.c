@@ -4,22 +4,23 @@
 
 #include "lj_strscan.h"
 
-int treadnumber(const char * buf, ReadNumber * result, int cstylesuffixes) {
+int treadnumber(const char* buf, ReadNumber* result, int cstylesuffixes) {
     TLJ_TValue o;
     StrScanFmt fmt;
     int opt = STRSCAN_OPT_TOINT | STRSCAN_OPT_LL;
-    if(cstylesuffixes)
+    if (cstylesuffixes)
         opt |= STRSCAN_OPT_C;
     else
         opt |= STRSCAN_OPT_IMAG;
-    
+
     fmt = terra_lj_strscan_scan((const uint8_t*)buf, &o, opt);
     result->flags = 0;
-    switch(fmt) {
+    switch (fmt) {
         case STRSCAN_ERROR:
             return 1;
         case STRSCAN_IMAG:
-            /* terra doesn't have imag numbers, so allowimag will be false for terra code */
+            /* terra doesn't have imag numbers, so allowimag will be false for terra code
+             */
             break;
         case STRSCAN_NUM:
             result->d = o.n;
