@@ -4153,13 +4153,19 @@ if ffi.os == "Windows" then
           end
           terra.vshome = terra.vshome .. "VC\\"
           terra.vsarch64 = "amd64" -- Before 2017, Visual Studio had it's own special architecture convention, because who needs standards
-          terra.vslinkpath = [[BIN\%s_%s\]]
+          terra.vslinkpath = function(host, target)
+            if string.lower(host) == string.lower(target) then
+              return ([[BIN\%s\]]):format(host)
+            else
+              return ([[BIN\%s_%s\]]):format(host, target)
+            end
+          end
         else
           if terra.vshome[#terra.vshome] ~= '\\' then
             terra.vshome = terra.vshome .. "\\"
           end
           terra.vsarch64 = "x64"
-          terra.vslinkpath = [[bin\Host%s\%s\]]
+          terra.vslinkpath = function(host, target) return ([[bin\Host%s\%s\]]):format(host, target) end
         end
         
         terra.systemincludes:insertall {
@@ -4183,9 +4189,9 @@ if ffi.os == "Windows" then
               host = terra.vsarch64
             end
             
-            local linker = terra.vshome..(terra.vslinkpath:format(host, target)).."link.exe"
+            local linker = terra.vshome..terra.vslinkpath(host, target).."link.exe"
             local vclib = ([[%s\um\%s;%s\ucrt\%s;]]):format(terra.sdklib, winarch, terra.sdklib, winarch) .. ([[%sLIB\%s;%sATLMFC\LIB\%s;]]):format(terra.vshome, target, terra.vshome, target)
-            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[BIN;]]..terra.vshome..(terra.vslinkpath:format(host, host))..";" -- deals with VS2017 cross-compile nonsense: https://github.com/rust-lang/rust/issues/31063
+            local vcpath = terra.vcpath or (os.getenv("Path") or "")..";"..terra.vshome..[[BIN;]]..terra.vshome..terra.vslinkpath(host, host)..";" -- deals with VS2017 cross-compile nonsense: https://github.com/rust-lang/rust/issues/31063
             vclib,vcpath = "LIB="..vclib,"Path="..vcpath
             return linker,vclib,vcpath
         end
