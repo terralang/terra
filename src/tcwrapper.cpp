@@ -24,6 +24,7 @@ extern "C" {
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/Compilation.h"
+#include "clang/Driver/ToolChain.h"
 #include "tcompilerstate.h"
 
 using namespace clang;
