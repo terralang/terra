@@ -20,6 +20,7 @@ extern "C" {
 #include "llvmheaders.h"
 #include "tllvmutil.h"
 #include "llvm/Support/Errc.h"
+#include "llvm/Option/ArgList.h"
 #include "clang/AST/Attr.h"
 #include "clang/Lex/LiteralSupport.h"
 #include "clang/Driver/Driver.h"
@@ -814,8 +815,9 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     std::unique_ptr<DiagnosticsEngine> Diags(
             new DiagnosticsEngine(DiagID, &*DiagOpts, DiagsBuffer));
 
-    SmallVector<const char *, 3> Args = {"dummy.c", "-target", TripleStr.c_str(),
-                                         "-resource-dir", HSO.ResourceDir.c_str()};
+    auto argslist = {"dummy.c", "-target", TripleStr.c_str(), "-resource-dir",
+                     HSO.ResourceDir.c_str()};
+    SmallVector<const char *, 5> Args(argslist.begin(), argslist.end());
 
     // Build a dummy compilation to obtain the current toolchain.
     // Indeed, the BuildToolchain function of clang::driver::Driver is private :/
