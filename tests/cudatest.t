@@ -22,8 +22,6 @@ foo = terra(result : &float)
     fn(result)
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>

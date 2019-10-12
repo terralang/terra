@@ -19,8 +19,6 @@ terra foo(result : &float)
     result[tid()] = tid() + theone + theconst[0]
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>
