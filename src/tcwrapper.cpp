@@ -830,6 +830,7 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 
     llvm::opt::ArgStringList IncludeArgs;
     TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);
+    TC.AddCudaIncludeArgs(C->getArgs(), IncludeArgs);
 
     // organized in pairs "-<flag> <directory>"
     assert(((IncludeArgs.size() & 1) == 0) && "even number of IncludeArgs");
@@ -1106,7 +1107,7 @@ int include_c(lua_State *L) {
 #ifdef _WIN32
     args.push_back("-fms-extensions");
     args.push_back("-fms-compatibility");
-    args.push_back("-fms-compatibility-version=1800");
+    args.push_back("-fms-compatibility-version=18");
     args.push_back("-Wno-ignored-attributes");
 #endif
 
