@@ -16,17 +16,6 @@ if(TERRA_ENABLE_CUDA)
 endif()
 
 add_custom_command(
-  OUTPUT "${PROJECT_BINARY_DIR}/clangpaths.h"
-  DEPENDS
-    dummy.c
-    "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua"
-    LuaJIT
-  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genclangpaths.lua" ${PROJECT_BINARY_DIR}/clangpaths.h ${CLANG_EXECUTABLE} ${TERRA_CUDA_INCLUDE_DIR_FLAGS}
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-  VERBATIM
-)
-
-add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/internalizedfiles.h"
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua"
@@ -78,7 +67,6 @@ add_custom_command(
 add_custom_target(
   TerraGeneratedFiles
   DEPENDS
-    ${PROJECT_BINARY_DIR}/clangpaths.h
     ${PROJECT_BINARY_DIR}/internalizedfiles.h
     ${PROJECT_BINARY_DIR}/include/terra/terra.h
     ${TERRA_LIB_LUA_GEN}

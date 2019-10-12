@@ -3226,7 +3226,7 @@ static int terra_bindtoluaapi(lua_State *L) {
     lua_pushcclosure(L, (lua_CFunction)*fn, N - 1);
     return 1;
 }
-#ifdef _WIN32
+#if _MSC_VER < 1900 && defined(_WIN32)
 #define ISFINITE(v) _finite(v)
 #else
 #define ISFINITE(v) std::isfinite(v)

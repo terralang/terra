@@ -40,7 +40,7 @@ static char *vstringf(const char *fmt, va_list ap) {
     char *buf = (char *)malloc(N);
     while (1) {
         va_list cp;
-#ifdef _WIN32
+#if _MSC_VER < 1900 && defined(_WIN32)
         cp = ap;
 #else
         va_copy(cp, ap);

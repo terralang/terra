@@ -118,17 +118,13 @@ $(LUAJIT) $(TERRA_DIR)\release\include\terra\lua.h:	"$(LUAJIT_DIR)\src\luajit.c"
 	$(LUAJIT) -bg "$(SRC)\asdl.lua" "$(BUILD)\asdl.h"
 	$(LUAJIT) -bg "$(SRC)\terralist.lua" "$(BUILD)\terralist.h"
 
-"$(BUILD)\clangpaths.h":	$(LUAJIT) "$(SRC)\genclangpaths.lua"
-	cd "$(TERRA_DIR)"
-	$(LUAJIT) src\genclangpaths.lua build\clangpaths.h $(LLVM_DIR)\bin\clang $(CUDA_DIR_INCLUDE)
-
 "$(BUILD)\internalizedfiles.h":	$(LUAJIT)  "$(SRC)\geninternalizedfiles.lua"
 	cd "$(TERRA_DIR)"
 	$(LUAJIT) src\geninternalizedfiles.lua  build\internalizedfiles.h $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" "$(TERRA_DIR)\lib" "%.t$$" 
 
 EXPORTS = /EXPORT:terra_init /EXPORT:terra_initwithoptions /EXPORT:terra_load /EXPORT:terra_loadfile /EXPORT:terra_loadbuffer /EXPORT:terra_loadstring /EXPORT:terra_llvmshutdown
 
-"$(BUILD)\terra.obj":	"$(BUILD)\clangpaths.h" "$(BUILD)\internalizedfiles.h" "$(BUILD)\terralib.h" "$(BUILD)\strict.h" "$(BUILD)\cudalib.h" $(TERRALIB_SRC)
+"$(BUILD)\terra.obj": "$(BUILD)\internalizedfiles.h" "$(BUILD)\terralib.h" "$(BUILD)\strict.h" "$(BUILD)\cudalib.h" $(TERRALIB_SRC)
 	cd "$(BUILD)"
 	$(CPP) $(CPPFLAGS) /c $(TERRALIB_SRC)
 

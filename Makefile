@@ -163,7 +163,7 @@ LIBLUA = terralib.lua strict.lua cudalib.lua asdl.lua terralist.lua
 EXEOBJS = main.o linenoise.o
 
 EMBEDDEDLUA = $(addprefix build/,$(LIBLUA:.lua=.h))
-GENERATEDHEADERS = $(EMBEDDEDLUA) build/clangpaths.h build/internalizedfiles.h
+GENERATEDHEADERS = $(EMBEDDEDLUA) build/internalizedfiles.h
 
 LUAHEADERS = lua.h lualib.h lauxlib.h luaconf.h
 
@@ -261,12 +261,6 @@ build/%.bc:	src/%.lua $(PACKAGE_DEPS)
 	$(LUAJIT) -bg $< $@
 build/%.h:	build/%.bc $(PACKAGE_DEPS)
 	$(LUAJIT) src/genheader.lua $< $@
-
-#run clang on a C file to extract the header search paths for this architecture
-#genclangpaths.lua find the path arguments and formats them into a C file that is included by the cwrapper
-#to configure the paths	
-build/clangpaths.h:	src/dummy.c $(PACKAGE_DEPS) src/genclangpaths.lua
-	$(LUAJIT) src/genclangpaths.lua $@ $(CLANG) $(CUDA_INCLUDES)
 
 build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.t lib/parsing.t
 	$(LUAJIT) src/geninternalizedfiles.lua $@  $(CLANG_RESOURCE_DIRECTORY) "%.h$$" $(CLANG_RESOURCE_DIRECTORY) "%.modulemap$$" lib "%.t$$" 
