@@ -4110,9 +4110,6 @@ if ffi.os == "Windows" then
             error "Can't find windows SDK version 8.1 or 10! Try running Terra in a Native Tools Developer Console instead."
           end
           
-          terra.systemincludes:insertall{ "shared", "um", "winrt" }
-          terra.systemincludes = terra.systemincludes:map(function(e) return windowsdk..[[include\]]..e end)
-          
           local version = nil
           for i, v in ipairs(terra.listsubdirectories(windowsdk .. "lib")) do
             if compareversion("%d+", v, version) then
@@ -4136,8 +4133,6 @@ if ffi.os == "Windows" then
             error "Can't find valid version subdirectory in the SDK! Is the SDK installation corrupt?"
           end
           
-          terra.systemincludes:insertall{ "ucrt", "shared", "um", "winrt" }
-          terra.systemincludes = terra.systemincludes:map(function(e) return windowsdk..version..[[\include\]]..e end)
           terra.sdklib = windowsdk .. "lib\\" .. version
         end
         
@@ -4167,11 +4162,6 @@ if ffi.os == "Windows" then
           terra.vsarch64 = "x64"
           terra.vslinkpath = function(host, target) return ([[bin\Host%s\%s\]]):format(host, target) end
         end
-        
-        terra.systemincludes:insertall {
-            ([[%sINCLUDE]]):format(terra.vshome),
-            ([[%sATLMFC\INCLUDE]]):format(terra.vshome)
-        }
         
         function terra.getvclinker(target) --get the linker, and guess the needed environment variables for Windows if they are not set ...
             target = target or "x86_64"

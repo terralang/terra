@@ -50,7 +50,7 @@ TString * luaS_vstringf(terra_State * L, const char * fmt, va_list ap) {
     char * buf = stack_buf;
     while(1) {
         va_list cur;
-#ifdef _WIN32
+#if _MSC_VER < 1900 && defined(_WIN32)
         // Apparently this is fine for the MSVC x64 compiler.
         // See: http://www.bailopan.net/blog/?p=51
         cur = ap;
