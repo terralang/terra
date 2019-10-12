@@ -20,8 +20,6 @@ terra bar(result : &int)
     result[t] = somedata[N - 1 - t]  
 end
 
-terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
-
 local C = terralib.includecstring [[
 #include "cuda_runtime.h"
 #include <stdlib.h>

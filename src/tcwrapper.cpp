@@ -20,10 +20,13 @@ extern "C" {
 #include "llvmheaders.h"
 #include "tllvmutil.h"
 #include "llvm/Support/Errc.h"
+#include "llvm/Option/ArgList.h"
 #include "clang/AST/Attr.h"
 #include "clang/Lex/LiteralSupport.h"
+#include "clang/Driver/Driver.h"
+#include "clang/Driver/Compilation.h"
+#include "clang/Driver/ToolChain.h"
 #include "tcompilerstate.h"
-#include "clangpaths.h"
 
 using namespace clang;
 
@@ -803,6 +806,49 @@ public:
 #endif
 };
 
+void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HSO) {
+    using namespace llvm::sys;
+
+    IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
+    IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts(new DiagnosticOptions());
+    auto *DiagsBuffer = new IgnoringDiagConsumer();
+    std::unique_ptr<DiagnosticsEngine> Diags(
+            new DiagnosticsEngine(DiagID, &*DiagOpts, DiagsBuffer));
+
+    auto argslist = {"dummy.c", "-target", TripleStr.c_str(), "-resource-dir",
+                     HSO.ResourceDir.c_str()};
+    SmallVector<const char *, 5> Args(argslist.begin(), argslist.end());
+
+    // Build a dummy compilation to obtain the current toolchain.
+    // Indeed, the BuildToolchain function of clang::driver::Driver is private :/
+    clang::driver::Driver D("dummy", TripleStr, *Diags);
+    std::unique_ptr<driver::Compilation> C(D.BuildCompilation(Args));
+
+    clang::driver::ToolChain const &TC = C->getDefaultToolChain();
+    const char *link = TC.GetLinkerPath().c_str();
+    for (auto &i : TC.getProgramPaths()) link = i.c_str();
+
+    llvm::opt::ArgStringList IncludeArgs;
+    TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);
+
+#if LLVM_VERSION > 37
+    TC.AddCudaIncludeArgs(C->getArgs(), IncludeArgs);
+#endif
+
+    // organized in pairs "-<flag> <directory>"
+    assert(((IncludeArgs.size() & 1) == 0) && "even number of IncludeArgs");
+    HSO.UserEntries.reserve(IncludeArgs.size() / 2);
+    for (size_t i = 0; i != IncludeArgs.size(); i += 2) {
+        auto &Directory = IncludeArgs[i + 1];
+
+        auto IncludeType = frontend::System;
+        if (IncludeArgs[i] == StringRef("-internal-externc-isystem"))
+            IncludeType = frontend::ExternCSystem;
+
+        HSO.UserEntries.emplace_back(Directory, IncludeType, false, false);
+    }
+}
+
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const char **argbegin, const char **argend,
                             CompilerInstance *TheCompInst) {
@@ -964,7 +1010,8 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
 #else
     llvm::MemoryBuffer *membuffer = llvm::MemoryBuffer::getMemBuffer(code, "<buffer>");
 #endif
-
+    TheCompInst.getHeaderSearchOpts().ResourceDir = "$CLANG_RESOURCE$";
+    InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
 
 #if LLVM_VERSION <= 32
@@ -1063,35 +1110,15 @@ int include_c(lua_State *L) {
 #ifdef _WIN32
     args.push_back("-fms-extensions");
     args.push_back("-fms-compatibility");
-#define __stringify(x) #x
-#define __indirect(x) __stringify(x)
-    args.push_back("-fms-compatibility-version=" __indirect(_MSC_VER));
+    args.push_back("-fms-compatibility-version=18");
     args.push_back("-Wno-ignored-attributes");
 #endif
 
-    const char **cpaths = clang_paths;
-// On windows, insert clang paths first, so that we include from the right version of VS.
-#ifdef _WIN32
-    while (*cpaths) {
-        args.push_back(*cpaths);
-        cpaths++;
-    }
     for (int i = 0; i < N; i++) {
         lua_rawgeti(L, 3, i + 1);
         args.push_back(luaL_checkstring(L, -1));
         lua_pop(L, 1);
     }
-#else
-    for (int i = 0; i < N; i++) {
-        lua_rawgeti(L, 3, i + 1);
-        args.push_back(luaL_checkstring(L, -1));
-        lua_pop(L, 1);
-    }
-    while (*cpaths) {
-        args.push_back(*cpaths);
-        cpaths++;
-    }
-#endif
 
     lua_newtable(L);  // return a table of loaded functions
     int ref_table = lobj_newreftable(L);
