@@ -830,7 +830,10 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 
     llvm::opt::ArgStringList IncludeArgs;
     TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);
+
+#if LLVM_VERSION > 37
     TC.AddCudaIncludeArgs(C->getArgs(), IncludeArgs);
+#endif
 
     // organized in pairs "-<flag> <directory>"
     assert(((IncludeArgs.size() & 1) == 0) && "even number of IncludeArgs");
