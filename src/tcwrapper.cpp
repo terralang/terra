@@ -961,9 +961,10 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
 
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
-        if (fn->hasAvailableExternallyLinkage() || fn->hasLinkOnceODRLinkage()) {
+        if (fn->hasAvailableExternallyLinkage() ||
+            fn->getLinkage() == llvm::GlobalValue::LinkOnceODRLinkage) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
-        } else if (fn->hasLinkOnceLinkage()) {
+        } else if (fn->getLinkage() == llvm::GlobalValue::LinkOnceAnyLinkage) {
             fn->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
         }
 #if LLVM_VERSION >= 35
