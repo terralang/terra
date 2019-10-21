@@ -961,7 +961,11 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
 
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
-        if (fn->isDiscardableIfUnused()) usedArray.push_back(fn);
+        if (fn->hasAvailableExternallyLinkage() || fn->hasLinkOnceODRLinkage()) {
+            fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+        } else if (fn->hasLinkOnceLinkage()) {
+            fn->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
+        }
 #if LLVM_VERSION >= 35
         if (fn->hasDLLImportStorageClass())  // clear dll import linkage because it messes
                                              // up the jit on window
@@ -971,18 +975,6 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
                                         // the jit on window
             fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
 #endif
-    }
-
-    if (usedArray.size() > 0) {
-        auto *i8PtrType = llvm::Type::getInt8PtrTy(M->getContext());
-        for (auto &elem : usedArray)
-            elem = llvm::ConstantExpr::getBitCast(elem, i8PtrType);
-
-        auto *arrayType = llvm::ArrayType::get(i8PtrType, usedArray.size());
-        auto *llvmUsed = new llvm::GlobalVariable(
-                *M, arrayType, false, llvm::GlobalValue::AppendingLinkage,
-                llvm::ConstantArray::get(arrayType, usedArray), "llvm.used");
-        llvmUsed->setSection("llvm.metadata");
     }
 
     M->setTargetTriple(
