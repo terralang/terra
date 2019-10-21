@@ -957,8 +957,6 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     // in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
     // the linker will then delete it because it is not used.
     // switching it to WeakODR means that the linker will keep it even if it is not used
-    std::vector<llvm::Constant *> usedArray;
-
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
         if (fn->hasAvailableExternallyLinkage() ||
