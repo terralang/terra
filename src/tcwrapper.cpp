@@ -961,12 +961,7 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
 
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
-        if (fn->hasAvailableExternallyLinkage()) {
-            fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
-        }
-#ifdef _WIN32  // On windows, the optimizer will delete LinkOnce functions that are unused
-        usedArray.push_back(fn);
-#endif
+        if (fn->isDiscardableIfUnused()) usedArray.push_back(fn);
 #if LLVM_VERSION >= 35
         if (fn->hasDLLImportStorageClass())  // clear dll import linkage because it messes
                                              // up the jit on window
@@ -1109,9 +1104,14 @@ int include_c(lua_State *L) {
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");
+    args.push_back("-fms-volatile");
     args.push_back("-fms-compatibility");
     args.push_back("-fms-compatibility-version=18");
     args.push_back("-Wno-ignored-attributes");
+    args.push_back("-flto-visibility-public-std");
+    args.push_back("--dependent-lib=msvcrt");
+    args.push_back("-fdiagnostics-format");
+    args.push_back("msvc");
 #endif
 
     for (int i = 0; i < N; i++) {
