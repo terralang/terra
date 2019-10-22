@@ -261,6 +261,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 newfn = Function::Create(fn->getFunctionType(), fn->getLinkage(),
                                          fn->getName(), dest);
                 newfn->copyAttributesFrom(fn);
+                newfn->setComdat(
+                        fn->getComdat());  // copyAttributesFrom does not copy comdats
             }
             if (!fn->isDeclaration() && newfn->isDeclaration() && copyGlobal(fn, data)) {
                 for (Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(),

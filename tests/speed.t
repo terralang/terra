@@ -1,7 +1,7 @@
 local C = terralib.includecstring [[ 
     #include <stdlib.h>
+    #include <stdio.h>
 ]]
-C.printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true))
 
 terra doit(N : int64)
     var cur,last = 1ULL,1ULL
@@ -27,4 +27,4 @@ local test = require("test")
 print(what())
 print(test.time( function() doit:compile() end))
 print(test.time( function() doit(100000000) end))
-print(test.time( function() terralib.saveobj("speed",{main = main}, (jit.os == "Windows" and {"\\legacy_stdio_definitions.lib"} or nil)) end))
+print(test.time( function() terralib.saveobj("speed",{main = main}) end))

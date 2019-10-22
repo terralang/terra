@@ -957,16 +957,14 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     // in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
     // the linker will then delete it because it is not used.
     // switching it to WeakODR means that the linker will keep it even if it is not used
-    std::vector<llvm::Constant *> usedArray;
-
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
-        if (fn->hasAvailableExternallyLinkage()) {
+        if (fn->hasAvailableExternallyLinkage() ||
+            fn->getLinkage() == llvm::GlobalValue::LinkOnceODRLinkage) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+        } else if (fn->getLinkage() == llvm::GlobalValue::LinkOnceAnyLinkage) {
+            fn->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
         }
-#ifdef _WIN32  // On windows, the optimizer will delete LinkOnce functions that are unused
-        usedArray.push_back(fn);
-#endif
 #if LLVM_VERSION >= 35
         if (fn->hasDLLImportStorageClass())  // clear dll import linkage because it messes
                                              // up the jit on window
@@ -976,18 +974,6 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
                                         // the jit on window
             fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
 #endif
-    }
-
-    if (usedArray.size() > 0) {
-        auto *i8PtrType = llvm::Type::getInt8PtrTy(M->getContext());
-        for (auto &elem : usedArray)
-            elem = llvm::ConstantExpr::getBitCast(elem, i8PtrType);
-
-        auto *arrayType = llvm::ArrayType::get(i8PtrType, usedArray.size());
-        auto *llvmUsed = new llvm::GlobalVariable(
-                *M, arrayType, false, llvm::GlobalValue::AppendingLinkage,
-                llvm::ConstantArray::get(arrayType, usedArray), "llvm.used");
-        llvmUsed->setSection("llvm.metadata");
     }
 
     M->setTargetTriple(
@@ -1109,9 +1095,14 @@ int include_c(lua_State *L) {
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");
+    args.push_back("-fms-volatile");
     args.push_back("-fms-compatibility");
     args.push_back("-fms-compatibility-version=18");
     args.push_back("-Wno-ignored-attributes");
+    args.push_back("-flto-visibility-public-std");
+    args.push_back("--dependent-lib=msvcrt");
+    args.push_back("-fdiagnostics-format");
+    args.push_back("msvc");
 #endif
 
     for (int i = 0; i < N; i++) {

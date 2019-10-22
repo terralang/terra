@@ -6,11 +6,10 @@
  
  ]]
 
-local C = {
-    printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true)),
-    exit = terralib.externfunction("exit", int -> {}),
-    atoi = terralib.externfunction("atoi", rawstring -> int)
-}
+C = terralib.includecstring [[
+#include<stdio.h>
+#include<stdlib.h>
+]]
 
 -- this depends highly on the platform.  It might be faster to use
 -- char type on 32-bit systems; it might be faster to use unsigned.
@@ -147,7 +146,7 @@ end))
 local N = assert(tonumber((...) or 10))
 doit(N)
 if jit.os == "Windows" then
-  terralib.saveobj("benchmark_fannkuchredux.exe", { main = main }, {"\\legacy_stdio_definitions.lib"})
+  terralib.saveobj("benchmark_fannkuchredux.exe", { main = main })
   os.execute("benchmark_fannkuchredux.exe "..N)
 else
   terralib.saveobj("benchmark_fannkuchredux", { main = main })
