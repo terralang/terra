@@ -23,7 +23,7 @@ enum RESERVED {
     /* terminal symbols denoted by reserved words */
     TK_AND = FIRST_RESERVED,
     TK_BREAK,
-    TK_CASE
+    TK_CASE,
     TK_DO,
     TK_ELSE,
     TK_ELSEIF,
