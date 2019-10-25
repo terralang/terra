@@ -47,7 +47,7 @@ enum RESERVED {
     TK_TERRA,
     TK_VAR,
     TK_STRUCT,
-    TK_SWITCH
+    TK_SWITCH,
     TK_UNION,
     TK_QUOTE,
     TK_IMPORT,
