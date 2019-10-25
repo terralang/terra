@@ -428,6 +428,7 @@ static void dump_stack(lua_State *L, int elem) {
 */
 static int block_follow(LexState *ls, int withuntil) {
     switch (ls->t.token) {
+        case TK_CASE:
         case TK_ELSE:
         case TK_ELSEIF:
         case TK_END:
@@ -1456,6 +1457,48 @@ static void labelstat(LexState *ls) {
     new_object(ls, "label", 1, &pos);
 }
 
+static void switchcase(LexState *ls) {
+    /* switchcase -> CASE expression THEN block */'
+    FuncState *fs = ls->fs;
+    Position pos = getposition(ls);
+    BlockCnt bl;
+    luaX_next(ls); /* skip CASE */
+    enterblock(ls, &bl, 0);
+    expr(ls);
+    check_match(ls, TK_THEN, TK_CASE, pos.linenumber);
+    Position bodypos = getposition(ls);
+    block(ls);
+    leaveblock(fs);
+    new_object(ls, "switchcase", 2, &pos);
+}
+
+static void switchstat(LexState *ls) {
+    check_terra(ls, "switch statement");
+    /* switchstat -> SWITCH expression DO switchcase* (ELSE block)? END */
+    FuncState *fs = ls->fs;
+    Position pos = getposition(ls);
+    BlockCnt bl;
+    luaX_next(ls); /* skip SWITCH */
+    enterblock(ls, &bl, 0);
+    expr(ls);
+    check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
+    new_list(ls);
+    while (test_match(ls, TK_CASE)) {
+        switchcase(ls);
+        add_entry(ls, -2);
+    }
+    if (test_match(ls, TK_ELSE)) {
+        BlockCnt ebl;
+        enterblock(ls, &bl, 0);
+        block(ls);
+        leaveblock(ls);
+    } else {
+        push_nil(ls);
+    }
+    check_match(ls, TK_END, TK_SWITCH, pos.linenumber);
+    new_object(ls, "switchstat", 3, &pos);
+}
+
 static void whilestat(LexState *ls, int line) {
     /* whilestat -> WHILE cond DO block END */
     FuncState *fs = ls->fs;
@@ -1463,7 +1506,7 @@ static void whilestat(LexState *ls, int line) {
     BlockCnt bl;
     luaX_next(ls); /* skip WHILE */
     RETURNS_1(cond(ls));
-    enterblock(fs, &bl, 1);
+    enterblock(ls, &bl, 1);
     checknext(ls, TK_DO);
     RETURNS_1(block(ls));
     check_match(ls, TK_END, TK_WHILE, line);
@@ -1935,6 +1978,9 @@ static void statement(LexState *ls) {
         case TK_ESCAPE: {
             blockescape(ls);
             break;
+        }
+        case TK_SWITCH: { /* stat -> switchstat */
+            switchstat(ls);
         }
             /*otherwise, fallthrough to the normal error message.*/
         default: { /* stat -> func | assignment */
