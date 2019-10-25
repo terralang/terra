@@ -1458,7 +1458,7 @@ static void labelstat(LexState *ls) {
 }
 
 static void switchcase(LexState *ls) {
-    /* switchcase -> CASE expression THEN block */'
+    /* switchcase -> CASE expression THEN block */
     FuncState *fs = ls->fs;
     Position pos = getposition(ls);
     BlockCnt bl;
