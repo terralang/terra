@@ -1479,7 +1479,7 @@ static void switchstat(LexState *ls) {
     Position pos = getposition(ls);
     BlockCnt bl;
     luaX_next(ls); /* skip SWITCH */
-    enterblock(ls, &bl, 0);
+    enterblock(fs, &bl, 0);
     expr(ls);
     check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
     new_list(ls);
@@ -1489,12 +1489,13 @@ static void switchstat(LexState *ls) {
     }
     if (test_match(ls, TK_ELSE)) {
         BlockCnt ebl;
-        enterblock(ls, &bl, 0);
+        enterblock(fs, &bl, 0);
         block(ls);
-        leaveblock(ls);
+        leaveblock(fs);
     } else {
         push_nil(ls);
     }
+    leaveblock(fs);
     check_match(ls, TK_END, TK_SWITCH, pos.linenumber);
     new_object(ls, "switchstat", 3, &pos);
 }
@@ -1506,7 +1507,7 @@ static void whilestat(LexState *ls, int line) {
     BlockCnt bl;
     luaX_next(ls); /* skip WHILE */
     RETURNS_1(cond(ls));
-    enterblock(ls, &bl, 1);
+    enterblock(fs, &bl, 1);
     checknext(ls, TK_DO);
     RETURNS_1(block(ls));
     check_match(ls, TK_END, TK_WHILE, line);
