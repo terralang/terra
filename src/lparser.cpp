@@ -1463,7 +1463,7 @@ static void switchcase(LexState *ls) {
     Position pos = getposition(ls);
     BlockCnt bl;
     luaX_next(ls); /* skip CASE */
-    enterblock(ls, &bl, 0);
+    enterblock(fs, &bl, 0);
     expr(ls);
     check_match(ls, TK_THEN, TK_CASE, pos.linenumber);
     Position bodypos = getposition(ls);
