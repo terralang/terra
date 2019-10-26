@@ -1483,11 +1483,11 @@ static void switchstat(LexState *ls) {
     expr(ls);
     check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
     new_list(ls);
-    while (test_match(ls, TK_CASE)) {
+    while (testnext(ls, TK_CASE)) {
         switchcase(ls);
         add_entry(ls, -2);
     }
-    if (test_match(ls, TK_ELSE)) {
+    if (testnext(ls, TK_ELSE)) {
         BlockCnt ebl;
         enterblock(fs, &bl, 0);
         block(ls);
