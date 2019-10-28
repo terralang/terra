@@ -1462,7 +1462,7 @@ static void switchcase(LexState *ls) {
     FuncState *fs = ls->fs;
     Position pos = getposition(ls);
     BlockCnt bl;
-    luaX_next(ls); /* skip CASE */
+    /* case token already skipped by testnext */
     enterblock(fs, &bl, 0);
     expr(ls);
     check_match(ls, TK_THEN, TK_CASE, pos.linenumber);
@@ -1482,21 +1482,21 @@ static void switchstat(LexState *ls) {
     enterblock(fs, &bl, 0);
     expr(ls);
     check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
-    new_list(ls);
+    int lst = new_list(ls);
     while (testnext(ls, TK_CASE)) {
         switchcase(ls);
-        add_entry(ls, -2);
+        add_entry(ls, lst);
     }
     if (testnext(ls, TK_ELSE)) {
         BlockCnt ebl;
-        enterblock(fs, &bl, 0);
+        enterblock(fs, &ebl, 0);
         block(ls);
         leaveblock(fs);
     } else {
         push_nil(ls);
     }
-    leaveblock(fs);
     check_match(ls, TK_END, TK_SWITCH, pos.linenumber);
+    leaveblock(fs);
     new_object(ls, "switchstat", 3, &pos);
 }
 
@@ -1982,6 +1982,7 @@ static void statement(LexState *ls) {
         }
         case TK_SWITCH: { /* stat -> switchstat */
             switchstat(ls);
+            break;
         }
             /*otherwise, fallthrough to the normal error message.*/
         default: { /* stat -> func | assignment */
