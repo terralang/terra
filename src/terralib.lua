@@ -3070,7 +3070,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local body = checkblock(s.body)
         return copyobject(s,{condition = e, body = body})
     end
-    local function checkexpintegral(e)
+    local function checkexpintegral(re)
         local e = checkexp(re)
         if not e.type:isintegral() then
             diag:reporterror(e,"expected an integral expression but found ",e.type)
@@ -3217,7 +3217,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 local cond = checkexpintegral(s.condition)
                 local br = s.cases:map(checkcasebranch)
                 local def = (s.ordefault and checkblock(s.ordefault))
-                return s:copy{ cases = br, ordefault = def }
+                return s:copy{ condition = cond, cases = br, ordefault = def }
             elseif s:is "repeatstat" then
                 local stmts = checkstmts(s.statements)
                 local e = checkcond(s.condition)
@@ -3754,7 +3754,7 @@ function prettystring(toptree,breaklines)
                 emitStmt(b.body)
             end
             if s.ordefault then
-                begin(s.ordefault,"default \n")
+                begin(s.ordefault,"else \n")
                 emitStmt(s.ordefault)
             end
             begin(s,"end\n")
