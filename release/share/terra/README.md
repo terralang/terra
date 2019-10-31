@@ -4,8 +4,8 @@ Getting Started with Terra
 _Zach DeVito_ (zdevito at cs dot stanford dot edu)
 
 [terralang.org](http://terralang.org)
-[![Build Status](https://travis-ci.org/zdevito/terra.svg?branch=develop)](https://travis-ci.org/zdevito/terra)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/zdevito/terra?branch=master&svg=true)](https://ci.appveyor.com/project/zdevito/terra/branch/master)
+[![Build Status](https://travis-ci.org/terralang/terra.svg?branch=develop)](https://travis-ci.org/terralang/terra)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/terralang/terra?branch=master&svg=true)](https://ci.appveyor.com/project/terralang/terra/branch/master)
 
 Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua).
 
@@ -16,7 +16,7 @@ This guide serves as an introduction for programming in Terra. A general underst
 Installing Terra
 ================
 
-Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
+Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
 Running Terra
 =============
@@ -116,7 +116,7 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 
 ### Windows ###
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang, as well as a copy of the LuaJIT sources.
+For instructions on installing Terra in Windows see this [readme](https://github.com/terralang/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang, as well as a copy of the LuaJIT sources.
 
 
 ### Linux/OSX ###
@@ -126,7 +126,7 @@ The easiest way to get a working LLVM/Clang install is to download the _Clang Bi
 
 Now get the Terra sources:
 
-    git clone https://github.com/zdevito/terra
+    git clone https://github.com/terralang/terra
 
 To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
 
