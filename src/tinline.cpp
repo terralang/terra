@@ -70,7 +70,7 @@ void ManualInliner::run(std::vector<Function *>::iterator fbegin,
 #if LLVM_VERSION < 90
                         n->addCalledFunction(CS, n2);
 #else
-                        n->addCalledFunction(cast<CallBase>(II),n2);
+                        n->addCalledFunction(cast<CallBase>(II), n2);
 #endif
                     }
                 }
