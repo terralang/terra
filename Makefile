@@ -104,7 +104,7 @@ LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
 CLANG_AST_MATCHERS = "80 90"
-ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_ASTS_MATCHERS)))
+ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
 LLVM_LIBRARY_FLAGS += -lclangASTMatchers
 endif
 
