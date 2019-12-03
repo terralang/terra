@@ -11,6 +11,9 @@ if [[ $(uname) = Linux ]]; then
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-9-dev clang-9 libclang-9-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-9:/usr/share/llvm-9
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-9/lib"
+    fi
   elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-8 main"
