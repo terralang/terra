@@ -68,6 +68,12 @@ if [[ $(uname) = Darwin ]]; then
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/llvm-config llvm-config-9
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/clang clang-9
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-9.0.0-x86_64-darwin-apple
+  elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
+    curl -O http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-8
+    ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/clang clang-8
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-7.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-7 ]]; then
     curl -O http://releases.llvm.org/7.0.0/clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
