@@ -77,8 +77,8 @@
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 80
-#include "llvmheaders_80.h"
+#define LLVM_VERSION 90
+#include "llvmheaders_90.h"
 #endif
 
 #if LLVM_VERSION >= 34
