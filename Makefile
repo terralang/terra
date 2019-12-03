@@ -103,6 +103,11 @@ ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
 LLVM_LIBRARY_FLAGS += -lclangRewriteCore
 endif
 
+CLANG_AST_MATCHERS = "80 90"
+ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_ASTS_MATCHERS)))
+LLVM_LIBRARY_FLAGS += -lclangASTMatchers
+endif
+
 # by default, Terra includes only the pieces of the LLVM libraries it needs,
 #  but this can be a problem if third-party-libraries that also need LLVM are
 #  used - allow the user to request that some/all of the LLVM components be
