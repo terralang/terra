@@ -953,8 +953,12 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
 #else
     llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
 #endif
+#if LLVM_VERSION < 90
     TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
+#else
+    TheCompInst->createFileManager(FS);
+#endif
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
