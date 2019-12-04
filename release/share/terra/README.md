@@ -104,15 +104,17 @@ If the binary releases are not appropriate, then you can also build Terra from s
 
 The current recommended version of LLVM is **6.0**. The following versions are also supported:
 
-  * LLVM 3.4
-  * LLVM 3.5 (tested in Travis, supports debug info, supports CUDA)
-  * LLVM 3.6
-  * LLVM 3.7
-  * LLVM 3.8 (used frequently, tested in Travis, supports CUDA)
-  * LLVM 3.9
-  * LLVM 5.0 (tested in Travis, supports CUDA)
-  * LLVM 6.0 (used frequently, tested in Travis, supports CUDA)
-  * LLVM 7.0 (tested in Travis, supports CUDA, requires CMake)
+| Version | CI | CUDA | Notes |
+| 3.5 | :heavy_check_mark: | :heavy_check_mark: | supports debug info |
+| 3.6 | | | |
+| 3.7 | | | |
+| 3.8 | :heavy_check_mark: | :heavy_check_mark: | |
+| 3.9 | | | |
+| 5.0 | :heavy_check_mark: | :heavy_check_mark: | |
+| 6.0 | :heavy_check_mark: | :heavy_check_mark: | |
+| 7.0 | :heavy_check_mark: | :heavy_check_mark: | requires CMake |
+| 8.0 | :heavy_check_mark: | :heavy_check_mark: | |
+| 9.0 | :heavy_check_mark: | :heavy_check_mark: | |
 
 ### Windows ###
 
