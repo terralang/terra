@@ -67,7 +67,11 @@ void ManualInliner::run(std::vector<Function *>::iterator fbegin,
                     const Function *Callee = CS.getCalledFunction();
                     if (Callee && !Callee->isIntrinsic()) {
                         CallGraphNode *n2 = CG->getOrInsertFunction(Callee);
+#if LLVM_VERSION < 90
                         n->addCalledFunction(CS, n2);
+#else
+                        n->addCalledFunction(cast<CallBase>(II), n2);
+#endif
                     }
                 }
             }

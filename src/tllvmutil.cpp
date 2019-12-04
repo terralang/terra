@@ -76,7 +76,9 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
+#if LLVM_VERSION < 90
     PMB.DisableUnitAtATime = true;
+#endif
 #if LLVM_VERSION <= 34 && LLVM_VERSION >= 32
     PMB.LoopVectorize = false;
 #elif LLVM_VERSION >= 35
