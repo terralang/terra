@@ -45,7 +45,11 @@ matrix:
     - os: osx
       env: LLVM_CONFIG=llvm-config-7 CLANG=clang-7 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
     - os: osx
+      env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8
+    - os: osx
       env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
+    - os: osx
+      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9
     - os: osx
       env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
 
