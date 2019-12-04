@@ -682,7 +682,7 @@ public:
     virtual ~LuaProvidedFile() override {}
     virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
 #if LLVM_VERSION >= 36
-    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer> > getBuffer(
             const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
             bool IsVolatile) override {
         return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
@@ -884,9 +884,9 @@ public:
         return llvm::errc::no_such_file_or_directory;
     }
 #else
-    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> openFileForRead(
+    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > openFileForRead(
             const llvm::Twine &Path) override {
-        llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> ec = RFS->openFileForRead(Path);
+        llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > ec = RFS->openFileForRead(Path);
         if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
         clang::vfs::Status Status;
         StringRef Buffer;
