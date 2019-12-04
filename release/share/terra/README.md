@@ -105,6 +105,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
 The current recommended version of LLVM is **6.0**. The following versions are also supported:
 
 | Version | CI | CUDA | Notes |
+| ------- | -- | ---- | ----- |
 | 3.5 | :heavy_check_mark: | :heavy_check_mark: | supports debug info |
 | 3.6 | | | |
 | 3.7 | | | |
