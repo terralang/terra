@@ -45,7 +45,7 @@ List also has the following functions:
     -- apply map to every element resulting in new list
     list:map(fn : A -> B) : List[B]
 
-     -- new list with elements were fn(e) is true
+     -- new list with elements where fn(e) is true
     list:filter(fn : A -> boolean) : List[A]
 
     -- apply map to every element, resulting in lists which are all concatenated together
