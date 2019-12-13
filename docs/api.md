@@ -1490,6 +1490,25 @@ Report that the string `msg` was expected but did not appear. Does not return.
 
 Parses a single Lua expression from the token stream. This can be used to switch back into the Lua language for expressions in your language. For instance, Terra uses this to parse its types (which are just Lua expressions): `var a : aluaexpression(4) = 3`. It returns a function `function(lexicalenv)` that takes a table of the current lexical scope (such as the one return from `environment_function` in the constructor) and returns the value of the expression evaluated in that scope. This function is not intended to be used to parse a Lua expression into an AST. Currently, parsing a Lua expression into an AST requires you to writing the parser yourself. In the future we plan to add a library which will let you pick and choose pieces of Lua/Terra's grammar to use in your language.
 
+
+---
+
+    lexer:luastats()
+
+Parses a set of Lua statement from the token stream until it reaches an end of block keyword (`end`, `else`, `elseif`, etc.). This can be used to help build domain specific languages that are supersets of Lua without having to reimplement all of the Lua parser.
+
+---
+
+    lexer:terraexpr()
+
+Parses a single Terra expression from the token stream. This can be used to help build domain specific languages that are supersets of Terra without having to reimplement all of the Terra parser.
+
+---
+
+    lexer:terrastats()
+
+Parses a set of Terra statement from the token stream until it reaches an end of block keyword (`end`, `else`, `elseif`, etc.). This can be used to help build domain specific languages that are supersets of Terra without having to reimplement all of the Terra parser.
+
 Intermediate Representations with Abstract Syntax Description Language
 ======================================================================
 
