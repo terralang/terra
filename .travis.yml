@@ -8,6 +8,8 @@ compiler:
   - gcc
   - clang
 env:
+  global:
+  - HOMEBREW_NO_AUTO_UPDATE=1 # workaround for #421
   matrix:
   - CHECK_CLANG_FORMAT=1
   - LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
