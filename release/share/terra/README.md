@@ -16,7 +16,7 @@ This guide serves as an introduction for programming in Terra. A general underst
 Installing Terra
 ================
 
-Terra currently runs Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
+Terra currently runs Linux, macOS, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
 Running Terra
 =============
@@ -98,7 +98,35 @@ Expect it to print a lot of junk out. At the end it will summarize the results:
 Building Terra
 ==============
 
-If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM, Clang (the C/C++ frontend for LLVM), and LuaJIT 2.0.5 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+If the binary releases are not appropriate, then you can also build Terra from source. Terra has the following dependencies:
+
+  * A working C/C++ compiler (GCC, Clang, MSVC, etc.)
+  * Linux and macOS only: either GNU Make **OR** CMake (version 3.5 or greater)
+  * Windows only: Visual Studio 2013, 2015, 2017 or 2019
+  * LLVM and Clang (see suppport table below)
+  * LuaJIT (note this is downloaded and installed automatically be default)
+  * *Optional:* CUDA
+
+On recent versions of Ubuntu, you can get these dependencies with:
+
+```
+sudo apt-get install build-essential cmake llvm-6.0-dev libclang-6.0-dev clang-6.0
+```
+
+On macOS with Homebrew, the following should be sufficient:
+
+```
+brew install cmake llvm@6
+```
+
+Terra supports two build system: **GNU Make** and **CMake**. CMake is
+newer but is generally recommended. Note that in Ubuntu, the LLVM
+packages for versions < 6 are broken in Ubuntu 16.04 and older. Please
+either upgrade to LLVM 6 or Ubuntu 18.04, or build LLVM from source,
+or else use GNU Make on these systems.
+
+Terra also supports an older NMake build system for Windows, but CMake
+is generally preferred and is substantially more flexible.
 
 ### Supported LLVM Versions ###
 
@@ -117,37 +145,120 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 | 8.0 | :heavy_check_mark: | :heavy_check_mark: | |
 | 9.0 | :heavy_check_mark: | :heavy_check_mark: | |
 
-### Windows ###
+### Instructions for Building LLVM from Source
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/terralang/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang, as well as a copy of the LuaJIT sources.
+LLVM can be somewhat tricky to build from source. If you need to do
+this, the following recipe has been known to work with Terra. The same
+basic procedure should work for all LLVM versions >= 3.8.
 
+```
+wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
+wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
+tar xf llvm-9.0.0.src.tar.xz
+tar xf cfe-9.0.0.src.tar.xz
+mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
+mkdir build install
+cd build
+cmake ../llvm-9.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
+make install -j4 # tune this for how many cores you have
+```
 
-### Linux/OSX ###
+### Building Terra with CMake (Linux, macOS)
 
-The easiest way to get a working LLVM/Clang install is to download the _Clang Binaries_ (which also include LLVM binaries) from the
-[LLVM download](http://llvm.org/releases/download.html) page, and unzip this package.
+The basic procedure for building with CMake is the following:
 
-Now get the Terra sources:
+```
+git clone https://github.com/terralang/terra.git
+cd terra/build
+cmake -DCMAKE_INSTALL_PREFIX=$PWD/../install ..
+make install -j4 # tune this for how many cores you have
+```
 
-    git clone https://github.com/terralang/terra
+This will install Terra into the `terra/install` directory.
 
-To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
+CMake will attempt to auto-detect the location of LLVM on the
+system. If it is unable to do so (e.g., because LLVM is installed in a
+non-standard location), this can be specified manually be adding the
+CMake flag:
 
-    LLVM_CONFIG = <path-to-llvm-install>/bin/llvm-config
+```
+-DCMAKE_PREFIX_PATH=/path/to/llvm/install
+```
 
-Now run make in the `terra` directory to download LuaJIT and build Terra:
+Similarly, CMake will attempt to auto-detect the presence of
+CUDA. However, CUDA is optional by default and the build will continue
+if CUDA is not found. In order to force CUDA on or off, add the
+following CMake flag:
 
-    $ make
+```
+-DTERRA_ENABLE_CMAKE=ON # or OFF
+```
 
-If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
+For more details on how CMake detects CUDA, see [the FindCUDA
+documentation](https://cmake.org/cmake/help/v3.5/module/FindCUDA.html).
 
-    LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
-    LLVM_PREFIX ?= $(shell $(LLVM_CONFIG) --prefix)
-    CLANG ?= $(shell which clang-3.5 clang | head -1)
-    CXX ?= $(CLANG)++
-    CC  ?= $(CLANG)
+### Building Terra with GNU Make (Linux, macOS)
 
-If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
+The basic procudure for building with GNU Make is the following:
+
+```
+git clone https://github.com/terralang/terra.git
+cd terra
+make -j4 # tune this for how many cores you have
+```
+
+This will build Terra into the `terra/release` directory.
+
+Make will attempt to auto-detect the location of LLVM by searching for
+`llvm-config` on `PATH`. If it is unable to do so (e.g., because LLVM
+is installed in a non-standard location), this can be specified
+manually by setting the following environment variable:
+
+```
+export LLVM_CONFIG=path/to/llvm/bin/llvm-config
+```
+
+This can also be set by creating a file called `Makefile.inc` with the
+following contents:
+
+```
+LLVM_CONFIG=path/to/llvm/bin/llvm-config
+```
+
+Similarly, Make will attempt to discover the location of `clang`. If
+this fails, it can be corrected via the `CLANG` environment (or
+Makefile) variable.
+
+The Make build will automatically detect CUDA if it is installed at
+`/usr/local/cuda`. Otherwise, please set `CUDA_HOME` to the location
+where CUDA is installed.
+
+### Building Terra with CMake (Windows)
+
+See the CMake instructions above. The biggest caveats when buildings
+on Windows are:
+
+  * Run CMake from a Visual Studio Command Prompt. This is necessary
+    for CMake (and Terra) to correctly detect the compiler.
+
+  * After using CMake to configure the build, you can use the
+    following command to build Terra (so as to avoid needing to open
+    the Visual Studio GUI to build it):
+
+    ```
+    cmake --build . --target INSTALL --config Release
+    ```
+
+Otherwise the CMake build should function (and obey the same
+variables) as on other OSes.
+
+### Building with NMake (Windows)
+
+Terra also has an older NMake build for Windows, which is no longer
+recommended. For instructions, see [the msvc
+directory](https://github.com/terralang/terra/blob/master/msvc/README.md).
+
+Note that you will need to build LuaJIT yourself (unlike CMake).
 
 Hello, World
 ============
