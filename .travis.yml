@@ -12,6 +12,9 @@ env:
   - HOMEBREW_NO_AUTO_UPDATE=1 # workaround for #421
   matrix:
   - CHECK_CLANG_FORMAT=1
+  - DOCKER_BUILD=ubuntu-16.04
+  - DOCKER_BUILD=ubuntu-18.04
+  - DOCKER_BUILD=ubuntu-19.10
   - LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
   - LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8 USE_CMAKE=1
@@ -39,11 +42,26 @@ matrix:
     - os: linux
       compiler: clang
       env: CHECK_CLANG_FORMAT=1
+    - os: linux
+      compiler: clang
+      env: DOCKER_BUILD=ubuntu-16.04
+    - os: linux
+      compiler: clang
+      env: DOCKER_BUILD=ubuntu-18.04
+    - os: linux
+      compiler: clang
+      env: DOCKER_BUILD=ubuntu-19.10
     # Various macOS tests seem to be broken.
     - os: osx
       compiler: gcc
     - os: osx
       env: CHECK_CLANG_FORMAT=1
+    - os: osx
+      env: DOCKER_BUILD=ubuntu-16.04
+    - os: osx
+      env: DOCKER_BUILD=ubuntu-18.04
+    - os: osx
+      env: DOCKER_BUILD=ubuntu-19.10
     - os: osx
       env: LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
     - os: osx
