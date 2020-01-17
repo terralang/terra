@@ -15,4 +15,4 @@ RUN apt-get update -qq && \
 
 FROM ubuntu:$release
 
-COPY --from=0 /terra_install/* /usr/local
+COPY --from=0 /terra_install/* /usr/local/
