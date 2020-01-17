@@ -147,8 +147,9 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 
 ### Instructions for Building LLVM from Source
 
-LLVM can be somewhat tricky to build from source. If you need to do
-this, the following recipe has been known to work with Terra. The same
+LLVM provides [binary releases](https://releases.llvm.org/), but these
+can sometimes be out of date. If you need to build LLVM from source,
+the following recipe has been known to work with Terra. The same
 basic procedure should work for all LLVM versions >= 3.8.
 
 ```
@@ -251,6 +252,21 @@ on Windows are:
 
 Otherwise the CMake build should function (and obey the same
 variables) as on other OSes.
+
+Note that, even after Terra has been built, it is still necessary to
+run it from the Visual Studio Command Prompt so that it can detect the
+location of the system header files.
+
+### Additional Build Flags for CMake
+
+The following flags are not typically required, but can be used to
+further configure the Terra build via CMake:
+
+  * `TERRA_ENABLE_CUDA` (default unset): Set this variable to force CUDA on or off.
+  * `TERRA_STATIC_LINK_LLVM` (default `ON`): Whether to statically link against LLVM or not.
+  * `TERRA_SLIB_INCLUDE_LLVM` (default `ON`, except on Windows): Whether `libterra_s.a` should include LLVM or not.
+  * `TERRA_STATIC_LINK_LUAJIT` (default `ON`): Whether to statically link against LuaJIT or not.
+  * `TERRA_SLIB_INCLUDE_LUAJIT` (default `ON`, except on Windows): Whether `libterra_s.a` should include LuaJIT or not.
 
 ### Building with NMake (Windows)
 
