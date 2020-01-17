@@ -3,12 +3,10 @@ on: [push]
 
 jobs:
   build:
-    name: Build
-    runs-on: ubuntu-16.04
+    name: Build Ubuntu 16.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
-          LLVM_CONFIG: llvm-config-6.0
-          CLANG: clang-6.0
-          USE_CMAKE: 1
+          DOCKER_BUILD: ubuntu-16.04
