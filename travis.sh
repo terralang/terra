@@ -22,6 +22,11 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
     exit 0
 fi
 
+if [[ -n $DOCKER_BUILD ]]; then
+    ./docker/build.sh $DOCKER_BUILD
+    exit 0
+fi
+
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
   if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
