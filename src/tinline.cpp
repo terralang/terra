@@ -31,7 +31,7 @@ ManualInliner::ManualInliner(TargetMachine *TM, Module *m) {
     SI = (CallGraphSCCPass *)createFunctionInliningPass();
     PM.add(SI);
     PM.run(*m);
-// save the call graph so we can keep it up to date
+    // save the call graph so we can keep it up to date
     CallGraphWrapperPass &CGW = SI->getAnalysis<CallGraphWrapperPass>();
     CGW.runOnModule(*m);  // force it to realloc the CG
     CG = &CGW.getCallGraph();

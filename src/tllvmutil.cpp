@@ -101,8 +101,7 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-            *TheTarget->createMCRegInfo(TripleName),
-            TripleName);
+            *TheTarget->createMCRegInfo(TripleName), TripleName);
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");

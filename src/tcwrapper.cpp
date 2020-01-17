@@ -505,8 +505,7 @@ public:
         for (size_t i = 0; i < outputtypes.size(); i++) {
             params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(),
                                                  SourceLocation(), 0, outputtypes[i],
-                                                 /*TInfo=*/0, SC_None,
-                                                 0));
+                                                 /*TInfo=*/0, SC_None, 0));
         }
         F->setParams(params);
 #if LLVM_VERSION >= 60
@@ -942,14 +941,14 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const char **argbegin, const char **argend,
                             CompilerInstance *TheCompInst) {
-// CompilerInstance will hold the instance of the Clang compiler for us,
-// managing the various objects needed to run the compiler.
+    // CompilerInstance will hold the instance of the Clang compiler for us,
+    // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
 
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend,
                                        TheCompInst->getDiagnostics());
-// need to recreate the diagnostics engine so that it actually listens to warning flags
-// like -Wno-deprecated this cannot go before CreateFromArgs
+    // need to recreate the diagnostics engine so that it actually listens to warning
+    // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
     std::shared_ptr<TargetOptions> to(new TargetOptions(TheCompInst->getTargetOpts()));
 

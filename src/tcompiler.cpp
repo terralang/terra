@@ -122,9 +122,7 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if LLVM_VERSION >= 34 && LLVM_VERSION <= 35
     virtual void NotifyObjectEmitted(const ObjectImage &Obj) {
         for (object::symbol_iterator I = Obj.begin_symbols(), E = Obj.end_symbols();
-             I != E;
-             ++I
-        ) {
+             I != E; ++I) {
             StringRef name;
             object::SymbolRef::Type t;
             uint64_t sz;
@@ -2402,19 +2400,16 @@ struct FunctionEmitter {
             DB = new DIBuilder(*M);
 
             DIFileP file = createDebugInfoForFile(filename);
-            DICompileUnit CU =
-                    DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "",
-                                          0);
+            DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
+                                                     true, "", 0);
 #if LLVM_VERSION >= 36
             auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata *>());
 #else
             auto TA = DB->getOrCreateArray(ArrayRef<Value *>());
 #endif
-            SP = DB->createFunction(
-                    CU,
-                    fstate->func->getName(), fstate->func->getName(), file, lineno,
-                    DB->createSubroutineType(file, TA), false, true, 0, 0, true,
-                    fstate->func);
+            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
+                                    file, lineno, DB->createSubroutineType(file, TA),
+                                    false, true, 0, 0, true, fstate->func);
 
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
