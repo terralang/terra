@@ -48,13 +48,7 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm-c/Linker.h"
 
-#if LLVM_VERSION == 32
-#include "llvmheaders_32.h"
-#elif LLVM_VERSION == 33
-#include "llvmheaders_33.h"
-#elif LLVM_VERSION == 34
-#include "llvmheaders_34.h"
-#elif LLVM_VERSION == 35
+#if LLVM_VERSION == 35
 #include "llvmheaders_35.h"
 #elif LLVM_VERSION == 36
 #include "llvmheaders_36.h"

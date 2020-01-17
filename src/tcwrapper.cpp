@@ -388,11 +388,7 @@ public:
         bool valid =
                 true;  // decisions about whether this function can be exported or not are
                        // delayed until we have seen all the potential problems
-#if LLVM_VERSION <= 34
-        QualType RT = f->getResultType();
-#else
         QualType RT = f->getReturnType();
-#endif
         if (RT->isVoidType()) {
             PushTypeField("unit");
             returntype.initFromStack(L, ref_table);
@@ -499,14 +495,8 @@ public:
     FunctionDecl *GetLivenessFunction() {
         IdentifierInfo &II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
-#if LLVM_VERSION >= 33
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes,
                                               FunctionProtoType::ExtProtoInfo());
-#else
-        QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],
-                                              outputtypes.size(),
-                                              FunctionProtoType::ExtProtoInfo());
-#endif
         FunctionDecl *F = FunctionDecl::Create(
                 *Context, Context->getTranslationUnitDecl(), SourceLocation(),
                 SourceLocation(), N, T, 0, SC_Extern);
@@ -515,23 +505,15 @@ public:
         for (size_t i = 0; i < outputtypes.size(); i++) {
             params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(),
                                                  SourceLocation(), 0, outputtypes[i],
-                                                 /*TInfo=*/0, SC_None,
-#if LLVM_VERSION <= 32
-                                                 SC_None,
-#endif
-                                                 0));
+                                                 /*TInfo=*/0, SC_None, 0));
         }
         F->setParams(params);
 #if LLVM_VERSION >= 60
         CompoundStmt *stmts = CompoundStmt::Create(*Context, outputstmts,
                                                    SourceLocation(), SourceLocation());
-#elif LLVM_VERSION >= 33
+#else
         CompoundStmt *stmts = new (*Context)
                 CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
-#else
-    CompoundStmt *stmts =
-            new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(),
-                                        SourceLocation(), SourceLocation());
 #endif
         F->setBody(stmts);
         return F;
@@ -636,19 +618,10 @@ public:
     }
     virtual void PrintStats() { CG->PrintStats(); }
 
-#if LLVM_VERSION == 32
-    virtual void HandleImplicitImportDecl(ImportDecl *D) {
-        CG->HandleImplicitImportDecl(D);
-    }
-    virtual PPMutationListener *GetPPMutationListener() {
-        return CG->GetPPMutationListener();
-    }
-#elif LLVM_VERSION >= 33
     virtual void HandleImplicitImportDecl(ImportDecl *D) {
         CG->HandleImplicitImportDecl(D);
     }
     virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
-#endif
 };
 
 #if LLVM_VERSION >= 80
@@ -968,28 +941,16 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const char **argbegin, const char **argend,
                             CompilerInstance *TheCompInst) {
-// CompilerInstance will hold the instance of the Clang compiler for us,
-// managing the various objects needed to run the compiler.
-#if LLVM_VERSION <= 32
-    TheCompInst->createDiagnostics(0, 0);
-#else
+    // CompilerInstance will hold the instance of the Clang compiler for us,
+    // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
-#endif
 
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend,
                                        TheCompInst->getDiagnostics());
-// need to recreate the diagnostics engine so that it actually listens to warning flags
-// like -Wno-deprecated this cannot go before CreateFromArgs
-#if LLVM_VERSION <= 32
-    TheCompInst->createDiagnostics(argbegin - argend, argbegin);
-    TargetOptions &to = TheCompInst->getTargetOpts();
-#elif LLVM_VERSION <= 34
-    TheCompInst->createDiagnostics();
-    TargetOptions *to = &TheCompInst->getTargetOpts();
-#else
+    // need to recreate the diagnostics engine so that it actually listens to warning
+    // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
     std::shared_ptr<TargetOptions> to(new TargetOptions(TheCompInst->getTargetOpts()));
-#endif
 
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
@@ -1016,12 +977,8 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     TheCompInst->createASTContext();
 
     // Set the main file handled by the source manager to the input file.
-#if LLVM_VERSION <= 34
-    SourceMgr.createMainFileIDForMemBuffer(membuffer);
-#else
     SourceMgr.setMainFileID(
             SourceMgr.createFileID(UNIQUEIFY(llvm::MemoryBuffer, membuffer)));
-#endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),
                                                        &TheCompInst->getPreprocessor());
     Preprocessor &PP = TheCompInst->getPreprocessor();
@@ -1031,7 +988,7 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     PP.getBuiltinInfo().initializeBuiltins(PP.getIdentifierTable(), PP.getLangOpts());
 #endif
 }
-#if LLVM_VERSION >= 33
+
 static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
                      MacroDirective *MD, Obj *table) {
     if (!II->hasMacroDefinition()) return;
@@ -1074,7 +1031,6 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     lua_pushnumber(T->L, V);
     table->setfield(II->getName().str().c_str());
 }
-#endif
 
 static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     // cleanup after clang.
@@ -1089,15 +1045,9 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
         } else if (fn->getLinkage() == llvm::GlobalValue::LinkOnceAnyLinkage) {
             fn->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
         }
-#if LLVM_VERSION >= 35
         if (fn->hasDLLImportStorageClass())  // clear dll import linkage because it messes
                                              // up the jit on window
             fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
-#else
-        if (fn->hasDLLImportLinkage())  // clear dll import linkage because it messes up
-                                        // the jit on window
-            fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-#endif
     }
 
     M->setTargetTriple(
@@ -1124,10 +1074,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
 
-#if LLVM_VERSION <= 32
-    CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
-                                               TheCompInst.getCodeGenOpts(), *TT->ctx);
-#elif LLVM_VERSION <= 36
+#if LLVM_VERSION <= 36
     CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
                                                TheCompInst.getCodeGenOpts(),
                                                TheCompInst.getTargetOpts(), *TT->ctx);
@@ -1157,7 +1104,6 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     Obj macros;
     CreateTableWithName(result, "macros", &macros);
 
-#if LLVM_VERSION >= 33
     Preprocessor &PP = TheCompInst.getPreprocessor();
     // adjust PP so that it no longer reports errors, which could happen while trying to
     // parse numbers here
@@ -1174,7 +1120,6 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
 #endif
         AddMacro(T, PP, II, MD, &macros);
     }
-#endif
 
     llvm::Module *M = codegen->ReleaseModule();
     delete codegen;
