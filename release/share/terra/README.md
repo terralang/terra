@@ -198,6 +198,17 @@ following CMake flag:
 For more details on how CMake detects CUDA, see [the FindCUDA
 documentation](https://cmake.org/cmake/help/v3.5/module/FindCUDA.html).
 
+### Additional Build Flags for CMake
+
+The following flags are not typically required, but can be used to
+further configure the Terra build via CMake:
+
+  * `TERRA_ENABLE_CUDA` (default unset): Set this variable to force CUDA on or off.
+  * `TERRA_STATIC_LINK_LLVM` (default `ON`): Whether to statically link against LLVM or not.
+  * `TERRA_SLIB_INCLUDE_LLVM` (default `ON`, except on Windows): Whether `libterra_s.a` should include LLVM or not.
+  * `TERRA_STATIC_LINK_LUAJIT` (default `ON`): Whether to statically link against LuaJIT or not.
+  * `TERRA_SLIB_INCLUDE_LUAJIT` (default `ON`, except on Windows): Whether `libterra_s.a` should include LuaJIT or not.
+
 ### Building Terra with GNU Make (Linux, macOS)
 
 The basic procudure for building with GNU Make is the following:
@@ -256,17 +267,6 @@ variables) as on other OSes.
 Note that, even after Terra has been built, it is still necessary to
 run it from the Visual Studio Command Prompt so that it can detect the
 location of the system header files.
-
-### Additional Build Flags for CMake
-
-The following flags are not typically required, but can be used to
-further configure the Terra build via CMake:
-
-  * `TERRA_ENABLE_CUDA` (default unset): Set this variable to force CUDA on or off.
-  * `TERRA_STATIC_LINK_LLVM` (default `ON`): Whether to statically link against LLVM or not.
-  * `TERRA_SLIB_INCLUDE_LLVM` (default `ON`, except on Windows): Whether `libterra_s.a` should include LLVM or not.
-  * `TERRA_STATIC_LINK_LUAJIT` (default `ON`): Whether to statically link against LuaJIT or not.
-  * `TERRA_SLIB_INCLUDE_LUAJIT` (default `ON`, except on Windows): Whether `libterra_s.a` should include LuaJIT or not.
 
 ### Building with NMake (Windows)
 
