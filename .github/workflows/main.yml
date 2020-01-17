@@ -2,27 +2,37 @@ name: CI
 on: [push]
 
 jobs:
-  build_ubuntu1604:
-    name: Build Ubuntu 16.04
+  ubuntu1604:
+    name: Ubuntu 16.04
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
           DOCKER_BUILD: ubuntu-16.04
-  build_ubuntu1804:
-    name: Build Ubuntu 18.04
+  ubuntu1804:
+    name: Ubuntu 18.04
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
           DOCKER_BUILD: ubuntu-18.04
-  build_ubuntu1910:
-    name: Build Ubuntu 19.10
+  ubuntu1910:
+    name: Ubuntu 19.10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
           DOCKER_BUILD: ubuntu-19.10
+  macos_llvm6:
+    name: macOS LLVM 6
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./travis.sh
+        env:
+          LLVM_CONFIG: llvm-config-6.0
+          CLANG: clang-6.0
+          USE_CMAKE: 1
