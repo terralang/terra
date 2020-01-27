@@ -168,8 +168,9 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     )
   fi
 
+  export TERRA_INSTALL_PREFIX=$PWD/install
   pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
+  cmake .. -DCMAKE_INSTALL_PREFIX=$TERRA_INSTALL_PREFIX "${CMAKE_FLAGS[@]}"
   make install -j2
   ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
@@ -177,11 +178,33 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   pushd tests
   ../install/bin/terra ./run
   popd
+
 else
+  export TERRA_INSTALL_PREFIX=$PWD/release
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
 
   # Only deploy Makefile-based builds, and only with LLVM 6.
   if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
     make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) release
   fi
+fi
+
+if [[ $EXTERNAL_TEST = regent ]]; then
+    if [[ $(uname) = Linux ]]; then
+        sudo apt-get install -qq libblas-dev liblapack-dev
+    fi
+    git clone -b master https://github.com/StanfordLegion/legion.git
+    cd legion
+    export REALM_SYNTHETIC_CORE_MAP=
+    export SHORT=1 # skip expensive tests
+    export THREADS=2
+    export TERRA_DIR=$TERRA_INSTALL_PREFIX
+    ./test.py --test=regent
+elif [[ $EXTERNAL_TEST = rigel ]]; then
+    git clone https://github.com/jameshegarty/rigel.git
+    cd rigel/examples
+    mkdir bin
+    ln -s "$TERRA_INSTALL_PREFIX/../build/bin/luajit" bin/luajit
+    export PATH="$PATH:$TERRA_INSTALL_PREFIX/bin:$PWD/bin"
+    make terra
 fi
