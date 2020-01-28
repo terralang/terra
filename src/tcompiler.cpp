@@ -86,6 +86,8 @@ static llvm_shutdown_obj llvmshutdownobj;
 #define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
 #endif
 
+#define MEM_ARRAY_THRESHOLD 64
+
 struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit *CU;
     terra_State *T;
@@ -1042,27 +1044,41 @@ struct CCallingConv {
     Value *emitStoreAgg(IRBuilder<> *B, Type *t1, Value *src, Value *addr_dst) {
         assert(t1->isAggregateType());
         LoadInst *l = dyn_cast<LoadInst>(src);
-        if (t1->isStructTy() && l) {
+        if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
             // create bitcasts of src and dest address
             Value *addr_src = l->getOperand(0);
             Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
-            addr_dst = B->CreateBitCast(addr_dst, t);
-            addr_src = B->CreateBitCast(addr_src, t);
-            // size of bytes to copy
-            StructType *st = cast<StructType>(t1);
-            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
-            uint64_t size = sl->getSizeInBytes();
+            Value *addr_dest = B->CreateBitCast(addr_dst, t);
+            Value *addr_source = B->CreateBitCast(addr_src, t);
+            uint64_t size = 0;
+            unsigned a1 = 0;
+            if (t1->isStructTy()) {
+                // size of bytes to copy
+                StructType *st = cast<StructType>(t1);
+                const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+                size = sl->getSizeInBytes();
+                a1 = sl->getAlignment();
+            } else if (t1->isArrayTy()) {
+                size = CU->getDataLayout().getTypeAllocSize(t1);
+                if (size < MEM_ARRAY_THRESHOLD) {
+                    StoreInst *st = B->CreateStore(src, addr_dst);
+                    return st;
+                }
+                a1 = CU->getDataLayout().getABITypeAlignment(t1);
+            } else
+                assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
 #if LLVM_VERSION <= 60
-            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, sl->getAlignment());
+            Value *m = B->CreateMemCpy(addr_dest, addr_source, size_v, a1);
 #else
-            Value *m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src,
-                                       sl->getAlignment(), size_v);
+            Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
 #endif
             return m;
-        } else
-            return (B->CreateStore(src, addr_dst));
+        } else {
+            StoreInst *st = B->CreateStore(src, addr_dst);
+            return st;
+        }
     }
 
     Function *CreateFunction(Module *M, Obj *ftype, const Twine &name) {
@@ -1927,7 +1943,7 @@ struct FunctionEmitter {
                      int alignment) {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
-        if (t1->isStructTy() && l) {
+        if ((t1->isStructTy() || t1->isArrayTy()) && l) {
             // create bitcasts of src and dest address
             Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
             // addr_dst
@@ -1935,25 +1951,40 @@ struct FunctionEmitter {
             // addr_src
             Value *addr_src = l->getOperand(0);
             addr_src = B->CreateBitCast(addr_src, t);
-            // size of bytes to copy
-            StructType *st = cast<StructType>(t1);
-            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
-            uint64_t size = sl->getSizeInBytes();
+            uint64_t size = 0;
+            unsigned a1 = 0;
+            if (t1->isStructTy()) {
+                // size of bytes to copy
+                StructType *st = cast<StructType>(t1);
+                const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+                size = sl->getSizeInBytes();
+                a1 = hasAlignment ? alignment : sl->getAlignment();
+            } else if (t1->isArrayTy() &&
+                       (CU->getDataLayout().getTypeAllocSize(t1) < MEM_ARRAY_THRESHOLD)) {
+                size = CU->getDataLayout().getTypeAllocSize(t1);
+                a1 = hasAlignment ? alignment
+                                  : CU->getDataLayout().getABITypeAlignment(t1);
+            } else {
+                StoreInst *st = B->CreateStore(value, addr);
+                if (isVolatile) st->setVolatile(true);
+                if (hasAlignment) st->setAlignment(alignment);
+                return st;
+            }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
-            int al = hasAlignment ? alignment : sl->getAlignment();
             // perform the copy
 #if LLVM_VERSION <= 60
-            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, al, isVolatile);
+            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, a1, isVolatile);
 #else
-            Value *m = B->CreateMemCpy(addr_dst, al, addr_src, sl->getAlignment(), size_v,
+            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, l->getAlignment(), size_v,
                                        isVolatile);
 #endif
             return m;
+        } else {
+            StoreInst *st = B->CreateStore(value, addr);
+            if (isVolatile) st->setVolatile(true);
+            if (hasAlignment) st->setAlignment(alignment);
+            return st;
         }
-        StoreInst *st = B->CreateStore(value, addr);
-        if (isVolatile) st->setVolatile(true);
-        if (hasAlignment) st->setAlignment(alignment);
-        return st;
     }
 
     Value *emitIfElse(Obj *cond, Obj *a, Obj *b) {
