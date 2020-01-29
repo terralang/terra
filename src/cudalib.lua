@@ -109,6 +109,7 @@ cudalib.useculink = false
 -- this this is only needed for cuda compilation, we load this library lazily below
 local terracode = [[
 local ffi = require('ffi')
+local asdl = require('asdl')
 local ef = terralib.externfunction
 local struct CUctx_st
 local struct CUfunc_st
@@ -347,7 +348,11 @@ local function dumpsass(data,sz)
     local nvdisasm = terralib.cudahome..(ffi.os == "Windows" and "\\bin\\nvdisasm.exe" or "/bin/nvdisasm")
     os.execute(string.format("%q --print-life-ranges dump.sass",nvdisasm))
 end
-dumpsass = terralib.cast({&opaque,uint64} -> {},dumpsass)
+if asdl.isluajit() then
+    dumpsass = terralib.cast({&opaque,uint64} -> {},dumpsass)
+else
+    dumpsass = nil -- FIXME: PUC Lua doesn't support callbacks
+end
 
 function cudalib.compile(module,dumpmodule,version,jitload)
     version = version or cudalib.localversion()

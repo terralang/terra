@@ -68,7 +68,7 @@ public:
     }
 
     void PushTypeField(const char *name) {
-        lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+        lua_getglobal(L, "terra");
         lua_getfield(L, -1, "types");
         lua_getfield(L, -1, name);
         lua_remove(L, -2);
@@ -482,7 +482,7 @@ public:
     void CreateFunction(const std::string &name, const std::string &internalname,
                         Obj *typ) {
         if (!general.hasfield(name.c_str())) {
-            lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+            lua_getglobal(L, "terra");
             lua_getfield(L, -1, "externfunction");
             lua_remove(L, -2);  // terra table
             lua_pushstring(L, internalname.c_str());
@@ -538,7 +538,7 @@ public:
     }
     void CreateExternGlobal(const std::string &name, Obj *typ) {
         if (!general.hasfield(name.c_str())) {
-            lua_getfield(L, LUA_GLOBALSINDEX, "terra");
+            lua_getglobal(L, "terra");
             lua_getfield(L, -1, "global");
             lua_remove(L, -2);  // terra table
             typ->push();
@@ -1148,7 +1148,7 @@ int include_c(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     (void)T;
     lua_getfield(L, TARGET_POS, "llvm_target");
-    TerraTarget *TT = (TerraTarget *)terra_tocdatapointer(L, -1);
+    TerraTarget *TT = terra_totarget(L, -1);
     const char *code = luaL_checkstring(L, 2);
     int N = lua_objlen(L, 3);
     std::vector<const char *> args;
@@ -1195,11 +1195,11 @@ int include_c(lua_State *L) {
 }
 
 void terra_cwrapperinit(terra_State *T) {
-    lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
+    lua_getglobal(T->L, "terra");
 
     lua_pushlightuserdata(T->L, (void *)T);
     lua_pushcclosure(T->L, include_c, 1);
     lua_setfield(T->L, -2, "registercfile");
 
-    lua_pop(T->L, -1);  // terra object
+    lua_pop(T->L, 1);  // terra object
 }

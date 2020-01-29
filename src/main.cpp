@@ -73,10 +73,19 @@ static int luapanic(
     exit(1);
 }
 
+#ifdef TERRA_USE_PUC_LUA
+extern "C" {
+void preload_ffi(lua_State *L);
+}
+#endif
+
 int main(int argc, char **argv) {
     progname = argv[0];
     lua_State *L = luaL_newstate();
     luaL_openlibs(L);
+#ifdef TERRA_USE_PUC_LUA
+    preload_ffi(L);
+#endif
     lua_atpanic(L, luapanic);
     terra_Options options;
     memset(&options, 0, sizeof(terra_Options));

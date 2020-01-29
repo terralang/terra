@@ -424,8 +424,8 @@ int terra_initwithoptions(lua_State *L, terra_Options *options) {
     lua_setfield(L, -2, "__terrastate");  // reference to our T object, so that we can
                                           // load it from the lua state on other API calls
 
-    lua_setfield(T->L, LUA_GLOBALSINDEX, "terra");  // create global terra object
-    terra_kindsinit(T);  // initialize lua mapping from T_Kind to/from string
+    lua_setglobal(T->L, "terra");  // create global terra object
+    terra_kindsinit(T);            // initialize lua mapping from T_Kind to/from string
     setterrahome(T->L);  // find the location of support files such as the clang resource
                          // directory
 
@@ -466,7 +466,7 @@ int terra_initwithoptions(lua_State *L, terra_Options *options) {
 
     terra_cwrapperinit(T);
 
-    lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
+    lua_getglobal(T->L, "terra");
 
     lua_pushcfunction(T->L, terra_luaload);
     lua_setfield(T->L, -2, "load");

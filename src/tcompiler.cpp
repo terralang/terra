@@ -42,9 +42,22 @@ extern "C" {
 
 using namespace llvm;
 
+#ifdef TERRA_USE_PUC_LUA
+#include "tffi.h"
+#endif
+
+static const void *tocdata(lua_State *L, int idx) {
+#ifdef TERRA_USE_PUC_LUA
+    // libffi uses a 32 byte header for each cdata object,
+    // which we have to skip here
+    return ((char *)lua_topointer(L, idx) + sizeof(struct cdata));
+#else
+    return lua_topointer(L, idx);
+#endif
+}
+
 #define TERRALIB_FUNCTIONS(_)                                                            \
     _(inittarget, 1)                                                                     \
-    _(freetarget, 0)                                                                     \
     _(initcompilationunit, 1)                                                            \
     _(compilationunitaddvalue,                                                           \
       1) /*entry point from lua into compiler to generate LLVM for a function, other     \
@@ -294,6 +307,17 @@ bool HostHasAVX() {
     return Features["avx"];
 }
 
+static inline void terra_pushpointerwithgc(lua_State *L, void *ptr,
+                                           lua_CFunction destructor) {
+    void **blockaddr = (void **)lua_newuserdata(L, sizeof(void *));
+    *blockaddr = ptr;
+    lua_newtable(L);
+    lua_pushcfunction(L, destructor);
+    lua_setfield(L, -2, "__gc");
+    lua_setmetatable(L, -2);
+}
+
+int terra_freetarget(lua_State *L);
 int terra_inittarget(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     TerraTarget *TT = new TerraTarget();
@@ -373,14 +397,15 @@ int terra_inittarget(lua_State *L) {
             CodeGenOpt::Aggressive);
     TT->external = new Module("external", *TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
-    lua_pushlightuserdata(L, TT);
+    terra_pushpointerwithgc(L, TT, terra_freetarget);
     return 1;
 }
 
+int terra_freecompilationunit(lua_State *L);
 int terra_initcompilationunit(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     TerraCompilationUnit *CU = new TerraCompilationUnit();
-    TerraTarget *TT = (TerraTarget *)terra_tocdatapointer(L, 1);
+    TerraTarget *TT = terra_totarget(L, 1);
     CU->TT = TT;
     CU->TT->nreferences++;
     CU->nreferences = 1;
@@ -404,7 +429,7 @@ int terra_initcompilationunit(lua_State *L) {
     llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
     llvmutil_addoptimizationpasses(CU->fpm);
     CU->fpm->doInitialization();
-    lua_pushlightuserdata(L, CU);
+    terra_pushpointerwithgc(L, CU, terra_freecompilationunit);
     return 1;
 }
 
@@ -487,7 +512,7 @@ void freetarget(TerraTarget *TT) {
     }
 }
 int terra_freetarget(lua_State *L) {
-    freetarget((TerraTarget *)terra_tocdatapointer(L, 1));
+    freetarget(terra_totarget(L, 1));
     return 0;
 }
 
@@ -509,7 +534,7 @@ static void freecompilationunit(TerraCompilationUnit *CU) {
     }
 }
 int terra_freecompilationunit(lua_State *L) {
-    freecompilationunit((TerraCompilationUnit *)terra_tocdatapointer(L, 1));
+    freecompilationunit(terra_tocompilationunit(L, 1));
     return 0;
 }
 
@@ -2161,7 +2186,7 @@ struct FunctionEmitter {
                 TType *typ = typeOfValue(exp);
                 Obj value;
                 exp->pushfield("value");
-                const void *data = lua_topointer(L, -1);
+                const void *data = tocdata(L, -1);
                 assert(data);
                 size_t size = CU->getDataLayout().getTypeAllocSize(typ->type);
                 Value *r;
@@ -2843,8 +2868,10 @@ static int terra_compilationunitaddvalue(
         const char *modulename = (lua_isnil(L, 2)) ? NULL : lua_tostring(L, 2);
         lua_pushvalue(L, 3);  // the function definition
         cu.fromStack(&value);
-        TerraCompilationUnit *CU = (TerraCompilationUnit *)cu.cd("llvm_cu");
+        cu.pushfield("llvm_cu");
+        TerraCompilationUnit *CU = terra_tocompilationunit(L, -1);
         assert(CU);
+        lua_pop(L, 1);
 
         Types Ty(CU);
         CCallingConv CC(CU, &Ty);
@@ -2881,11 +2908,10 @@ static int terra_compilationunitaddvalue(
     return 1;
 }
 
-static int terra_llvmsizeof(lua_State *L) {
+static void RetrieveCUAndType(lua_State *L, TerraCompilationUnit **CUp,
+                              TType **llvmtypp) {
     terra_State *T = terra_getstate(L, 1);
     int ref_table = lobj_newreftable(L);
-    TType *llvmtyp;
-    TerraCompilationUnit *CU;
     {
         Obj cu, typ, globals;
         lua_pushvalue(L, 1);
@@ -2893,13 +2919,21 @@ static int terra_llvmsizeof(lua_State *L) {
         lua_pushvalue(L, 2);
         typ.initFromStack(L, ref_table);
         cu.obj("symbols", &globals);
-        CU = (TerraCompilationUnit *)cu.cd("llvm_cu");
-        CU->symbols = &globals;
-        llvmtyp = Types(CU).Get(&typ);
-        CU->symbols = NULL;
+        cu.pushfield("llvm_cu");
+        (*CUp) = terra_tocompilationunit(L, -1);
+        lua_pop(L, 1);
+        (*CUp)->symbols = &globals;
+        *llvmtypp = Types(*CUp).Get(&typ);
+        (*CUp)->symbols = NULL;
     }
     lobj_removereftable(T->L, ref_table);
-    lua_pushnumber(T->L, CU->getDataLayout().getTypeAllocSize(llvmtyp->type));
+}
+
+static int terra_llvmsizeof(lua_State *L) {
+    TerraCompilationUnit *CU;
+    TType *llvmtyp;
+    RetrieveCUAndType(L, &CU, &llvmtyp);
+    lua_pushnumber(L, CU->getDataLayout().getTypeAllocSize(llvmtyp->type));
     return 1;
 }
 
@@ -2962,7 +2996,7 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
 
 static int terra_jit(lua_State *L) {
     terra_getstate(L, 1);
-    TerraCompilationUnit *CU = (TerraCompilationUnit *)terra_tocdatapointer(L, 1);
+    TerraCompilationUnit *CU = terra_tocompilationunit(L, 1);
     GlobalValue *gv = (GlobalValue *)lua_touserdata(L, 2);
     double begin = CurrentTimeInSeconds();
     void *ptr = JITGlobalValue(CU, gv);
@@ -2973,8 +3007,7 @@ static int terra_jit(lua_State *L) {
 }
 
 static int terra_deletefunction(lua_State *L) {
-    TerraCompilationUnit *CU =
-            (TerraCompilationUnit *)terra_tocdatapointer(L, lua_upvalueindex(1));
+    TerraCompilationUnit *CU = terra_tocompilationunit(L, lua_upvalueindex(1));
     TerraFunctionState *fstate = (TerraFunctionState *)lua_touserdata(L, -1);
     assert(fstate);
     Function *func = fstate->func;
@@ -3149,7 +3182,7 @@ static int terra_saveobjimpl(lua_State *L) {
     bool optimize = lua_toboolean(L, 5);
 
     lua_getfield(L, 3, "llvm_cu");
-    TerraCompilationUnit *CU = (TerraCompilationUnit *)terra_tocdatapointer(L, -1);
+    TerraCompilationUnit *CU = terra_tocompilationunit(L, -1);
     assert(CU);
     if (optimize) {
         llvmutil_optimizemodule(CU->M, CU->TT->tm);
@@ -3198,15 +3231,21 @@ static int terra_saveobjimpl(lua_State *L) {
 }
 
 static int terra_pointertolightuserdata(lua_State *L) {
-    lua_pushlightuserdata(L, terra_tocdatapointer(L, -1));
+    if (10 != lua_type(L, 1))
+        return 0;  // not a cdata, 10 is from LuaJIT sources since it is not exposed in
+                   // the normal API
+    void *const *cdata = (void *const *)lua_topointer(L, 1);
+    if (!cdata) return 0;
+    lua_pushlightuserdata(L, *cdata);
     return 1;
 }
+
 static int terra_bindtoluaapi(lua_State *L) {
     int N = lua_gettop(L);
     assert(N >= 1);
-    void *const *fn = (void *const *)lua_topointer(L, 1);
+    void *fn = lua_touserdata(L, 1);
     assert(fn);
-    lua_pushcclosure(L, (lua_CFunction)*fn, N - 1);
+    lua_pushcclosure(L, (lua_CFunction)fn, N - 1);
     return 1;
 }
 #if _MSC_VER < 1900 && defined(_WIN32)
@@ -3232,7 +3271,7 @@ static int terra_linkllvmimpl(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     (void)T;
     std::string Err;
-    TerraTarget *TT = (TerraTarget *)terra_tocdatapointer(L, 1);
+    TerraTarget *TT = terra_totarget(L, 1);
     size_t length;
     const char *filename = lua_tolstring(L, 2, &length);
     bool fromstring = lua_toboolean(L, 3);
@@ -3318,7 +3357,7 @@ static int terra_linkllvmimpl(lua_State *L) {
 static int terra_dumpmodule(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     (void)T;
-    TerraCompilationUnit *CU = (TerraCompilationUnit *)terra_tocdatapointer(L, 1);
+    TerraCompilationUnit *CU = terra_tocompilationunit(L, 1);
     if (CU) TERRA_DUMP_MODULE(CU->M);
     return 0;
 }

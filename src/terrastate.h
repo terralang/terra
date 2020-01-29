@@ -42,7 +42,7 @@ terra_State *terra_getstate(lua_State *L, int closureindex);
 #define VERBOSE_ONLY(T) if ((T)->options.verbose != 0)
 #define DEBUG_ONLY(T) if ((T)->options.debug != 0)
 
-// definition in tclanginternalizedheaders.cpp
+// definition in tinternalizedfiles.cpp
 void terra_registerinternalizedfiles(lua_State *L, int terratable);
 
 #endif
