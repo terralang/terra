@@ -3,6 +3,9 @@ local ffi = require("ffi")
 local asdl = require("asdl")
 local List = asdl.List
 
+local isluajit = asdl.isluajit
+local iscdata = asdl.iscdata
+
 -- LINE COVERAGE INFORMATION, must run test script with luajit and not terra to avoid overwriting coverage with old version
 if false then
     local converageloader = loadfile("coverageinfo.lua")
@@ -422,7 +425,11 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
         -- invokeuserfunction is recognized by a customtraceback and we need to prevent the tail call
         return result
     end
-    local success,result = xpcall(userfn,debug.traceback,...)
+    local userargs = {...}
+    local function userwrapper()
+      return userfn(unpack(userargs))
+    end
+    local success,result = xpcall(userwrapper,debug.traceback)
     -- same here
     return success, result
 end
@@ -726,12 +733,6 @@ local function newweakkeytable()
     return setmetatable({},weakkeys)
 end
 
-local function cdatawithdestructor(ud,dest)
-    local cd = ffi.cast("void*",ud)
-    ffi.gc(cd,dest)
-    return cd
-end
-
 terra.target = {}
 terra.target.__index = terra.target
 function terra.istarget(a) return getmetatable(a) == terra.target end
@@ -742,7 +743,7 @@ function terra.newtarget(tbl)
         CPU = CPU or ""
         Features = Features or ""
     end
-    return setmetatable({ llvm_target = cdatawithdestructor(terra.inittarget(Triple,CPU,Features,FloatABIHard),terra.freetarget),
+    return setmetatable({ llvm_target = terra.inittarget(Triple,CPU,Features,FloatABIHard),
                           Triple = Triple,
                           cnametostruct = { general = {}, tagged = {}}  --map from llvm_name -> terra type used to make c structs unique per llvm_name
                         },terra.target)
@@ -768,7 +769,7 @@ function terra.newcompilationunit(target,opt)
     assert(terra.istarget(target),"expected a target object")
     return setmetatable({ symbols = newweakkeytable(), 
                           collectfunctions = opt,
-                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+                          llvm_cu = terra.initcompilationunit(target.llvm_target,opt) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
@@ -781,7 +782,7 @@ function compilationunit:jitvalue(v)
 end
 function compilationunit:free()
     assert(not self.collectfunctions, "cannot explicitly release a compilation unit with auto-delete functions")
-    ffi.gc(self.llvm_cu,nil) --unregister normal destructor object
+    getmetatable(self.llvm_cu).__gc = nil
     terra.freecompilationunit(self.llvm_cu)
 end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
@@ -1450,10 +1451,15 @@ do
             
             --create a map from this ctype to the terra type to that we can implement terra.typeof(cdata)
             local ctype = ffi.typeof(self.cachedcstring)
-            types.ctypetoterra[tonumber(ctype)] = self
-            local rctype = ffi.typeof(self.cachedcstring.."&")
-            types.ctypetoterra[tonumber(rctype)] = self
-            
+            -- tonumber(ctype) is LuaJIT-only, so rely on printed representation in PUC Lua
+            local ctype_key = tonumber(ctype) or tostring(ctype)
+            types.ctypetoterra[ctype_key] = self
+            if isluajit() then
+              local rctype = ffi.typeof(self.cachedcstring.."&")
+              local rctype_key = tonumber(rctype) or tostring(rctype)
+              types.ctypetoterra[rctype_key] = self
+            end
+
             if self:isstruct() then
                 local function index(obj,idx)
                     local method = self:getmethod(idx)
@@ -1674,12 +1680,21 @@ do
                 name = "u"..name
             end
             local min,max
+            -- Hack: The syntax below doesn't parse in Lua 5.1-5.2, so
+            -- wrapping it in a conditional eval is the only way to
+            -- guard against parse errors.
+            local function eval(program)
+              local obj = loadstring(program)
+              if obj then
+                return obj()
+              end
+            end
             if not s then
-                min = 0ULL
-                max = -1ULL
+                min = eval("return 0ULL")
+                max = eval("return -1ULL")
             else
-                min = 2LL ^ (bits - 1)
-                max = min - 1
+                min = eval("return 2LL ^ (" .. tostring(bits) .. " - 1)")
+                max = min and min - 1
             end
             local typ = T.primitive("integer",size,s)
             globaltype(name,typ,min,max)
@@ -2111,7 +2126,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif terra.istree(v) then
                 --if this is a raw tree, we just drop it in place and hope the user knew what they were doing
                 return v
-            elseif type(v) == "cdata" then
+            elseif iscdata(v) then
                 local typ = terra.typeof(v)
                 if typ:isaggregate() then --when an aggregate is directly referenced from Terra we get its pointer
                                           --a constant would make an entire copy of the object
@@ -3351,22 +3366,17 @@ local function fileparts(path)
     local pattern = "[%s]([^%s]*)"
     return path:gmatch(pattern:format(fileseparators,fileseparators))
 end
-function terra.registerinternalizedfiles(names,contents,sizes)
-    names,contents,sizes = ffi.cast("const char **",names),ffi.cast("uint8_t **",contents),ffi.cast("int*",sizes)
-    for i = 0,math.huge do
-        if names[i] == nil then break end
-        local name,content,size = ffi.string(names[i]),contents[i],sizes[i]
-        local cur = internalizedfiles
-        for segment in fileparts(name) do
-            cur.children = cur.children or {}
-            cur.kind = "directory"
-            if not cur.children[segment] then
-                cur.children[segment] = {} 
-            end
-            cur = cur.children[segment]
+function terra.registerinternalizedfile(name,content,size)
+    local cur = internalizedfiles
+    for segment in fileparts(name) do
+        cur.children = cur.children or {}
+        cur.kind = "directory"
+        if not cur.children[segment] then
+            cur.children[segment] = {}
         end
-        cur.contents,cur.size,cur.kind =  terra.pointertolightuserdata(content), size, "file"
+        cur = cur.children[segment]
     end
+    cur.contents,cur.size,cur.kind =  content, size, "file"
 end
 
 local function getinternalizedfile(path)
@@ -3484,8 +3494,8 @@ local function createunpacks(tupleonly)
         return result
     end
     local function unpacklua(cdata,from,to)
-        local t = type(cdata) == "cdata" and terra.typeof(cdata)
-        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then 
+        local t = iscdata(cdata) and terra.typeof(cdata)
+        if not t or not t:isstruct() or (tupleonly and t.convertible ~= "tuple") then
           return cdata
         end
         local results = terralib.newlist()
@@ -4268,7 +4278,7 @@ function terra.constant(typ,init)
         typ,init = nil,typ
     end
     if typ == nil then --try to infer the type, and if successful build the constant
-        if type(init) == "cdata" then
+        if iscdata(init) then
             typ = terra.typeof(init)
         elseif type(init) == "number" then
             typ = (terra.isintegral(init) and terra.types.int) or terra.types.double
@@ -4290,7 +4300,7 @@ function terra.constant(typ,init)
         return terra.newquote(newobject(anchor,T.literal,init,typ))
     end
     local orig = init -- hold anchor until we capture the value
-    if type(init) ~= "cdata" or terra.typeof(init) ~= typ then
+    if not iscdata(init) or terra.typeof(init) ~= typ then
         init = terra.cast(typ,init)
     end
     if not typ:isaggregate() then
@@ -4311,10 +4321,10 @@ _G["constant"] = terra.constant
 
 -- equivalent to ffi.typeof, takes a cdata object and returns associated terra type object
 function terra.typeof(obj)
-    if type(obj) ~= "cdata" then
+    if not iscdata(obj) then
         error("cannot get the type of a non cdata object")
     end
-    return terra.types.ctypetoterra[tonumber(ffi.typeof(obj))]
+    return terra.types.ctypetoterra[tostring(ffi.typeof(obj))]
 end
 
 --equivalent to Lua's type function, but knows about concepts in Terra to improve error reporting

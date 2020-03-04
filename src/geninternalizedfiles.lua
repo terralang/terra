@@ -1,10 +1,9 @@
-local outputfilename = arg[1]
+local os,outputfilename = arg[1],arg[2]
 
-local ffi = require("ffi")
-local findcmd = ffi.os == "Windows" and "cmd /c dir /b /s \"%s\"" or "find %q"
+local findcmd = os == "Windows" and "cmd /c dir /b /s \"%s\"" or "find %q"
 
 local listoffiles = {}
-for i = 2,#arg,2 do
+for i = 3,#arg,2 do
     local path,pattern = arg[i],arg[i+1]
     local p = assert(io.popen(findcmd:format(path)))
     print(findcmd:format(path))
