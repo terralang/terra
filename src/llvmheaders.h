@@ -48,13 +48,7 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm-c/Linker.h"
 
-#if LLVM_VERSION == 32
-#include "llvmheaders_32.h"
-#elif LLVM_VERSION == 33
-#include "llvmheaders_33.h"
-#elif LLVM_VERSION == 34
-#include "llvmheaders_34.h"
-#elif LLVM_VERSION == 35
+#if LLVM_VERSION == 35
 #include "llvmheaders_35.h"
 #elif LLVM_VERSION == 36
 #include "llvmheaders_36.h"
@@ -70,11 +64,15 @@
 #include "llvmheaders_60.h"
 #elif LLVM_VERSION >= 70 && LLVM_VERSION < 80
 #include "llvmheaders_70.h"
+#elif LLVM_VERSION == 80
+#include "llvmheaders_80.h"
+#elif LLVM_VERSION == 90
+#include "llvmheaders_90.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 60
-#include "llvmheaders_60.h"
+#define LLVM_VERSION 90
+#include "llvmheaders_90.h"
 #endif
 
 #if LLVM_VERSION >= 34

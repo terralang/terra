@@ -1,0 +1,18 @@
+ARG release=16.04
+
+FROM ubuntu:$release
+
+ENV DEBIAN_FRONTEND noninteractive
+
+COPY . /terra
+
+RUN apt-get update -qq && \
+    apt-get install -qq build-essential cmake git llvm-6.0-dev libclang-6.0-dev clang-6.0 libedit-dev libncurses5-dev zlib1g-dev && \
+    cd /terra/build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
+    make install -j4 && \
+    make test
+
+FROM ubuntu:$release
+
+COPY --from=0 /terra_install/* /usr/local/

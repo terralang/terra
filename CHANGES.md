@@ -10,9 +10,9 @@ The following changes are included in this release:
 
 ## Added features
 
-  * Support for LLVM 3.8, 3.9, 5, 6 and 7
+  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8 and 9
   * Support for CUDA 9.2
-  * Support for Visual Studio 2015 on Windows
+  * Support for Visual Studio 2015, 2017 and 2019 on Windows
   * Upgrade to LuaJIT 2.0.5 by default, experimental support for 2.1 betas
   * Added `terralib.linkllvmstring` to link bitcode modules directly from memory
   * Allow types defined via `ffi.cdef` to be used as Terra types as well

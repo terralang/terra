@@ -78,9 +78,7 @@ LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).
 LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
-ifneq ($(LLVM_VERSION), 32)
 CPPFLAGS += -std=c++11
-endif
 
 
 ifneq ($(findstring $(UNAME), Linux FreeBSD),)
@@ -98,9 +96,9 @@ LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
                       -lclangAnalysis \
                       -lclangEdit -lclangAST -lclangLex -lclangBasic
 
-CLANG_REWRITE_CORE = "32 33 34"
-ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_REWRITE_CORE)))
-LLVM_LIBRARY_FLAGS += -lclangRewriteCore
+CLANG_AST_MATCHERS = "80 90"
+ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
+LLVM_LIBRARY_FLAGS += -lclangASTMatchers
 endif
 
 # by default, Terra includes only the pieces of the LLVM libraries it needs,

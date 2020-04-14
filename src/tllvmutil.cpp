@@ -20,9 +20,7 @@
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#if LLVM_VERSION >= 35
 #include "llvm/MC/MCContext.h"
-#endif
 #if LLVM_VERSION < 50
 #include "llvm/Support/MemoryObject.h"
 #endif
@@ -44,9 +42,7 @@ void llvmutil_addtargetspecificpasses(PassManagerBase *fpm, TargetMachine *TM) {
 #if LLVM_VERSION <= 35
     DataLayout *TD = new DataLayout(*TM->getDataLayout());
 #endif
-#if LLVM_VERSION <= 34
-    fpm->add(TD);
-#elif LLVM_VERSION == 35
+#if LLVM_VERSION == 35
     fpm->add(new DataLayoutPass(*TD));
 #elif LLVM_VERSION == 36
     fpm->add(new DataLayoutPass());
@@ -54,10 +50,7 @@ void llvmutil_addtargetspecificpasses(PassManagerBase *fpm, TargetMachine *TM) {
     fpm->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 #endif
 
-#if LLVM_VERSION == 32
-    fpm->add(new TargetTransformInfo(TM->getScalarTargetTransformInfo(),
-                                     TM->getVectorTargetTransformInfo()));
-#elif LLVM_VERSION >= 33 && LLVM_VERSION <= 36
+#if LLVM_VERSION >= 33 && LLVM_VERSION <= 36
     TM->addAnalysisPasses(*fpm);
 #endif
 }
@@ -76,10 +69,10 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
+#if LLVM_VERSION < 90
     PMB.DisableUnitAtATime = true;
-#if LLVM_VERSION <= 34 && LLVM_VERSION >= 32
-    PMB.LoopVectorize = false;
-#elif LLVM_VERSION >= 35
+#endif
+#if LLVM_VERSION >= 35
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
 #endif
@@ -102,20 +95,13 @@ struct SimpleMemoryObject : public MemoryObject {
 void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
     std::string Error;
-#if LLVM_VERSION >= 33
     std::string TripleName = llvm::sys::getProcessTriple();
-#else
-    std::string TripleName = llvm::sys::getDefaultTargetTriple();
-#endif
     std::string CPU = llvm::sys::getHostCPUName();
 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-#if LLVM_VERSION >= 34
-            *TheTarget->createMCRegInfo(TripleName),
-#endif
-            TripleName);
+            *TheTarget->createMCRegInfo(TripleName), TripleName);
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
@@ -127,12 +113,8 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
             TheTarget->createMCSubtargetInfo(TripleName, CPU, FeaturesStr);
     assert(STI && "Unable to create subtarget info!");
 
-#if LLVM_VERSION >= 35
     MCContext Ctx(MAI, MRI, NULL);
     MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI, Ctx);
-#else
-    MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI);
-#endif
     assert(DisAsm && "Unable to create disassembler!");
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
@@ -221,8 +203,6 @@ bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
     return false;
 }
 
-#if LLVM_VERSION >= 34
-
 struct CopyConnectedComponent : public ValueMaterializer {
     Module *dest;
     Module *src;
@@ -261,6 +241,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 newfn = Function::Create(fn->getFunctionType(), fn->getLinkage(),
                                          fn->getName(), dest);
                 newfn->copyAttributesFrom(fn);
+                newfn->setComdat(
+                        fn->getComdat());  // copyAttributesFrom does not copy comdats
             }
             if (!fn->isDeclaration() && newfn->isDeclaration() && copyGlobal(fn, data)) {
                 for (Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(),
@@ -387,7 +369,6 @@ void llvmutil_copyfrommodule(llvm::Module *Dest, llvm::Module *Src,
     CopyConnectedComponent cp(Dest, Src, copyGlobal, data, VMap);
     for (size_t i = 0; i < N; i++) MapValue(gvs[i], VMap, RF_None, NULL, &cp);
 }
-#endif
 
 void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PassManagerT MPM;
@@ -407,36 +388,20 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0, false);
 #endif
 
-#if LLVM_VERSION >= 35
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
-#endif
 
     PMB.populateModulePassManager(MPM);
 
     MPM.run(*M);
 }
 
-#if LLVM_VERSION >= 34
 error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
                                         SmallVectorImpl<char> &ResultPath) {
     return sys::fs::createTemporaryFile(Prefix, Suffix, ResultPath);
 }
-#else
-error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
-                                        SmallVectorImpl<char> &ResultPath) {
-    llvm::sys::Path P("/tmp");
-    P.appendComponent(Prefix.str());
-    P.appendSuffix(Suffix);
-    P.makeUnique(false, NULL);
-    StringRef str = P.str();
-    ResultPath.append(str.begin(), str.end());
-    return error_code();
-}
-#endif
 
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::string *err) {
-#if LLVM_VERSION >= 34
     bool executionFailed = false;
 #if LLVM_VERSION >= 70
     llvm::sys::ProcessInfo Info =
@@ -462,8 +427,5 @@ int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::stri
     }
 #else
     return llvm::sys::Wait(Info, 0, true, err).ReturnCode;
-#endif
-#else
-    return sys::Program::ExecuteAndWait(program, args, 0, 0, 0, 0, err);
 #endif
 }

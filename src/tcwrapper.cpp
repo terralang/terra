@@ -388,11 +388,7 @@ public:
         bool valid =
                 true;  // decisions about whether this function can be exported or not are
                        // delayed until we have seen all the potential problems
-#if LLVM_VERSION <= 34
-        QualType RT = f->getResultType();
-#else
         QualType RT = f->getReturnType();
-#endif
         if (RT->isVoidType()) {
             PushTypeField("unit");
             returntype.initFromStack(L, ref_table);
@@ -499,14 +495,8 @@ public:
     FunctionDecl *GetLivenessFunction() {
         IdentifierInfo &II = Context->Idents.get(livenessfunction);
         DeclarationName N = Context->DeclarationNames.getIdentifier(&II);
-#if LLVM_VERSION >= 33
         QualType T = Context->getFunctionType(Context->VoidTy, outputtypes,
                                               FunctionProtoType::ExtProtoInfo());
-#else
-        QualType T = Context->getFunctionType(Context->VoidTy, &outputtypes[0],
-                                              outputtypes.size(),
-                                              FunctionProtoType::ExtProtoInfo());
-#endif
         FunctionDecl *F = FunctionDecl::Create(
                 *Context, Context->getTranslationUnitDecl(), SourceLocation(),
                 SourceLocation(), N, T, 0, SC_Extern);
@@ -515,23 +505,15 @@ public:
         for (size_t i = 0; i < outputtypes.size(); i++) {
             params.push_back(ParmVarDecl::Create(*Context, F, SourceLocation(),
                                                  SourceLocation(), 0, outputtypes[i],
-                                                 /*TInfo=*/0, SC_None,
-#if LLVM_VERSION <= 32
-                                                 SC_None,
-#endif
-                                                 0));
+                                                 /*TInfo=*/0, SC_None, 0));
         }
         F->setParams(params);
 #if LLVM_VERSION >= 60
         CompoundStmt *stmts = CompoundStmt::Create(*Context, outputstmts,
                                                    SourceLocation(), SourceLocation());
-#elif LLVM_VERSION >= 33
+#else
         CompoundStmt *stmts = new (*Context)
                 CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
-#else
-    CompoundStmt *stmts =
-            new (*Context) CompoundStmt(*Context, &outputstmts[0], outputstmts.size(),
-                                        SourceLocation(), SourceLocation());
 #endif
         F->setBody(stmts);
         return F;
@@ -636,21 +618,33 @@ public:
     }
     virtual void PrintStats() { CG->PrintStats(); }
 
-#if LLVM_VERSION == 32
-    virtual void HandleImplicitImportDecl(ImportDecl *D) {
-        CG->HandleImplicitImportDecl(D);
-    }
-    virtual PPMutationListener *GetPPMutationListener() {
-        return CG->GetPPMutationListener();
-    }
-#elif LLVM_VERSION >= 33
     virtual void HandleImplicitImportDecl(ImportDecl *D) {
         CG->HandleImplicitImportDecl(D);
     }
     virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
-#endif
 };
 
+#if LLVM_VERSION >= 80
+class LuaProvidedFile : public llvm::vfs::File {
+private:
+    std::string Name;
+    llvm::vfs::Status Status;
+    StringRef Buffer;
+
+public:
+    LuaProvidedFile(const std::string &Name_, const llvm::vfs::Status &Status_,
+                    const StringRef &Buffer_)
+            : Name(Name_), Status(Status_), Buffer(Buffer_) {}
+    virtual ~LuaProvidedFile() override {}
+    virtual llvm::ErrorOr<llvm::vfs::Status> status() override { return Status; }
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
+            const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
+            bool IsVolatile) override {
+        return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
+    }
+    virtual std::error_code close() override { return std::error_code(); }
+};
+#else
 class LuaProvidedFile : public clang::vfs::File {
 private:
     std::string Name;
@@ -664,7 +658,7 @@ public:
     virtual ~LuaProvidedFile() override {}
     virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
 #if LLVM_VERSION >= 36
-    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer> > getBuffer(
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
             const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
             bool IsVolatile) override {
         return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
@@ -684,6 +678,7 @@ public:
     virtual void setName(StringRef Name_) override { Name = Name_; }
 #endif
 };
+#endif
 
 #if LLVM_VERSION < 50
 static llvm::sys::TimeValue ZeroTime() {
@@ -698,6 +693,99 @@ static llvm::sys::TimePoint<> ZeroTime() {
     return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
 }
 #endif
+
+#if LLVM_VERSION >= 80
+class LuaOverlayFileSystem : public llvm::vfs::FileSystem {
+private:
+    IntrusiveRefCntPtr<llvm::vfs::FileSystem> RFS;
+    lua_State *L;
+
+public:
+    LuaOverlayFileSystem(lua_State *L_) : RFS(llvm::vfs::getRealFileSystem()), L(L_) {}
+
+    bool GetFile(const llvm::Twine &Path, llvm::vfs::Status *status,
+                 StringRef *contents) {
+        lua_pushvalue(L, HEADERPROVIDER_POS);
+        lua_pushstring(L, Path.str().c_str());
+        lua_call(L, 1, 1);
+        if (!lua_istable(L, -1)) {
+            lua_pop(L, 1);
+            return false;
+        }
+        llvm::sys::fs::file_type filetype = llvm::sys::fs::file_type::directory_file;
+        int64_t size = 0;
+        lua_getfield(L, -1, "kind");
+        const char *kind = lua_tostring(L, -1);
+        if (strcmp(kind, "file") == 0) {
+            filetype = llvm::sys::fs::file_type::regular_file;
+            lua_getfield(L, -2, "contents");
+            const char *data = (const char *)lua_touserdata(L, -1);
+            if (!data) {
+                data = lua_tostring(L, -1);
+            }
+            if (!data) {
+                lua_pop(L, 3);  // pop table,kind,contents
+                return false;
+            }
+            lua_getfield(L, -3, "size");
+            size = (lua_isnumber(L, -1)) ? lua_tonumber(L, -1) : ::strlen(data);
+            *contents = StringRef(data, size);
+            lua_pop(L, 2);  // pop contents, size
+        }
+        *status = llvm::vfs::Status(Path.str(), llvm::vfs::getNextVirtualUniqueID(),
+                                    ZeroTime(), 0, 0, size, filetype,
+                                    llvm::sys::fs::all_all);
+        lua_pop(L, 2);  // pop table, kind
+        return true;
+    }
+    virtual ~LuaOverlayFileSystem() {}
+
+    virtual llvm::ErrorOr<llvm::vfs::Status> status(const llvm::Twine &Path) override {
+        static const std::error_code noSuchFileErr =
+                std::make_error_code(std::errc::no_such_file_or_directory);
+        llvm::ErrorOr<llvm::vfs::Status> RealStatus = RFS->status(Path);
+        if (RealStatus || RealStatus.getError() != noSuchFileErr) return RealStatus;
+        llvm::vfs::Status Status;
+        StringRef Buffer;
+        if (GetFile(Path, &Status, &Buffer)) {
+            return Status;
+        }
+        return llvm::errc::no_such_file_or_directory;
+    }
+
+    virtual llvm::ErrorOr<std::unique_ptr<llvm::vfs::File>> openFileForRead(
+            const llvm::Twine &Path) override {
+        llvm::ErrorOr<std::unique_ptr<llvm::vfs::File>> ec = RFS->openFileForRead(Path);
+        if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
+        llvm::vfs::Status Status;
+        StringRef Buffer;
+        if (GetFile(Path, &Status, &Buffer)) {
+            return std::unique_ptr<llvm::vfs::File>(
+                    new LuaProvidedFile(Path.str(), Status, Buffer));
+        }
+        return llvm::errc::no_such_file_or_directory;
+    }
+
+    virtual llvm::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
+                                                    std::error_code &EC) override {
+        printf("BUGBUG: unexpected call to directory iterator in C header include. "
+               "report this a bug on github.com/zdevito/terra");  // as far as I can tell
+                                                                  // this isn't used by
+                                                                  // the things we are
+                                                                  // using, so I am
+                                                                  // leaving it unfinished
+                                                                  // until this changes.
+        return RFS->dir_begin(Dir, EC);
+    }
+
+    llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {
+        return std::string("cwd");
+    }
+    std::error_code setCurrentWorkingDirectory(const Twine &Path) override {
+        return std::error_code();
+    }
+};
+#else
 class LuaOverlayFileSystem : public clang::vfs::FileSystem {
 private:
     IntrusiveRefCntPtr<vfs::FileSystem> RFS;
@@ -772,9 +860,9 @@ public:
         return llvm::errc::no_such_file_or_directory;
     }
 #else
-    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > openFileForRead(
+    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> openFileForRead(
             const llvm::Twine &Path) override {
-        llvm::ErrorOr<std::unique_ptr<clang::vfs::File> > ec = RFS->openFileForRead(Path);
+        llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> ec = RFS->openFileForRead(Path);
         if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
         clang::vfs::Status Status;
         StringRef Buffer;
@@ -805,6 +893,7 @@ public:
     }
 #endif
 };
+#endif
 
 void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HSO) {
     using namespace llvm::sys;
@@ -852,35 +941,31 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const char **argbegin, const char **argend,
                             CompilerInstance *TheCompInst) {
-// CompilerInstance will hold the instance of the Clang compiler for us,
-// managing the various objects needed to run the compiler.
-#if LLVM_VERSION <= 32
-    TheCompInst->createDiagnostics(0, 0);
-#else
+    // CompilerInstance will hold the instance of the Clang compiler for us,
+    // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
-#endif
 
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend,
                                        TheCompInst->getDiagnostics());
-// need to recreate the diagnostics engine so that it actually listens to warning flags
-// like -Wno-deprecated this cannot go before CreateFromArgs
-#if LLVM_VERSION <= 32
-    TheCompInst->createDiagnostics(argbegin - argend, argbegin);
-    TargetOptions &to = TheCompInst->getTargetOpts();
-#elif LLVM_VERSION <= 34
-    TheCompInst->createDiagnostics();
-    TargetOptions *to = &TheCompInst->getTargetOpts();
-#else
+    // need to recreate the diagnostics engine so that it actually listens to warning
+    // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
     std::shared_ptr<TargetOptions> to(new TargetOptions(TheCompInst->getTargetOpts()));
-#endif
 
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
 
+#if LLVM_VERSION < 80
     llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#else
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#endif
+#if LLVM_VERSION < 90
     TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
+#else
+    TheCompInst->createFileManager(FS);
+#endif
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
@@ -892,12 +977,8 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     TheCompInst->createASTContext();
 
     // Set the main file handled by the source manager to the input file.
-#if LLVM_VERSION <= 34
-    SourceMgr.createMainFileIDForMemBuffer(membuffer);
-#else
     SourceMgr.setMainFileID(
             SourceMgr.createFileID(UNIQUEIFY(llvm::MemoryBuffer, membuffer)));
-#endif
     TheCompInst->getDiagnosticClient().BeginSourceFile(TheCompInst->getLangOpts(),
                                                        &TheCompInst->getPreprocessor());
     Preprocessor &PP = TheCompInst->getPreprocessor();
@@ -907,7 +988,7 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     PP.getBuiltinInfo().initializeBuiltins(PP.getIdentifierTable(), PP.getLangOpts());
 #endif
 }
-#if LLVM_VERSION >= 33
+
 static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
                      MacroDirective *MD, Obj *table) {
     if (!II->hasMacroDefinition()) return;
@@ -950,44 +1031,23 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     lua_pushnumber(T->L, V);
     table->setfield(II->getName().str().c_str());
 }
-#endif
 
 static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     // cleanup after clang.
     // in some cases clang will mark stuff AvailableExternally (e.g. atoi on linux)
     // the linker will then delete it because it is not used.
     // switching it to WeakODR means that the linker will keep it even if it is not used
-    std::vector<llvm::Constant *> usedArray;
-
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         llvm::Function *fn = &*it;
-        if (fn->hasAvailableExternallyLinkage()) {
+        if (fn->hasAvailableExternallyLinkage() ||
+            fn->getLinkage() == llvm::GlobalValue::LinkOnceODRLinkage) {
             fn->setLinkage(llvm::GlobalValue::WeakODRLinkage);
+        } else if (fn->getLinkage() == llvm::GlobalValue::LinkOnceAnyLinkage) {
+            fn->setLinkage(llvm::GlobalValue::WeakAnyLinkage);
         }
-#ifdef _WIN32  // On windows, the optimizer will delete LinkOnce functions that are unused
-        usedArray.push_back(fn);
-#endif
-#if LLVM_VERSION >= 35
         if (fn->hasDLLImportStorageClass())  // clear dll import linkage because it messes
                                              // up the jit on window
             fn->setDLLStorageClass(llvm::GlobalValue::DefaultStorageClass);
-#else
-        if (fn->hasDLLImportLinkage())  // clear dll import linkage because it messes up
-                                        // the jit on window
-            fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-#endif
-    }
-
-    if (usedArray.size() > 0) {
-        auto *i8PtrType = llvm::Type::getInt8PtrTy(M->getContext());
-        for (auto &elem : usedArray)
-            elem = llvm::ConstantExpr::getBitCast(elem, i8PtrType);
-
-        auto *arrayType = llvm::ArrayType::get(i8PtrType, usedArray.size());
-        auto *llvmUsed = new llvm::GlobalVariable(
-                *M, arrayType, false, llvm::GlobalValue::AppendingLinkage,
-                llvm::ConstantArray::get(arrayType, usedArray), "llvm.used");
-        llvmUsed->setSection("llvm.metadata");
     }
 
     M->setTargetTriple(
@@ -1014,10 +1074,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
     initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
 
-#if LLVM_VERSION <= 32
-    CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
-                                               TheCompInst.getCodeGenOpts(), *TT->ctx);
-#elif LLVM_VERSION <= 36
+#if LLVM_VERSION <= 36
     CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
                                                TheCompInst.getCodeGenOpts(),
                                                TheCompInst.getTargetOpts(), *TT->ctx);
@@ -1047,7 +1104,6 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     Obj macros;
     CreateTableWithName(result, "macros", &macros);
 
-#if LLVM_VERSION >= 33
     Preprocessor &PP = TheCompInst.getPreprocessor();
     // adjust PP so that it no longer reports errors, which could happen while trying to
     // parse numbers here
@@ -1064,7 +1120,6 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
 #endif
         AddMacro(T, PP, II, MD, &macros);
     }
-#endif
 
     llvm::Module *M = codegen->ReleaseModule();
     delete codegen;
@@ -1109,9 +1164,14 @@ int include_c(lua_State *L) {
 
 #ifdef _WIN32
     args.push_back("-fms-extensions");
+    args.push_back("-fms-volatile");
     args.push_back("-fms-compatibility");
     args.push_back("-fms-compatibility-version=18");
     args.push_back("-Wno-ignored-attributes");
+    args.push_back("-flto-visibility-public-std");
+    args.push_back("--dependent-lib=msvcrt");
+    args.push_back("-fdiagnostics-format");
+    args.push_back("msvc");
 #endif
 
     for (int i = 0; i < N; i++) {

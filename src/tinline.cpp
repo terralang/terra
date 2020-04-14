@@ -17,9 +17,7 @@ ManualInliner::ManualInliner(TargetMachine *TM, Module *m) {
     DataLayout *TD = new DataLayout(*TM->getDataLayout());
 #endif
 
-#if LLVM_VERSION <= 34
-    PM.add(TD);
-#elif LLVM_VERSION <= 35
+#if LLVM_VERSION <= 35
     PM.add(new DataLayoutPass(*TD));
 #elif LLVM_VERSION <= 36
     PM.add(new DataLayoutPass());
@@ -33,15 +31,11 @@ ManualInliner::ManualInliner(TargetMachine *TM, Module *m) {
     SI = (CallGraphSCCPass *)createFunctionInliningPass();
     PM.add(SI);
     PM.run(*m);
-// save the call graph so we can keep it up to date
-#if LLVM_VERSION <= 34
-    CG = &SI->getAnalysis<CallGraph>();
-#else
+    // save the call graph so we can keep it up to date
     CallGraphWrapperPass &CGW = SI->getAnalysis<CallGraphWrapperPass>();
     CGW.runOnModule(*m);  // force it to realloc the CG
     CG = &CGW.getCallGraph();
     assert(CG);
-#endif
 }
 // Inliner handles erasing functions since it also maintains a copy of the callgraph
 // that needs to be kept up to date with the functions in the module
@@ -67,7 +61,11 @@ void ManualInliner::run(std::vector<Function *>::iterator fbegin,
                     const Function *Callee = CS.getCalledFunction();
                     if (Callee && !Callee->isIntrinsic()) {
                         CallGraphNode *n2 = CG->getOrInsertFunction(Callee);
+#if LLVM_VERSION < 90
                         n->addCalledFunction(CS, n2);
+#else
+                        n->addCalledFunction(cast<CallBase>(II), n2);
+#endif
                     }
                 }
             }

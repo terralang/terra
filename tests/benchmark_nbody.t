@@ -2,10 +2,9 @@ local C = terralib.includecstring[[
 
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 ]]
-
-C.printf = terralib.externfunction("printf", terralib.types.funcpointer(rawstring,int,true))
 
 pi = 3.141592653589793
 solar_mass = (4 * pi * pi)
@@ -144,7 +143,7 @@ if jit.os ~= "Windows" then
   terralib.saveobj("benchmark_nbody",{ main = main }, {"-lm"} )
   os.execute("./benchmark_nbody "..tostring(N))
 else
-  terralib.saveobj("benchmark_nbody.exe",{ main = main }, {"\\legacy_stdio_definitions.lib"} )
+  terralib.saveobj("benchmark_nbody.exe",{ main = main } )
   os.execute("benchmark_nbody.exe "..tostring(N))
 end
 

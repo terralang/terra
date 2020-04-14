@@ -86,10 +86,13 @@ static llvm_shutdown_obj llvmshutdownobj;
 #define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
 #endif
 
+#define MEM_ARRAY_THRESHOLD 64
+
 struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit *CU;
     terra_State *T;
     DisassembleFunctionListener(TerraCompilationUnit *CU_) : CU(CU_), T(CU_->T) {}
+#if LLVM_VERSION < 80
     virtual void NotifyFunctionEmitted(const Function &f, void *data, size_t sz,
                                        const EmittedFunctionDetails &EFD) {
         TerraFunctionInfo &fi = T->C->functioninfo[data];
@@ -99,7 +102,8 @@ struct DisassembleFunctionListener : public JITEventListener {
         fi.size = sz;
         DEBUG_ONLY(T) { fi.efd = EFD; }
     }
-#if LLVM_VERSION >= 34
+#endif
+
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if (type == object::SymbolRef::ST_Function) {
 #if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
@@ -116,17 +120,11 @@ struct DisassembleFunctionListener : public JITEventListener {
             }
         }
     }
-#endif
+
 #if LLVM_VERSION >= 34 && LLVM_VERSION <= 35
     virtual void NotifyObjectEmitted(const ObjectImage &Obj) {
         for (object::symbol_iterator I = Obj.begin_symbols(), E = Obj.end_symbols();
-             I != E;
-#if LLVM_VERSION <= 34
-             I.increment(err)
-#else
-             ++I
-#endif
-        ) {
+             I != E; ++I) {
             StringRef name;
             object::SymbolRef::Type t;
             uint64_t sz;
@@ -280,15 +278,6 @@ bool OneTimeInit(struct terra_State *T) {
         InitializeAllAsmPrinters();
         InitializeAllAsmParsers();
         InitializeAllTargetMCs();
-    } else {
-#if LLVM_VERSION <= 34
-        if (!llvm_is_multithreaded()) {
-            if (!llvm_start_multithreaded()) {
-                terra_pusherror(T, "llvm failed to start multi-threading\n");
-                success = false;
-            }
-        }
-#endif  // after 3.5, this isn't needed
     }
 #if LLVM_VERSION <= 35
     terrainitlock.release();
@@ -315,11 +304,7 @@ int terra_inittarget(lua_State *L) {
     if (!lua_isnil(L, 1)) {
         TT->Triple = lua_tostring(L, 1);
     } else {
-#if LLVM_VERSION >= 33
         TT->Triple = llvm::sys::getProcessTriple();
-#else
-        TT->Triple = llvm::sys::getDefaultTargetTriple();
-#endif
     }
     if (!lua_isnil(L, 2))
         TT->CPU = lua_tostring(L, 2);
@@ -1023,36 +1008,17 @@ struct CCallingConv {
 
     template <typename FnOrCall>
     void addSRetAttr(FnOrCall *r, int idx) {
-#if LLVM_VERSION == 32
-        AttrBuilder builder;
-        builder.addAttribute(Attributes::StructRet);
-        builder.addAttribute(Attributes::NoAlias);
-        r->addAttribute(idx, Attributes::get(*C->ctx, builder));
-#else
         r->addAttribute(idx, Attribute::StructRet);
         r->addAttribute(idx, Attribute::NoAlias);
-#endif
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx) {
-#if LLVM_VERSION == 32
-        AttrBuilder builder;
-        builder.addAttribute(Attributes::ByVal);
-        r->addAttribute(idx, Attributes::get(*C->ctx, builder));
-#else
         r->addAttribute(idx, Attribute::ByVal);
-#endif
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
-#if LLVM_VERSION == 32
-        AttrBuilder builder;
-        builder.addAttribute(t->issigned ? Attributes::SExt : Attributes::ZExt);
-        r->addAttribute(idx, Attributes::get(*C->ctx, builder));
-#else
         r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
-#endif
     }
 
     template <typename FnOrCall>
@@ -1078,27 +1044,41 @@ struct CCallingConv {
     Value *emitStoreAgg(IRBuilder<> *B, Type *t1, Value *src, Value *addr_dst) {
         assert(t1->isAggregateType());
         LoadInst *l = dyn_cast<LoadInst>(src);
-        if (t1->isStructTy() && l) {
+        if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
             // create bitcasts of src and dest address
             Value *addr_src = l->getOperand(0);
             Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
-            addr_dst = B->CreateBitCast(addr_dst, t);
-            addr_src = B->CreateBitCast(addr_src, t);
-            // size of bytes to copy
-            StructType *st = cast<StructType>(t1);
-            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
-            uint64_t size = sl->getSizeInBytes();
+            Value *addr_dest = B->CreateBitCast(addr_dst, t);
+            Value *addr_source = B->CreateBitCast(addr_src, t);
+            uint64_t size = 0;
+            unsigned a1 = 0;
+            if (t1->isStructTy()) {
+                // size of bytes to copy
+                StructType *st = cast<StructType>(t1);
+                const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+                size = sl->getSizeInBytes();
+                a1 = sl->getAlignment();
+            } else if (t1->isArrayTy()) {
+                size = CU->getDataLayout().getTypeAllocSize(t1);
+                if (size < MEM_ARRAY_THRESHOLD) {
+                    StoreInst *st = B->CreateStore(src, addr_dst);
+                    return st;
+                }
+                a1 = CU->getDataLayout().getABITypeAlignment(t1);
+            } else
+                assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
 #if LLVM_VERSION <= 60
-            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, sl->getAlignment());
+            Value *m = B->CreateMemCpy(addr_dest, addr_source, size_v, a1);
 #else
-            Value *m = B->CreateMemCpy(addr_dst, sl->getAlignment(), addr_src,
-                                       sl->getAlignment(), size_v);
+            Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
 #endif
             return m;
-        } else
-            return (B->CreateStore(src, addr_dst));
+        } else {
+            StoreInst *st = B->CreateStore(src, addr_dst);
+            return st;
+        }
     }
 
     Function *CreateFunction(Module *M, Obj *ftype, const Twine &name) {
@@ -1963,7 +1943,7 @@ struct FunctionEmitter {
                      int alignment) {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
-        if (t1->isStructTy() && l) {
+        if ((t1->isStructTy() || t1->isArrayTy()) && l) {
             // create bitcasts of src and dest address
             Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
             // addr_dst
@@ -1971,25 +1951,40 @@ struct FunctionEmitter {
             // addr_src
             Value *addr_src = l->getOperand(0);
             addr_src = B->CreateBitCast(addr_src, t);
-            // size of bytes to copy
-            StructType *st = cast<StructType>(t1);
-            const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
-            uint64_t size = sl->getSizeInBytes();
+            uint64_t size = 0;
+            unsigned a1 = 0;
+            if (t1->isStructTy()) {
+                // size of bytes to copy
+                StructType *st = cast<StructType>(t1);
+                const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
+                size = sl->getSizeInBytes();
+                a1 = hasAlignment ? alignment : sl->getAlignment();
+            } else if (t1->isArrayTy() && (CU->getDataLayout().getTypeAllocSize(t1) >=
+                                           MEM_ARRAY_THRESHOLD)) {
+                size = CU->getDataLayout().getTypeAllocSize(t1);
+                a1 = hasAlignment ? alignment
+                                  : CU->getDataLayout().getABITypeAlignment(t1);
+            } else {
+                StoreInst *st = B->CreateStore(value, addr);
+                if (isVolatile) st->setVolatile(true);
+                if (hasAlignment) st->setAlignment(alignment);
+                return st;
+            }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
-            int al = hasAlignment ? alignment : sl->getAlignment();
             // perform the copy
 #if LLVM_VERSION <= 60
-            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, al, isVolatile);
+            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, a1, isVolatile);
 #else
-            Value *m = B->CreateMemCpy(addr_dst, al, addr_src, sl->getAlignment(), size_v,
+            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, l->getAlignment(), size_v,
                                        isVolatile);
 #endif
             return m;
+        } else {
+            StoreInst *st = B->CreateStore(value, addr);
+            if (isVolatile) st->setVolatile(true);
+            if (hasAlignment) st->setAlignment(alignment);
+            return st;
         }
-        StoreInst *st = B->CreateStore(value, addr);
-        if (isVolatile) st->setVolatile(true);
-        if (hasAlignment) st->setAlignment(alignment);
-        return st;
     }
 
     Value *emitIfElse(Obj *cond, Obj *a, Obj *b) {
@@ -2455,25 +2450,16 @@ struct FunctionEmitter {
             DB = new DIBuilder(*M);
 
             DIFileP file = createDebugInfoForFile(filename);
-#if LLVM_VERSION >= 34
-            DICompileUnit CU =
-#endif
-                    DB->createCompileUnit(1, "compilationunit", ".", "terra", true, "",
-                                          0);
+            DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
+                                                     true, "", 0);
 #if LLVM_VERSION >= 36
             auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata *>());
 #else
             auto TA = DB->getOrCreateArray(ArrayRef<Value *>());
 #endif
-            SP = DB->createFunction(
-#if LLVM_VERSION >= 34
-                    CU,
-#else
-                    (DIDescriptor)DB->getCU(),
-#endif
-                    fstate->func->getName(), fstate->func->getName(), file, lineno,
-                    DB->createSubroutineType(file, TA), false, true, 0, 0, true,
-                    fstate->func);
+            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
+                                    file, lineno, DB->createSubroutineType(file, TA),
+                                    false, true, 0, 0, true, fstate->func);
 
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
@@ -3082,12 +3068,9 @@ static bool FindLinker(terra_State *T, LLVM_PATH_TYPE *linker, const char *targe
 #if LLVM_VERSION >= 36
     *linker = *sys::findProgramByName("gcc");
     return *linker == "";
-#elif LLVM_VERSION >= 34
+#else
     *linker = sys::FindProgramByName("gcc");
     return *linker == "";
-#else
-    *linker = sys::Program::FindProgramByName("gcc");
-    return linker->isEmpty();
 #endif
 #else
     lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
@@ -3297,14 +3280,6 @@ static int terra_linkllvmimpl(lua_State *L) {
     size_t length;
     const char *filename = lua_tolstring(L, 2, &length);
     bool fromstring = lua_toboolean(L, 3);
-#if LLVM_VERSION <= 34
-    OwningPtr<MemoryBuffer> mb;
-    error_code ec = MemoryBuffer::getFile(filename, mb);
-    if (ec)
-        terra_reporterror(CU->T, "linkllvm(%s): %s\n", filename, ec.message().c_str());
-    Module *m = ParseBitcodeFile(mb.get(), *T->C->ctx, &Err);
-    if (!m) terra_reporterror(CU->T, "linkllvm(%s): %s\n", filename, Err.c_str());
-#else
     ErrorOr<std::unique_ptr<MemoryBuffer> > mb = std::error_code();
     if (fromstring) {
         std::unique_ptr<MemoryBuffer> mbcontents(
@@ -3359,7 +3334,6 @@ static int terra_linkllvmimpl(lua_State *L) {
     Module *M = mm.get().release();
 #else
     Module *M = mm.get();
-#endif
 #endif
     M->setTargetTriple(TT->Triple);
 #if LLVM_VERSION < 39
