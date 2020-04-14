@@ -441,7 +441,11 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setOptLevel(CodeGenOpt::Aggressive);
 #else
             .setOptLevel(CodeGenOpt::Aggressive)
+#if LLVM_VERSION <= 90
             .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
+#else
+            .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
+#endif
             .setUseOrcMCJITReplacement(true);
 #endif
 
@@ -1054,7 +1058,11 @@ struct CCallingConv {
             Value *addr_dest = B->CreateBitCast(addr_dst, t);
             Value *addr_source = B->CreateBitCast(addr_src, t);
             uint64_t size = 0;
+#if LLVM_VERSION <= 90
             unsigned a1 = 0;
+#else
+            MaybeAlign a1(0);
+#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
@@ -1067,7 +1075,11 @@ struct CCallingConv {
                     StoreInst *st = B->CreateStore(src, addr_dst);
                     return st;
                 }
+#if LLVM_VERSION <= 90
                 a1 = CU->getDataLayout().getABITypeAlignment(t1);
+#else
+                a1 = MaybeAlign(CU->getDataLayout().getABITypeAlignment(t1));
+#endif
             } else
                 assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
@@ -1957,37 +1969,62 @@ struct FunctionEmitter {
             Value *addr_src = l->getOperand(0);
             addr_src = B->CreateBitCast(addr_src, t);
             uint64_t size = 0;
+#if LLVM_VERSION <= 90
             unsigned a1 = 0;
+#else
+            MaybeAlign a1(0);
+#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
                 const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
                 size = sl->getSizeInBytes();
+#if LLVM_VERSION <= 90
                 a1 = hasAlignment ? alignment : sl->getAlignment();
+#else
+                a1 = hasAlignment ? MaybeAlign(alignment) : sl->getAlignment();
+#endif
             } else if (t1->isArrayTy() && (CU->getDataLayout().getTypeAllocSize(t1) >=
                                            MEM_ARRAY_THRESHOLD)) {
                 size = CU->getDataLayout().getTypeAllocSize(t1);
+#if LLVM_VERSION <= 90
                 a1 = hasAlignment ? alignment
                                   : CU->getDataLayout().getABITypeAlignment(t1);
+#else
+                a1 = MaybeAlign(hasAlignment
+                                        ? alignment
+                                        : CU->getDataLayout().getABITypeAlignment(t1));
+#endif
             } else {
                 StoreInst *st = B->CreateStore(value, addr);
                 if (isVolatile) st->setVolatile(true);
+#if LLVM_VERSION <= 90
                 if (hasAlignment) st->setAlignment(alignment);
+#else
+                if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#endif
                 return st;
             }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
 #if LLVM_VERSION <= 60
             Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, a1, isVolatile);
-#else
+#elif LLVM_VERSION <= 90
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, l->getAlignment(), size_v,
                                        isVolatile);
+#else
+            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
+                                       MaybeAlign(l->getAlignment()), size_v, isVolatile);
 #endif
             return m;
         } else {
             StoreInst *st = B->CreateStore(value, addr);
             if (isVolatile) st->setVolatile(true);
+#if LLVM_VERSION <= 90
             if (hasAlignment) st->setAlignment(alignment);
+#else
+            if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#endif
             return st;
         }
     }
@@ -2327,7 +2364,11 @@ struct FunctionEmitter {
                 LoadInst *l = B->CreateLoad(emitExp(&addr));
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
+#if LLVM_VERSION <= 90
                     l->setAlignment(alignment);
+#else
+                    l->setAlignment(MaybeAlign(alignment));
+#endif
                 }
                 if (attr.boolean("nontemporal")) {
 #if LLVM_VERSION <= 35

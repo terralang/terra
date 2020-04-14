@@ -100,8 +100,13 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
-    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
-            *TheTarget->createMCRegInfo(TripleName), TripleName);
+    const MCAsmInfo *MAI =
+            TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName), TripleName
+#if LLVM_VERSION >= 100
+                                       ,
+                                       MCTargetOptions()
+#endif
+            );
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
@@ -142,20 +147,33 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     raw_fd_ostream Out(fileno(stdout), false);
     for (size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
-#if LLVM_VERSION >= 36
+#if LLVM_VERSION <= 35
+        MCDisassembler::DecodeStatus S =
+                DisAsm->getInstruction(Inst, Size, SMO, addr + b, nulls(), Out);
+#elif LLVM_VERSION <= 90
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(
                 Inst, Size, Bytes.slice(b), addr + b, nulls(), Out);
 #else
         MCDisassembler::DecodeStatus S =
-                DisAsm->getInstruction(Inst, Size, SMO, addr + b, nulls(), Out);
+                DisAsm->getInstruction(Inst, Size, Bytes.slice(b), addr + b, Out);
 #endif
         if (MCDisassembler::Fail == S || MCDisassembler::SoftFail == S) break;
         Out << (void *)((uintptr_t)data + b) << "(+" << b << ")"
             << ":\t";
-        IP->printInst(&Inst, Out, ""
+        IP->printInst(&Inst,
+#if LLVM_VERSION <= 90
+                      Out,
+#else
+                      addr + b,
+#endif
+                      ""
 #if LLVM_VERSION >= 37
                       ,
                       *STI
+#endif
+#if LLVM_VERSION >= 100
+                      ,
+                      Out
 #endif
         );
         Out << "\n";
@@ -175,9 +193,13 @@ bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
     PassManagerT pass;
     llvmutil_addtargetspecificpasses(&pass, TM);
 
+#if LLVM_VERSION <= 90
     TargetMachine::CodeGenFileType ft = outputobjectfile
                                                 ? TargetMachine::CGFT_ObjectFile
                                                 : TargetMachine::CGFT_AssemblyFile;
+#else
+    CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
+#endif
 
 #if LLVM_VERSION <= 36
     formatted_raw_ostream destf(dest);

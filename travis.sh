@@ -29,7 +29,16 @@ fi
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-10 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-10-dev clang-10 libclang-10-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-10:/usr/share/llvm-10
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-10/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-9 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
@@ -86,7 +95,13 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+    curl -L -O http://releases.llvm.org/10.0.0/clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-10.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-10
+    ln -s clang+llvm-10.0.0-x86_64-apple-darwin/bin/clang clang-10
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-10.0.0-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
     curl -L -O http://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     tar xf clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/llvm-config llvm-config-9

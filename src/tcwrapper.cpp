@@ -26,6 +26,9 @@ extern "C" {
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/ToolChain.h"
+#if LLVM_VERSION >= 100
+#include "clang/Basic/Builtins.h"
+#endif
 #include "tcompilerstate.h"
 
 using namespace clang;
@@ -939,14 +942,19 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 }
 
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
-                            const char **argbegin, const char **argend,
+                            const std::vector<const char *> &args,
                             CompilerInstance *TheCompInst) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
 
-    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend,
+#if LLVM_VERSION <= 90
+    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), &args[0],
+                                       &args[args.size()], TheCompInst->getDiagnostics());
+#else
+    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), args,
                                        TheCompInst->getDiagnostics());
+#endif
     // need to recreate the diagnostics engine so that it actually listens to warning
     // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
@@ -1059,7 +1067,7 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     opt.run(*M);
 }
 static int dofile(terra_State *T, TerraTarget *TT, const char *code,
-                  const char **argbegin, const char **argend, Obj *result) {
+                  const std::vector<const char *> &args, Obj *result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
@@ -1072,7 +1080,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
 #endif
     TheCompInst.getHeaderSearchOpts().ResourceDir = "$CLANG_RESOURCE$";
     InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
-    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
+    initializeclang(T, membuffer, args, &TheCompInst);
 
 #if LLVM_VERSION <= 36
     CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
@@ -1187,7 +1195,7 @@ int include_c(lua_State *L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
 
-        dofile(T, TT, code, &args.data()[0], &args.data()[args.size()], &result);
+        dofile(T, TT, code, args, &result);
     }
 
     lobj_removereftable(L, ref_table);

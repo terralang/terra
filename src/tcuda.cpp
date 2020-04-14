@@ -216,7 +216,11 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
     PMB.LoopVectorize = false;
+#if LLVM_VERSION <= 90
     auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
+#else
+    auto FileType = llvm::CGFT_AssemblyFile;
+#endif
 
     llvm::legacy::PassManager PM;
     TargetMachine->adjustPassManager(PMB);

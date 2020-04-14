@@ -85,8 +85,13 @@ LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).
 LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
-CPPFLAGS += -std=c++11
 
+LLVM_NEEDS_CXX14="100"
+ifeq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
+CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
+else
+CPPFLAGS += -std=c++11
+endif
 
 ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared -fPIC
