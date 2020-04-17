@@ -1457,18 +1457,31 @@ static void labelstat(LexState *ls) {
     new_object(ls, "label", 1, &pos);
 }
 
-static void switchcase(LexState *ls) {
+#include <iostream>
+static void casestat(LexState *ls) {
     /* switchcase -> CASE expression THEN block */
     FuncState *fs = ls->fs;
     Position pos = getposition(ls);
     BlockCnt bl;
-    /* case token already skipped by testnext */
+    std::cout << "case" << std::endl;
+    luaX_next(ls); /* skip CASE */
     enterblock(fs, &bl, 0);
+    std::cout << "condition" << std::endl;
     expr(ls);
+    std::cout << "then" << std::endl;
     check_match(ls, TK_THEN, TK_CASE, pos.linenumber);
     Position bodypos = getposition(ls);
+    std::cout << "body" << std::endl;
     block(ls);
     leaveblock(fs);
+    if (ls->t.token == TK_END) {
+        std::cout << "end" << std::endl;
+        luaX_next(ls); /* consume END */
+    } else if (ls->t.token == TK_CASE) {
+        /* leave case for next case statement */
+    } else {
+        luaX_syntaxerror(ls, "improperly terminated case statement");
+    }
     new_object(ls, "switchcase", 2, &pos);
 }
 
@@ -1480,13 +1493,9 @@ static void switchstat(LexState *ls) {
     BlockCnt bl;
     luaX_next(ls); /* skip SWITCH */
     enterblock(fs, &bl, 0);
-    expr(ls);
+    RETURNS_1(expr(ls));
     check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
-    int lst = new_list(ls);
-    while (testnext(ls, TK_CASE)) {
-        switchcase(ls);
-        add_entry(ls, lst);
-    }
+    statlist(ls);
     if (testnext(ls, TK_ELSE)) {
         BlockCnt ebl;
         enterblock(fs, &ebl, 0);
@@ -1981,7 +1990,11 @@ static void statement(LexState *ls) {
             break;
         }
         case TK_SWITCH: { /* stat -> switchstat */
-            switchstat(ls);
+            RETURNS_1(switchstat(ls));
+            break;
+        }
+        case TK_CASE: { /* stat -> casestat */
+            RETURNS_1(casestat(ls));
             break;
         }
             /*otherwise, fallthrough to the normal error message.*/
