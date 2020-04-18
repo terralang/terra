@@ -87,50 +87,50 @@ fi
 
 if [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
-    curl -O http://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
+    curl -L -O http://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     tar xf clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/llvm-config llvm-config-9
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/clang clang-9
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-9.0.0-x86_64-darwin-apple
   elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
-    curl -O http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-8
     ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/clang clang-8
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-8.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-7 ]]; then
-    curl -O http://releases.llvm.org/7.0.0/clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/7.0.0/clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7
     ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-7.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
-    curl -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-6.0
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/clang clang-6.0
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-6.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
-    curl -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
     ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-5.0.1-final-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
-    curl -O http://releases.llvm.org/3.8.0/clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/3.8.0/clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-3.8.0-x86_64-apple-darwin/bin/llvm-config llvm-config-3.8
     ln -s clang+llvm-3.8.0-x86_64-apple-darwin/bin/clang clang-3.8
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-3.8.0-x86_64-apple-darwin
   else
-    curl -O http://releases.llvm.org/3.5.2/clang+llvm-3.5.2-x86_64-apple-darwin.tar.xz
+    curl -L -O http://releases.llvm.org/3.5.2/clang+llvm-3.5.2-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-3.5.2-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/llvm-config llvm-config-3.5
     ln -s clang+llvm-3.5.2-x86_64-apple-darwin/bin/clang clang-3.5
   fi
 
   if [[ $USE_CUDA -eq 1 ]]; then
-    curl -o cuda.dmg -L https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda_9.2.148_mac
+    curl -L -o cuda.dmg https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda_9.2.148_mac
     echo "defb095aa002301f01b2f41312c9b1630328847800baa1772fe2bbb811d5fa9f  cuda.dmg" | shasum -c -a 256
     hdiutil attach cuda.dmg
     # This is probably the "correct" way to do it, but it times out on Travis.
