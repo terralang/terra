@@ -142,6 +142,8 @@ if [[ $(uname) = Darwin ]]; then
     hdiutil detach /Volumes/CUDAMacOSXInstaller
   fi
 
+  sudo installer -pkg /Library/Developer/CommandLineTools/Packages/macOS_SDK_headers_for_macOS_10.14.pkg -target /
+
   export PATH=$PWD:$PATH
 fi
 
