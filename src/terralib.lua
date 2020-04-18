@@ -93,7 +93,7 @@ tree =
      | repeatstat(tree* statements, tree condition)
      | fornum(allocvar variable, tree initial, tree limit, tree? step, block body)
      | ifstat(ifbranch* branches, block? orelse)
-     | switchstat(tree condition, switchcase* cases, block? ordefault)
+     | switchstat(tree condition, tree* cases, block? ordefault)
      | defer(tree expression)
      | select(tree value, number index, string fieldname) # typed version, fieldname for debugging
      | globalvalueref(string name, globalvalue value)
@@ -3215,9 +3215,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return s:copy{ branches = br, orelse = els }
             elseif s:is "switchstat" then
                 local cond = checkexpintegral(s.condition)
-                local br = s.cases:map(checkcasebranch)
+                --local br = s.cases:map(checkcasebranch)
+                --local br = terralib.newlist()
+                --local stack = terralib.newlist{s.cases}
+                local br = checkstmts(s.cases)
                 local def = (s.ordefault and checkblock(s.ordefault))
                 return s:copy{ condition = cond, cases = br, ordefault = def }
+            elseif s:is "switchcase" then
+                local cond = checkexpintegral(s.condition)
+                local body = checkblock(s.body)
+                return s:copy{ condition = cond, body = body }
             elseif s:is "repeatstat" then
                 local stmts = checkstmts(s.statements)
                 local e = checkcond(s.condition)
