@@ -1463,7 +1463,9 @@ static void labelstat(LexState *ls) {
 static void casestat(LexState *ls) {
     /* switchcase -> CASE expression THEN block */
     if (ls->fs->bl->starttoken != TK_SWITCH && ls->fs->bl->starttoken != TK_QUOTE) {
-        luaX_syntaxerror(ls, "case statement must be in a switch block or quote block; duff's device is unsupported.");
+        luaX_syntaxerror(ls,
+                         "case statement must be in a switch block or quote block; "
+                         "duff's device is unsupported.");
     }
     FuncState *fs = ls->fs;
     Position pos = getposition(ls);
