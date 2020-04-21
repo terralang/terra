@@ -1,7 +1,7 @@
 local ffi = require 'ffi'
 -- test that the dynamic library for terra was built correctly
 -- by compiling a new program that links against it and running it
-terralib.includepath = terralib.terrahome.."/include/terra"
+terralib.includepath = terralib.includepath .. ";" .. terralib.terrahome .. "/include/terra"
 C = terralib.includecstring [[
 #include <stdio.h>
 #include "terra.h"
