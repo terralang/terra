@@ -103,8 +103,8 @@ if [[ $(uname) = Darwin ]]; then
     export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@7
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
     brew install llvm@6
-    ln -s "$(brew --prefix)"/opt/llvm@6/bin/llvm-config llvm-config-6
-    ln -s "$(brew --prefix)"/opt/llvm@6/bin/clang clang-6
+    ln -s "$(brew --prefix)"/opt/llvm@6/bin/llvm-config llvm-config-6.0
+    ln -s "$(brew --prefix)"/opt/llvm@6/bin/clang clang-6.0
     export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@6
   elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
     curl -L -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
