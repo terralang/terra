@@ -146,9 +146,6 @@ if [[ $(uname) = Darwin ]]; then
   # export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
   # export INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
 
-  export CC=$(which $CC)
-  export CXX=$(which $CXX)
-
   export PATH=$PWD:$PATH
 fi
 
@@ -176,7 +173,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   fi
 
   pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
+  cmake .. -DCMAKE_C_COMPILER=$(which $CC) -DCMAKE_CXX_COMPILER=$(which $CXX) -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   make install -j2
   ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
