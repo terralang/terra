@@ -14,13 +14,18 @@ local mangleSelector
 --replace methods such as:   myobj:methodcall(arg0,arg1)
 --with calls to the objc runtime api: objc_msgSend(&obj,sel_registerName("methodcall"),arg0,arg1) 
 
+-- Hack: As of macOS 10.15 this type signature has changed, see:
+-- https://www.mikeash.com/pyblog/objc_msgsends-new-prototype.html
+local objc_msgSend_type = terralib.types.funcpointer(
+  {&C.objc_object, &C.objc_selector}, &C.objc_object, true)
+
 local struct Wrapper {
     data : &C.objc_object
 }
 Wrapper.metamethods.__methodmissing = macro(function(sel,obj,...)
 	local arguments = {...}
 	sel = mangleSelector(sel,#arguments)
-	return `Wrapper { C.objc_msgSend(obj.data,C.sel_registerName(sel),arguments) }
+	return `Wrapper { ([objc_msgSend_type](C.objc_msgSend))(obj.data,C.sel_registerName(sel),arguments) }
 end)
 
 function mangleSelector(sel,nargs)
