@@ -146,6 +146,9 @@ if [[ $(uname) = Darwin ]]; then
   # export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
   # export INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
 
+  export CC=$(which $CC)
+  export CXX=$(which $CXX)
+
   export PATH=$PWD:$PATH
 fi
 
