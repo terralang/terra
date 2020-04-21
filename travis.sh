@@ -143,7 +143,7 @@ if [[ $(uname) = Darwin ]]; then
 
   # workaround for https://github.com/terralang/terra/issues/365
   # xcode-select --install
-  # export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+  export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
   # export INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
 
   export PATH=$PWD:$PATH
