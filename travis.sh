@@ -186,9 +186,12 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   ctest --output-on-failure -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
 
-  pushd tests
-  ../install/bin/terra ./run
-  popd
+  # Skip this on macOS because it spews too much on Mojave and newer.
+  if [[ $(uname) != Darwin ]]; then
+      pushd tests
+      ../install/bin/terra ./run
+      popd
+  fi
 else
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
 
