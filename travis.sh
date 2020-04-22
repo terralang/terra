@@ -142,13 +142,8 @@ if [[ $(uname) = Darwin ]]; then
     hdiutil detach /Volumes/CUDAMacOSXInstaller
   fi
 
-  # # Hack: Seems the package isn't signed on some versions of macOS?
-  # sudo installer -pkg /Library/Developer/CommandLineTools/Packages/macOS_SDK_headers_for_macOS_10.14.pkg -target / -allowUntrusted
-
   # workaround for https://github.com/terralang/terra/issues/365
-  # xcode-select --install
   export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
-  # export INCLUDE_PATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include
 
   export PATH=$PWD:$PATH
 fi
