@@ -1,10 +1,8 @@
 language: cpp
 sudo: required
 dist: xenial
-osx_image: xcode11.3 # macOS 10.14
 os:
   - linux
-  - osx
 compiler:
   - gcc
   - clang
@@ -39,20 +37,32 @@ jobs:
       env: DOCKER_BUILD=ubuntu-18.04
     - os: linux
       env: DOCKER_BUILD=ubuntu-19.10
-  exclude:
-    # Various macOS tests seem to be broken.
+
+    # macOS tests
     - os: osx
-      compiler: gcc
+      osx_image: xcode10.1 # macOS 10.13
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-3.5 CLANG=clang-3.5
     - os: osx
-      env: LLVM_CONFIG=llvm-config-5.0 CLANG=clang-5.0 USE_CMAKE=1
+      osx_image: xcode10.1 # macOS 10.13
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-3.8 CLANG=clang-3.8
     - os: osx
-      env: LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
+      osx_image: xcode11.3 # macOS 10.14
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1
     - os: osx
-      env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8
+      osx_image: xcode11.3 # macOS 10.14
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-7 CLANG=clang-7 USE_CMAKE=1
     - os: osx
-      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9
+      osx_image: xcode11.3 # macOS 10.14
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1
     - os: osx
-      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
+      osx_image: xcode11.3 # macOS 10.14
+      compiler: clang
+      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1
 
 script:
   - ./travis.sh
