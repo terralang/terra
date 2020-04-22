@@ -61,9 +61,16 @@ LUAJIT_VERSION_BASE ?= 2.1
 LUAJIT_VERSION_EXTRA ?= .0-beta3
 LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
+LUAJIT_COMMIT ?= 9143e86498436892cb4316550be4d45b68a61224
+ifneq ($(strip $(LUAJIT_COMMIT)),)
+LUAJIT_URL ?= https://github.com/LuaJIT/LuaJIT/archive/$(LUAJIT_COMMIT).tar.gz
+LUAJIT_TAR ?= LuaJIT-$(LUAJIT_COMMIT).tar.gz
+LUAJIT_DIR ?= build/LuaJIT-$(LUAJIT_COMMIT)
+else
 LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
+endif
 LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
 LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
 LUAJIT ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
@@ -201,7 +208,7 @@ download: build/$(LUAJIT_TAR)
 
 build/$(LUAJIT_TAR):
 ifeq ($(UNAME), Darwin)
-	curl $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
+	curl -L $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
 else
 	wget $(LUAJIT_URL) -O build/$(LUAJIT_TAR)
 endif
