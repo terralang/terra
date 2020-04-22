@@ -74,6 +74,6 @@ deploy:
   file-glob: true
   file: terra-*.zip
   on:
-    repo: zdevito/terra
+    repo: terralang/terra
     tags: true
   skip_cleanup: true
