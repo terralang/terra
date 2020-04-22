@@ -142,6 +142,11 @@ if [[ $(uname) = Darwin ]]; then
     hdiutil detach /Volumes/CUDAMacOSXInstaller
   fi
 
+  # workaround for https://github.com/terralang/terra/issues/365
+  if [[ ! -e /usr/include ]]; then
+    export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+  fi
+
   export PATH=$PWD:$PATH
 fi
 
@@ -167,16 +172,28 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
     )
   fi
+  if [[ $(uname) = Darwin ]]; then
+    # Hack: CMake tries to be smart and use XCode's copy of Clang by
+    # default. This causes LuaJIT to not build on Mojave and later
+    # (math.h not found) if the header package is not installed.
+    CMAKE_FLAGS+=(
+      -DCMAKE_C_COMPILER=$(which $CC)
+      -DCMAKE_CXX_COMPILER=$(which $CXX)
+    )
+  fi
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   make install -j2
-  ctest -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
+  ctest --output-on-failure -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
   popd
 
-  pushd tests
-  ../install/bin/terra ./run
-  popd
+  # Skip this on macOS because it spews too much on Mojave and newer.
+  if [[ $(uname) != Darwin ]]; then
+      pushd tests
+      ../install/bin/terra ./run
+      popd
+  fi
 else
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
 
