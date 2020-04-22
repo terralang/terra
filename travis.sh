@@ -143,7 +143,9 @@ if [[ $(uname) = Darwin ]]; then
   fi
 
   # workaround for https://github.com/terralang/terra/issues/365
-  export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+  if [[ ! -e /usr/include ]]; then
+    export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+  fi
 
   export PATH=$PWD:$PATH
 fi
@@ -175,8 +177,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     # default. This causes LuaJIT to not build on Mojave and later
     # (math.h not found) if the header package is not installed.
     CMAKE_FLAGS+=(
-        -DCMAKE_C_COMPILER=$(which $CC)
-        -DCMAKE_CXX_COMPILER=$(which $CXX)
+      -DCMAKE_C_COMPILER=$(which $CC)
+      -DCMAKE_CXX_COMPILER=$(which $CXX)
     )
   fi
 
