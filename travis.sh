@@ -87,25 +87,29 @@ fi
 
 if [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
-    brew install llvm@9
-    ln -s "$(brew --prefix)"/opt/llvm@9/bin/llvm-config llvm-config-9
-    ln -s "$(brew --prefix)"/opt/llvm@9/bin/clang clang-9
-    export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@9
+    curl -L -O http://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
+    tar xf clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
+    ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/llvm-config llvm-config-9
+    ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/clang clang-9
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-9.0.0-x86_64-darwin-apple
   elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
-    brew install llvm@8
-    ln -s "$(brew --prefix)"/opt/llvm@8/bin/llvm-config llvm-config-8
-    ln -s "$(brew --prefix)"/opt/llvm@8/bin/clang clang-8
-    export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@8
+    curl -L -O http://releases.llvm.org/8.0.0/clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-8.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-8
+    ln -s clang+llvm-8.0.0-x86_64-apple-darwin/bin/clang clang-8
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-8.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-7 ]]; then
-    brew install llvm@7
-    ln -s "$(brew --prefix)"/opt/llvm@7/bin/llvm-config llvm-config-7
-    ln -s "$(brew --prefix)"/opt/llvm@7/bin/clang clang-7
-    export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@7
+    curl -L -O http://releases.llvm.org/7.0.0/clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-7.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-7
+    ln -s clang+llvm-7.0.0-x86_64-apple-darwin/bin/clang clang-7
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-7.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
-    brew install llvm@6
-    ln -s "$(brew --prefix)"/opt/llvm@6/bin/llvm-config llvm-config-6
-    ln -s "$(brew --prefix)"/opt/llvm@6/bin/clang clang-6
-    export CMAKE_PREFIX_PATH="$(brew --prefix)"/opt/llvm@6
+    curl -L -O http://releases.llvm.org/6.0.0/clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-6.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-6.0
+    ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/clang clang-6.0
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-6.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
     curl -L -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
