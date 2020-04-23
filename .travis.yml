@@ -36,7 +36,7 @@ jobs:
     - os: linux
       env: DOCKER_BUILD=ubuntu-18.04
     - os: linux
-      env: DOCKER_BUILD=ubuntu-19.10
+      env: DOCKER_BUILD=ubuntu-20.04
 
     # macOS tests
     - os: osx

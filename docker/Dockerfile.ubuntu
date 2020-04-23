@@ -11,7 +11,7 @@ RUN apt-get update -qq && \
     cd /terra/build && \
     cmake -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
     make install -j4 && \
-    make test
+    ctest --output-on-failure -j4
 
 FROM ubuntu:$release
 
