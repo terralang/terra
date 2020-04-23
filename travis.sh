@@ -194,11 +194,14 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       ../install/bin/terra ./run
       popd
   fi
+
+  # Only deploy CMake builds, and only with LLVM 6.
+  if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
+    RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
+    mv install $RELEASE_NAME
+    zip -q -r $RELEASE_NAME.zip $RELEASE_NAME
+    mv $RELEASE_NAME install
+  fi
 else
   make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
-
-  # Only deploy Makefile-based builds, and only with LLVM 6.
-  if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CMAKE -eq 1 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
-    make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) release
-  fi
 fi

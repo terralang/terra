@@ -376,6 +376,10 @@ file(GLOB TERRA_TESTS
   ${PROJECT_SOURCE_DIR}/tests/*.t
   ${PROJECT_SOURCE_DIR}/tests/fails/*.t
 )
+file(GLOB_RECURSE TERRA_TESTS_INSTALL
+  RELATIVE ${PROJECT_SOURCE_DIR}/tests
+  ${PROJECT_SOURCE_DIR}/tests/*
+)
 
 foreach(TERRA_TEST ${TERRA_TESTS})
   add_test(NAME ${TERRA_TEST}
@@ -383,3 +387,19 @@ foreach(TERRA_TEST ${TERRA_TESTS})
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
   )
 endforeach()
+foreach(TERRA_TEST ${TERRA_TESTS_INSTALL})
+  get_filename_component(TERRA_TEST_DIR ${TERRA_TEST} DIRECTORY)
+  install(
+    FILES ${PROJECT_SOURCE_DIR}/tests/${TERRA_TEST}
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/terra/tests/${TERRA_TEST_DIR}
+  )
+endforeach()
+
+install(
+  FILES ${PROJECT_SOURCE_DIR}/release/share/terra/LICENSE.txt
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/terra
+)
+install(
+  FILES ${PROJECT_SOURCE_DIR}/release/share/terra/README.md
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/terra
+)

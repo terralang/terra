@@ -77,7 +77,6 @@ build_script:
   - set TERRA_SHARE_PATH=%TERRA_DIR%\install\share\terra
   - ps: |
         If($Env:LLVM_VERSION_SHORT -eq 60 -and $Env:USE_CMAKE -eq 1) {
-          git ls-tree HEAD -r tests --name-only | ForEach-Object { $dir = "$Env:TERRA_SHARE_PATH\$(Split-Path -Path $_)"; If(!(Test-Path "$dir")) { New-Item -Path "$dir" -ItemType Directory }; Copy-Item $_ "$dir" }
           $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
           Rename-Item install "$Env:RELEASE_NAME"
           7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
