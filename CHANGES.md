@@ -48,10 +48,6 @@ The following changes are included in this release:
   * Fixes for building on FreeBSD
   * Fix auto-detection of library type when file name ends in `[^.]bc`
 
-## Experimental features
-
-  * Experimental support for CMake-based build system
-
 # Release 2016-03-25
 
 This new release of Terra brings some changes to the language and APIs
