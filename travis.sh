@@ -185,7 +185,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   make install -j2
-  ctest --output-on-failure -j2 || (test "$(uname)" = "Darwin" && test "$LLVM_CONFIG" = "llvm-config-3.8")
+  ctest --output-on-failure -j2
   popd
 
   # Skip this on macOS because it spews too much on Mojave and newer.

@@ -57,13 +57,20 @@ FLAGS += -DTERRA_VERSION_STRING="\"$(TERRA_VERSION)\""
 #LUAJIT_VERSION_BASE =2.1
 #LUAJIT_VERSION_EXTRA =.0-beta2
 
-LUAJIT_VERSION_BASE ?= 2.0
-LUAJIT_VERSION_EXTRA ?= .5
+LUAJIT_VERSION_BASE ?= 2.1
+LUAJIT_VERSION_EXTRA ?= .0-beta3
 LUAJIT_VERSION ?= LuaJIT-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
 LUAJIT_EXECUTABLE ?= luajit-$(LUAJIT_VERSION_BASE)$(LUAJIT_VERSION_EXTRA)
+LUAJIT_COMMIT ?= 9143e86498436892cb4316550be4d45b68a61224
+ifneq ($(strip $(LUAJIT_COMMIT)),)
+LUAJIT_URL ?= https://github.com/LuaJIT/LuaJIT/archive/$(LUAJIT_COMMIT).tar.gz
+LUAJIT_TAR ?= LuaJIT-$(LUAJIT_COMMIT).tar.gz
+LUAJIT_DIR ?= build/LuaJIT-$(LUAJIT_COMMIT)
+else
 LUAJIT_URL ?= http://luajit.org/download/$(LUAJIT_VERSION).tar.gz
 LUAJIT_TAR ?= $(LUAJIT_VERSION).tar.gz
 LUAJIT_DIR ?= build/$(LUAJIT_VERSION)
+endif
 LUAJIT_LIB ?= $(LUAJIT_PREFIX)/lib/libluajit-5.1.a
 LUAJIT_INCLUDE ?= $(dir $(shell ls 2>/dev/null $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h || ls 2>/dev/null $(LUAJIT_PREFIX)/include/lua.h || echo $(LUAJIT_PREFIX)/include/luajit-$(LUAJIT_VERSION_BASE)/lua.h))
 LUAJIT ?= $(LUAJIT_PREFIX)/bin/$(LUAJIT_EXECUTABLE)
@@ -201,7 +208,7 @@ download: build/$(LUAJIT_TAR)
 
 build/$(LUAJIT_TAR):
 ifeq ($(UNAME), Darwin)
-	curl $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
+	curl -L $(LUAJIT_URL) -o build/$(LUAJIT_TAR)
 else
 	wget $(LUAJIT_URL) -O build/$(LUAJIT_TAR)
 endif
@@ -210,7 +217,7 @@ build/lib/libluajit-5.1.a: build/$(LUAJIT_TAR)
 	(cd build; tar -xf $(LUAJIT_TAR))
 	# MACOSX_DEPLOYMENT_TARGET is a workaround for https://github.com/LuaJIT/LuaJIT/issues/484
 	# see also https://github.com/LuaJIT/LuaJIT/issues/575
-	(cd $(LUAJIT_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC" MACOSX_DEPLOYMENT_TARGET=10.7)
+	(cd $(LUAJIT_DIR); $(MAKE) install PREFIX=$(realpath build) CC=$(CC) STATIC_CC="$(CC) -fPIC" XCFLAGS=-DLUAJIT_ENABLE_GC64 MACOSX_DEPLOYMENT_TARGET=10.7)
 
 release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB) 
 	cp $(LUAJIT_INCLUDE)/$*.h $@

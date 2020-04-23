@@ -1,3 +1,9 @@
+-- Disabled due to non-deterministic failures: https://github.com/zdevito/terra/issues/404
+if os.getenv("CI") then
+  print("This test does not pass reliably in CI, skipping...")
+  return
+end
+
 local leak = require "lib.leak"
 
 function make()
