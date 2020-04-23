@@ -13,13 +13,19 @@ The following changes are included in this release:
   * Support for LLVM 3.8, 3.9, 5, 6, 7, 8 and 9
   * Support for CUDA 9.2
   * Support for Visual Studio 2015, 2017 and 2019 on Windows
-  * Upgrade to LuaJIT 2.0.5 by default, experimental support for 2.1 betas
+  * New CMake-based build system replaces Make/NMake on all platforms
+  * Upgrade to LuaJIT 2.1 (from Git) by default
   * Added `terralib.linkllvmstring` to link bitcode modules directly from memory
   * Allow types defined via `ffi.cdef` to be used as Terra types as well
   * Support for "module" definitions in ASDL, which allow ASTs to be namespaced
   * Added command line flag `-e` to evaluate a Terra expression
   * Added `terralib.version` which contains the version string, or `unknown` if this can't be detected
   * Added `optimize` flag to `terralib.saveobj` to optionally disable LLVM optimizations for better compile times
+
+## Deprecated features
+
+  * Deprecated support for all LLVM versions 3.4 and prior
+  * Deprecated support for Make (Linux, macOS) and NMake (Windows) build systems
 
 ## Changed behaviors
 
@@ -28,6 +34,7 @@ The following changes are included in this release:
 ## Infrastructure improvements
 
   * Automated tests with Travis (Linux, macOS) and AppVeyor (Windows)
+  * Automated tests for various Linux distros (currently Ubuntu 16.04, 18.04, 20.04) via Docker
   * Automated release build infrastructure
 
 ## Bug fixes

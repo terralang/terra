@@ -101,8 +101,8 @@ Building Terra
 If the binary releases are not appropriate, then you can also build Terra from source. Terra has the following dependencies:
 
   * A working C/C++ compiler (GCC, Clang, MSVC, etc.)
-  * Linux and macOS only: either GNU Make **OR** CMake (version 3.5 or greater)
   * Windows only: Visual Studio 2013, 2015, 2017 or 2019
+  * CMake (version 3.5 or greater)
   * LLVM and Clang (see suppport table below)
   * LuaJIT (note this is downloaded and installed automatically be default)
   * *Optional:* CUDA
@@ -119,14 +119,15 @@ On macOS with Homebrew, the following should be sufficient:
 brew install cmake llvm@6
 ```
 
-Terra supports two build system: **GNU Make** and **CMake**. CMake is
-newer but is generally recommended. Note that in Ubuntu, the LLVM
-packages for versions < 6 are broken in Ubuntu 16.04 and older. Please
-either upgrade to LLVM 6 or Ubuntu 18.04, or build LLVM from source,
-or else use GNU Make on these systems.
+Note that in Ubuntu, the LLVM packages for versions < 6 are broken in
+Ubuntu 16.04 and older. Please either upgrade to LLVM 6 or Ubuntu
+18.04, or build LLVM from source, or else use GNU Make on these
+systems (see below).
 
-Terra also supports an older NMake build system for Windows, but CMake
-is generally preferred and is substantially more flexible.
+Terra also supports an older build system based on GNU Make (for
+Linux, macOS) and NMake (for Windows). These build systems are both
+deprecated, and in the vast majority of circumstances CMake is both
+preferred and substantially more flexible.
 
 ### Supported LLVM Versions ###
 
@@ -211,6 +212,9 @@ further configure the Terra build via CMake:
 
 ### Building Terra with GNU Make (Linux, macOS)
 
+Note: This build system is deprecated. Please use CMake instead (see
+above).
+
 The basic procudure for building with GNU Make is the following:
 
 ```
@@ -270,8 +274,11 @@ location of the system header files.
 
 ### Building with NMake (Windows)
 
-Terra also has an older NMake build for Windows, which is no longer
-recommended. For instructions, see [the msvc
+Note: This build system is deprecated. Please use CMake instead (see
+above).
+
+Terra also has an older NMake build for Windows, though it is no
+longer recommended. For instructions, see [the msvc
 directory](https://github.com/terralang/terra/blob/master/msvc/README.md).
 
 Note that you will need to build LuaJIT yourself (unlike CMake).
