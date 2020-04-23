@@ -186,10 +186,10 @@ static bool pushterrahome(lua_State *L) {
         if (dladdr(lmain, &infomain) != 0) {
             if (infomain.dli_fbase == info.dli_fbase) {
                 // statically compiled on linux, we need to find the executable directly.
-                char exe_path[PATH_MAX];
-                ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path));
-                if (len > 0) {
+                char *exe_path = realpath("/proc/self/exe", NULL);
+                if (exe_path) {
                     lua_pushstring(L, dirname(dirname(exe_path)));
+                    free(exe_path);
                     return true;
                 }
             }
