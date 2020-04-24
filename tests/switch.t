@@ -1,13 +1,13 @@
 local test = require 'test'
 
-function dotest(fn, a, b, c, d)
+local function dotest(fn, a, b, c, d)
   test.eq(fn(1), a)
   test.eq(fn(2), b)
   test.eq(fn(3), c)
   test.eq(fn(4), d)
 end
 
-terra foo(a: int): int
+local terra foo(a: int): int
   switch a do
     case 1 then
       return 2
@@ -21,7 +21,7 @@ end
 
 dotest(foo, 2, 5, 3, 3)
 
-terra empty(a: int): int
+local terra empty(a: int): int
   switch a do
   end
   return -1
@@ -29,7 +29,7 @@ end
 
 dotest(empty, -1, -1, -1, -1)
 
-terra single(a: int): int
+local terra single(a: int): int
   switch a do
     case 1 then 
       return 2
@@ -40,7 +40,7 @@ end
 
 dotest(single, 2, -1, -1, -1)
 
-terra justelse(a: int): int
+local terra justelse(a: int): int
   switch a do
     else
       return 3
@@ -50,7 +50,7 @@ end
 
 dotest(justelse, 3, 3, 3, 3)
 
-terra values(a: int): int
+local terra values(a: int): int
   switch a + (a + a) do
     case 1 + (1 + 1) then
       return 2
@@ -65,9 +65,9 @@ end
 
 dotest(values, 2, 5, 3, 3)
 
-function returnval() return `8 end
+local function returnval() return `8 end
 
-terra values2(a: int): int
+local terra values2(a: int): int
   switch a * (a + a) do
     case 2 then
       return 2
@@ -80,7 +80,7 @@ end
 
 dotest(values2, 2, 5, -1, -1)
 
-terra nested(a: int): int
+local terra nested(a: int): int
   switch a do
     case 1 then
       switch a + a do
@@ -95,7 +95,7 @@ end
 
 dotest(nested, 2, -1, -1, -1)
 
-terra nested2(a: int): int
+local terra nested2(a: int): int
   switch a do
     case 1 then
       switch a + a do
@@ -116,7 +116,7 @@ end
 
 dotest(nested2, 2, 5, -1, -1)
 
-terra nested3(a: int): int
+local terra nested3(a: int): int
   switch a do
     case 1 then
       switch a + a do
@@ -142,3 +142,47 @@ terra nested3(a: int): int
 end
 
 dotest(nested3, 2, 5, 3, 3)
+
+local terra case_end_elision(a: int): int
+  switch a do
+    case 1 then
+      return 1
+  else
+    return 2
+  end
+end
+
+dotest(case_end_elision, 1, 2, 2, 2)
+
+local case_quote_1 = quote
+  case 1 then
+    return 2
+  case 2 then
+    return 1
+  end
+end
+local case_quote_2 = quote case 4 then return 5 end end
+local terra quoted_cases(a: int): int
+  switch a do
+    [case_quote_1]
+    case 3 then
+      return 3
+    end
+    [case_quote_2]
+  end
+end
+
+dotest(quoted_cases, 2, 1, 3, 5)
+
+local terra escaped_cases(a: int): int
+  switch a do
+    escape
+      local tbl = {4, 3, 2, 1}
+      for i, v in ipairs(tbl) do
+        emit quote case [i] then return [v] end end
+      end
+    end
+  end
+end
+
+dotest(escaped_cases, 4, 3, 2, 1)

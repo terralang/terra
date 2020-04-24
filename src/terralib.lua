@@ -3215,9 +3215,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return s:copy{ branches = br, orelse = els }
             elseif s:is "switchstat" then
                 local cond = checkexpintegral(s.condition)
-                --local br = s.cases:map(checkcasebranch)
-                --local br = terralib.newlist()
-                --local stack = terralib.newlist{s.cases}
                 local br = checkstmts(s.cases)
                 local def = (s.ordefault and checkblock(s.ordefault))
                 return s:copy{ condition = cond, cases = br, ordefault = def }
