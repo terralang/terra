@@ -563,19 +563,19 @@ until ~b
 </div>
 <p> Switch
  </p>
-<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>//NYI, use if statements
-switch(x) {
+<div style="width: 100%; margin-left: 40px;";><div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>C++</small><pre class="highlight"><code>switch(x) {
     case X1: a;
     case X2 : b;
     default: c;
 }
-</code></pre></div>
-<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>-- no switch statements yet, use if
-if x == X1 then a
-elseif x == X2 then b
-else c
-end
 
+</code></pre></div>
+<div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>switch x do
+    case X1 then a
+    case X2 then b
+else
+    c
+end
 </code></pre></div>
 </div>
 <p> Control Flow
@@ -711,7 +711,7 @@ float max(float a, float b) {
 </code></pre></div>
 <div class="highlighter-rouge" style="margin: 0; display: inline-block;"><small>Terra</small><pre class="highlight"><code>max = terralib.overloadedfunction("max" { 
     terra(a : int, b : int) 
-        return terralib.select( a &gt b, a, b) 
+        return terralib.select( a &gt b, a, b)
     end,
     terra(a : float, b : float) 
         return terralib.select( a &gt b, a, b)

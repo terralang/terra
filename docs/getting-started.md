@@ -167,7 +167,8 @@ Variables in Terra are always lexically scoped. The statement `do <stmts> end` i
 Control Flow
 ------------
 
-Terra's control flow is almost identical to Lua except for the behavior of `for` loops.
+Terra's control flow is almost identical to Lua except for the behavior of `for`
+loops and the addition of switch statements.
 
 ### If Statements ###
 
@@ -213,6 +214,36 @@ The loop may also specify an option step parameter:
 
     for i = 0,10,2 do
         c.printf("%d\n",i) --0, 2, 4, ...
+    end
+
+### Switch statement ###
+
+Due to the utility of branch tables for high-performance cellular automata,
+Terra has switch statements to generate them.
+
+    switch expr do
+       case 1 then
+           first_thing()
+       case 2 then
+           second_thing()
+       end
+    end
+
+    switch expr do
+        case 1 then
+            first_thing()
+        end
+    else
+        default_thing()
+    end
+    
+The end on the last case may be omitted if the switch statement has an else
+
+    switch expr do
+        case 1 then
+            first_thing()
+    else
+        default_thing()
     end
 
 ### Gotos ###
