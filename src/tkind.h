@@ -63,6 +63,7 @@ struct terra_State;
     _(sizeof, "sizeof")                       \
     _(struct, "struct")                       \
     _(structcast, "structcast")               \
+    _(switchstat, "switchstat")               \
     _(sub, "-")                               \
     _(var, "var")                             \
     _(vector, "vector")                       \

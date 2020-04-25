@@ -446,17 +446,17 @@ Loops
         <statements>
     until ~b
 Switch
-    //NYI, use if statements
     switch(x) {
         case X1: a;
         case X2 : b;
         default: c;
     }
     ###
-    -- no switch statements yet, use if
-    if x == X1 then a
-    elseif x == X2 then b
-    else c
+    switch x do
+        case X1 then a
+        case X2 then b
+    else
+        c
     end
 Control Flow
     break;

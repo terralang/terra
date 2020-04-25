@@ -69,6 +69,7 @@ typedef struct BlockCnt {
     StringSet defined;
     int isterra; /* does this scope describe a terra scope or a lua scope?*/
     int languageextensionsdefined;
+    int starttoken;
 } BlockCnt;
 
 struct TerraCnt {
@@ -337,10 +338,11 @@ static void enterlevel(LexState *ls) {
 
 #define leavelevel(ls) ((ls)->LP->nCcalls--)
 
-static void enterblock(FuncState *fs, BlockCnt *bl, lu_byte isloop) {
+static void enterblock(FuncState *fs, BlockCnt *bl, int starttoken) {
     bl->previous = fs->bl;
     bl->isterra = fs->ls->in_terra;
     bl->languageextensionsdefined = 0;
+    bl->starttoken = starttoken;
     fs->bl = bl;
     // printf("entering block %lld\n", (long long int)bl);
     // printf("previous is %lld\n", (long long int)bl->previous);
@@ -428,6 +430,8 @@ static void dump_stack(lua_State *L, int elem) {
 */
 static int block_follow(LexState *ls, int withuntil) {
     switch (ls->t.token) {
+        case TK_CASE:
+            return ls->fs->bl->starttoken == TK_CASE;
         case TK_ELSE:
         case TK_ELSEIF:
         case TK_END:
@@ -932,7 +936,7 @@ static void doquote(LexState *ls, int isexp) {
     } else {
         FuncState *fs = ls->fs;
         BlockCnt bc;
-        enterblock(fs, &bc, 0);
+        enterblock(fs, &bc, begin.token);
         Position p = getposition(ls);
         RETURNS_1(statlist(ls));
         if (isfullquote && testnext(ls, TK_IN)) {
@@ -1456,6 +1460,60 @@ static void labelstat(LexState *ls) {
     new_object(ls, "label", 1, &pos);
 }
 
+static void casestat(LexState *ls) {
+    /* switchcase -> CASE expression THEN block */
+    if (ls->fs->bl->starttoken != TK_SWITCH && ls->fs->bl->starttoken != TK_QUOTE) {
+        luaX_syntaxerror(ls,
+                         "case statement must be in a switch block or quote block; "
+                         "duff's device is unsupported.");
+    }
+    FuncState *fs = ls->fs;
+    Position pos = getposition(ls);
+    BlockCnt bl;
+    luaX_next(ls); /* skip CASE */
+    enterblock(fs, &bl, TK_CASE);
+    expr(ls);
+    check_match(ls, TK_THEN, TK_CASE, pos.linenumber);
+    Position bodypos = getposition(ls);
+    statlist(ls);
+    leaveblock(fs);
+    new_object(ls, "block", 1, &pos);
+    if (ls->t.token == TK_END) {
+        luaX_next(ls); /* consume END */
+    } else if (ls->t.token == TK_CASE) {
+        /* leave case for next case statement */
+    } else if (ls->t.token == TK_ELSE) {
+        // leave else for the switch statement
+    } else {
+        luaX_syntaxerror(ls, "improperly terminated case statement");
+    }
+    new_object(ls, "switchcase", 2, &pos);
+}
+
+static void switchstat(LexState *ls) {
+    check_terra(ls, "switch statement");
+    /* switchstat -> SWITCH expression DO switchcase* (ELSE block)? END */
+    FuncState *fs = ls->fs;
+    Position pos = getposition(ls);
+    BlockCnt bl;
+    luaX_next(ls); /* skip SWITCH */
+    enterblock(fs, &bl, TK_SWITCH);
+    RETURNS_1(expr(ls));
+    check_match(ls, TK_DO, TK_SWITCH, pos.linenumber);
+    statlist(ls);
+    if (testnext(ls, TK_ELSE)) {
+        BlockCnt ebl;
+        enterblock(fs, &ebl, 0);
+        block(ls);
+        leaveblock(fs);
+    } else {
+        push_nil(ls);
+    }
+    check_match(ls, TK_END, TK_SWITCH, pos.linenumber);
+    leaveblock(fs);
+    new_object(ls, "switchstat", 3, &pos);
+}
+
 static void whilestat(LexState *ls, int line) {
     /* whilestat -> WHILE cond DO block END */
     FuncState *fs = ls->fs;
@@ -1934,6 +1992,14 @@ static void statement(LexState *ls) {
         }
         case TK_ESCAPE: {
             blockescape(ls);
+            break;
+        }
+        case TK_SWITCH: { /* stat -> switchstat */
+            RETURNS_1(switchstat(ls));
+            break;
+        }
+        case TK_CASE: { /* stat -> casestat */
+            RETURNS_1(casestat(ls));
             break;
         }
             /*otherwise, fallthrough to the normal error message.*/

@@ -2387,6 +2387,11 @@ struct FunctionEmitter {
         }
         return B->CreateTrunc(cond, resultType);
     }
+
+    llvm::ConstantInt *emitConstantInt(Obj *v) {
+        return dyn_cast<llvm::ConstantInt>(emitExp(v));  // TODO: collapse constants
+    }
+
     void emitIfBranch(Obj *ifbranch, BasicBlock *footer) {
         Obj cond, body;
         ifbranch->obj("condition", &cond);
@@ -2401,6 +2406,20 @@ struct FunctionEmitter {
         B->CreateBr(footer);
         followsBB(continueif);
         setInsertBlock(continueif);
+    }
+
+    void emitCaseBranch(Obj *casebranch, SwitchInst *sw, BasicBlock *footer) {
+        Obj caseindex, body;
+        casebranch->obj("condition", &caseindex);
+        casebranch->obj("body", &body);
+
+        BasicBlock *thenBB = createAndInsertBB("then");
+        sw->addCase(emitConstantInt(&caseindex), thenBB);
+        followsBB(thenBB);
+        setInsertBlock(thenBB);
+
+        emitStmt(&body);
+        B->CreateBr(footer);
     }
 
 #ifdef DEBUG_INFO_WORKING
@@ -2738,6 +2757,31 @@ struct FunctionEmitter {
                 }
                 Obj orelse;
                 if (stmt->obj("orelse", &orelse)) emitStmt(&orelse);
+                B->CreateBr(footer);
+                followsBB(footer);
+                setInsertBlock(footer);
+            } break;
+            case T_switchstat: {
+                Obj cond;
+                stmt->obj("condition", &cond);
+
+                BasicBlock *footer = createAndInsertBB("merge");
+                BasicBlock *dest = createAndInsertBB("default_block");
+                Value *condexpr = emitExp(&cond);
+                Obj cases;
+                stmt->obj("cases", &cases);
+                int N = cases.size();
+                SwitchInst *sw = B->CreateSwitch(condexpr, dest, N);
+                for (int i = 0; i < N; i++) {
+                    Obj casebranch;
+                    cases.objAt(i, &casebranch);
+                    emitCaseBranch(&casebranch, sw, footer);
+                }
+                followsBB(dest);
+                setInsertBlock(dest);
+
+                Obj ordefault;
+                if (stmt->obj("ordefault", &ordefault)) emitStmt(&ordefault);
                 B->CreateBr(footer);
                 followsBB(footer);
                 setInsertBlock(footer);
