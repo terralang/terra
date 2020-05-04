@@ -789,8 +789,11 @@ end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
-terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
 terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
+
+if terra.cudahome then
+  terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
+end
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
@@ -3347,7 +3350,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local parameter_types = typed_parameters:map("type")
         local body,returntype = checkreturns(checkblock(topexp.body),topexp.returntype)
         
-        local fntype = terra.types.functype(parameter_types,returntype,false):tcompletefunction(topexp)
+        local fntype = terra.types.functype(parameter_types,returntype,topexp.is_varargs):tcompletefunction(topexp)
         diag:finishandabortiferrors("Errors reported during typechecking.",2)
         local labeldepths,globalsused = semanticcheck(diag,typed_parameters,body)
         result = newobject(topexp,T.functiondef,nil,fntype,typed_parameters,topexp.is_varargs, body, labeldepths, globalsused)
