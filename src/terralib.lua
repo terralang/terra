@@ -791,10 +791,6 @@ function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 terra.nativetarget = terra.newtarget {}
 terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
-if terra.cudahome then
-  terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
-end
-
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
 end }
@@ -4110,6 +4106,11 @@ if terra.cudalibpaths and terra.cudahome then
 		terra.cudalibpaths[name] = path
 	end
 end                       
+
+if terra.cudahome then
+  terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
+end
+
 
 terra.systemincludes = List()
 if ffi.os == "Windows" then
