@@ -1103,7 +1103,7 @@ function terra.defineobjects(fmt,envfn,...)
                 if not terra.isfunction(v) or v:isdefined() then
                     local typ = terra.types.placeholderfunction
                     if c.tree.returntype then
-                        typ = terra.types.functype(c.tree.parameters:map("type"),c.tree.returntype,false)
+                        typ = terra.types.functype(c.tree.parameters:map("type"),c.tree.returntype,c.tree.is_varargs)
                     end
                     v = T.terrafunction(nil,c.name,typ,c.tree)
                 end
