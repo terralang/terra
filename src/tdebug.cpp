@@ -3,7 +3,7 @@
 #include "terrastate.h"
 #include "tcompilerstate.h"
 
-#if !defined(__arm__) && !defined(__aarch64__)
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(__PPC__)
 
 #ifndef _WIN32
 #include <execinfo.h>
