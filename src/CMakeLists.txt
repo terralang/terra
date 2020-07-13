@@ -22,8 +22,7 @@ add_custom_command(
     "${PROJECT_SOURCE_DIR}/lib/std.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
     LuaJIT
-  # FIXME: LUA_PATH is a workaround for https://github.com/moonjit/moonjit/issues/128#issuecomment-655758336
-  COMMAND ${CMAKE_COMMAND} -E env "LUA_PATH=${LUAJIT_SHARE_DIR}/?.lua" ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
+  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   VERBATIM
 )
@@ -44,15 +43,13 @@ foreach(LUA_SRC ${TERRA_LIB_LUA_SRC})
   add_custom_command(
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" LuaJIT
-    # FIXME: LUA_PATH is a workaround for https://github.com/moonjit/moonjit/issues/128#issuecomment-655758336
-    COMMAND ${CMAKE_COMMAND} -E env "LUA_PATH=${LUAJIT_SHARE_DIR}/?.lua" ${LUAJIT_EXECUTABLE} -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
+    COMMAND ${LUAJIT_EXECUTABLE} -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
     VERBATIM
   )
   add_custom_command(
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_H_GEN}"
     DEPENDS "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}" LuaJIT
-    # FIXME: LUA_PATH is a workaround for https://github.com/moonjit/moonjit/issues/128#issuecomment-655758336
-    COMMAND ${CMAKE_COMMAND} -E env "LUA_PATH=${LUAJIT_SHARE_DIR}/?.lua" ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genheader.lua" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}" "${PROJECT_BINARY_DIR}/${LUA_H_GEN}"
+    COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/genheader.lua" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}" "${PROJECT_BINARY_DIR}/${LUA_H_GEN}"
     VERBATIM
   )
 endforeach()
