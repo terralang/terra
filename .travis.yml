@@ -21,9 +21,9 @@ env:
   - LLVM_CONFIG=llvm-config-6.0 CLANG=clang-6.0 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0 SLIB_INCLUDE_LUAJIT=0
   - LLVM_CONFIG=llvm-config-7 CLANG=clang-7 USE_CMAKE=1
   - LLVM_CONFIG=llvm-config-8 CLANG=clang-8
-  - LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1
+  - LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1 TERRA_LUA=moonjit
   - LLVM_CONFIG=llvm-config-9 CLANG=clang-9
-  - LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1
+  - LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 TERRA_LUA=luajit
   - LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 STATIC_LLVM=0 STATIC_LUAJIT=0
   - LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 SLIB_INCLUDE_LLVM=0 SLIB_INCLUDE_LUAJIT=0 USE_CUDA=1
 
@@ -58,11 +58,11 @@ jobs:
     - os: osx
       osx_image: xcode11.3 # macOS 10.14
       compiler: clang
-      env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1
+      env: LLVM_CONFIG=llvm-config-8 CLANG=clang-8 USE_CMAKE=1 TERRA_LUA=moonjit
     - os: osx
       osx_image: xcode11.3 # macOS 10.14
       compiler: clang
-      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1
+      env: LLVM_CONFIG=llvm-config-9 CLANG=clang-9 USE_CMAKE=1 TERRA_LUA=luajit
 
 script:
   - ./travis.sh

@@ -172,6 +172,11 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
     )
   fi
+  if [[ -n $TERRA_LUA ]]; then
+    CMAKE_FLAGS+=(
+      -DTERRA_LUA=$TERRA_LUA
+    )
+  fi
   if [[ $(uname) = Darwin ]]; then
     # Hack: CMake tries to be smart and use XCode's copy of Clang by
     # default. This causes LuaJIT to not build on Mojave and later
