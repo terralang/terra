@@ -212,7 +212,12 @@ struct CopyConnectedComponent : public ValueMaterializer {
 
     CopyConnectedComponent(Module *dest_, Module *src_, llvmutil_Property copyGlobal_,
                            void *data_, ValueToValueMapTy &VMap_)
-            : dest(dest_), src(src_), copyGlobal(copyGlobal_), data(data_), VMap(VMap_) {}
+            : dest(dest_),
+              src(src_),
+              copyGlobal(copyGlobal_),
+              data(data_),
+              VMap(VMap_),
+              DI(NULL) {}
     bool needsFreshlyNamedConstant(GlobalVariable *GV, GlobalVariable *newGV) {
         if (GV->isConstant() && GV->hasPrivateLinkage() &&
 #if LLVM_VERSION < 39
@@ -228,11 +233,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
         return false;
     }
 #if LLVM_VERSION == 38
-    virtual Value *materializeDeclFor(Value *V) {
+    virtual Value *materializeDeclFor(Value *V) override {
 #elif LLVM_VERSION < 38
-    virtual Value *materializeValueFor(Value *V) {
+    virtual Value *materializeValueFor(Value *V) override {
 #else
-    virtual Value *materialize(Value *V) {
+    virtual Value *materialize(Value *V) override {
 #endif
         if (Function *fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);
@@ -280,11 +285,13 @@ struct CopyConnectedComponent : public ValueMaterializer {
         } else
             return materializeValueForMetadata(V);
     }
-#ifdef DEBUG_INFO_WORKING
     DIBuilder *DI;
+#if LLVM_VERSION >= 37
+    DICompileUnit *NCU;
+#else
     DICompileUnit NCU;
+#endif
     void CopyDebugMetadata() {
-        DI = NULL;
         if (NamedMDNode *NMD = src->getNamedMetadata("llvm.module.flags")) {
             NamedMDNode *New = dest->getOrInsertNamedMetadata(NMD->getName());
             for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
@@ -295,15 +302,35 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #endif
             }
         }
+
+#if LLVM_VERSION >= 37
+        NCU = NULL;
+
+        // for (DICompileUnit *CU : src->debug_compile_units()) {
+        if (src->debug_compile_units_begin() != src->debug_compile_units_end()) {
+            DICompileUnit *CU = *src->debug_compile_units_begin();
+
+            if (DI == NULL) DI = new DIBuilder(*dest);
+
+            if (CU) {
+                NCU = DI->createCompileUnit(
+                        CU->getSourceLanguage(), CU->getFile(), CU->getProducer(),
+                        CU->isOptimized(), CU->getFlags(), CU->getRuntimeVersion(),
+                        CU->getSplitDebugFilename(), CU->getEmissionKind(),
+                        CU->getDWOId(), CU->getSplitDebugInlining(),
+                        CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
+            }
+        }
+#else
         if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
             DI = new DIBuilder(*dest);
-
             DICompileUnit CU(CUN->getOperand(0));
             NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(),
                                         CU.getDirectory(), CU.getProducer(),
                                         CU.isOptimized(), CU.getFlags(),
                                         CU.getRunTimeVersion());
         }
+#endif
     }
     Value *materializeValueForMetadata(Value *V) {
 #if LLVM_VERSION <= 35
@@ -314,18 +341,47 @@ struct CopyConnectedComponent : public ValueMaterializer {
         if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
             Metadata *MDraw = MDV->getMetadata();
             MDNode *MD = dyn_cast<MDNode>(MDraw);
+#if LLVM_VERSION >= 37
+            DISubprogram *SP = getDISubprogram(MD);
+            if (MD != NULL && DI != NULL && SP != NULL) {
+#else
             DISubprogram SP(MD);
             if (MD != NULL && DI != NULL && SP.isSubprogram()) {
 #endif
+#endif
 
+#if LLVM_VERSION >= 37
+                {
+#else
                 if (Function *OF = SP.getFunction()) {
                     Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
+#endif
+
+#if LLVM_VERSION >= 37
+                    //DISubprogram *NSP = SP;
+                    DISubprogram *NSP = DI->createFunction(
+                            SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
+                            DI->createFile(SP->getFilename(), SP->getDirectory()),
+                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
+                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
+                            SP->isOptimized(), SP->getTemplateParams(),
+                            SP->getDeclaration(), SP->getThrownTypes());
+
+                    Function *newfn = dest->getFunction(SP->getName());
+                    if (!newfn) newfn = dest->getFunction(SP->getLinkageName());
+                    if (newfn) {
+                        newfn->setSubprogram(NSP);
+                    }
+                    
+#else
                     DISubprogram NSP = DI->createFunction(
                             SP.getContext(), SP.getName(), SP.getLinkageName(),
                             DI->createFile(SP.getFilename(), SP.getDirectory()),
                             SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
                             SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
                             SP.isOptimized(), F);
+#endif
+
 #if LLVM_VERSION <= 35
                     return NSP;
 #else
@@ -342,13 +398,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
         if (DI) {
             DI->finalize();
             delete DI;
+            DI = NULL;
         }
     }
-#else
-    void CopyDebugMetadata() {}
-    Value *materializeValueForMetadata(Value *V) { return NULL; }
-    void finalize() {}
-#endif
 };
 
 llvm::Module *llvmutil_extractmodulewithproperties(

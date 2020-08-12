@@ -38,6 +38,7 @@ extern "C" {
 
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 #include "tllvmutil.h"
 
 using namespace llvm;
@@ -414,8 +415,10 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             (CU->T->options.usemcjit) ? new Module("terra", *CU->TT->ctx) : CU->M;
 #ifdef _WIN32
     std::string MCJITTriple = CU->TT->Triple;
+#if LLVM_VERSION < 38
     MCJITTriple.append("-elf");  // on windows we need to use an elf container because
                                  // coff is not supported yet
+#endif
     topeemodule->setTargetTriple(MCJITTriple);
 #else
     topeemodule->setTargetTriple(CU->TT->Triple);
@@ -1347,8 +1350,10 @@ struct FunctionEmitter {
     std::vector<std::pair<BasicBlock *, size_t> >
             breakpoints;  // stack of basic blocks where a break statement should go
 
-#ifdef DEBUG_INFO_WORKING
     DIBuilder *DB;
+#if LLVM_VERSION >= 37
+    DISubprogram *SP;
+#else
     DISubprogram SP;
 #endif
 
@@ -2422,7 +2427,6 @@ struct FunctionEmitter {
         B->CreateBr(footer);
     }
 
-#ifdef DEBUG_INFO_WORKING
     DIFileP createDebugInfoForFile(const char *filename) {
         // checking the existence of a file once per function can be expensive,
         // so only do it if debug mode is set to slow compile anyway.
@@ -2432,6 +2436,7 @@ struct FunctionEmitter {
             llvm::sys::fs::make_absolute(filepath);
             return DB->createFile(llvm::sys::path::filename(filepath),
                                   llvm::sys::path::parent_path(filepath));
+
         } else {
             return DB->createFile(filename, ".");
         }
@@ -2450,20 +2455,44 @@ struct FunctionEmitter {
             DB = new DIBuilder(*M);
 
             DIFileP file = createDebugInfoForFile(filename);
+#if LLVM_VERSION >= 37
+            DICompileUnit *CU =
+                    DB->createCompileUnit(dwarf::DW_LANG_C, file, "terra", true, "", 0);
+#else
             DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
                                                      true, "", 0);
+#endif
+
 #if LLVM_VERSION >= 36
             auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata *>());
 #else
             auto TA = DB->getOrCreateArray(ArrayRef<Value *>());
 #endif
+
+#if LLVM_VERSION == 80
+            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
+                                    file, lineno, DB->createSubroutineType(TA), 0,
+                                    llvm::DINode::FlagZero, true);
+            fstate->func->setSubprogram(SP);
+#elif LLVM_VERSION >= 37
+            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
+                                    file, lineno, DB->createSubroutineType(TA), false,
+                                    true, 0, llvm::DINode::FlagZero, true);
+            fstate->func->setSubprogram(SP);
+#else
             SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
                                     file, lineno, DB->createSubroutineType(file, TA),
                                     false, true, 0, 0, true, fstate->func);
+#endif
 
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
                 M->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 1);
+
+#ifdef _WIN32
+                M->addModuleFlag(llvm::Module::Warning, "CodeView", 1);
+                M->addModuleFlag(llvm::Module::Warning, "CodeViewGHash", 1);
+#endif
             }
             filenamecache[filename] = SP;
         }
@@ -2483,11 +2512,6 @@ struct FunctionEmitter {
                     scope));
         }
     }
-#else
-    void initDebug(const char *filename, int lineno) {}
-    void endDebug() {}
-    void setDebugPoint(Obj *obj) {}
-#endif
 
     void setInsertBlock(BasicBlock *bb) { B->SetInsertPoint(bb); }
     void pushBreakpoint(BasicBlock *exit) {
@@ -2596,8 +2620,21 @@ struct FunctionEmitter {
     }
     BasicBlock *copyBlock(BasicBlock *BB) {
         ValueToValueMapTy VMap;
-        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "", fstate->func);
-        for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE; ++II)
+        DebugInfoFinder DIFinder;
+        BasicBlock *NewBB =
+                CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr, &DIFinder);
+        VMap[BB] = NewBB;
+        BasicBlock::iterator oldII = BB->begin();
+
+        for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE;
+             ++II) {
+            // HACK: LLVM is not happy about terra copying single isolated BasicBlocks,
+            // and will blow up when copying metadata. This removes the metadata before
+            // remapping, then copies it afterwards, which isn't fully correct, but works.
+            llvm::SmallVector<std::pair<unsigned int, llvm::MDNode *>, 4> MDs;
+            II->getAllMetadata(MDs);
+            for (auto md : MDs) II->setMetadata(md.first, nullptr);
+
             RemapInstruction(&*II, VMap,
 #if LLVM_VERSION < 39
                              RF_IgnoreMissingEntries
@@ -2605,6 +2642,10 @@ struct FunctionEmitter {
                              RF_IgnoreMissingLocals
 #endif
             );
+
+            II->copyMetadata(*oldII);
+            ++oldII;
+        }
         return NewBB;
     }
     // emit an exit path that includes the most recent num deferred statements

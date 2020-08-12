@@ -21,15 +21,12 @@
 
 using namespace llvm;
 
-#ifdef DEBUG_INFO_WORKING
 static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
     return point < inst || (!isNextInst && point == inst);
 }
-#endif
 static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo *fi,
                                 uintptr_t ip, bool isNextInstr, StringRef *file,
                                 size_t *lineno) {
-#ifdef DEBUG_INFO_WORKING
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> &LineStarts =
             fi->efd.LineStarts;
     size_t i;
@@ -42,14 +39,21 @@ static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo 
 
     if (i < LineStarts.size()) {
         if (lineno) *lineno = LineStarts[i].Loc.getLine();
-        if (file) *file = DIFile(LineStarts[i].Loc.getScope(*fi->ctx)).getFilename();
-        return true;
-    } else {
-        return false;
-    }
+#if LLVM_VERSION >= 37
+        // getFilename was just converting the 0th operand to a string
+        if (file && LineStarts[i].Loc.getScope()) { 
+          if (auto *s = llvm::cast_or_null<MDString>(LineStarts[i].Loc.getScope()->getOperand(0)))
+                *file = s->getString();
+            else
+                *file = StringRef();
+        }
 #else
-    return false;
+        if (file) *file = DIFile(LineStarts[i].Loc.getScope(*fi->ctx)).getFilename();
 #endif
+        return true;
+    }
+
+    return false;
 }
 
 static bool stacktrace_findsymbol(terra_CompilerState *C, uintptr_t ip,

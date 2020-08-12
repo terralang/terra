@@ -103,7 +103,6 @@ using llvm::legacy::PassManager;
 typedef llvm::raw_pwrite_stream emitobjfile_t;
 typedef llvm::DIFile* DIFileP;
 #else
-#define DEBUG_INFO_WORKING
 using llvm::FunctionPassManager;
 using llvm::PassManager;
 typedef llvm::raw_ostream emitobjfile_t;
