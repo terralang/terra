@@ -26,6 +26,7 @@ static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNex
 static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo *fi,
                                 uintptr_t ip, bool isNextInstr, StringRef *file,
                                 size_t *lineno) {
+#if LLVM_VERSION < 80
     const std::vector<JITEvent_EmittedFunctionDetails::LineStart> &LineStarts =
             fi->efd.LineStarts;
     size_t i;
@@ -51,6 +52,7 @@ static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo 
 #endif
         return true;
     }
+#endif
 
     return false;
 }

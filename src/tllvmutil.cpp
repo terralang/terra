@@ -266,22 +266,27 @@ struct CopyConnectedComponent : public ValueMaterializer {
 
                 if (SP) {
                     F->setSubprogram(DI->createFunction(
-#if LLVM_VERSION >= 40
+#if LLVM_VERSION >= 40 && LLVM_VERSION < 90
                             SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
 #else
                             SP->getScope(), SP->getName(), SP->getLinkageName(),
 #endif
                             DI->createFile(SP->getFilename(), SP->getDirectory()),
+#if LLVM_VERSION >= 80
+                            SP->getLine(), SP->getType(), SP->getScopeLine(),
+                            SP->getFlags(), SP->getSPFlags(), SP->getTemplateParams(),
+#else
                             SP->getLine(), SP->getType(), SP->isLocalToUnit(),
                             SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
                             SP->isOptimized(), SP->getTemplateParams(),
+#endif
 #if LLVM_VERSION >= 40
                             SP->getDeclaration(), SP->getThrownTypes()));
 #else
                             SP->getDeclaration()));
 #endif
-                }
 #endif
+                }
             } else {
                 newfn->setLinkage(GlobalValue::ExternalLinkage);
             }
@@ -314,7 +319,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #if LLVM_VERSION >= 37
     DICompileUnit *NCU;
 #else
-    DICompileUnit NCU;
+DICompileUnit NCU;
 #endif
     void CopyDebugMetadata() {
         if (NamedMDNode *NMD = src->getNamedMetadata("llvm.module.flags")) {
@@ -323,7 +328,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #if LLVM_VERSION <= 35
                 New->addOperand(MapValue(NMD->getOperand(i), VMap));
 #else
-                New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
+            New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
 #endif
             }
         }
@@ -342,8 +347,10 @@ struct CopyConnectedComponent : public ValueMaterializer {
                         CU->isOptimized(), CU->getFlags(), CU->getRuntimeVersion(),
                         CU->getSplitDebugFilename(), CU->getEmissionKind(),
                         CU->getDWOId(), CU->getSplitDebugInlining(),
-
-#if LLVM_VERSION >= 60
+#if LLVM_VERSION >= 80
+                        CU->getDebugInfoForProfiling(), CU->getNameTableKind(),
+                        CU->getRangesBaseAddress());
+#elif LLVM_VERSION >= 60
                         CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
 #else
                         CU->getDebugInfoForProfiling());
@@ -351,23 +358,22 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
         }
 #elif LLVM_VERSION >= 37
-        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-            DI = new DIBuilder(*dest);
-            DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
-            NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
-                                        CU->getDirectory(), CU->getProducer(),
-                                        CU->isOptimized(), CU->getFlags(),
-                                        CU->getRuntimeVersion());
-        }
+    if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+        DI = new DIBuilder(*dest);
+        DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
+        NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
+                                    CU->getDirectory(), CU->getProducer(),
+                                    CU->isOptimized(), CU->getFlags(),
+                                    CU->getRuntimeVersion());
+    }
 #else
-        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-            DI = new DIBuilder(*dest);
-            DICompileUnit CU(CUN->getOperand(0));
-            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(),
-                                        CU.getDirectory(), CU.getProducer(),
-                                        CU.isOptimized(), CU.getFlags(),
-                                        CU.getRunTimeVersion());
-        }
+    if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+        DI = new DIBuilder(*dest);
+        DICompileUnit CU(CUN->getOperand(0));
+        NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(),
+                                    CU.getProducer(), CU.isOptimized(), CU.getFlags(),
+                                    CU.getRunTimeVersion());
+    }
 #endif
     }
     Value *materializeValueForMetadata(Value *V) {
@@ -376,34 +382,43 @@ struct CopyConnectedComponent : public ValueMaterializer {
             DISubprogram SP(MD);
             if (DI != NULL && SP.isSubprogram()) {
 #else
-        if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
-            Metadata *MDraw = MDV->getMetadata();
-            MDNode *MD = dyn_cast<MDNode>(MDraw);
+    if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
+        Metadata *MDraw = MDV->getMetadata();
+        MDNode *MD = dyn_cast<MDNode>(MDraw);
 #if LLVM_VERSION >= 37
-            DISubprogram *SP = getDISubprogram(MD);
-            if (MD != NULL && DI != NULL && SP != NULL) {
+        DISubprogram *SP = getDISubprogram(MD);
+        if (MD != NULL && DI != NULL && SP != NULL) {
 #else
-            DISubprogram SP(MD);
-            if (MD != NULL && DI != NULL && SP.isSubprogram()) {
+        DISubprogram SP(MD);
+        if (MD != NULL && DI != NULL && SP.isSubprogram()) {
 #endif
 #endif
 
 #if LLVM_VERSION >= 37
                 {
 #else
-                if (Function *OF = SP.getFunction()) {
-                    Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
+            if (Function *OF = SP.getFunction()) {
+                Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
 #endif
 
 #if LLVM_VERSION >= 37
 #if LLVM_VERSION >= 40
                     // DISubprogram *NSP = SP;
                     DISubprogram *NSP = DI->createFunction(
+#if LLVM_VERSION >= 40 && LLVM_VERSION < 90
                             SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
+#else
+                            SP->getScope(), SP->getName(), SP->getLinkageName(),
+#endif
                             DI->createFile(SP->getFilename(), SP->getDirectory()),
+#if LLVM_VERSION >= 80
+                            SP->getLine(), SP->getType(), SP->getScopeLine(),
+                            SP->getFlags(), SP->getSPFlags(), SP->getTemplateParams(),
+#else
                             SP->getLine(), SP->getType(), SP->isLocalToUnit(),
                             SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
                             SP->isOptimized(), SP->getTemplateParams(),
+#endif
                             SP->getDeclaration(), SP->getThrownTypes());
 #else
                     DISubprogram *NSP = DI->createFunction(
@@ -422,18 +437,18 @@ struct CopyConnectedComponent : public ValueMaterializer {
                     }
 
 #else
-                    DISubprogram NSP = DI->createFunction(
-                            SP.getContext(), SP.getName(), SP.getLinkageName(),
-                            DI->createFile(SP.getFilename(), SP.getDirectory()),
-                            SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
-                            SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
-                            SP.isOptimized(), F);
+                DISubprogram NSP = DI->createFunction(
+                        SP.getContext(), SP.getName(), SP.getLinkageName(),
+                        DI->createFile(SP.getFilename(), SP.getDirectory()),
+                        SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
+                        SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
+                        SP.isOptimized(), F);
 #endif
 
 #if LLVM_VERSION <= 35
                     return NSP;
 #else
-                    return MetadataAsValue::get(dest->getContext(), NSP);
+                return MetadataAsValue::get(dest->getContext(), NSP);
 #endif
                 }
                 /* fallthrough */

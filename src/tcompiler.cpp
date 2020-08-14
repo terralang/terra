@@ -2473,10 +2473,12 @@ struct FunctionEmitter {
             auto TA = DB->getOrCreateArray(ArrayRef<Value *>());
 #endif
 
-#if LLVM_VERSION == 80
-            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
-                                    file, lineno, DB->createSubroutineType(TA), 0,
-                                    llvm::DINode::FlagZero, true);
+#if LLVM_VERSION >= 80
+            SP = DB->createFunction(
+                    CU, fstate->func->getName(), fstate->func->getName(), file, lineno,
+                    DB->createSubroutineType(TA), 0, llvm::DINode::FlagZero,
+                    llvm::DISubprogram::DISPFlags::SPFlagOptimized |
+                            llvm::DISubprogram::DISPFlags::SPFlagDefinition);
             fstate->func->setSubprogram(SP);
 #elif LLVM_VERSION >= 40
             SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
@@ -2497,7 +2499,7 @@ struct FunctionEmitter {
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
                 M->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 1);
-                
+
 #ifdef _WIN32
                 M->addModuleFlag(llvm::Module::Warning, "CodeView", 1);
                 M->addModuleFlag(llvm::Module::Warning, "CodeViewGHash", 1);
