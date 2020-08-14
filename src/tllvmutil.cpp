@@ -246,8 +246,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 newfn = Function::Create(fn->getFunctionType(), fn->getLinkage(),
                                          fn->getName(), dest);
                 newfn->copyAttributesFrom(fn);
-                newfn->setComdat(
-                        fn->getComdat());  // copyAttributesFrom does not copy comdats
+                // copyAttributesFrom does not copy comdats
+                newfn->setComdat(fn->getComdat());
             }
             if (!fn->isDeclaration() && newfn->isDeclaration() && copyGlobal(fn, data)) {
                 for (Function::arg_iterator II = newfn->arg_begin(), I = fn->arg_begin(),
@@ -259,6 +259,29 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst *, 8> Returns;
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+#if LLVM_VERSION >= 37
+                DISubprogram *SP = fn->getSubprogram();
+
+                Function *F = cast<Function>(MapValue(fn, VMap, RF_None, NULL, this));
+
+                if (SP) {
+                    F->setSubprogram(DI->createFunction(
+#if LLVM_VERSION >= 40
+                            SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
+#else
+                            SP->getScope(), SP->getName(), SP->getLinkageName(),
+#endif
+                            DI->createFile(SP->getFilename(), SP->getDirectory()),
+                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
+                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
+                            SP->isOptimized(), SP->getTemplateParams(),
+#if LLVM_VERSION >= 40
+                            SP->getDeclaration(), SP->getThrownTypes()));
+#else
+                            SP->getDeclaration()));
+#endif
+                }
+#endif
             } else {
                 newfn->setLinkage(GlobalValue::ExternalLinkage);
             }
@@ -271,6 +294,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                         GV->getLinkage(), NULL, GV->getName(), NULL,
                         GlobalVariable::NotThreadLocal, GV->getType()->getAddressSpace());
                 newGV->copyAttributesFrom(GV);
+                // copyAttributesFrom does not copy comdats
+                newGV->setComdat(GV->getComdat());
                 if (!GV->isDeclaration()) {
                     if (!copyGlobal(GV, data)) {
                         newGV->setLinkage(GlobalValue::ExternalLinkage);
@@ -303,9 +328,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
         }
 
-#if LLVM_VERSION >= 37
+#if LLVM_VERSION >= 40
         NCU = NULL;
-
         // for (DICompileUnit *CU : src->debug_compile_units()) {
         if (src->debug_compile_units_begin() != src->debug_compile_units_end()) {
             DICompileUnit *CU = *src->debug_compile_units_begin();
@@ -318,8 +342,22 @@ struct CopyConnectedComponent : public ValueMaterializer {
                         CU->isOptimized(), CU->getFlags(), CU->getRuntimeVersion(),
                         CU->getSplitDebugFilename(), CU->getEmissionKind(),
                         CU->getDWOId(), CU->getSplitDebugInlining(),
+
+#if LLVM_VERSION >= 60
                         CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
+#else
+                        CU->getDebugInfoForProfiling());
+#endif
             }
+        }
+#elif LLVM_VERSION >= 37
+        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+            DI = new DIBuilder(*dest);
+            DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
+            NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
+                                        CU->getDirectory(), CU->getProducer(),
+                                        CU->isOptimized(), CU->getFlags(),
+                                        CU->getRuntimeVersion());
         }
 #else
         if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
@@ -358,7 +396,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #endif
 
 #if LLVM_VERSION >= 37
-                    //DISubprogram *NSP = SP;
+#if LLVM_VERSION >= 40
+                    // DISubprogram *NSP = SP;
                     DISubprogram *NSP = DI->createFunction(
                             SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
                             DI->createFile(SP->getFilename(), SP->getDirectory()),
@@ -366,13 +405,22 @@ struct CopyConnectedComponent : public ValueMaterializer {
                             SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
                             SP->isOptimized(), SP->getTemplateParams(),
                             SP->getDeclaration(), SP->getThrownTypes());
+#else
+                    DISubprogram *NSP = DI->createFunction(
+                            SP->getScope(), SP->getName(), SP->getLinkageName(),
+                            DI->createFile(SP->getFilename(), SP->getDirectory()),
+                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
+                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
+                            SP->isOptimized(), SP->getTemplateParams(),
+                            SP->getDeclaration());
+#endif
 
                     Function *newfn = dest->getFunction(SP->getName());
                     if (!newfn) newfn = dest->getFunction(SP->getLinkageName());
                     if (newfn) {
                         newfn->setSubprogram(NSP);
                     }
-                    
+
 #else
                     DISubprogram NSP = DI->createFunction(
                             SP.getContext(), SP.getName(), SP.getLinkageName(),

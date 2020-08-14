@@ -13,8 +13,7 @@
 #include <ucontext.h>
 #include <unistd.h>
 #else
-#define NOMINMAX
-#include <Windows.h>
+#include "twindows.h"
 #include <imagehlp.h>
 #include <intrin.h>
 #endif

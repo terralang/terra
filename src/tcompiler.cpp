@@ -11,16 +11,6 @@ extern "C" {
 #include <stdio.h>
 #include <inttypes.h>
 
-#ifdef _WIN32
-#include <io.h>
-#include <time.h>
-#include <Windows.h>
-#undef interface
-#else
-#include <unistd.h>
-#include <sys/time.h>
-#endif
-
 #include <cmath>
 #include <sstream>
 #include "llvmheaders.h"
@@ -40,6 +30,16 @@ extern "C" {
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 #include "tllvmutil.h"
+
+#ifdef _WIN32
+#include <io.h>
+#include <time.h>
+#include "twindows.h"
+#undef interface
+#else
+#include <unistd.h>
+#include <sys/time.h>
+#endif
 
 using namespace llvm;
 
@@ -2455,9 +2455,13 @@ struct FunctionEmitter {
             DB = new DIBuilder(*M);
 
             DIFileP file = createDebugInfoForFile(filename);
-#if LLVM_VERSION >= 37
-            DICompileUnit *CU =
-                    DB->createCompileUnit(dwarf::DW_LANG_C, file, "terra", true, "", 0);
+#if LLVM_VERSION >= 40
+            DICompileUnit *CU = DB->createCompileUnit(
+                    dwarf::DW_LANG_C89, DB->createFile("compilationunit", "."), "terra",
+                    true, "", 0);
+#elif LLVM_VERSION >= 37
+            DICompileUnit *CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
+                                                      true, "", 0);
 #else
             DICompileUnit CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
                                                      true, "", 0);
@@ -2474,10 +2478,15 @@ struct FunctionEmitter {
                                     file, lineno, DB->createSubroutineType(TA), 0,
                                     llvm::DINode::FlagZero, true);
             fstate->func->setSubprogram(SP);
-#elif LLVM_VERSION >= 37
+#elif LLVM_VERSION >= 40
             SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
                                     file, lineno, DB->createSubroutineType(TA), false,
                                     true, 0, llvm::DINode::FlagZero, true);
+            fstate->func->setSubprogram(SP);
+#elif LLVM_VERSION >= 37
+            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
+                                    file, lineno, DB->createSubroutineType(TA), false,
+                                    true, 0, 0, true);
             fstate->func->setSubprogram(SP);
 #else
             SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
@@ -2488,7 +2497,7 @@ struct FunctionEmitter {
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
                 M->addModuleFlag(llvm::Module::Warning, "Debug Info Version", 1);
-
+                
 #ifdef _WIN32
                 M->addModuleFlag(llvm::Module::Warning, "CodeView", 1);
                 M->addModuleFlag(llvm::Module::Warning, "CodeViewGHash", 1);
@@ -2501,6 +2510,7 @@ struct FunctionEmitter {
         DEBUG_ONLY(T) {
             DB->finalize();
             delete DB;
+            DB = nullptr;
         }
     }
     void setDebugPoint(Obj *obj) {
@@ -2620,20 +2630,29 @@ struct FunctionEmitter {
     }
     BasicBlock *copyBlock(BasicBlock *BB) {
         ValueToValueMapTy VMap;
+#if LLVM_VERSION < 50
+        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "defer", fstate->func);
+#else
         DebugInfoFinder DIFinder;
         BasicBlock *NewBB =
                 CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr, &DIFinder);
+#endif
         VMap[BB] = NewBB;
+
+#if LLVM_VERSION >= 40
         BasicBlock::iterator oldII = BB->begin();
+#endif
 
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE;
              ++II) {
+#if LLVM_VERSION >= 40
             // HACK: LLVM is not happy about terra copying single isolated BasicBlocks,
             // and will blow up when copying metadata. This removes the metadata before
             // remapping, then copies it afterwards, which isn't fully correct, but works.
             llvm::SmallVector<std::pair<unsigned int, llvm::MDNode *>, 4> MDs;
             II->getAllMetadata(MDs);
             for (auto md : MDs) II->setMetadata(md.first, nullptr);
+#endif
 
             RemapInstruction(&*II, VMap,
 #if LLVM_VERSION < 39
@@ -2643,8 +2662,10 @@ struct FunctionEmitter {
 #endif
             );
 
+#if LLVM_VERSION >= 40
             II->copyMetadata(*oldII);
             ++oldII;
+#endif
         }
         return NewBB;
     }
