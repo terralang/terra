@@ -41,8 +41,9 @@ static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo 
         if (lineno) *lineno = LineStarts[i].Loc.getLine();
 #if LLVM_VERSION >= 37
         // getFilename was just converting the 0th operand to a string
-        if (file && LineStarts[i].Loc.getScope()) { 
-          if (auto *s = llvm::cast_or_null<MDString>(LineStarts[i].Loc.getScope()->getOperand(0)))
+        if (file && LineStarts[i].Loc.getScope()) {
+            if (auto *s = llvm::cast_or_null<MDString>(
+                        LineStarts[i].Loc.getScope()->getOperand(0)))
                 *file = s->getString();
             else
                 *file = StringRef();

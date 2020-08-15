@@ -285,8 +285,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #else
                             SP->getDeclaration()));
 #endif
-#endif
                 }
+#endif
             } else {
                 newfn->setLinkage(GlobalValue::ExternalLinkage);
             }
@@ -319,7 +319,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #if LLVM_VERSION >= 37
     DICompileUnit *NCU;
 #else
-DICompileUnit NCU;
+    DICompileUnit NCU;
 #endif
     void CopyDebugMetadata() {
         if (NamedMDNode *NMD = src->getNamedMetadata("llvm.module.flags")) {
@@ -328,7 +328,7 @@ DICompileUnit NCU;
 #if LLVM_VERSION <= 35
                 New->addOperand(MapValue(NMD->getOperand(i), VMap));
 #else
-            New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
+                New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
 #endif
             }
         }
@@ -358,47 +358,49 @@ DICompileUnit NCU;
             }
         }
 #elif LLVM_VERSION >= 37
-    if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-        DI = new DIBuilder(*dest);
-        DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
-        NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
-                                    CU->getDirectory(), CU->getProducer(),
-                                    CU->isOptimized(), CU->getFlags(),
-                                    CU->getRuntimeVersion());
-    }
+        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+            DI = new DIBuilder(*dest);
+            DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
+            NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
+                                        CU->getDirectory(), CU->getProducer(),
+                                        CU->isOptimized(), CU->getFlags(),
+                                        CU->getRuntimeVersion());
+        }
 #else
-    if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-        DI = new DIBuilder(*dest);
-        DICompileUnit CU(CUN->getOperand(0));
-        NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(), CU.getDirectory(),
-                                    CU.getProducer(), CU.isOptimized(), CU.getFlags(),
-                                    CU.getRunTimeVersion());
-    }
+        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
+            DI = new DIBuilder(*dest);
+            DICompileUnit CU(CUN->getOperand(0));
+            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(),
+                                        CU.getDirectory(), CU.getProducer(),
+                                        CU.isOptimized(), CU.getFlags(),
+                                        CU.getRunTimeVersion());
+        }
 #endif
     }
+
     Value *materializeValueForMetadata(Value *V) {
 #if LLVM_VERSION <= 35
         if (MDNode *MD = dyn_cast<MDNode>(V)) {
             DISubprogram SP(MD);
             if (DI != NULL && SP.isSubprogram()) {
 #else
-    if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
-        Metadata *MDraw = MDV->getMetadata();
-        MDNode *MD = dyn_cast<MDNode>(MDraw);
+        if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
+            Metadata *MDraw = MDV->getMetadata();
+            MDNode *MD = dyn_cast<MDNode>(MDraw);
 #if LLVM_VERSION >= 37
-        DISubprogram *SP = getDISubprogram(MD);
-        if (MD != NULL && DI != NULL && SP != NULL) {
+            DISubprogram *SP = getDISubprogram(MD);
+            if (MD != NULL && DI != NULL && SP != NULL) {
 #else
-        DISubprogram SP(MD);
-        if (MD != NULL && DI != NULL && SP.isSubprogram()) {
+            DISubprogram SP(MD);
+            if (MD != NULL && DI != NULL && SP.isSubprogram()) {
 #endif
 #endif
 
 #if LLVM_VERSION >= 37
                 {
 #else
-            if (Function *OF = SP.getFunction()) {
-                Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
+                if (Function *OF = SP.getFunction()) {
+                    Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
 #endif
 
 #if LLVM_VERSION >= 37
@@ -437,18 +439,18 @@ DICompileUnit NCU;
                     }
 
 #else
-                DISubprogram NSP = DI->createFunction(
-                        SP.getContext(), SP.getName(), SP.getLinkageName(),
-                        DI->createFile(SP.getFilename(), SP.getDirectory()),
-                        SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
-                        SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
-                        SP.isOptimized(), F);
+                    DISubprogram NSP = DI->createFunction(
+                            SP.getContext(), SP.getName(), SP.getLinkageName(),
+                            DI->createFile(SP.getFilename(), SP.getDirectory()),
+                            SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
+                            SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
+                            SP.isOptimized(), F);
 #endif
 
 #if LLVM_VERSION <= 35
                     return NSP;
 #else
-                return MetadataAsValue::get(dest->getContext(), NSP);
+                    return MetadataAsValue::get(dest->getContext(), NSP);
 #endif
                 }
                 /* fallthrough */
