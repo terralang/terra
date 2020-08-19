@@ -10,8 +10,7 @@
 #include <io.h>
 #include "ext/getopt.h"
 #define isatty(x) _isatty(x)
-#define NOMINMAX
-#include <Windows.h>
+#include "twindows.h"
 #else
 #include <signal.h>
 #include <getopt.h>

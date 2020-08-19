@@ -1187,7 +1187,7 @@ int include_c(lua_State *L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
 
-        dofile(T, TT, code, &args[0], &args[args.size()], &result);
+        dofile(T, TT, code, &args.data()[0], &args.data()[args.size()], &result);
     }
 
     lobj_removereftable(L, ref_table);

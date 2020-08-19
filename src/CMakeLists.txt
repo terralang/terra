@@ -134,7 +134,7 @@ if(WIN32)
       /nologo
       /EHsc   # extern "C" functions don't throw exceptions
       /w      # disable warnings
-      /MD     # use thread-safe version of MSVCRT.lib
+      #/MD    # Don't do this, cmake chooses the correct version automatically
       /Zi     # debug info
   )
   target_compile_definitions(TerraObjectFiles

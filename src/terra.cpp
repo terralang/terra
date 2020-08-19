@@ -20,9 +20,8 @@
 #include <libgen.h>
 #include <unistd.h>
 #else
-#define NOMINMAX
+#include "twindows.h"
 #include <string>
-#include <Windows.h>
 #include <Shlwapi.h>
 #include <comdef.h>
 #include "MSVCSetupAPI.h"
