@@ -386,6 +386,11 @@ foreach(TERRA_TEST ${TERRA_TESTS})
     COMMAND $<TARGET_FILE:TerraExecutable> ${TERRA_TEST}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
   )
+  # again, with debug symbols
+  add_test(NAME "${TERRA_TEST}-debug"
+    COMMAND $<TARGET_FILE:TerraExecutable> -mg ${TERRA_TEST}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
+  )
 endforeach()
 foreach(TERRA_TEST ${TERRA_TESTS_INSTALL})
   get_filename_component(TERRA_TEST_DIR ${TERRA_TEST} DIRECTORY)
