@@ -32,15 +32,10 @@ for line in io.popen(lscmd):lines() do
     end
     local file = line:match("^([^/]*%.t)$") or line:match("^(fails/[^/]*%.t)$")
     if file then
-        local pass = true
-        for test_debug = 0, 0 do
-            debug_flag = test_debug == 1 and "-mg" or ""
-            print(debug_flag .. file .. ":")
-            local execstring = getcommand(file) .. " " .. file
-            local result = os.execute(execstring)
-            pass = pass and (type(result) == "number" and result == 0 or result == true)
-        end
-        if pass then
+        print(file .. ":")
+        local execstring = getcommand(file) .. " " .. file
+        local result = os.execute(execstring)
+        if type(result) == "number" and result == 0 or result == true then
             table.insert(passed,file)
         else
             --error("fail")
