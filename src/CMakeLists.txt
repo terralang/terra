@@ -388,7 +388,7 @@ foreach(TERRA_TEST ${TERRA_TESTS})
   )
   # again, with debug symbols
   add_test(NAME "${TERRA_TEST}-debug"
-    COMMAND $<TARGET_FILE:TerraExecutable> -mg ${TERRA_TEST}
+    COMMAND $<TARGET_FILE:TerraExecutable> -g ${TERRA_TEST}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
   )
 endforeach()

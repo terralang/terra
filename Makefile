@@ -194,7 +194,7 @@ BIN2C = build/bin2c
 all:	$(EXECUTABLE) $(DYNLIBRARY)
 
 test:	all
-	(cd tests; ./run)
+	(cd tests; ./run && ./run -g)
 
 variants:	$(LIBRARY_VARIANTS)
 
