@@ -6,7 +6,13 @@ end
 
 local ffi =  require 'ffi'
 
-local name = (ffi.os == "Windows" and "foo.dll" or "foo.so")
+-- We can run this test concurrently, make sure we don't clobber the other test.
+local suffix = ""
+if 0 ~= terralib.isdebug then
+  suffix = "-debug"
+end
+
+local name = (ffi.os == "Windows" and "foo" .. suffix .. ".dll" or "foo" .. suffix .. ".so")
 
 local args = {}
 
