@@ -52,7 +52,7 @@ void registerhandler() {
 LONG WINAPI windowsheapcorruptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == STATUS_HEAP_CORRUPTION) {
         // The traceback is often useless, so make it clear what happened
-        printf("Heap corruption detected!\n");  
+        printf("Heap corruption detected!\n");
         terratraceback(ExceptionInfo->ContextRecord);
         fflush(stdout);
         TerminateProcess(GetCurrentProcess(),
