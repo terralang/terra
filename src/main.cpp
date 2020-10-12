@@ -49,11 +49,26 @@ void registerhandler() {
     sigaction(SIGILL, &sa, NULL);
 }
 #else
+LONG WINAPI windowsheapcorruptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
+    if (ExceptionInfo->ExceptionRecord->ExceptionCode == STATUS_HEAP_CORRUPTION) {
+        // The traceback is often useless, so make it clear what happened
+        printf("Heap corruption detected!\n");
+        terratraceback(ExceptionInfo->ContextRecord);
+        fflush(stdout);
+        TerminateProcess(GetCurrentProcess(),
+                         ExceptionInfo->ExceptionRecord->ExceptionCode);
+    }
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 LONG WINAPI windowsexceptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
     terratraceback(ExceptionInfo->ContextRecord);
     return EXCEPTION_EXECUTE_HANDLER;
 }
-void registerhandler() { SetUnhandledExceptionFilter(windowsexceptionhandler); }
+void registerhandler() {
+    // https://peteronprogramming.wordpress.com/2017/07/30/crashes-you-cant-handle-easily-3-status_heap_corruption-on-windows/
+    AddVectoredExceptionHandler(1, windowsheapcorruptionhandler);
+    SetUnhandledExceptionFilter(windowsexceptionhandler);
+}
 #endif
 
 void setupcrashsignal(lua_State *L) {
