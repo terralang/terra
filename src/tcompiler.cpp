@@ -353,11 +353,19 @@ int terra_inittarget(lua_State *L) {
     std::string err;
 
     llvm::Triple llvm_triple = llvm::Triple(TT->Triple);
+    /*
     printf("DEBUG - tcompiler.cpp: reading in Triple:\n\t\tArch Name: %s\n\t\tVendor: %s\n\t\tOS: %s\n\t\tEnvironment: %s\n", llvm_triple.getArchName().begin(), llvm_triple.getVendorName().begin(), llvm_triple.getOSName().begin(), llvm_triple.getEnvironmentName().begin());
 
       printf("DEBUG - prefix: %s\n", llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin());
       printf("DEBUG - name: %s\n", llvm::Triple::getArchTypeName(llvm_triple.getArch()).begin());
-    if (strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin(), "spir")) {
+    */
+    bool isSpir;
+#if LLVM_VERSION > 38
+    isSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin(), "spir");
+#else
+  isSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()), "spir");
+#endif
+    if (
         printf("DEBUG - tcompiler.cpp: using LLVM for non-spir triple\n");
 	const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
 	if (!TheTarget) {
@@ -428,11 +436,16 @@ int terra_initcompilationunit(lua_State *L) {
 
     CU->M = new Module("terra", *TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
-#if LLVM_VERSION >= 38
+#if LLVM_VERSION > 38
     if (TT->tm)
       CU->M->setDataLayout(TT->tm->createDataLayout());
     else
       CU->M->setDataLayout(TT->ti->getDataLayout());
+#elif LLVM_VERSION == 38
+    if (TT->tm)
+      CU->M->setDataLayout(TT->tm->createDataLayout());
+    else
+      CU->M->setDataLayout(TT->ti->getDataLayoutString());
 #elif LLVM_VERSION == 37
     if (TT->tm)
       CU->M->setDataLayout(*TT->tm->getDataLayout());
@@ -442,7 +455,7 @@ int terra_initcompilationunit(lua_State *L) {
     if (TT->tm)
       CU->M->setDataLayout(TT->tm->getDataLayout());
     else
-      CU->M->setDataLayout(TT->ti->getDataLayout());
+      CU->M->setDataLayout(TT->ti->getDataLayoutString());
 #endif
 
     CU->fpm = new FunctionPassManagerT(CU->M);
