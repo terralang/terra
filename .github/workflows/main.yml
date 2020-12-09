@@ -15,7 +15,17 @@ jobs:
     runs-on: ubuntu-16.04
     strategy:
       matrix:
-        llvm: ['3.5', '3.8', '6.0', '8', '9']
+        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9']
+        cmake: ['0', '1']
+        exclude:
+          - llvm: '3.5'
+          - cmake: '1'
+        exclude:
+          - llvm: '5.0'
+          - cmake: '0'
+        exclude:
+          - llvm: '7'
+          - cmake: '0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
