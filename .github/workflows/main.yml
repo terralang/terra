@@ -15,85 +15,85 @@ jobs:
     runs-on: ubuntu-16.04
     strategy:
       matrix:
-        llvm: [3.5, 3.8, 6.0, 8, 9]
+        llvm: ['3.5', '3.8', '6.0', '8', '9']
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
           CLANG: clang-${{ matrix.llvm }}
-  gcc_cmake:
-    name: Ubuntu 16.04 GCC CMake
-    runs-on: ubuntu-16.04
-    strategy:
-      matrix:
-        llvm: [3.8, 5.0, 6.0, 7]
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: 1
-  gcc_cmake_cuda:
-    name: Ubuntu 16.04 GCC CMake CUDA
-    runs-on: ubuntu-16.04
-    strategy:
-      matrix:
-        llvm: [6.0, 9]
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: 1
-          USE_CUDA: 1
-  gcc_cmake_no_static:
-    name: Ubuntu 16.04 GCC CMake STATIC=0
-    runs-on: ubuntu-16.04
-    strategy:
-      matrix:
-        llvm: [6.0, 9]
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: 1
-          STATIC_LLVM: 0
-          STATIC_LUAJIT: 0
-  llvm60_cmake_no_slib_include:
-    name: Ubuntu 16.04 LLVM 6.0 GCC CMake SLIB_INCLUDE=0
-    runs-on: ubuntu-16.04
-    strategy:
-      matrix:
-        llvm: [6.0, 9]
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: 1
-          SLIB_INCLUDE_LLVM: 0
-          SLIB_INCLUDE_LUAJIT: 0
-  llvm60_cmake_luajit:
-    name: Ubuntu 16.04 LLVM 6.0 GCC CMake Moonjit
-    runs-on: ubuntu-16.04
-    strategy:
-      matrix:
-        llvm: [9]
-        luajit: [moonjit, luajit]
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: 1
-          TERRA_LUA: ${{ matrix.luajit }}
+  # gcc_cmake:
+  #   name: Ubuntu 16.04 GCC CMake
+  #   runs-on: ubuntu-16.04
+  #   strategy:
+  #     matrix:
+  #       llvm: ['3.8', '5.0', '6.0', '7']
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - run: ./travis.sh
+  #       env:
+  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+  #         CLANG: clang-${{ matrix.llvm }}
+  #         USE_CMAKE: 1
+  # gcc_cmake_cuda:
+  #   name: Ubuntu 16.04 GCC CMake CUDA
+  #   runs-on: ubuntu-16.04
+  #   strategy:
+  #     matrix:
+  #       llvm: ['6.0', '9']
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - run: ./travis.sh
+  #       env:
+  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+  #         CLANG: clang-${{ matrix.llvm }}
+  #         USE_CMAKE: 1
+  #         USE_CUDA: 1
+  # gcc_cmake_no_static:
+  #   name: Ubuntu 16.04 GCC CMake STATIC=0
+  #   runs-on: ubuntu-16.04
+  #   strategy:
+  #     matrix:
+  #       llvm: ['6.0', '9']
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - run: ./travis.sh
+  #       env:
+  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+  #         CLANG: clang-${{ matrix.llvm }}
+  #         USE_CMAKE: 1
+  #         STATIC_LLVM: 0
+  #         STATIC_LUAJIT: 0
+  # llvm60_cmake_no_slib_include:
+  #   name: Ubuntu 16.04 LLVM 6.0 GCC CMake SLIB_INCLUDE=0
+  #   runs-on: ubuntu-16.04
+  #   strategy:
+  #     matrix:
+  #       llvm: ['6.0', '9']
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - run: ./travis.sh
+  #       env:
+  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+  #         CLANG: clang-${{ matrix.llvm }}
+  #         USE_CMAKE: 1
+  #         SLIB_INCLUDE_LLVM: 0
+  #         SLIB_INCLUDE_LUAJIT: 0
+  # llvm60_cmake_luajit:
+  #   name: Ubuntu 16.04 LLVM 6.0 GCC CMake Moonjit
+  #   runs-on: ubuntu-16.04
+  #   strategy:
+  #     matrix:
+  #       llvm: ['9']
+  #       luajit: [moonjit, luajit]
+  #   steps:
+  #     - uses: actions/checkout@v1
+  #     - run: ./travis.sh
+  #       env:
+  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+  #         CLANG: clang-${{ matrix.llvm }}
+  #         USE_CMAKE: 1
+  #         TERRA_LUA: ${{ matrix.luajit }}
   ubuntu1604:
     name: Docker (Ubuntu 16.04)
     runs-on: ubuntu-latest
