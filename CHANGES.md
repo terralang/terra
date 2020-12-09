@@ -24,7 +24,7 @@ The following changes are included in this release:
 
 ## Deprecated features
 
-  * Deprecated support for all LLVM versions 3.4 and prior
+  * Deprecated support for all LLVM versions 3.7 and prior
   * Deprecated support for Make (Linux, macOS) and NMake (Windows) build systems
 
 ## Changed behaviors

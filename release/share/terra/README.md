@@ -135,9 +135,9 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 
 | Version | CI Coverage | CUDA | Notes |
 | ------- | ----------- | ---- | ----- |
-| 3.5 | :heavy_check_mark: | :heavy_check_mark: | supports debug info |
-| 3.6 | | | |
-| 3.7 | | | |
+| 3.5 | :heavy_check_mark: | :heavy_check_mark: | **deprecated** |
+| 3.6 | | | **deprecated** |
+| 3.7 | | | **deprecated** |
 | 3.8 | :heavy_check_mark: | :heavy_check_mark: | |
 | 3.9 | | | |
 | 5.0 | :heavy_check_mark: | :heavy_check_mark: | |
