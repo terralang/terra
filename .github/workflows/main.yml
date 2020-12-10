@@ -23,9 +23,12 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # macOS: exclude LLVM 5.0, 9 static/slib
+          # macOS: exclude LLVM 5.0, 8 make, 9 static/slib
           - os: 'macos-10.15'
             llvm: '5.0'
+          - os: 'macos-10.15'
+            llvm: '8'
+            cmake: '0'
           - os: 'macos-10.15'
             llvm: '9'
             static: '0'
