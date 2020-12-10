@@ -10,11 +10,12 @@ jobs:
       - run: ./travis.sh
         env:
           CHECK_CLANG_FORMAT: 1
-  gcc:
-    name: Linux
-    runs-on: ubuntu-16.04
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: ['ubuntu-16.04', 'macos-10.15']
         llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -22,6 +23,18 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # macOS: exclude LLVM 3.5, 5.0, 7, 8, 9
+          - os: 'macos-10.15'
+            llvm: '3.5'
+          - os: 'macos-10.15'
+            llvm: '5.0'
+          - os: 'macos-10.15'
+            llvm: '7'
+          - os: 'macos-10.15'
+            llvm: '8'
+          - os: 'macos-10.15'
+            llvm: '9'
+
           # CMake
           - llvm: '3.5'
             cmake: '1'
@@ -125,71 +138,3 @@ jobs:
       - run: ./travis.sh
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
-  macos:
-    name: macOS
-    runs-on: macos-10.15
-    strategy:
-      matrix:
-        llvm: ['3.8', '6.0', '9']
-        cmake: ['0', '1']
-        cuda: ['0', '1']
-        static: ['0', '1']
-        slib: ['0', '1']
-        lua: ['luajit', 'moonjit']
-        exclude:
-          # Make breaks on LLVM 9
-          - llvm: '9'
-            cmake: '0'
-
-          # Static/Slib: require CMake, Slib require Static
-          - cmake: '0'
-            static: '0'
-          - cmake: '0'
-            slib: '0'
-          - static: '0'
-            slib: '1'
-
-          # FIXME: Static breaks with LuaJIT
-          - static: '0'
-            lua: 'luajit'
-
-          # Moonjit: only with CMake
-          - cmake: '0'
-            lua: 'moonjit'
-
-          # CUDA: only most recent LLVM
-          - llvm: '3.8'
-            cuda: '1'
-          - llvm: '6.0'
-            cuda: '1'
-
-          # Static: only most recent LLVM
-          - llvm: '3.8'
-            static: '0'
-          - llvm: '6.0'
-            static: '0'
-
-          # Slib: only most recent LLVM
-          - llvm: '3.8'
-            slib: '0'
-          - llvm: '6.0'
-            slib: '0'
-
-          # Moonjit: only most recent LLVM
-          - llvm: '3.8'
-            lua: 'moonjit'
-          - llvm: '6.0'
-            lua: 'moonjit'
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: ${{ matrix.cmake }}
-          USE_CUDA: ${{ matrix.cuda }}
-          STATIC_LLVM: ${{ matrix.static }}
-          STATIC_LUAJIT: ${{ matrix.static }}
-          SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
-          SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
-          TERRA_LUA: ${{ matrix.lua }}
