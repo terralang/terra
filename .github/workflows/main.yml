@@ -19,13 +19,11 @@ jobs:
         cmake: ['0', '1']
         exclude:
           - llvm: '3.5'
-          - cmake: '1'
-        exclude:
+            cmake: '1'
           - llvm: '5.0'
-          - cmake: '0'
-        exclude:
+            cmake: '0'
           - llvm: '7'
-          - cmake: '0'
+            cmake: '0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
