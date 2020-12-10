@@ -131,12 +131,16 @@ jobs:
     strategy:
       matrix:
         llvm: ['3.8', '6.0', '9']
-        cmake: ['1'] # '0' # FIXME: Make builds fail on Github Actions
+        cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # Make breaks on LLVM 9
+          - llvm: '9'
+            cmake: '0'
+
           # Static/Slib: require CMake, Slib require Static
           - cmake: '0'
             static: '0'
