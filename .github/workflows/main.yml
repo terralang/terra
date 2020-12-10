@@ -11,7 +11,7 @@ jobs:
         env:
           CHECK_CLANG_FORMAT: 1
   gcc:
-    name: Ubuntu 16.04 GCC
+    name: Linux GCC
     runs-on: ubuntu-16.04
     strategy:
       matrix:
@@ -26,10 +26,10 @@ jobs:
           - llvm: '7'
             cmake: '0'
         include:
-          - llvm: '6'
+          - llvm: '6.0'
             cmake: '0'
             cuda: '1'
-          - llvm: '6'
+          - llvm: '6.0'
             cmake: '1'
             cuda: '1'
     steps:
@@ -99,32 +99,19 @@ jobs:
   #         CLANG: clang-${{ matrix.llvm }}
   #         USE_CMAKE: 1
   #         TERRA_LUA: ${{ matrix.luajit }}
-  ubuntu1604:
-    name: Docker (Ubuntu 16.04)
+  docker:
+    name: Docker
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: [ubuntu-16.04, ubuntu-18.04, ubuntu-20.04]
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
-          DOCKER_BUILD: ubuntu-16.04
-  ubuntu1804:
-    name: Docker (Ubuntu 18.04)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          DOCKER_BUILD: ubuntu-18.04
-  ubuntu2004:
-    name: Docker (Ubuntu 20.04)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - run: ./travis.sh
-        env:
-          DOCKER_BUILD: ubuntu-20.04
-  macos1015_llvm6:
-    name: macOS 10.15 LLVM 6
+          DOCKER_BUILD: ${{ matrix.distro }}
+  macos_llvm6:
+    name: macOS LLVM 6
     runs-on: macos-10.15
     steps:
       - uses: actions/checkout@v1
