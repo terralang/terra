@@ -38,6 +38,10 @@ jobs:
           - static: '0'
             slib: '1'
 
+          # FIXME: Static breaks with LuaJIT
+          - static: '0'
+            lua: 'luajit'
+
           # CUDA: only most recent LLVM
           - llvm: '3.5'
             cuda: '1'
@@ -136,6 +140,10 @@ jobs:
             slib: '0'
           - static: '0'
             slib: '1'
+
+          # FIXME: Static breaks with LuaJIT
+          - static: '0'
+            lua: 'luajit'
 
           # CUDA: only most recent LLVM
           - llvm: '3.8'
