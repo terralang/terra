@@ -17,21 +17,67 @@ jobs:
       matrix:
         llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9']
         cmake: ['0', '1']
-        cuda: ['0']
+        cuda: ['0', '1']
+        static: ['0', '1']
+        slib: ['0', '1']
         exclude:
+          # CMake
           - llvm: '3.5'
             cmake: '1'
           - llvm: '5.0'
             cmake: '0'
           - llvm: '7'
             cmake: '0'
-        include:
-          - llvm: '6.0'
-            cmake: '0'
+
+          # Static/Slib: require CMake, Slib require Static
+          - cmake: '0'
+            static: '0'
+          - cmake: '0'
+            slib: '0'
+          - static: '0'
+            slib: '1'
+
+          # CUDA: only most recent LLVM
+          - llvm: '3.5'
+            cuda: '1'
+          - llvm: '3.8'
+            cuda: '1'
+          - llvm: '5.0'
             cuda: '1'
           - llvm: '6.0'
-            cmake: '1'
             cuda: '1'
+          - llvm: '7'
+            cuda: '1'
+          - llvm: '8'
+            cuda: '1'
+
+          # Static: only most recent LLVM
+          - llvm: '3.5'
+            static: '0'
+          - llvm: '3.8'
+            static: '0'
+          - llvm: '5.0'
+            static: '0'
+          - llvm: '6.0'
+            static: '0'
+          - llvm: '7'
+            static: '0'
+          - llvm: '8'
+            static: '0'
+
+          # Slib: only most recent LLVM
+          - llvm: '3.5'
+            slib: '0'
+          - llvm: '3.8'
+            slib: '0'
+          - llvm: '5.0'
+            slib: '0'
+          - llvm: '6.0'
+            slib: '0'
+          - llvm: '7'
+            slib: '0'
+          - llvm: '8'
+            slib: '0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -40,50 +86,10 @@ jobs:
           CLANG: clang-${{ matrix.llvm }}
           USE_CMAKE: ${{ matrix.cmake }}
           USE_CUDA: ${{ matrix.cuda }}
-  # gcc_cmake_cuda:
-  #   name: Ubuntu 16.04 GCC CMake CUDA
-  #   runs-on: ubuntu-16.04
-  #   strategy:
-  #     matrix:
-  #       llvm: ['6.0', '9']
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - run: ./travis.sh
-  #       env:
-  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-  #         CLANG: clang-${{ matrix.llvm }}
-  #         USE_CMAKE: 1
-  #         USE_CUDA: 1
-  # gcc_cmake_no_static:
-  #   name: Ubuntu 16.04 GCC CMake STATIC=0
-  #   runs-on: ubuntu-16.04
-  #   strategy:
-  #     matrix:
-  #       llvm: ['6.0', '9']
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - run: ./travis.sh
-  #       env:
-  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-  #         CLANG: clang-${{ matrix.llvm }}
-  #         USE_CMAKE: 1
-  #         STATIC_LLVM: 0
-  #         STATIC_LUAJIT: 0
-  # llvm60_cmake_no_slib_include:
-  #   name: Ubuntu 16.04 LLVM 6.0 GCC CMake SLIB_INCLUDE=0
-  #   runs-on: ubuntu-16.04
-  #   strategy:
-  #     matrix:
-  #       llvm: ['6.0', '9']
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - run: ./travis.sh
-  #       env:
-  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-  #         CLANG: clang-${{ matrix.llvm }}
-  #         USE_CMAKE: 1
-  #         SLIB_INCLUDE_LLVM: 0
-  #         SLIB_INCLUDE_LUAJIT: 0
+          STATIC_LLVM: ${{ matrix.static }}
+          STATIC_LUAJIT: ${{ matrix.static }}
+          SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
+          SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
   # llvm60_cmake_luajit:
   #   name: Ubuntu 16.04 LLVM 6.0 GCC CMake Moonjit
   #   runs-on: ubuntu-16.04
