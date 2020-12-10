@@ -20,9 +20,7 @@ jobs:
         exclude:
           - llvm: '3.5'
             cmake: '1'
-          - llvm: '5.0'
-            cmake: '0'
-          - llvm: '7'
+          - llvm: ['5.0', '7']
             cmake: '0'
     steps:
       - uses: actions/checkout@v1
@@ -31,19 +29,6 @@ jobs:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
           CLANG: clang-${{ matrix.llvm }}
           USE_CMAKE: ${{ matrix.cmake }}
-  # gcc_cmake:
-  #   name: Ubuntu 16.04 GCC CMake
-  #   runs-on: ubuntu-16.04
-  #   strategy:
-  #     matrix:
-  #       llvm: ['3.8', '5.0', '6.0', '7']
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - run: ./travis.sh
-  #       env:
-  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-  #         CLANG: clang-${{ matrix.llvm }}
-  #         USE_CMAKE: 1
   # gcc_cmake_cuda:
   #   name: Ubuntu 16.04 GCC CMake CUDA
   #   runs-on: ubuntu-16.04
