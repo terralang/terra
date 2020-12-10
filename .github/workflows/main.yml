@@ -23,11 +23,14 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # macOS: exclude LLVM 5.0, 8 make, 9 static/slib
+          # macOS: exclude LLVM 5.0, 8 make, 9 make/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
           - os: 'macos-10.15'
             llvm: '8'
+            cmake: '0'
+          - os: 'macos-10.15'
+            llvm: '9'
             cmake: '0'
           - os: 'macos-10.15'
             llvm: '9'
@@ -44,7 +47,7 @@ jobs:
           - llvm: '7'
             cmake: '0'
 
-          # Static/Slib: require CMake, Slib require Static
+          # no-static/no-slib require CMake, slib requires static
           - cmake: '0'
             static: '0'
           - cmake: '0'
@@ -52,11 +55,11 @@ jobs:
           - static: '0'
             slib: '1'
 
-          # FIXME: Static breaks with LuaJIT
+          # FIXME: no-static breaks with LuaJIT
           - static: '0'
             lua: 'luajit'
 
-          # Moonjit: only with CMake
+          # Moonjit requires CMake
           - cmake: '0'
             lua: 'moonjit'
 
@@ -74,7 +77,7 @@ jobs:
           - llvm: '8'
             cuda: '1'
 
-          # Static: only most recent LLVM
+          # no-static: only most recent LLVM
           - llvm: '3.5'
             static: '0'
           - llvm: '3.8'
@@ -88,7 +91,7 @@ jobs:
           - llvm: '8'
             static: '0'
 
-          # Slib: only most recent LLVM
+          # no-slib: only most recent LLVM
           - llvm: '3.5'
             slib: '0'
           - llvm: '3.8'
