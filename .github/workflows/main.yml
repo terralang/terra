@@ -42,6 +42,10 @@ jobs:
           - static: '0'
             lua: 'luajit'
 
+          # Moonjit: only with CMake
+          - cmake: '0'
+            lua: 'moonjit'
+
           # CUDA: only most recent LLVM
           - llvm: '3.5'
             cuda: '1'
@@ -144,6 +148,10 @@ jobs:
           # FIXME: Static breaks with LuaJIT
           - static: '0'
             lua: 'luajit'
+
+          # Moonjit: only with CMake
+          - cmake: '0'
+            lua: 'moonjit'
 
           # CUDA: only most recent LLVM
           - llvm: '3.8'
