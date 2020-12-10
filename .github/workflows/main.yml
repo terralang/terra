@@ -20,6 +20,7 @@ jobs:
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
+        lua: ['luajit', 'moonjit']
         exclude:
           # CMake
           - llvm: '3.5'
@@ -78,6 +79,20 @@ jobs:
             slib: '0'
           - llvm: '8'
             slib: '0'
+
+          # Moonjit: only most recent LLVM
+          - llvm: '3.5'
+            lua: 'moonjit'
+          - llvm: '3.8'
+            lua: 'moonjit'
+          - llvm: '5.0'
+            lua: 'moonjit'
+          - llvm: '6.0'
+            lua: 'moonjit'
+          - llvm: '7'
+            lua: 'moonjit'
+          - llvm: '8'
+            lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -90,21 +105,7 @@ jobs:
           STATIC_LUAJIT: ${{ matrix.static }}
           SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
           SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
-  # llvm60_cmake_luajit:
-  #   name: Ubuntu 16.04 LLVM 6.0 GCC CMake Moonjit
-  #   runs-on: ubuntu-16.04
-  #   strategy:
-  #     matrix:
-  #       llvm: ['9']
-  #       luajit: [moonjit, luajit]
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #     - run: ./travis.sh
-  #       env:
-  #         LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-  #         CLANG: clang-${{ matrix.llvm }}
-  #         USE_CMAKE: 1
-  #         TERRA_LUA: ${{ matrix.luajit }}
+          TERRA_LUA: ${{ matrix.lua }}
   docker:
     name: Docker
     runs-on: ubuntu-latest
