@@ -359,13 +359,13 @@ int terra_inittarget(lua_State *L) {
       printf("DEBUG - prefix: %s\n", llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin());
       printf("DEBUG - name: %s\n", llvm::Triple::getArchTypeName(llvm_triple.getArch()).begin());
     */
-    bool isSpir;
+    bool notSpir;
 #if LLVM_VERSION > 38
-    isSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin(), "spir");
+    notSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin(), "spir");
 #else
-  isSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()), "spir");
+    notSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()), "spir");
 #endif
-    if (
+  if (notSpir) {
         printf("DEBUG - tcompiler.cpp: using LLVM for non-spir triple\n");
 	const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
 	if (!TheTarget) {
