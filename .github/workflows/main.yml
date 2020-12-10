@@ -30,6 +30,7 @@ jobs:
         env:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
           CLANG: clang-${{ matrix.llvm }}
+          USE_CMAKE: ${{ matrix.cmake }}
   # gcc_cmake:
   #   name: Ubuntu 16.04 GCC CMake
   #   runs-on: ubuntu-16.04
