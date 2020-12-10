@@ -182,8 +182,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     # default. This causes LuaJIT to not build on Mojave and later
     # (math.h not found) if the header package is not installed.
     CMAKE_FLAGS+=(
-      -DCMAKE_C_COMPILER=$(which $CC)
-      -DCMAKE_CXX_COMPILER=$(which $CXX)
+      -DCMAKE_C_COMPILER=$(which ${CC:-clang})
+      -DCMAKE_CXX_COMPILER=$(which ${CXX:-clang++})
     )
   fi
 
