@@ -4,7 +4,7 @@ Getting Started with Terra
 _Zach DeVito_ (zdevito at cs dot stanford dot edu)
 
 [terralang.org](http://terralang.org)
-[![Build Status](https://travis-ci.org/terralang/terra.svg?branch=develop)](https://travis-ci.org/terralang/terra)
+[![Build Status](https://github.com/terralang/terra/workflows/CI/badge.svg)](https://github.com/terralang/terra/actions)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/terralang/terra?branch=master&svg=true)](https://ci.appveyor.com/project/terralang/terra/branch/master)
 
 Terra is a new low-level system programming language that is designed to interoperate seamlessly with the Lua programming language. It is also backwards compatible with (and embeddable in) existing C code. Like C, Terra is a monomorphic, statically-typed, compiled language with manual memory management. But unlike C, it is designed to make interaction with Lua easy. Terra code shares Lua's syntax and control-flow constructs. It is easy to call Lua functions from Terra (or Terra functions from Lua).
