@@ -11,7 +11,7 @@ end
 
 local function isinteger(x) return math.floor(x) == x end
 
-llvmprefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
+llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
 
 local function alignedload(addr)
 	return `terralib.attrload(addr, { align = 8 })
