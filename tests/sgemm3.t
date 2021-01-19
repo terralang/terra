@@ -9,7 +9,7 @@ function symmat(typ,name,I,...)
 end
 
 
-llvmprefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
+llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
 
 
 
