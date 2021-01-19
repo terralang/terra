@@ -11,7 +11,7 @@ jobs:
         env:
           CHECK_CLANG_FORMAT: 1
   build:
-    name: Build
+    name: Build (os=${{ matrix.os }}, llvm=${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, lua=${{ matrix.lua }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
