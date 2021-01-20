@@ -2004,7 +2004,7 @@ struct FunctionEmitter {
                 if (isVolatile) st->setVolatile(true);
 #if LLVM_VERSION <= 90
                 if (hasAlignment) st->setAlignment(alignment);
-#elseif LLVM_VERSION <= 100
+#elif LLVM_VERSION <= 100
                 if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
 #else
                 if (hasAlignment) st->setAlignment(Align(alignment));
@@ -2028,7 +2028,7 @@ struct FunctionEmitter {
             if (isVolatile) st->setVolatile(true);
 #if LLVM_VERSION <= 90
             if (hasAlignment) st->setAlignment(alignment);
-#elseif LLVM_VERSION <= 100
+#elif LLVM_VERSION <= 100
             if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
 #else
             if (hasAlignment) st->setAlignment(Align(alignment));
@@ -2378,7 +2378,7 @@ struct FunctionEmitter {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
                     l->setAlignment(alignment);
-#elseif LLVM_VERSION <= 100
+#elif LLVM_VERSION <= 100
                     l->setAlignment(MaybeAlign(alignment));
 #else
                     l->setAlignment(Align(alignment));
