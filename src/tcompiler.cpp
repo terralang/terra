@@ -2353,9 +2353,9 @@ struct FunctionEmitter {
                 std::vector<Type *> ptypes;
                 for (size_t i = 0; i < values.size(); i++)
                     ptypes.push_back(values[i]->getType());
-                InlineAsm *fn = InlineAsm::get(FunctionType::get(rtype, ptypes, false),
-                                           exp->string("asm"), exp->string("constraints"),
-                                           exp->boolean("volatile"));
+                InlineAsm *fn = InlineAsm::get(
+                        FunctionType::get(rtype, ptypes, false), exp->string("asm"),
+                        exp->string("constraints"), exp->boolean("volatile"));
                 Value *call = B->CreateCall(fn->getFunctionType(), fn, values);
                 return (isvoid) ? UndefValue::get(ttype) : call;
             } break;
@@ -3101,7 +3101,8 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
             llvmutil_createtemporaryfile("terra", "so", tmpname);
             if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
             sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
-            void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
+            void *result =
+                    sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
             assert(result);
             return result;
         }

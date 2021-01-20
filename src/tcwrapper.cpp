@@ -129,7 +129,7 @@ public:
     }
     bool GetRecordTypeFromDecl(RecordDecl *rd, Obj *tt) {
         if (rd->isStruct() || rd->isUnion()) {
-	  std::string name = rd->getName().str();
+            std::string name = rd->getName().str();
             Obj *thenamespace = &tagged;
             if (name == "") {
                 TypedefNameDecl *decl = rd->getTypedefNameForAnonDecl();
@@ -1021,7 +1021,9 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
 #if LLVM_VERSION <= 100
     NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP);
 #else
-    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP.getSourceManager(), PP.getLangOpts(), PP.getTargetInfo(), PP.getDiagnostics());
+    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP.getSourceManager(),
+                                 PP.getLangOpts(), PP.getTargetInfo(),
+                                 PP.getDiagnostics());
 #endif
     if (Literal.hadError) return;
     double V;
