@@ -1214,7 +1214,11 @@ struct CCallingConv {
         // function pointers are stored as &int8 to avoid calling convension issues
         // cast it back to the real pointer type right before calling it
         callee = B->CreateBitCast(callee, Ptr(info.fntype));
+#if LLVM_VERSION <= 35
+        CallInst *call = B->CreateCall(callee, arguments);
+#else
         CallInst *call = B->CreateCall(info.fntype, callee, arguments);
+#endif
         // annotate call with byval and sret
         AttributeFnOrCall(call, &info);
 
@@ -2356,7 +2360,11 @@ struct FunctionEmitter {
                 InlineAsm *fn = InlineAsm::get(
                         FunctionType::get(rtype, ptypes, false), exp->string("asm"),
                         exp->string("constraints"), exp->boolean("volatile"));
+#if LLVM_VERSION <= 35
+                Value *call = B->CreateCall(fn, values);
+#else
                 Value *call = B->CreateCall(fn->getFunctionType(), fn, values);
+#endif
                 return (isvoid) ? UndefValue::get(ttype) : call;
             } break;
             case T_attrload: {
