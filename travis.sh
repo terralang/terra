@@ -104,7 +104,13 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    curl -L -O https://github.com/llvm/llvm-project/releases/download/llvmorg-11.0.0/clang+llvm-11.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-11.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-11.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-11
+    ln -s clang+llvm-11.0.0-x86_64-apple-darwin/bin/clang clang-11
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.0-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
     curl -L -O https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-10.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-10
