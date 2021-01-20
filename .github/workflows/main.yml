@@ -16,14 +16,14 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-16.04', 'macos-10.15']
-        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9', '10']
+        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # macOS: exclude LLVM 5.0, 8-10 make, cuda/no-static/no-slib
+          # macOS: exclude LLVM 5.0, 8-11 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
           - os: 'macos-10.15'
@@ -34,6 +34,9 @@ jobs:
             cmake: '0'
           - os: 'macos-10.15'
             llvm: '10'
+            cmake: '0'
+          - os: 'macos-10.15'
+            llvm: '11'
             cmake: '0'
           - os: 'macos-10.15'
             cuda: '1'
