@@ -1214,7 +1214,7 @@ struct CCallingConv {
         // function pointers are stored as &int8 to avoid calling convension issues
         // cast it back to the real pointer type right before calling it
         callee = B->CreateBitCast(callee, Ptr(info.fntype));
-        CallInst *call = B->CreateCall(callee, arguments);
+        CallInst *call = B->CreateCall(info.fntype, callee, arguments);
         // annotate call with byval and sret
         AttributeFnOrCall(call, &info);
 
@@ -2000,8 +2000,10 @@ struct FunctionEmitter {
                 if (isVolatile) st->setVolatile(true);
 #if LLVM_VERSION <= 90
                 if (hasAlignment) st->setAlignment(alignment);
-#else
+#elseif LLVM_VERSION <= 100
                 if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#else
+                if (hasAlignment) st->setAlignment(Align(alignment));
 #endif
                 return st;
             }
@@ -2022,8 +2024,10 @@ struct FunctionEmitter {
             if (isVolatile) st->setVolatile(true);
 #if LLVM_VERSION <= 90
             if (hasAlignment) st->setAlignment(alignment);
-#else
+#elseif LLVM_VERSION <= 100
             if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#else
+            if (hasAlignment) st->setAlignment(Align(alignment));
 #endif
             return st;
         }
@@ -2349,10 +2353,10 @@ struct FunctionEmitter {
                 std::vector<Type *> ptypes;
                 for (size_t i = 0; i < values.size(); i++)
                     ptypes.push_back(values[i]->getType());
-                Value *fn = InlineAsm::get(FunctionType::get(rtype, ptypes, false),
+                InlineAsm *fn = InlineAsm::get(FunctionType::get(rtype, ptypes, false),
                                            exp->string("asm"), exp->string("constraints"),
                                            exp->boolean("volatile"));
-                Value *call = B->CreateCall(fn, values);
+                Value *call = B->CreateCall(fn->getFunctionType(), fn, values);
                 return (isvoid) ? UndefValue::get(ttype) : call;
             } break;
             case T_attrload: {
@@ -2366,8 +2370,10 @@ struct FunctionEmitter {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
                     l->setAlignment(alignment);
-#else
+#elseif LLVM_VERSION <= 100
                     l->setAlignment(MaybeAlign(alignment));
+#else
+                    l->setAlignment(Align(alignment));
 #endif
                 }
                 if (attr.boolean("nontemporal")) {

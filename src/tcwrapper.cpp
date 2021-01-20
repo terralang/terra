@@ -129,13 +129,13 @@ public:
     }
     bool GetRecordTypeFromDecl(RecordDecl *rd, Obj *tt) {
         if (rd->isStruct() || rd->isUnion()) {
-            std::string name = rd->getName();
+	  std::string name = rd->getName().str();
             Obj *thenamespace = &tagged;
             if (name == "") {
                 TypedefNameDecl *decl = rd->getTypedefNameForAnonDecl();
                 if (decl) {
                     thenamespace = &general;
-                    name = decl->getName();
+                    name = decl->getName().str();
                 }
             }
             // if name == "" then we have an anonymous struct
@@ -459,7 +459,7 @@ public:
         AsmLabelAttr *asmlabel = f->getAttr<AsmLabelAttr>();
         if (asmlabel) {
 #if !((LLVM_VERSION > 50) && __APPLE__)
-            InternalName = asmlabel->getLabel();
+            InternalName = asmlabel->getLabel().str();
 #if !defined(__linux__) && !defined(__FreeBSD__)
             // In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
             InternalName.insert(InternalName.begin(), '\01');

@@ -96,7 +96,7 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
     std::string Error;
     std::string TripleName = llvm::sys::getProcessTriple();
-    std::string CPU = llvm::sys::getHostCPUName();
+    std::string CPU = llvm::sys::getHostCPUName().str();
 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
