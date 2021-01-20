@@ -29,7 +29,16 @@ fi
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-11 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-11/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-10 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
