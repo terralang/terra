@@ -1018,7 +1018,11 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     SmallString<64> IntegerBuffer;
     bool NumberInvalid = false;
     StringRef Spelling = PP.getSpelling(*Tok, IntegerBuffer, &NumberInvalid);
+#if LLVM_VERSION <= 100
     NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP);
+#else
+    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP.getSourceManager(), PP.getLangOpts(), PP.getTargetInfo(), PP.getDiagnostics());
+#endif
     if (Literal.hadError) return;
     double V;
     if (Literal.isFloatingLiteral()) {
