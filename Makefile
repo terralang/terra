@@ -86,7 +86,7 @@ LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100"
+LLVM_NEEDS_CXX14="100 110"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
 CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
 else
@@ -108,7 +108,7 @@ LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
                       -lclangAnalysis \
                       -lclangEdit -lclangAST -lclangLex -lclangBasic
 
-CLANG_AST_MATCHERS = "80 90 100"
+CLANG_AST_MATCHERS = "80 90 100 110"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
 LLVM_LIBRARY_FLAGS += -lclangASTMatchers
 endif
