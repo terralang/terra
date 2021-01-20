@@ -219,8 +219,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
-  make install -j2
-  ctest --output-on-failure -j2
+  make install -j${THREADS:-2}
+  ctest --output-on-failure -j${THREADS:-2}
   popd
 
   # Skip this on macOS because it spews too much on Mojave and newer.
@@ -238,5 +238,5 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     mv $RELEASE_NAME install
   fi
 else
-  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test -j${THREADS:-2}
 fi
