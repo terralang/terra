@@ -110,12 +110,12 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
             name = name.substr(1);
 #endif
-            void *addr = (void *)CU->ee->getFunctionAddress(name);
+            void *addr = (void *)CU->ee->getFunctionAddress(name.str());
             if (addr) {
                 assert(addr);
                 TerraFunctionInfo &fi = T->C->functioninfo[addr];
                 fi.ctx = CU->TT->ctx;
-                fi.name = name;
+                fi.name = name.str();
                 fi.addr = addr;
                 fi.size = sz;
             }
@@ -310,7 +310,7 @@ int terra_inittarget(lua_State *L) {
     if (!lua_isnil(L, 2))
         TT->CPU = lua_tostring(L, 2);
     else
-        TT->CPU = llvm::sys::getHostCPUName();
+        TT->CPU = llvm::sys::getHostCPUName().str();
 
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
@@ -1471,14 +1471,14 @@ struct FunctionEmitter {
                         scc.push_back(f->func);
                         f->onstack = false;
                         VERBOSE_ONLY(T) {
-                            std::string s = f->func->getName();
+                            std::string s = f->func->getName().str();
                             printf("%s%s", s.c_str(), (fstate == f) ? "\n" : " ");
                         }
                     } while (fstate != f);
                     CU->mi->run(scc.begin(), scc.end());
                     for (size_t i = 0; i < scc.size(); i++) {
                         VERBOSE_ONLY(T) {
-                            std::string s = scc[i]->getName();
+                            std::string s = scc[i]->getName().str();
                             printf("optimizing %s\n", s.c_str());
                         }
                         CU->fpm->run(*scc[i]);
@@ -3055,9 +3055,9 @@ static int terra_llvmsizeof(lua_State *L) {
 #ifdef TERRA_CAN_USE_MCJIT
 static void *GetGlobalValueAddress(TerraCompilationUnit *CU, StringRef Name) {
     if (CU->T->options.debug > 1)
-        return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
+        return sys::DynamicLibrary::SearchForAddressOfSymbol(Name.str());
 
-    return (void *)CU->ee->getGlobalValueAddress(Name);
+    return (void *)CU->ee->getGlobalValueAddress(Name.str());
 }
 static bool MCJITShouldCopy(GlobalValue *G, void *data) {
     TerraCompilationUnit *CU = (TerraCompilationUnit *)data;
@@ -3095,12 +3095,12 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
             llvmutil_createtemporaryfile("terra", "so", tmpname);
             if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
             sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
-            void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName());
+            void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
             assert(result);
             return result;
         }
         ee->addModule(UNIQUEIFY(Module, m));
-        return (void *)ee->getGlobalValueAddress(gv->getName());
+        return (void *)ee->getGlobalValueAddress(gv->getName().str());
 #else
         return NULL;
 #endif
