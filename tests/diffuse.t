@@ -99,7 +99,11 @@ terra diffuse(output : &float, N : int, M : int, stride : int, x : &float, x0 : 
 
 end
 
-llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&uint8,int,int,int} -> {})
+if terralib.llvm_version < 100 then
+  llvmprefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
+else
+  llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
+end
 
 terra diffuse2(output : &float, N : int, M : int, stride : int, x : &float, x0 : &float, a : float,xi : &float)
 	var invD = 1.f / (1 + 4.f*a)

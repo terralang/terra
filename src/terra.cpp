@@ -476,6 +476,8 @@ int terra_initwithoptions(lua_State *L, terra_Options *options) {
 
     lua_pushstring(T->L, TERRA_VERSION_STRING);
     lua_setfield(T->L, -2, "version");
+    lua_pushinteger(T->L, LLVM_VERSION);
+    lua_setfield(L, -2, "llvm_version");
 
     lua_newtable(T->L);
     lua_setfield(T->L, -2, "_trees");  // to hold parser generated trees
