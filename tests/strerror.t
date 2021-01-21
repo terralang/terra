@@ -7,13 +7,11 @@ else
 
 #if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
 int strerror_r_(int errnum, char *buf, size_t buflen) {
-  return strerror_r(errnum, buf, buflen);
-}
 #else
 char *strerror_r_(int errnum, char *buf, size_t buflen) {
+#endif
   return strerror_r(errnum, buf, buflen);
 }
-#endif
 ]]
 end
 
