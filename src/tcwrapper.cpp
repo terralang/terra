@@ -465,7 +465,7 @@ public:
             InternalName.insert(InternalName.begin(), '\01');
 #endif
 #else
-            std::string label = asmlabel->getLabel();
+            std::string label = asmlabel->getLabel().str();
             if (!((label[0] == '_') && (label.substr(1) == InternalName))) {
                 InternalName = asmlabel->getLabel();
                 InternalName.insert(InternalName.begin(), '\01');
