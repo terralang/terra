@@ -467,7 +467,7 @@ public:
 #else
             std::string label = asmlabel->getLabel().str();
             if (!((label[0] == '_') && (label.substr(1) == InternalName))) {
-                InternalName = asmlabel->getLabel();
+                InternalName = asmlabel->getLabel().str();
                 InternalName.insert(InternalName.begin(), '\01');
             }
 #endif
