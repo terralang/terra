@@ -82,6 +82,10 @@ jobs:
             cuda: '1'
           - llvm: '8'
             cuda: '1'
+          - llvm: '9'
+            cuda: '1'
+          - llvm: '10'
+            cuda: '1'
 
           # no-static: only most recent LLVM
           - llvm: '3.5'
@@ -95,6 +99,10 @@ jobs:
           - llvm: '7'
             static: '0'
           - llvm: '8'
+            static: '0'
+          - llvm: '9'
+            static: '0'
+          - llvm: '10'
             static: '0'
 
           # no-slib: only most recent LLVM
@@ -110,6 +118,10 @@ jobs:
             slib: '0'
           - llvm: '8'
             slib: '0'
+          - llvm: '9'
+            slib: '0'
+          - llvm: '10'
+            slib: '0'
 
           # Moonjit: only most recent LLVM
           - llvm: '3.5'
@@ -123,6 +135,10 @@ jobs:
           - llvm: '7'
             lua: 'moonjit'
           - llvm: '8'
+            lua: 'moonjit'
+          - llvm: '9'
+            lua: 'moonjit'
+          - llvm: '10'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
