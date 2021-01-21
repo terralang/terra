@@ -69,7 +69,7 @@ jobs:
           - cmake: '0'
             lua: 'moonjit'
 
-          # CUDA: only most recent LLVM
+          # CUDA: only LLVM 9
           - llvm: '3.5'
             cuda: '1'
           - llvm: '3.8'
@@ -82,12 +82,12 @@ jobs:
             cuda: '1'
           - llvm: '8'
             cuda: '1'
-          - llvm: '9'
-            cuda: '1'
           - llvm: '10'
+            cuda: '1'
+          - llvm: '11'
             cuda: '1'
 
-          # no-static: only most recent LLVM
+          # no-static: only LLVM 9
           - llvm: '3.5'
             static: '0'
           - llvm: '3.8'
@@ -100,12 +100,12 @@ jobs:
             static: '0'
           - llvm: '8'
             static: '0'
-          - llvm: '9'
-            static: '0'
           - llvm: '10'
+            static: '0'
+          - llvm: '11'
             static: '0'
 
-          # no-slib: only most recent LLVM
+          # no-slib: only LLVM 9
           - llvm: '3.5'
             slib: '0'
           - llvm: '3.8'
@@ -118,12 +118,12 @@ jobs:
             slib: '0'
           - llvm: '8'
             slib: '0'
-          - llvm: '9'
-            slib: '0'
           - llvm: '10'
+            slib: '0'
+          - llvm: '11'
             slib: '0'
 
-          # Moonjit: only most recent LLVM
+          # Moonjit: only LLVM 9
           - llvm: '3.5'
             lua: 'moonjit'
           - llvm: '3.8'
@@ -136,9 +136,9 @@ jobs:
             lua: 'moonjit'
           - llvm: '8'
             lua: 'moonjit'
-          - llvm: '9'
-            lua: 'moonjit'
           - llvm: '10'
+            lua: 'moonjit'
+          - llvm: '11'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
