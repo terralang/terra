@@ -917,7 +917,8 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     std::unique_ptr<driver::Compilation> C(D.BuildCompilation(Args));
 
     clang::driver::ToolChain const &TC = C->getDefaultToolChain();
-    const char *link = TC.GetLinkerPath().c_str();
+    std::string path = TC.GetLinkerPath();
+    const char *link = path.c_str();
     for (auto &i : TC.getProgramPaths()) link = i.c_str();
 
     llvm::opt::ArgStringList IncludeArgs;
