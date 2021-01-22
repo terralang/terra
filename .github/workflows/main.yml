@@ -47,8 +47,6 @@ jobs:
           # FIXME: https://github.com/terralang/terra/issues/478
           - os: 'macos-10.15'
             llvm: '10'
-          - os: 'macos-10.15'
-            llvm: '11'
 
           # CMake
           - llvm: '3.5'
