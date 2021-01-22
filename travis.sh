@@ -105,7 +105,7 @@ fi
 
 if [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
-    curl -L -O https://github.com/elliottslaughter/llvm-project/releases/download/llvmorg-11.0.1/clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
+    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-11.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-11
     ln -s clang+llvm-11.0.1-x86_64-apple-darwin/bin/clang clang-11
