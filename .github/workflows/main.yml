@@ -44,7 +44,7 @@ jobs:
             static: '0'
           - os: 'macos-10.15'
             slib: '0'
-          # FIXME: https://github.com/terralang/terra/issues/478
+          # FIXME: https://github.com/terralang/terra/issues/479
           - os: 'macos-10.15'
             llvm: '10'
           - os: 'macos-10.15'
