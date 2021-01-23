@@ -64,7 +64,11 @@ include(BuildDirs)
 include(GetLuaJIT)
 include(ExtractLLVM)
 
-set(CMAKE_CXX_STANDARD 11)
+if(LLVM_VERSION_MAJOR GREATER 9)
+  set(CMAKE_CXX_STANDARD 14)
+else()
+  set(CMAKE_CXX_STANDARD 11)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 enable_testing()

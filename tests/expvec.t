@@ -3,6 +3,10 @@ if require("ffi").os == "Windows" then
 	print("Not consistent on windows")
 	return
 end
+if terralib.llvm_version >= 100 then
+	print("FIXME #476 cannot include immintrin.h on LLVM >= 10")
+	return
+end
 local C = terralib.includecstring[[
 	#include <immintrin.h>
 	void dostuff(__m128 what) {}

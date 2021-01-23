@@ -110,12 +110,12 @@ struct DisassembleFunctionListener : public JITEventListener {
 #if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
             name = name.substr(1);
 #endif
-            void *addr = (void *)CU->ee->getFunctionAddress(name);
+            void *addr = (void *)CU->ee->getFunctionAddress(name.str());
             if (addr) {
                 assert(addr);
                 TerraFunctionInfo &fi = T->C->functioninfo[addr];
                 fi.ctx = CU->TT->ctx;
-                fi.name = name;
+                fi.name = name.str();
                 fi.addr = addr;
                 fi.size = sz;
             }
@@ -310,7 +310,7 @@ int terra_inittarget(lua_State *L) {
     if (!lua_isnil(L, 2))
         TT->CPU = lua_tostring(L, 2);
     else
-        TT->CPU = llvm::sys::getHostCPUName();
+        TT->CPU = llvm::sys::getHostCPUName().str();
 
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
@@ -441,7 +441,11 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setOptLevel(CodeGenOpt::Aggressive);
 #else
             .setOptLevel(CodeGenOpt::Aggressive)
+#if LLVM_VERSION <= 90
             .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
+#else
+            .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
+#endif
             .setUseOrcMCJITReplacement(true);
 #endif
 
@@ -1054,7 +1058,11 @@ struct CCallingConv {
             Value *addr_dest = B->CreateBitCast(addr_dst, t);
             Value *addr_source = B->CreateBitCast(addr_src, t);
             uint64_t size = 0;
+#if LLVM_VERSION <= 90
             unsigned a1 = 0;
+#else
+            MaybeAlign a1(0);
+#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
@@ -1067,7 +1075,11 @@ struct CCallingConv {
                     StoreInst *st = B->CreateStore(src, addr_dst);
                     return st;
                 }
+#if LLVM_VERSION <= 90
                 a1 = CU->getDataLayout().getABITypeAlignment(t1);
+#else
+                a1 = MaybeAlign(CU->getDataLayout().getABITypeAlignment(t1));
+#endif
             } else
                 assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
@@ -1202,7 +1214,11 @@ struct CCallingConv {
         // function pointers are stored as &int8 to avoid calling convension issues
         // cast it back to the real pointer type right before calling it
         callee = B->CreateBitCast(callee, Ptr(info.fntype));
+#if LLVM_VERSION <= 35
         CallInst *call = B->CreateCall(callee, arguments);
+#else
+        CallInst *call = B->CreateCall(info.fntype, callee, arguments);
+#endif
         // annotate call with byval and sret
         AttributeFnOrCall(call, &info);
 
@@ -1459,14 +1475,14 @@ struct FunctionEmitter {
                         scc.push_back(f->func);
                         f->onstack = false;
                         VERBOSE_ONLY(T) {
-                            std::string s = f->func->getName();
+                            std::string s = f->func->getName().str();
                             printf("%s%s", s.c_str(), (fstate == f) ? "\n" : " ");
                         }
                     } while (fstate != f);
                     CU->mi->run(scc.begin(), scc.end());
                     for (size_t i = 0; i < scc.size(); i++) {
                         VERBOSE_ONLY(T) {
-                            std::string s = scc[i]->getName();
+                            std::string s = scc[i]->getName().str();
                             printf("optimizing %s\n", s.c_str());
                         }
                         CU->fpm->run(*scc[i]);
@@ -1957,37 +1973,66 @@ struct FunctionEmitter {
             Value *addr_src = l->getOperand(0);
             addr_src = B->CreateBitCast(addr_src, t);
             uint64_t size = 0;
+#if LLVM_VERSION <= 90
             unsigned a1 = 0;
+#else
+            MaybeAlign a1(0);
+#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
                 const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
                 size = sl->getSizeInBytes();
+#if LLVM_VERSION <= 90
                 a1 = hasAlignment ? alignment : sl->getAlignment();
+#else
+                a1 = hasAlignment ? MaybeAlign(alignment) : sl->getAlignment();
+#endif
             } else if (t1->isArrayTy() && (CU->getDataLayout().getTypeAllocSize(t1) >=
                                            MEM_ARRAY_THRESHOLD)) {
                 size = CU->getDataLayout().getTypeAllocSize(t1);
+#if LLVM_VERSION <= 90
                 a1 = hasAlignment ? alignment
                                   : CU->getDataLayout().getABITypeAlignment(t1);
+#else
+                a1 = MaybeAlign(hasAlignment
+                                        ? alignment
+                                        : CU->getDataLayout().getABITypeAlignment(t1));
+#endif
             } else {
                 StoreInst *st = B->CreateStore(value, addr);
                 if (isVolatile) st->setVolatile(true);
+#if LLVM_VERSION <= 90
                 if (hasAlignment) st->setAlignment(alignment);
+#elif LLVM_VERSION <= 100
+                if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#else
+                if (hasAlignment) st->setAlignment(Align(alignment));
+#endif
                 return st;
             }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
 #if LLVM_VERSION <= 60
             Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, a1, isVolatile);
-#else
+#elif LLVM_VERSION <= 90
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, l->getAlignment(), size_v,
                                        isVolatile);
+#else
+            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
+                                       MaybeAlign(l->getAlignment()), size_v, isVolatile);
 #endif
             return m;
         } else {
             StoreInst *st = B->CreateStore(value, addr);
             if (isVolatile) st->setVolatile(true);
+#if LLVM_VERSION <= 90
             if (hasAlignment) st->setAlignment(alignment);
+#elif LLVM_VERSION <= 100
+            if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
+#else
+            if (hasAlignment) st->setAlignment(Align(alignment));
+#endif
             return st;
         }
     }
@@ -2312,10 +2357,14 @@ struct FunctionEmitter {
                 std::vector<Type *> ptypes;
                 for (size_t i = 0; i < values.size(); i++)
                     ptypes.push_back(values[i]->getType());
-                Value *fn = InlineAsm::get(FunctionType::get(rtype, ptypes, false),
-                                           exp->string("asm"), exp->string("constraints"),
-                                           exp->boolean("volatile"));
+                InlineAsm *fn = InlineAsm::get(
+                        FunctionType::get(rtype, ptypes, false), exp->string("asm"),
+                        exp->string("constraints"), exp->boolean("volatile"));
+#if LLVM_VERSION <= 35
                 Value *call = B->CreateCall(fn, values);
+#else
+                Value *call = B->CreateCall(fn->getFunctionType(), fn, values);
+#endif
                 return (isvoid) ? UndefValue::get(ttype) : call;
             } break;
             case T_attrload: {
@@ -2327,7 +2376,13 @@ struct FunctionEmitter {
                 LoadInst *l = B->CreateLoad(emitExp(&addr));
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
+#if LLVM_VERSION <= 90
                     l->setAlignment(alignment);
+#elif LLVM_VERSION <= 100
+                    l->setAlignment(MaybeAlign(alignment));
+#else
+                    l->setAlignment(Align(alignment));
+#endif
                 }
                 if (attr.boolean("nontemporal")) {
 #if LLVM_VERSION <= 35
@@ -3014,9 +3069,9 @@ static int terra_llvmsizeof(lua_State *L) {
 #ifdef TERRA_CAN_USE_MCJIT
 static void *GetGlobalValueAddress(TerraCompilationUnit *CU, StringRef Name) {
     if (CU->T->options.debug > 1)
-        return sys::DynamicLibrary::SearchForAddressOfSymbol(Name);
+        return sys::DynamicLibrary::SearchForAddressOfSymbol(Name.str());
 
-    return (void *)CU->ee->getGlobalValueAddress(Name);
+    return (void *)CU->ee->getGlobalValueAddress(Name.str());
 }
 static bool MCJITShouldCopy(GlobalValue *G, void *data) {
     TerraCompilationUnit *CU = (TerraCompilationUnit *)data;
@@ -3054,12 +3109,13 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
             llvmutil_createtemporaryfile("terra", "so", tmpname);
             if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
             sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
-            void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName());
+            void *result =
+                    sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
             assert(result);
             return result;
         }
         ee->addModule(UNIQUEIFY(Module, m));
-        return (void *)ee->getGlobalValueAddress(gv->getName());
+        return (void *)ee->getGlobalValueAddress(gv->getName().str());
 #else
         return NULL;
 #endif

@@ -26,6 +26,9 @@ extern "C" {
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/ToolChain.h"
+#if LLVM_VERSION >= 100
+#include "clang/Basic/Builtins.h"
+#endif
 #include "tcompilerstate.h"
 
 using namespace clang;
@@ -126,13 +129,13 @@ public:
     }
     bool GetRecordTypeFromDecl(RecordDecl *rd, Obj *tt) {
         if (rd->isStruct() || rd->isUnion()) {
-            std::string name = rd->getName();
+            std::string name = rd->getName().str();
             Obj *thenamespace = &tagged;
             if (name == "") {
                 TypedefNameDecl *decl = rd->getTypedefNameForAnonDecl();
                 if (decl) {
                     thenamespace = &general;
-                    name = decl->getName();
+                    name = decl->getName().str();
                 }
             }
             // if name == "" then we have an anonymous struct
@@ -456,15 +459,15 @@ public:
         AsmLabelAttr *asmlabel = f->getAttr<AsmLabelAttr>();
         if (asmlabel) {
 #if !((LLVM_VERSION > 50) && __APPLE__)
-            InternalName = asmlabel->getLabel();
+            InternalName = asmlabel->getLabel().str();
 #if !defined(__linux__) && !defined(__FreeBSD__)
             // In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
             InternalName.insert(InternalName.begin(), '\01');
 #endif
 #else
-            std::string label = asmlabel->getLabel();
+            std::string label = asmlabel->getLabel().str();
             if (!((label[0] == '_') && (label.substr(1) == InternalName))) {
-                InternalName = asmlabel->getLabel();
+                InternalName = asmlabel->getLabel().str();
                 InternalName.insert(InternalName.begin(), '\01');
             }
 #endif
@@ -914,7 +917,8 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     std::unique_ptr<driver::Compilation> C(D.BuildCompilation(Args));
 
     clang::driver::ToolChain const &TC = C->getDefaultToolChain();
-    const char *link = TC.GetLinkerPath().c_str();
+    std::string path = TC.GetLinkerPath();
+    const char *link = path.c_str();
     for (auto &i : TC.getProgramPaths()) link = i.c_str();
 
     llvm::opt::ArgStringList IncludeArgs;
@@ -939,14 +943,19 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
 }
 
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
-                            const char **argbegin, const char **argend,
+                            const std::vector<const char *> &args,
                             CompilerInstance *TheCompInst) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
 
-    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), argbegin, argend,
+#if LLVM_VERSION <= 90
+    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), &args[0],
+                                       &args[args.size()], TheCompInst->getDiagnostics());
+#else
+    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), args,
                                        TheCompInst->getDiagnostics());
+#endif
     // need to recreate the diagnostics engine so that it actually listens to warning
     // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
@@ -1010,7 +1019,13 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     SmallString<64> IntegerBuffer;
     bool NumberInvalid = false;
     StringRef Spelling = PP.getSpelling(*Tok, IntegerBuffer, &NumberInvalid);
+#if LLVM_VERSION <= 100
     NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP);
+#else
+    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP.getSourceManager(),
+                                 PP.getLangOpts(), PP.getTargetInfo(),
+                                 PP.getDiagnostics());
+#endif
     if (Literal.hadError) return;
     double V;
     if (Literal.isFloatingLiteral()) {
@@ -1059,7 +1074,7 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
     opt.run(*M);
 }
 static int dofile(terra_State *T, TerraTarget *TT, const char *code,
-                  const char **argbegin, const char **argend, Obj *result) {
+                  const std::vector<const char *> &args, Obj *result) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
@@ -1072,7 +1087,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
 #endif
     TheCompInst.getHeaderSearchOpts().ResourceDir = "$CLANG_RESOURCE$";
     InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
-    initializeclang(T, membuffer, argbegin, argend, &TheCompInst);
+    initializeclang(T, membuffer, args, &TheCompInst);
 
 #if LLVM_VERSION <= 36
     CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
@@ -1187,7 +1202,7 @@ int include_c(lua_State *L) {
         lua_pushvalue(L, -2);
         result.initFromStack(L, ref_table);
 
-        dofile(T, TT, code, &args.data()[0], &args.data()[args.size()], &result);
+        dofile(T, TT, code, args, &result);
     }
 
     lobj_removereftable(L, ref_table);

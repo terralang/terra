@@ -11,19 +11,19 @@ jobs:
         env:
           CHECK_CLANG_FORMAT: 1
   build:
-    name: Build
+    name: Build (os=${{ matrix.os }}, llvm=${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, lua=${{ matrix.lua }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ['ubuntu-16.04', 'macos-10.15']
-        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9']
+        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # macOS: exclude LLVM 5.0, 8 make, 9 make, cuda/no-static/no-slib
+          # macOS: exclude LLVM 5.0, 8-11 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
           - os: 'macos-10.15'
@@ -33,11 +33,22 @@ jobs:
             llvm: '9'
             cmake: '0'
           - os: 'macos-10.15'
+            llvm: '10'
+            cmake: '0'
+          - os: 'macos-10.15'
+            llvm: '11'
+            cmake: '0'
+          - os: 'macos-10.15'
             cuda: '1'
           - os: 'macos-10.15'
             static: '0'
           - os: 'macos-10.15'
             slib: '0'
+          # FIXME: https://github.com/terralang/terra/issues/479
+          - os: 'macos-10.15'
+            llvm: '10'
+          - os: 'macos-10.15'
+            llvm: '11'
 
           # CMake
           - llvm: '3.5'
@@ -63,7 +74,7 @@ jobs:
           - cmake: '0'
             lua: 'moonjit'
 
-          # CUDA: only most recent LLVM
+          # CUDA: only LLVM 9
           - llvm: '3.5'
             cuda: '1'
           - llvm: '3.8'
@@ -75,9 +86,13 @@ jobs:
           - llvm: '7'
             cuda: '1'
           - llvm: '8'
+            cuda: '1'
+          - llvm: '10'
+            cuda: '1'
+          - llvm: '11'
             cuda: '1'
 
-          # no-static: only most recent LLVM
+          # no-static: only LLVM 9
           - llvm: '3.5'
             static: '0'
           - llvm: '3.8'
@@ -89,9 +104,13 @@ jobs:
           - llvm: '7'
             static: '0'
           - llvm: '8'
+            static: '0'
+          - llvm: '10'
+            static: '0'
+          - llvm: '11'
             static: '0'
 
-          # no-slib: only most recent LLVM
+          # no-slib: only LLVM 9
           - llvm: '3.5'
             slib: '0'
           - llvm: '3.8'
@@ -103,9 +122,13 @@ jobs:
           - llvm: '7'
             slib: '0'
           - llvm: '8'
+            slib: '0'
+          - llvm: '10'
+            slib: '0'
+          - llvm: '11'
             slib: '0'
 
-          # Moonjit: only most recent LLVM
+          # Moonjit: only LLVM 9
           - llvm: '3.5'
             lua: 'moonjit'
           - llvm: '3.8'
@@ -117,6 +140,10 @@ jobs:
           - llvm: '7'
             lua: 'moonjit'
           - llvm: '8'
+            lua: 'moonjit'
+          - llvm: '10'
+            lua: 'moonjit'
+          - llvm: '11'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1

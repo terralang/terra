@@ -29,7 +29,25 @@ fi
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-11 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-11/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-10 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-10-dev clang-10 libclang-10-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-10:/usr/share/llvm-10
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-10/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-9 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
@@ -86,7 +104,19 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-9 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-11.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-11
+    ln -s clang+llvm-11.0.1-x86_64-apple-darwin/bin/clang clang-11
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.1-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
+    curl -L -O https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-10.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-10.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-10
+    ln -s clang+llvm-10.0.0-x86_64-apple-darwin/bin/clang clang-10
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-10.0.0-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
     curl -L -O http://releases.llvm.org/9.0.0/clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     tar xf clang+llvm-9.0.0-x86_64-darwin-apple.tar.xz
     ln -s clang+llvm-9.0.0-x86_64-darwin-apple/bin/llvm-config llvm-config-9
@@ -189,8 +219,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
-  make install -j2
-  ctest --output-on-failure -j2
+  make install -j${THREADS:-2}
+  ctest --output-on-failure -j${THREADS:-2}
   popd
 
   # Skip this on macOS because it spews too much on Mojave and newer.
@@ -208,5 +238,5 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     mv $RELEASE_NAME install
   fi
 else
-  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test
+  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test -j${THREADS:-2}
 fi
