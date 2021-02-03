@@ -301,8 +301,8 @@ int terra_toptx(lua_State *L) {
         size_t prefixsize = strlen(prefix);
         std::string name = it->getName().str();
         if (name.size() >= prefixsize && name.substr(0, prefixsize) == prefix) {
-            std::string shortname = name.substr(prefixsize);
-            it->setName(shortname);
+          std::string shortname = name.substr(prefixsize);
+          it->setName(shortname);
         }
         if (!it->isDeclaration()) {
           it->setName(sanitizeName(it->getName().str()));
