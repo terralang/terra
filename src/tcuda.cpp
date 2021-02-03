@@ -248,7 +248,7 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     // 	printf("[CUDA] Result size: %s\n", outs.str().c_str());
     // }
 
-    (*buf) = dest.str();
+    (*buf) = dest.str().str();
 #endif
 }
 
@@ -299,18 +299,18 @@ int terra_toptx(lua_State *L) {
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
         const char *prefix = "cudart:";
         size_t prefixsize = strlen(prefix);
-        std::string name = it->getName();
+        std::string name = it->getName().str();
         if (name.size() >= prefixsize && name.substr(0, prefixsize) == prefix) {
             std::string shortname = name.substr(prefixsize);
             it->setName(shortname);
         }
         if (!it->isDeclaration()) {
-            it->setName(sanitizeName(it->getName()));
+            it->setName(sanitizeName(it->getName().str()));
         }
     }
     for (llvm::Module::global_iterator it = M->global_begin(), end = M->global_end();
          it != end; ++it) {
-        it->setName(sanitizeName(it->getName()));
+        it->setName(sanitizeName(it->getName().str()));
     }
 
     std::string ptx;
