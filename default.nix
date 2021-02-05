@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> { }, lib ? stdenv.lib
-  # Supports LLVM up to 11, recommends at least 6
-, llvmPackages ? pkgs.llvmPackages_9, stdenv ? llvmPackages.stdenv
+  # Supports LLVM up to 10, recommends at least 6
+, llvmPackages ? pkgs.llvmPackages_10, stdenv ? llvmPackages.stdenv
 , enableCUDA ? false, cuda ? pkgs.cudaPackages.cudatoolkit_11 }:
 
 let
