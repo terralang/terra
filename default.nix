@@ -1,10 +1,17 @@
-{ pkgs ? import <nixpkgs> { } }:
+{ pkgs ? import <nixpkgs> { }, lib ? stdenv.lib
+  # Supports LLVM up to 11, recommends at least 6
+, llvmPackages ? pkgs.llvmPackages_9, stdenv ? llvmPackages.stdenv
+, enableCUDA ? false, cuda ? pkgs.cudaPackages.cudatoolkit_11 }:
 
 let
 
-  luajit = (import ./lib.nix { pkgs = pkgs; }).luajit;
-  llvmPackages = pkgs.llvmPackages_9;
-  stdenv = llvmPackages.stdenv;
+  luajit = pkgs.luajit.overrideAttrs (old: rec {
+    preBuild = ''
+      substituteInPlace ./src/Makefile \
+        --replace "default all:	$(TARGET_T)" "default all:	$(ALL_T)"
+    '';
+    buildFlags = [ ];
+  });
 
 in stdenv.mkDerivation rec {
   pname = "terra";
@@ -14,36 +21,29 @@ in stdenv.mkDerivation rec {
 
   depsBuildBuild = [ pkgs.pkg-config ];
 
-  buildInputs = with llvmPackages; [
-    luajit
-    llvm
-    clang-unwrapped
-    pkgs.libxml2
-    pkgs.ncurses
-    pkgs.cmake
-    pkgs.cudaPackages.cudatoolkit_11
-  ];
+  nativeBuildInputs = [ pkgs.cmake ];
+
+  buildInputs = with llvmPackages;
+    [ luajit llvm clang-unwrapped pkgs.libxml2 pkgs.ncurses ]
+    ++ lib.optional enableCUDA cuda;
 
   #doCheck = true;
   enableParallelBuilding = true;
   hardeningDisable = [ "fortify" ];
   outputs = [ "bin" "dev" "out" ];
 
+  patches = [ ./nix-cflags.patch ];
   postPatch = ''
     substituteInPlace src/terralib.lua \
-      --subst-var-by NIX_LIBC_INCLUDE ${
-        stdenv.lib.getDev stdenv.cc.libc
-      }/include
+      --subst-var-by NIX_LIBC_INCLUDE ${lib.getDev stdenv.cc.libc}/include
   '';
 
-  cmakeFlags = stdenv.lib.concatStringsSep " " [
-    "-DTERRA_ENABLE_CMAKE=ON"
-    "-DTERRA_ENABLE_CUDA=ON"
-  ];
+  cmakeFlags = lib.concatStringsSep " " ([ "-DTERRA_ENABLE_CMAKE=ON" ]
+    ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON");
 
   # checkPhase = "(cd tests && ../terra run)";
 
-  meta = with stdenv.lib; {
+  meta = with lib; {
     description = "A low-level counterpart to Lua";
     homepage = "http://terralang.org/";
     platforms = platforms.x86_64;
