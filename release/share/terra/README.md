@@ -135,9 +135,9 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 
 | Version | CI Coverage | CUDA | Notes |
 | ------- | ----------- | ---- | ----- |
-| 3.5 | :heavy_check_mark: | :heavy_check_mark: | **deprecated** |
-| 3.6 | | | **deprecated** |
-| 3.7 | | | **deprecated** |
+| 3.5 | :heavy_check_mark: | :heavy_check_mark: | [deprecated](https://github.com/terralang/terra/issues/456) |
+| 3.6 | | | [deprecated](https://github.com/terralang/terra/issues/456) |
+| 3.7 | | | [deprecated](https://github.com/terralang/terra/issues/456) |
 | 3.8 | :heavy_check_mark: | :heavy_check_mark: | |
 | 3.9 | | | |
 | 5.0 | :heavy_check_mark: | :heavy_check_mark: | |
@@ -145,8 +145,8 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 | 7.0 | :heavy_check_mark: | :heavy_check_mark: | requires CMake |
 | 8.0 | :heavy_check_mark: | :heavy_check_mark: | |
 | 9.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 10.0 | :heavy_check_mark: | :heavy_check_mark: | #476 #477 #479 |
-| 11.0 | :heavy_check_mark: | :heavy_check_mark: | #476 #477 #479 |
+| 10.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) [#479](https://github.com/terralang/terra/issues/479) |
+| 11.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) [#479](https://github.com/terralang/terra/issues/479) |
 
 ### Instructions for Building LLVM from Source
 
