@@ -3426,7 +3426,10 @@ function terra.includecstring(code,cargs,target)
     	args:insert("-internal-isystem")
     	args:insert(path)
     end
-    
+    if ffi.os == "Darwin" and terralib.llvm_version >= 100 then
+      args:insert("-fgnuc-version=4")
+    end
+
     if cargs then
         args:insertall(cargs)
     end
