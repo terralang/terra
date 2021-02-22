@@ -207,15 +207,6 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_LUA=$TERRA_LUA
     )
   fi
-  if [[ $(uname) = Darwin ]]; then
-    # Hack: CMake tries to be smart and use XCode's copy of Clang by
-    # default. This causes LuaJIT to not build on Mojave and later
-    # (math.h not found) if the header package is not installed.
-    CMAKE_FLAGS+=(
-      -DCMAKE_C_COMPILER=$(which ${CC:-clang})
-      -DCMAKE_CXX_COMPILER=$(which ${CXX:-clang++})
-    )
-  fi
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
