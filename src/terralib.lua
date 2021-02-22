@@ -3426,7 +3426,14 @@ function terra.includecstring(code,cargs,target)
     	args:insert("-internal-isystem")
     	args:insert(path)
     end
-    if ffi.os == "Darwin" and terralib.llvm_version >= 100 then
+    -- Obey the SDKROOT variable on macOS to match Clang behavior.
+    local sdkroot = os.getenv("SDKROOT")
+    if sdkroot then
+      args:insert("-isysroot")
+      args:insert(sdkroot)
+    end
+    -- Set GNU C version to match values observed on macOS.
+    if ffi.os == "OSX" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4")
     end
 
