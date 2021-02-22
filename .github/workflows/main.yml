@@ -44,7 +44,7 @@ jobs:
             static: '0'
           - os: 'macos-10.15'
             slib: '0'
-          # LLVM 11 binaries are broken on recent macOS
+          # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-10.15'
             llvm: '10'
 
