@@ -911,12 +911,12 @@ struct CCallingConv {
                     case 8:
                         return (C_SSE_DOUBLE == clz)
                                        ? Type::getDoubleTy(*CU->TT->ctx)
-                                       : VectorType::get(Type::getFloatTy(*CU->TT->ctx),
-                                                         2
+                                       : VectorType::get(Type::getFloatTy(*CU->TT->ctx), 2
 #if LLVM_VERSION >= 90
-                                                         , false
+                                                         ,
+                                                         false
 #endif
-                                                         );
+                                         );
                     default:
                         assert(!"unexpected size for floating point class");
                 }
