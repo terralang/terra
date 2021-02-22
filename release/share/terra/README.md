@@ -145,8 +145,8 @@ The current recommended version of LLVM is **6.0**. The following versions are a
 | 7.0 | :heavy_check_mark: | :heavy_check_mark: | requires CMake |
 | 8.0 | :heavy_check_mark: | :heavy_check_mark: | |
 | 9.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 10.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) [#479](https://github.com/terralang/terra/issues/479) |
-| 11.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) [#479](https://github.com/terralang/terra/issues/479) |
+| 10.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) |
+| 11.0 | :heavy_check_mark: | :heavy_check_mark: | [#476](https://github.com/terralang/terra/issues/476) [#477](https://github.com/terralang/terra/issues/477) |
 
 ### Instructions for Building LLVM from Source
 

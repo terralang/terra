@@ -174,7 +174,7 @@ if [[ $(uname) = Darwin ]]; then
 
   # workaround for https://github.com/terralang/terra/issues/365
   if [[ ! -e /usr/include ]]; then
-    export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+    export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
   fi
 
   export PATH=$PWD:$PATH

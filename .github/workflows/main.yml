@@ -44,11 +44,9 @@ jobs:
             static: '0'
           - os: 'macos-10.15'
             slib: '0'
-          # FIXME: https://github.com/terralang/terra/issues/479
+          # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-10.15'
             llvm: '10'
-          - os: 'macos-10.15'
-            llvm: '11'
 
           # CMake
           - llvm: '3.5'
