@@ -3432,9 +3432,9 @@ function terra.includecstring(code,cargs,target)
       args:insert("-isysroot")
       args:insert(sdkroot)
     end
-    -- Set GNU C version to match values observed on macOS.
-    if ffi.os == "OSX" and terralib.llvm_version >= 100 then
-      args:insert("-fgnuc-version=4")
+    -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
+    if ffi.os ~= "Windows" terralib.llvm_version >= 100 then
+      args:insert("-fgnuc-version=4.2.1")
     end
 
     if cargs then
