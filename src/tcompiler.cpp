@@ -587,7 +587,11 @@ class Types {
                     Type *baseType = ttype->type;
                     t->issigned = ttype->issigned;
                     t->islogical = ttype->islogical;
+#if LLVM_VERSION < 90
+                    t->type = VectorType::get(baseType, N);
+#else
                     t->type = VectorType::get(baseType, N, false);
+#endif
                 } break;
                 case T_primitive: {
                     CreatePrimitiveType(typ, t);
@@ -908,7 +912,11 @@ struct CCallingConv {
                         return (C_SSE_DOUBLE == clz)
                                        ? Type::getDoubleTy(*CU->TT->ctx)
                                        : VectorType::get(Type::getFloatTy(*CU->TT->ctx),
-                                                         2, false);
+                                                         2
+#if LLVM_VERSION >= 90
+                                                         , false
+#endif
+                                                         );
                     default:
                         assert(!"unexpected size for floating point class");
                 }
@@ -2443,7 +2451,11 @@ struct FunctionEmitter {
         Type *resultType = Type::getInt1Ty(*CU->TT->ctx);
         if (cond->getType()->isVectorTy()) {
             VectorType *vt = cast<VectorType>(cond->getType());
+#if LLVM_VERSION < 90
+            resultType = VectorType::get(resultType, vt->getNumElements());
+#else
             resultType = VectorType::get(resultType, vt->getNumElements(), false);
+#endif
         }
         return B->CreateTrunc(cond, resultType);
     }
