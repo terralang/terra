@@ -169,7 +169,7 @@ Terra functions are entry-points into Terra code. Functions can be either define
     [local] terra myfunctionname :: type_expresion
     [local] terra myfunctionname :: {int,bool} -> {int}
 
-_Terra function declaration_. It creates a new undefined function and stores it the Lua variable `myfunctionname`.
+_Terra function declaration_. It creates a new undefined function and stores it in the Lua variable `myfunctionname`.
  If the optional `local` keyword is used, then `myfunctionname` is first defined as a new local Lua variable.  When used without the `local` keyword, `myfunctionname` can be a table specifier (e.g. `a.b.c`).
 
  <!--- If `mystruct` is a [Struct](#exotypes-structs), then `mystruct:mymethod` is equivalent to using the specifier `mystruct.methods.mymethod`. --->
@@ -243,9 +243,9 @@ Print out a visual representation of the code in this function. By default, this
 
 ---
 
-    r0, ..., rn = myfunc(arg0, ... argN)
+    r0, ..., rn = myfunction(arg0, ... argN)
 
-Invokes `myfunctiondefinition` from Lua. Arguments are converted into the expected Terra types using the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. Return values are converted back into Lua values using the same rules. Causes the function to be compiled to machine code.
+Invokes `myfunction` from Lua. Arguments are converted into the expected Terra types using the [rules](#converting-between-lua-values-and-terra-values) for converting between Terra values and Lua values. Return values are converted back into Lua values using the same rules. Causes the function to be compiled to machine code.
 
 ---
 
@@ -276,7 +276,7 @@ Get or set the pretty name for the function. This is useful when viewing generat
 
     func:setinlined(bool)
 
-When `true` function when be always inlined. When `false` the function will never be inlined. By default, functions will be inlined at the descrection of LLVM's function inliner.
+When `true` function when be always inlined. When `false` the function will never be inlined. By default, functions will be inlined at the discretion of LLVM's function inliner.
 
 Types
 -----
@@ -313,11 +313,11 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
 
     parameters -> returntype
 
-Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type `int`. If `returntype` is a list, a `tuple` of the values in the list is the type returned from the function.
+Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type like `int`. If `returntype` is a list, a `tuple` of the values in the list is the type returned from the function.
 
 ---
 
-    struct { field0 : type2 , ..., fieldN : typeN }
+    struct { field0 : type0, ..., fieldN : typeN }
 
 Constructs a user-defined type, or exotype. Each call to `struct` creates a unique type since we use a [nominative](http://en.wikipedia.org/wiki/Nominative_type_system) type systems. See [Exotypes](#exotypes-structs) for more information.
 
@@ -401,7 +401,7 @@ True if `type` is a pointer to a struct.
 
 ---
 
-    function types.type:ispointertofunction()
+    types.type:ispointertofunction()
 
 True if `type` is a pointer to a function.
 
@@ -462,7 +462,7 @@ Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset 
 Quotes
 ------
 
-Quotes are the Lua objects that get returned by terra quotation operators (backtick and `quote ... in ... end`). They rerpresent a fragment of Terra code (a statement or expression) that has not been placed into a function yet. The escape operators (`[...]` and `escape ... emit ... end`) splice quotes into the surround Terra code. Quotes have a short form for generating just one _expression_ and long form for generating _statements and expressions_.
+Quotes are the Lua objects that get returned by terra quotation operators (backtick and `quote ... in ... end`). They represent a fragment of Terra code (a statement or expression) that has not been placed into a function yet. The escape operators (`[...]` and `escape ... emit ... end`) splice quotes into the surround Terra code. Quotes have a short form for generating just one _expression_ and long form for generating _statements and expressions_.
 
 ---
     quotation = `terraexpr
@@ -1321,7 +1321,7 @@ In addition to extending the syntax of expressions, you can also define new synt
 This is done by specifying the `statement` and `localstatement` functions in your language table. These function behave the same way as the `expression` function, but they can optionally return a list of names that they define. The file `test/lib/def.t` shows how this would work for the `def` constructor to support statements:
 
     def foo(a) luaexpr --defines global variable foo
-    local def bar(a) luaexpr --defins local variable bar
+    local def bar(a) luaexpr --defines local variable bar
 
 
 Higher-Level Parsing via Pratt Parsers
@@ -1568,8 +1568,8 @@ Types can be Lua primitives returned by `type(v)` (e.g. number table function st
 
 External types can be used by registering a name for the type and a function that returns true for objects of that type:
 
-    Types:Extern("File",function(v) 
-       return io.type(obj) == "file" 
+    Types:Extern("File",function(obj)
+       return io.type(obj) == "file"
     end)
 
 ---
@@ -1651,7 +1651,7 @@ You can also define methods on the super classes which will be defined for sub-c
 
     assign:foo()
 
-WARNING: To keep the metatable structure simple, this is not implemented with chained tables Instead definitions on the superclass also copy their method to the subclass because of this design YOU MUST DEFINE PARENT METHODS BEFORE CHILD METHODS. Otherwise, the parent method will clobber the child.
+WARNING: To keep the metatable structure simple, this is not implemented with chained tables. Instead definitions on the superclass also copy their method to the subclass because of this design YOU MUST DEFINE PARENT METHODS BEFORE CHILD METHODS. Otherwise, the parent method will clobber the child.
 
 IF YOU NEED TO OVERRIDE AN ALREADY DEFINE METHOD LIKE __tostring SET IT TO NILFIRST IN THE SUPERCLASS:
 

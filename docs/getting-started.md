@@ -386,7 +386,7 @@ See the [API reference](api.html#function) for the full behavior.
 Scoping Rules
 -------------
 
-Like any language, Terra has a set of rules for how it resolves symbos like the function name `add1` when it sees them in an expression. Because Terra code is nested inside of Lua code, these scoping rules are more complicated that a non-embedded langauge.
+Like any language, Terra has a set of rules for how it resolves symbols like the function name `add1` when it sees them in an expression. Because Terra code is nested inside of Lua code, these scoping rules are more complicated than in a non-embedded language.
 
 When the Terra compiler looks up a symbol like `add1` it first looks in the local (lexical) environment of the `terra` function. If it doesn't find the symbol, then it continues the search in the enclosing (Lua) environment using Lua's scoping rules for local/global variables. If the compiler finds a Lua value, then it converts it to a Terra value where possible. Let's look at a few examples:
 
@@ -921,7 +921,7 @@ This behavior is actually just syntax sugar for an escape expression.  In Terra,
 
 ### Quotes ###
 
-A quote allows you to generate a single Terra expression or statement outside of a Terra function. They are frequently used in combination with escapes to generate code. Quotes create the individual expressions and escapes are used stitch them together.
+A quote allows you to generate a single Terra expression or statement outside of a Terra function. They are frequently used in combination with escapes to generate code. Quotes create the individual expressions and escapes are used to stitch them together.
 
 	function addone(a)
 		--return quotation that
@@ -1114,7 +1114,7 @@ In general, macros are just syntax sugar for escapes where each argument to the 
     terra f()
         var a,b = 1,2
         [ foo(`a,`b,`3) ]
-        -- equivlent
+        -- equivalent
         mfoo(a,b,3)
     end
 
