@@ -236,7 +236,7 @@ Terra has switch statements to generate them.
     else
         default_thing()
     end
-    
+
 The end on the last case may be omitted if the switch statement has an else
 
     switch expr do
@@ -260,7 +260,7 @@ Functions
 We have already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
     terra sort2(a : int, b : int) : {int,int} --the return type is optional
-        if a < b then   
+        if a < b then
             return a, b
         else
             return b, a
@@ -403,7 +403,7 @@ When the Terra compiler looks up a symbol like `add1` it first looks in the loca
 
 Here `N` is a Lua value of type `number`. When `powN` is defined, the value of `N` is looked up in the Lua environment and inlined into the function as an `int` literal.
 
-Since `N` is resolved when `powN` is defined, changing `N` after `powN` is compiled will not change the behavior of `powN`.  
+Since `N` is resolved when `powN` is defined, changing `N` after `powN` is compiled will not change the behavior of `powN`.
 
 Think of `terra powN(...` as a _constructor_ for a Terra function. It takes some initial values like `N` to create the and initialize the Terra function. Changing `N` after this constructor runs won't change the constructed object.
 
@@ -804,7 +804,7 @@ We've already seen examples of Lua code calling Terra functions. In general, you
     assert( foo( {1,2.3} ) == 3.3)
     assert( foo( {b = 1, a = 2.3} ) == 3 )
 
-More examples are in `tests/luabridge*.t`.  
+More examples are in `tests/luabridge*.t`.
 
 It is also possible to call Lua functions from Terra. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primitive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
 
@@ -925,7 +925,7 @@ A quote allows you to generate a single Terra expression or statement outside of
 
 	function addone(a)
 		--return quotation that
-		--represents adding 1 to a    
+		--represents adding 1 to a
 		return `a + 1
     end
 	terra doit()
@@ -1173,7 +1173,7 @@ A simple example initializes Terra and then runs code from the file specified in
         terra_init(L);
         for(int i = 1; i < argc; i++)
         	//run the terra code in each file
-            if(terra_dofile(L,argv[i]))  
+            if(terra_dofile(L,argv[i]))
                 return 1; //error
         return 0;
     }

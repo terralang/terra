@@ -1514,12 +1514,12 @@ Intermediate Representations with Abstract Syntax Description Language
 
 [Abstract Syntax Description Language (ASDL)](https://www.usenix.org/legacy/publications/library/proceedings/dsl97/full_papers/wang/wang.pdf) is a way of describing compiler intermediate representations (IR) and other tree- or graph-based data structures in a concise way. It is similar in many ways to algebraic data types, but offers a consistent cross-language specification. ASDL is used in the Python compiler to describe its grammer, and is also used internally in Terra to represent Terra code.
 
-We provide a Lua library for parsing ASDL specifications that can be used to implement IR and other data-structures that are useful when building domain-specific languages. It allows you to parse ASDL specifications to create a set of Lua classes (actually specially defined meta-tables) for building IR. The library automatically sets up the classes with constructors for building the IR, and additional methods can be added to the classes using standard Lua method definitions. 
+We provide a Lua library for parsing ASDL specifications that can be used to implement IR and other data-structures that are useful when building domain-specific languages. It allows you to parse ASDL specifications to create a set of Lua classes (actually specially defined meta-tables) for building IR. The library automatically sets up the classes with constructors for building the IR, and additional methods can be added to the classes using standard Lua method definitions.
 
 ---
 
     local asdl = require 'asdl'
-   
+
 The ASDL package comes with Terra.
 
 ---
@@ -1547,10 +1547,10 @@ Creating ASDL Classes
        # Here the type Stm has three sub-types
        Stm = Compound(Stm head, Stm next)
            | Assign(string lval, Exp rval)
-       # '*' specifies that a field is a List object 
+       # '*' specifies that a field is a List object
        # '?' marks a field optional (may be nil as well as the type)
            | Print(Exp* args, string? format)
-    
+
 
 
        Exp = Id(string name)
@@ -1571,11 +1571,11 @@ External types can be used by registering a name for the type and a function tha
     Types:Extern("File",function(v) 
        return io.type(obj) == "file" 
     end)
-    
+
 ---
 
 
-   
+
 Using ASDL Classes
 ------------------
 
@@ -1595,26 +1595,26 @@ Fields are initialized by the constructor:
 By default classes have a string representation
 
     print(assign) -- Assign(lval = x,rval = Num(v = 1))
-   
+
 And you can check for membership using :isclassof
 
     assert(Types.Assign:isclassof(assign))
     assert(Types.Stm:isclassof(assign))
     assert(Types.Exp:isclassof(assign) == false)
-   
+
 Singletons are not classes but values:
-   
+
     assert(Types.BinOp:isclassof(Types.Plus))
-   
+
 Classes are the metatables of their values and have `Class.__index = Class`
-   
+
     assert(getmetatable(assign) == Types.Assign)
-   
+
 Tagged unions have a string field .kind that identifies which variant in the union the value is
 
     assert(assign.kind == "Assign")
-   
-   
+
+
 ---
 
 
@@ -1631,7 +1631,7 @@ You can define additional methods on the classes to add additional behavior
     end
     function Types.Op:eval(env)
       local op = self.op
-      local lhs = self.lhs:eval(env)    
+      local lhs = self.lhs:eval(env)
       local rhs = self.rhs:eval(env)
       if op.kind == "Plus" then
          return lhs + rhs
@@ -1650,9 +1650,9 @@ You can also define methods on the super classes which will be defined for sub-c
     end
 
     assign:foo()
-   
+
 WARNING: To keep the metatable structure simple, this is not implemented with chained tables Instead definitions on the superclass also copy their method to the subclass because of this design YOU MUST DEFINE PARENT METHODS BEFORE CHILD METHODS. Otherwise, the parent method will clobber the child.
- 
+
 IF YOU NEED TO OVERRIDE AN ALREADY DEFINE METHOD LIKE __tostring SET IT TO NILFIRST IN THE SUPERCLASS:
 
     Types.Stm.__tostring = nil
@@ -1685,7 +1685,7 @@ object is returned again. This works for types containing Lists (*) and Options 
           Exp = Id(string name) unique
               | Num(number v) unique
        }
-   
+
     ]]
     assert(Types.U.Id("foo") == Types.U.Id("foo"))
 
