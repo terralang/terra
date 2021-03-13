@@ -14,7 +14,7 @@ Setup
 Installing Terra
 ----------------
 
-Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On OSX, you need the Xcode Command Line Tools; On Linux you need the `gcc` toolchain (`build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013 installed.
+Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On OSX, you need the Xcode Command Line Tools; On Linux you need the `gcc` toolchain (`build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013 installed.
 
 Running Terra
 -------------
@@ -1127,7 +1127,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
 
 ### Windows ###
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+For instructions on installing Terra in Windows see this [readme](https://github.com/terralang/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
 
 
 ### Linux/OSX ###
@@ -1137,7 +1137,7 @@ The easiest way to get a working LLVM/Clang install is to download the download 
 
 Now get the Terra sources:
 
-    git clone https://github.com/zdevito/terra
+    git clone https://github.com/terralang/terra
 
 To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
 
