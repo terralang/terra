@@ -401,7 +401,7 @@ True if `type` is a pointer to a struct.
 
 ---
 
-    types.type:ispointertofunction()
+    type:ispointertofunction()
 
 True if `type` is a pointer to a function.
 
