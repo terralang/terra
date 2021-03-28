@@ -86,7 +86,9 @@ build_script:
 test_script:
   - cd tests
   - if /I "%USE_CMAKE%" EQU "1" (..\install\bin\terra run)
+  - if /I "%USE_CMAKE%" EQU "1" (..\install\bin\terra run -g)
   - if /I "%USE_CMAKE%" NEQ "1" (..\release\bin\terra run)
+  - if /I "%USE_CMAKE%" NEQ "1" (..\release\bin\terra run -g)
   - cd ..
 
 artifacts:

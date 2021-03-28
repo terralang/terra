@@ -34,6 +34,12 @@ local function exists(path)
   return result
 end
 
+-- We can run this test concurrently, make sure we don't clobber the other test.
+local suffix = ""
+if 0 ~= terralib.isdebug then
+  suffix = "-debug"
+end
+
 if ffi.os ~= "Windows" then
     print(libpath)
     local libext = ".so"
@@ -53,14 +59,14 @@ if ffi.os ~= "Windows" then
         flags:insertall {"-pagezero_size","10000", "-image_base", "100000000"}
     end
 
-    terralib.saveobj("dynlib",{main = main},flags)
+    terralib.saveobj("dynlib" .. suffix,{main = main},flags)
 
-    assert(0 == os.execute("./dynlib"))
+    assert(0 == os.execute("./dynlib" .. suffix))
 
 else
     local putenv = terralib.externfunction("_putenv", rawstring -> int)
     local flags = {libpath.."\\terra.lib",libpath.."\\lua51.lib"}
-    terralib.saveobj("dynlib.exe",{main = main},flags)
+    terralib.saveobj("dynlib" .. suffix .. ".exe",{main = main},flags)
     putenv("Path="..os.getenv("Path")..";"..terralib.terrahome.."\\bin") --make dll search happy
-    assert(0 == os.execute(".\\dynlib.exe"))
+    assert(0 == os.execute(".\\dynlib" .. suffix .. ".exe"))
 end

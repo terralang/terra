@@ -218,6 +218,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   if [[ $(uname) != Darwin ]]; then
       pushd tests
       ../install/bin/terra ./run
+      ../install/bin/terra ./run -g
       popd
   fi
 

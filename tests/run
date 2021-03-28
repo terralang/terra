@@ -1,6 +1,11 @@
 #!../terra
 local ffi = require("ffi")
 
+local test_args = ""
+for _, a in ipairs(arg) do
+  test_args = test_args .. a .. " "
+end
+
 local lscmd
 if ffi.os == "Windows" then
     lscmd = "cmd /c dir /b /s"
@@ -32,14 +37,14 @@ for line in io.popen(lscmd):lines() do
     end
     local file = line:match("^([^/]*%.t)$") or line:match("^(fails/[^/]*%.t)$")
     if file then
-        print(file .. ":")
-        local execstring = getcommand(file) .. " " .. file
+        print(test_args .. file .. ":")
+        local execstring = getcommand(file) .. " " .. test_args .. file
         local result = os.execute(execstring)
         if type(result) == "number" and result == 0 or result == true then
-            table.insert(passed,file)
+            table.insert(passed,test_args .. file)
         else
             --error("fail")
-            table.insert(failed,file)
+            table.insert(failed,test_args .. file)
         end
     end
 end
