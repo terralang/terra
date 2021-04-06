@@ -351,27 +351,71 @@ int terra_inittarget(lua_State *L) {
     TT->next_unused_id = 0;
     TT->ctx = new LLVMContext();
     std::string err;
-    const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
-    if (!TheTarget) {
-        luaL_error(L, "failed to initialize target for LLVM Triple: %s (%s)",
-                   TT->Triple.c_str(), err.c_str());
-    }
-    TT->tm = TheTarget->createTargetMachine(
-            TT->Triple, TT->CPU, TT->Features, options,
-#if defined(__linux__) || defined(__unix__) || (LLVM_VERSION < 50)
-            Reloc::PIC_,
+
+    llvm::Triple llvm_triple = llvm::Triple(TT->Triple);
+    /*
+    printf("DEBUG - tcompiler.cpp: reading in Triple:\n\t\tArch Name: %s\n\t\tVendor: %s\n\t\tOS: %s\n\t\tEnvironment: %s\n", llvm_triple.getArchName().begin(), llvm_triple.getVendorName().begin(), llvm_triple.getOSName().begin(), llvm_triple.getEnvironmentName().begin());
+
+      printf("DEBUG - prefix: %s\n", llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin());
+      printf("DEBUG - name: %s\n", llvm::Triple::getArchTypeName(llvm_triple.getArch()).begin());
+    */
+    bool notSpir;
+#if LLVM_VERSION > 38
+    notSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()).begin(), "spir");
 #else
-            Optional<Reloc::Model>(),
+    notSpir = strcmp(llvm::Triple::getArchTypePrefix(llvm_triple.getArch()), "spir");
+#endif
+  if (notSpir) {
+        printf("DEBUG - tcompiler.cpp: using LLVM for non-spir triple\n");
+	const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
+	if (!TheTarget) {
+	  luaL_error(L, "failed to initialize target for LLVM Triple: %s (%s)",
+		     TT->Triple.c_str(), err.c_str());
+	}
+	TT->tm = TheTarget->createTargetMachine(
+              TT->Triple, TT->CPU, TT->Features, options,
+#if defined(__linux__) || defined(__unix__) || (LLVM_VERSION < 50)
+	      Reloc::PIC_,
+#else
+	      Optional<Reloc::Model>(),
 #endif
 #if defined(__powerpc64__)
-            // On PPC the small model is limited to 16bit offsets
-            CodeModel::Medium,
+	      // On PPC the small model is limited to 16bit offsets
+	      CodeModel::Medium,
 #else
-            // Use small model so that we can use signed 32bits offset in the function and
-            // GV tables
-            CodeModel::Small,
+	      // Use small model so that we can use signed 32bits offset in the function and
+	      // GV tables
+	      CodeModel::Small,
 #endif
-            CodeGenOpt::Aggressive);
+	      CodeGenOpt::Aggressive);
+      } else {
+        printf("DEBUG - tcompiler.cpp: using clang path for spir target\n");
+	clang::CompilerInvocation CInvok;
+	// TODO: replace "spir64" with llvm:Triple from TT->Triple
+	const char *args[] = {"clang", "-target", "spir64", "-flto"};
+
+	IntrusiveRefCntPtr<clang::DiagnosticIDs> DiagID(new clang::DiagnosticIDs());
+	IntrusiveRefCntPtr<clang::DiagnosticOptions> DiagOpts(new clang::DiagnosticOptions());
+	auto *DiagsBuffer = new clang::IgnoringDiagConsumer();
+	std::unique_ptr<clang::DiagnosticsEngine> Diags(new clang::DiagnosticsEngine(DiagID, &*DiagOpts, DiagsBuffer));
+
+	// DON'T HARDCODE THE ARGS LENGTH LIKE THAT?
+	clang::CompilerInvocation::CreateFromArgs(CInvok, args, &args[4], *Diags);
+	// TODO: get rid of CompilerInstance
+	clang::CompilerInstance *compiler = new clang::CompilerInstance();
+	compiler->setTarget(clang::TargetInfo::CreateTargetInfo(*Diags, CInvok.TargetOpts));
+
+	TT->ti = &compiler->getTarget();
+	if (TT->ti)
+	  {
+	    llvm::Triple tr = TT->ti->getTriple();
+	    printf("DEBUG - tcompiler.cpp: TargetInfo created, Triple stored as...\n\t\tArch Name: %s\n\t\tVendor: %s\n\t\tOS: %s\n\t\tEnvironment: %s\n", tr.getArchName().begin(), tr.getVendorName().begin(), tr.getOSName().begin(), tr.getEnvironmentName().begin());
+	  }
+	else
+	  {
+	    printf("DEBUG - tcompiler.cpp: Attempted to create TargetInfo... didn't go so well...\n");
+	  }
+      }
     TT->external = new Module("external", *TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -392,17 +436,33 @@ int terra_initcompilationunit(lua_State *L) {
 
     CU->M = new Module("terra", *TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
-#if LLVM_VERSION >= 38
-    CU->M->setDataLayout(TT->tm->createDataLayout());
+#if LLVM_VERSION > 38
+    if (TT->tm)
+      CU->M->setDataLayout(TT->tm->createDataLayout());
+    else
+      CU->M->setDataLayout(TT->ti->getDataLayout());
+#elif LLVM_VERSION == 38
+    if (TT->tm)
+      CU->M->setDataLayout(TT->tm->createDataLayout());
+    else
+      CU->M->setDataLayout(TT->ti->getDataLayoutString());
 #elif LLVM_VERSION == 37
-    CU->M->setDataLayout(*TT->tm->getDataLayout());
+    if (TT->tm)
+      CU->M->setDataLayout(*TT->tm->getDataLayout());
+    else
+      CU->M->setDataLayout(*TT->ti->getDataLayout());
 #else
-    CU->M->setDataLayout(TT->tm->getDataLayout());
+    if (TT->tm)
+      CU->M->setDataLayout(TT->tm->getDataLayout());
+    else
+      CU->M->setDataLayout(TT->ti->getDataLayoutString());
 #endif
 
-    CU->mi = new ManualInliner(TT->tm, CU->M);
     CU->fpm = new FunctionPassManagerT(CU->M);
-    llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
+    if (TT->tm) {
+      CU->mi = new ManualInliner(TT->tm, CU->M);
+      llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
+    }
     llvmutil_addoptimizationpasses(CU->fpm);
     CU->fpm->doInitialization();
     lua_pushlightuserdata(L, CU);
@@ -436,7 +496,7 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setAllocateGVsWithCode(false)
             .setUseMCJIT(CU->T->options.usemcjit)
 #endif
-            .setTargetOptions(CU->TT->tm->Options)
+      //            .setTargetOptions(CU->TT->tm->Options)
 #if LLVM_VERSION < 50
             .setOptLevel(CodeGenOpt::Aggressive);
 #else
@@ -488,7 +548,10 @@ void freetarget(TerraTarget *TT) {
     assert(TT->nreferences > 0);
     if (0 == --TT->nreferences) {
         delete TT->external;
-        delete TT->tm;
+	if (TT->tm)
+	  delete TT->tm;
+	else
+	  delete TT->ti;
         delete TT->ctx;
         delete TT;
     }
@@ -3231,7 +3294,7 @@ static bool SaveAndLink(TerraCompilationUnit *CU, Module *M,
         unlink(tmpnamebuf);
         return true;
     }
-    if (llvmutil_emitobjfile(M, CU->TT->tm, true, tmp)) {
+    if (CU->TT->tm && llvmutil_emitobjfile(M, CU->TT->tm, true, tmp)) {
         terra_pusherror(CU->T, "llvm: llvmutil_emitobjfile");
         unlink(tmpnamebuf);
         return true;
@@ -3327,7 +3390,8 @@ static int terra_saveobjimpl(lua_State *L) {
     lua_getfield(L, 3, "llvm_cu");
     TerraCompilationUnit *CU = (TerraCompilationUnit *)terra_tocdatapointer(L, -1);
     assert(CU);
-    if (optimize) {
+    // HACKISH - Should not be able to optimize with TargetInfo if not supported...
+    if (optimize && CU->TT->tm) {
         llvmutil_optimizemodule(CU->M, CU->TT->tm);
     }
     // TODO: interialize the non-exported functions?

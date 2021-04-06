@@ -23,6 +23,7 @@ struct TerraTarget {
     int nreferences;
     std::string Triple, CPU, Features;
     llvm::TargetMachine *tm;
+    clang::TargetInfo *ti;
     llvm::LLVMContext *ctx;
     llvm::Module *external;  // module that holds IR for externally included things (from
                              // includec or linkllvm)
