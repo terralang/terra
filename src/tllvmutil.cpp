@@ -4,11 +4,7 @@
 
 #include "tllvmutil.h"
 
-#if LLVM_VERSION <= 36
-#include "llvm/Target/TargetLibraryInfo.h"
-#else
 #include "llvm/Analysis/TargetLibraryInfo.h"
-#endif
 #include "llvm/MC/MCAsmInfo.h"
 #if LLVM_VERSION < 39
 #include "llvm/MC/MCDisassembler.h"
@@ -32,27 +28,9 @@ using namespace llvm;
 
 void llvmutil_addtargetspecificpasses(PassManagerBase *fpm, TargetMachine *TM) {
     assert(TM && fpm);
-#if LLVM_VERSION >= 37
     TargetLibraryInfoImpl TLII(TM->getTargetTriple());
     fpm->add(new TargetLibraryInfoWrapperPass(TLII));
-#else
-    TargetLibraryInfo *TLI = new TargetLibraryInfo(Triple(TM->getTargetTriple()));
-    fpm->add(TLI);
-#endif
-#if LLVM_VERSION <= 35
-    DataLayout *TD = new DataLayout(*TM->getDataLayout());
-#endif
-#if LLVM_VERSION == 35
-    fpm->add(new DataLayoutPass(*TD));
-#elif LLVM_VERSION == 36
-    fpm->add(new DataLayoutPass());
-#else
     fpm->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
-#endif
-
-#if LLVM_VERSION >= 33 && LLVM_VERSION <= 36
-    TM->addAnalysisPasses(*fpm);
-#endif
 }
 
 class PassManagerWrapper : public PassManagerBase {
@@ -72,10 +50,8 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
 #if LLVM_VERSION < 90
     PMB.DisableUnitAtATime = true;
 #endif
-#if LLVM_VERSION >= 35
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
-#endif
 
     PassManagerWrapper W(fpm);
     PMB.populateModulePassManager(W);
@@ -124,22 +100,12 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
     MCInstPrinter *IP = TheTarget->createMCInstPrinter(
-#if LLVM_VERSION >= 37
             Triple(TripleName),
-#endif
             AsmPrinterVariant, *MAI, *MII, *MRI
-#if LLVM_VERSION <= 36
-            ,
-            *STI
-#endif
     );
     assert(IP && "Unable to create instruction printer!");
 
-#if LLVM_VERSION < 36
-    SimpleMemoryObject SMO;
-#else
     ArrayRef<uint8_t> Bytes((uint8_t *)data, numBytes);
-#endif
 
     uint64_t addr = (uint64_t)data;
     uint64_t Size;
@@ -147,10 +113,7 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     raw_fd_ostream Out(fileno(stdout), false);
     for (size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
-#if LLVM_VERSION <= 35
-        MCDisassembler::DecodeStatus S =
-                DisAsm->getInstruction(Inst, Size, SMO, addr + b, nulls(), Out);
-#elif LLVM_VERSION <= 90
+#if LLVM_VERSION <= 90
         MCDisassembler::DecodeStatus S = DisAsm->getInstruction(
                 Inst, Size, Bytes.slice(b), addr + b, nulls(), Out);
 #else
@@ -166,11 +129,8 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 #else
                       addr + b,
 #endif
-                      ""
-#if LLVM_VERSION >= 37
-                      ,
+                      "",
                       *STI
-#endif
 #if LLVM_VERSION >= 100
                       ,
                       Out
@@ -201,11 +161,7 @@ bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
     CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
 #endif
 
-#if LLVM_VERSION <= 36
-    formatted_raw_ostream destf(dest);
-#else
     emitobjfile_t &destf = dest;
-#endif
 
 #if LLVM_VERSION >= 70
     if (TM->addPassesToEmitFile(pass, destf, nullptr, ft)) {
@@ -256,8 +212,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
     }
 #if LLVM_VERSION == 38
     virtual Value *materializeDeclFor(Value *V) override {
-#elif LLVM_VERSION < 38
-    virtual Value *materializeValueFor(Value *V) override {
 #else
     virtual Value *materialize(Value *V) override {
 #endif
@@ -281,7 +235,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst *, 8> Returns;
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
-#if LLVM_VERSION >= 37
                 DISubprogram *SP = fn->getSubprogram();
 
                 Function *F = cast<Function>(MapValue(fn, VMap, RF_None, NULL, this));
@@ -308,7 +261,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
                             SP->getDeclaration()));
 #endif
                 }
-#endif
             } else {
                 newfn->setLinkage(GlobalValue::ExternalLinkage);
             }
@@ -338,20 +290,12 @@ struct CopyConnectedComponent : public ValueMaterializer {
             return materializeValueForMetadata(V);
     }
     DIBuilder *DI;
-#if LLVM_VERSION >= 37
     DICompileUnit *NCU;
-#else
-    DICompileUnit NCU;
-#endif
     void CopyDebugMetadata() {
         if (NamedMDNode *NMD = src->getNamedMetadata("llvm.module.flags")) {
             NamedMDNode *New = dest->getOrInsertNamedMetadata(NMD->getName());
             for (unsigned i = 0; i < NMD->getNumOperands(); i++) {
-#if LLVM_VERSION <= 35
-                New->addOperand(MapValue(NMD->getOperand(i), VMap));
-#else
                 New->addOperand(MapMetadata(NMD->getOperand(i), VMap));
-#endif
             }
         }
 
@@ -379,7 +323,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #endif
             }
         }
-#elif LLVM_VERSION >= 37
+#else
         if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
             DI = new DIBuilder(*dest);
             DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
@@ -388,44 +332,18 @@ struct CopyConnectedComponent : public ValueMaterializer {
                                         CU->isOptimized(), CU->getFlags(),
                                         CU->getRuntimeVersion());
         }
-#else
-        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-            DI = new DIBuilder(*dest);
-            DICompileUnit CU(CUN->getOperand(0));
-            NCU = DI->createCompileUnit(CU.getLanguage(), CU.getFilename(),
-                                        CU.getDirectory(), CU.getProducer(),
-                                        CU.isOptimized(), CU.getFlags(),
-                                        CU.getRunTimeVersion());
-        }
 #endif
     }
 
     Value *materializeValueForMetadata(Value *V) {
-#if LLVM_VERSION <= 35
-        if (MDNode *MD = dyn_cast<MDNode>(V)) {
-            DISubprogram SP(MD);
-            if (DI != NULL && SP.isSubprogram()) {
-#else
         if (auto *MDV = dyn_cast<MetadataAsValue>(V)) {
             Metadata *MDraw = MDV->getMetadata();
             MDNode *MD = dyn_cast<MDNode>(MDraw);
-#if LLVM_VERSION >= 37
             DISubprogram *SP = getDISubprogram(MD);
             if (MD != NULL && DI != NULL && SP != NULL) {
-#else
-            DISubprogram SP(MD);
-            if (MD != NULL && DI != NULL && SP.isSubprogram()) {
-#endif
-#endif
 
-#if LLVM_VERSION >= 37
                 {
-#else
-                if (Function *OF = SP.getFunction()) {
-                    Function *F = cast<Function>(MapValue(OF, VMap, RF_None, NULL, this));
-#endif
 
-#if LLVM_VERSION >= 37
 #if LLVM_VERSION >= 40
                     // DISubprogram *NSP = SP;
                     DISubprogram *NSP = DI->createFunction(
@@ -460,20 +378,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
                         newfn->setSubprogram(NSP);
                     }
 
-#else
-                    DISubprogram NSP = DI->createFunction(
-                            SP.getContext(), SP.getName(), SP.getLinkageName(),
-                            DI->createFile(SP.getFilename(), SP.getDirectory()),
-                            SP.getLineNumber(), SP.getType(), SP.isLocalToUnit(),
-                            SP.isDefinition(), SP.getScopeLineNumber(), SP.getFlags(),
-                            SP.isOptimized(), F);
-#endif
-
-#if LLVM_VERSION <= 35
-                    return NSP;
-#else
                     return MetadataAsValue::get(dest->getContext(), NSP);
-#endif
                 }
                 /* fallthrough */
             }

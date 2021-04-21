@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-16.04', 'macos-10.15']
-        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
+        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
@@ -49,8 +49,6 @@ jobs:
             llvm: '10'
 
           # CMake
-          - llvm: '3.5'
-            cmake: '1'
           - llvm: '5.0'
             cmake: '0'
           - llvm: '7'
@@ -73,8 +71,6 @@ jobs:
             lua: 'moonjit'
 
           # CUDA: only LLVM 9
-          - llvm: '3.5'
-            cuda: '1'
           - llvm: '3.8'
             cuda: '1'
           - llvm: '5.0'
@@ -91,8 +87,6 @@ jobs:
             cuda: '1'
 
           # no-static: only LLVM 8
-          - llvm: '3.5'
-            static: '0'
           - llvm: '3.8'
             static: '0'
           - llvm: '5.0'
@@ -109,8 +103,6 @@ jobs:
             static: '0'
 
           # no-slib: only LLVM 9
-          - llvm: '3.5'
-            slib: '0'
           - llvm: '3.8'
             slib: '0'
           - llvm: '5.0'
@@ -127,8 +119,6 @@ jobs:
             slib: '0'
 
           # Moonjit: only LLVM 9
-          - llvm: '3.5'
-            lua: 'moonjit'
           - llvm: '3.8'
             lua: 'moonjit'
           - llvm: '5.0'
