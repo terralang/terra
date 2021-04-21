@@ -100,9 +100,7 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
     MCInstPrinter *IP = TheTarget->createMCInstPrinter(
-            Triple(TripleName),
-            AsmPrinterVariant, *MAI, *MII, *MRI
-    );
+            Triple(TripleName), AsmPrinterVariant, *MAI, *MII, *MRI);
     assert(IP && "Unable to create instruction printer!");
 
     ArrayRef<uint8_t> Bytes((uint8_t *)data, numBytes);
@@ -129,8 +127,7 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 #else
                       addr + b,
 #endif
-                      "",
-                      *STI
+                      "", *STI
 #if LLVM_VERSION >= 100
                       ,
                       Out
@@ -341,9 +338,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             MDNode *MD = dyn_cast<MDNode>(MDraw);
             DISubprogram *SP = getDISubprogram(MD);
             if (MD != NULL && DI != NULL && SP != NULL) {
-
                 {
-
 #if LLVM_VERSION >= 40
                     // DISubprogram *NSP = SP;
                     DISubprogram *NSP = DI->createFunction(

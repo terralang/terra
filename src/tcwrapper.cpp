@@ -659,9 +659,7 @@ public:
 #endif
 
 #if LLVM_VERSION < 50
-static llvm::sys::TimeValue ZeroTime() {
-    return llvm::sys::TimeValue::ZeroTime();
-}
+static llvm::sys::TimeValue ZeroTime() { return llvm::sys::TimeValue::ZeroTime(); }
 #else
 static llvm::sys::TimePoint<> ZeroTime() {
     return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
@@ -797,9 +795,9 @@ public:
             *contents = StringRef(data, size);
             lua_pop(L, 2);  // pop contents, size
         }
-        *status = clang::vfs::Status(Path.str(),
-                                     clang::vfs::getNextVirtualUniqueID(), ZeroTime(), 0,
-                                     0, size, filetype, llvm::sys::fs::all_all);
+        *status = clang::vfs::Status(Path.str(), clang::vfs::getNextVirtualUniqueID(),
+                                     ZeroTime(), 0, 0, size, filetype,
+                                     llvm::sys::fs::all_all);
         lua_pop(L, 2);  // pop table, kind
         return true;
     }
@@ -927,9 +925,7 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
-    TheCompInst->createPreprocessor(
-            TU_Complete
-    );
+    TheCompInst->createPreprocessor(TU_Complete);
     TheCompInst->createASTContext();
 
     // Set the main file handled by the source manager to the input file.

@@ -10,9 +10,9 @@
 using namespace llvm;
 
 ManualInliner::ManualInliner(TargetMachine *TM, Module *m) {
-// Trick the Module-at-a-time inliner into running on a single SCC
-// First we run it on the (currently empty) module to initialize
-// the inlining pass with the Analysis passes it needs.
+    // Trick the Module-at-a-time inliner into running on a single SCC
+    // First we run it on the (currently empty) module to initialize
+    // the inlining pass with the Analysis passes it needs.
 
     PM.add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 
