@@ -222,7 +222,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   fi
 
   # Only deploy CMake builds, and only with LLVM 6.
-  if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-9 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
     zip -q -r $RELEASE_NAME.zip $RELEASE_NAME
