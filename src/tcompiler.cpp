@@ -358,8 +358,7 @@ int terra_initcompilationunit(lua_State *L) {
 
 static void InitializeJIT(TerraCompilationUnit *CU) {
     if (CU->ee) return;  // already initialized
-    Module *topeemodule =
-            (CU->T->options.usemcjit) ? new Module("terra", *CU->TT->ctx) : CU->M;
+    Module *topeemodule = new Module("terra", *CU->TT->ctx);
 #ifdef _WIN32
     std::string MCJITTriple = CU->TT->Triple;
     MCJITTriple.append("-elf");  // on windows we need to use an elf container because
@@ -414,7 +413,6 @@ int terra_compilerinit(struct terra_State *T) {
     T->C = new terra_CompilerState();
     memset(T->C, 0, sizeof(terra_CompilerState));
     T->C->nreferences = 1;
-    T->options.usemcjit = 1;  // force mcjit use, since old JIT is no longer supported.
     return 0;
 }
 void freetarget(TerraTarget *TT) {
@@ -441,8 +439,7 @@ static void freecompilationunit(TerraCompilationUnit *CU) {
             delete CU->jiteventlistener;
             delete CU->ee;
         }
-        if (CU->T->options.usemcjit || !CU->ee)  // we own the module so we delete it
-            delete CU->M;
+        delete CU->M;  // we own the module so we delete it
         freetarget(CU->TT);
         terra_compilerfree(CU->C);  // decrement reference count to compiler
         delete CU;
@@ -2989,37 +2986,31 @@ static bool SaveSharedObject(TerraCompilationUnit *CU, Module *M,
 static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
     InitializeJIT(CU);
     ExecutionEngine *ee = CU->ee;
-    if (CU->T->options.usemcjit) {
-        if (gv->isDeclaration()) {
-            StringRef name = gv->getName();
-            if (name.startswith(
-                        "\01"))  // remove asm renaming tag before looking for symbol
-                name = name.substr(1);
-            return ee->getPointerToNamedFunction(name);
-        }
-        void *ptr = GetGlobalValueAddress(CU, gv->getName());
-        if (ptr) {
-            return ptr;
-        }
-        llvm::ValueToValueMapTy VMap;
-        Module *m = llvmutil_extractmodulewithproperties(
-                gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy, CU, VMap);
-
-        if (CU->T->options.debug > 1) {
-            llvm::SmallString<256> tmpname;
-            llvmutil_createtemporaryfile("terra", "so", tmpname);
-            if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
-            sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
-            void *result =
-                    sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
-            assert(result);
-            return result;
-        }
-        ee->addModule(UNIQUEIFY(Module, m));
-        return (void *)ee->getGlobalValueAddress(gv->getName().str());
-    } else {
-        return ee->getPointerToGlobal(gv);
+    if (gv->isDeclaration()) {
+        StringRef name = gv->getName();
+        if (name.startswith("\01"))  // remove asm renaming tag before looking for symbol
+            name = name.substr(1);
+        return ee->getPointerToNamedFunction(name);
     }
+    void *ptr = GetGlobalValueAddress(CU, gv->getName());
+    if (ptr) {
+        return ptr;
+    }
+    llvm::ValueToValueMapTy VMap;
+    Module *m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv,
+                                                     1, MCJITShouldCopy, CU, VMap);
+
+    if (CU->T->options.debug > 1) {
+        llvm::SmallString<256> tmpname;
+        llvmutil_createtemporaryfile("terra", "so", tmpname);
+        if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
+        sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
+        void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
+        assert(result);
+        return result;
+    }
+    ee->addModule(UNIQUEIFY(Module, m));
+    return (void *)ee->getGlobalValueAddress(gv->getName().str());
 }
 
 static int terra_jit(lua_State *L) {
@@ -3045,16 +3036,13 @@ static int terra_deletefunction(lua_State *L) {
         printf("deleting function: %s\n", func->getName().str().c_str());
     }
     // MCJIT can't free individual functions, so we need to leak the generated code
-    if (!func->use_empty() ||
-        CU->T->options.usemcjit) {  // for MCJIT, we need to keep the declaration so
-                                    // another function doesn't get the same name
-        VERBOSE_ONLY(CU->T) {
-            printf("... uses not empty, removing body but keeping declaration.\n");
-        }
-        func->deleteBody();
-    } else {
-        CU->mi->eraseFunction(func);
+
+    // for MCJIT, we need to keep the declaration so
+    // another function doesn't get the same name
+    VERBOSE_ONLY(CU->T) {
+        printf("... uses not empty, removing body but keeping declaration.\n");
     }
+    func->deleteBody();
     VERBOSE_ONLY(CU->T) { printf("... finish delete.\n"); }
     fstate->func = NULL;
     freecompilationunit(CU);
