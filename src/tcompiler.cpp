@@ -358,8 +358,7 @@ int terra_initcompilationunit(lua_State *L) {
 
 static void InitializeJIT(TerraCompilationUnit *CU) {
     if (CU->ee) return;  // already initialized
-    Module *topeemodule =
-            new Module("terra", *CU->TT->ctx);
+    Module *topeemodule = new Module("terra", *CU->TT->ctx);
 #ifdef _WIN32
     std::string MCJITTriple = CU->TT->Triple;
     MCJITTriple.append("-elf");  // on windows we need to use an elf container because
@@ -440,7 +439,7 @@ static void freecompilationunit(TerraCompilationUnit *CU) {
             delete CU->jiteventlistener;
             delete CU->ee;
         }
-        delete CU->M; // we own the module so we delete it
+        delete CU->M;  // we own the module so we delete it
         freetarget(CU->TT);
         terra_compilerfree(CU->C);  // decrement reference count to compiler
         delete CU;
@@ -2989,8 +2988,7 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
     ExecutionEngine *ee = CU->ee;
     if (gv->isDeclaration()) {
         StringRef name = gv->getName();
-        if (name.startswith(
-                    "\01"))  // remove asm renaming tag before looking for symbol
+        if (name.startswith("\01"))  // remove asm renaming tag before looking for symbol
             name = name.substr(1);
         return ee->getPointerToNamedFunction(name);
     }
@@ -2999,16 +2997,15 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
         return ptr;
     }
     llvm::ValueToValueMapTy VMap;
-    Module *m = llvmutil_extractmodulewithproperties(
-            gv->getName(), gv->getParent(), &gv, 1, MCJITShouldCopy, CU, VMap);
+    Module *m = llvmutil_extractmodulewithproperties(gv->getName(), gv->getParent(), &gv,
+                                                     1, MCJITShouldCopy, CU, VMap);
 
     if (CU->T->options.debug > 1) {
         llvm::SmallString<256> tmpname;
         llvmutil_createtemporaryfile("terra", "so", tmpname);
         if (SaveSharedObject(CU, m, NULL, tmpname.c_str())) lua_error(CU->T->L);
         sys::DynamicLibrary::LoadLibraryPermanently(tmpname.c_str());
-        void *result =
-                sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
+        void *result = sys::DynamicLibrary::SearchForAddressOfSymbol(gv->getName().str());
         assert(result);
         return result;
     }
@@ -3043,7 +3040,7 @@ static int terra_deletefunction(lua_State *L) {
     // for MCJIT, we need to keep the declaration so
     // another function doesn't get the same name
     VERBOSE_ONLY(CU->T) {
-      printf("... uses not empty, removing body but keeping declaration.\n");
+        printf("... uses not empty, removing body but keeping declaration.\n");
     }
     func->deleteBody();
     VERBOSE_ONLY(CU->T) { printf("... finish delete.\n"); }
