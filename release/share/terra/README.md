@@ -124,10 +124,10 @@ Ubuntu 16.04 and older. Please either upgrade to LLVM 6 or Ubuntu
 18.04, or build LLVM from source, or else use GNU Make on these
 systems (see below).
 
-Terra also supports an older build system based on GNU Make (for
-Linux, macOS) and NMake (for Windows). These build systems are both
-deprecated, and in the vast majority of circumstances CMake is both
-preferred and substantially more flexible.
+Terra also supports an older build system based on GNU Make (for Linux
+and macOS only). This build system is deprecated, and in the vast
+majority of circumstances CMake is both preferred and substantially
+more flexible.
 
 ### Supported LLVM Versions ###
 
@@ -278,17 +278,6 @@ variables) as on other OSes.
 Note that, even after Terra has been built, it is still necessary to
 run it from the Visual Studio Command Prompt so that it can detect the
 location of the system header files.
-
-### Building with NMake (Windows)
-
-Note: This build system is deprecated. Please use CMake instead (see
-above).
-
-Terra also has an older NMake build for Windows, though it is no
-longer recommended. For instructions, see [the msvc
-directory](https://github.com/terralang/terra/blob/master/msvc/README.md).
-
-Note that you will need to build LuaJIT yourself (unlike CMake).
 
 Hello, World
 ============
