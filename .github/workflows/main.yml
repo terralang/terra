@@ -10,11 +10,6 @@ jobs:
       - run: ./travis.sh
         env:
           CHECK_CLANG_FORMAT: 1
-      - uses: actions/upload-artifact@v2
-        with:
-          name: terra
-          path: |
-            *.zip
   build:
     name: Build (${{ matrix.os }}, llvm-${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, ${{ matrix.lua }})
     runs-on: ${{ matrix.os }}
@@ -161,6 +156,11 @@ jobs:
           SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
           SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
           TERRA_LUA: ${{ matrix.lua }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: terra
+          path: |
+            *.zip
   docker:
     name: Docker
     runs-on: ubuntu-latest
