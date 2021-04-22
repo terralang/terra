@@ -13,7 +13,8 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: terra
-          path: *.zip
+          path: |
+            *.zip
   build:
     name: Build (${{ matrix.os }}, llvm-${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, ${{ matrix.lua }})
     runs-on: ${{ matrix.os }}
