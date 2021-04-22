@@ -4,23 +4,19 @@ environment:
       LLVM_VERSION: 7.0.0
       LLVM_VERSION_SHORT: 70
       VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
-      USE_CMAKE: 1
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
       LLVM_VERSION: 7.0.0
       LLVM_VERSION_SHORT: 70
       VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
-      USE_CMAKE: 1
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 7.0.0
       LLVM_VERSION_SHORT: 70
       VS_MAJOR_VERSION: 14
-      USE_CMAKE: 1
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
       VS_MAJOR_VERSION: 14
       USE_CUDA: 1
-      USE_CMAKE: 1
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
       LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
@@ -30,15 +26,9 @@ environment:
       LLVM_VERSION: 5.0.2
       LLVM_VERSION_SHORT: 50
       VS_MAJOR_VERSION: 14
-      USE_CMAKE: 1
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2013
-      LLVM_VERSION: 3.5.2
-      LLVM_VERSION_SHORT: 35
-      VS_MAJOR_VERSION: 12
 
 install:
   # Hopefully temporary lines
-  - if /I "%LLVM_VERSION_SHORT%" LSS "40" (set BINARY_SOURCE_USER=elliottslaughter)
   - if /I "%LLVM_VERSION_SHORT%" GEQ "40" (set BINARY_SOURCE_USER=Mx7f)
   - appveyor DownloadFile https://github.com/%BINARY_SOURCE_USER%/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
   - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
@@ -46,10 +36,6 @@ install:
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
   - set CMAKE_PREFIX_PATH=%LLVM_DIR%
-
-  - if /I "%USE_CMAKE%" NEQ "1" (appveyor DownloadFile http://luajit.org/download/LuaJIT-2.0.5.zip)
-  - if /I "%USE_CMAKE%" NEQ "1" (7z x LuaJIT-2.0.5.zip)
-  - if /I "%USE_CMAKE%" NEQ "1" (set LUAJIT_DIR=%CD%\LuaJit-2.0.5)
 
   - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers2/cuda_9.2.148_windows -FileName cuda.exe)
   - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_9.2 cudart_9.2)
@@ -61,22 +47,15 @@ install:
   - set /p TERRA_VERSION=<terra_version.txt
 
 build_script:
-  - if /I "%USE_CMAKE%" EQU "1" (cd build)
-  - if /I "%USE_CMAKE%" EQU "1" (cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DCMAKE_GENERATOR_PLATFORM=x64)
-  - if /I "%USE_CMAKE%" EQU "1" (cmake --build . --target INSTALL --config Release)
-  - if /I "%USE_CMAKE%" EQU "1" (cd ..)
-
-  # There is probably a better way to do this...
-  - if /I "%USE_CMAKE%" NEQ "1" (if /I "%VS_MAJOR_VERSION%" EQU "14" (call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64))
-  - if /I "%USE_CMAKE%" NEQ "1" (if /I "%VS_MAJOR_VERSION%" EQU "12" (call "%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64))
-  - if /I "%USE_CMAKE%" NEQ "1" (cd msvc)
-  - if /I "%USE_CMAKE%" NEQ "1" (build %LUAJIT_DIR% %LLVM_DIR%)
-  - if /I "%USE_CMAKE%" NEQ "1" (cd ..)
+  - cd build
+  - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DCMAKE_GENERATOR_PLATFORM=x64
+  - cmake --build . --target INSTALL --config Release
+  - cd ..
 
   # Package for release
   - set TERRA_SHARE_PATH=%TERRA_DIR%\install\share\terra
   - ps: |
-        If($Env:LLVM_VERSION_SHORT -eq 60 -and $Env:USE_CMAKE -eq 1) {
+        If($Env:LLVM_VERSION_SHORT -eq 60) {
           $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
           Rename-Item install "$Env:RELEASE_NAME"
           7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
@@ -85,8 +64,7 @@ build_script:
 
 test_script:
   - cd tests
-  - if /I "%USE_CMAKE%" EQU "1" (..\install\bin\terra run)
-  - if /I "%USE_CMAKE%" NEQ "1" (..\release\bin\terra run)
+  - ..\install\bin\terra run
   - cd ..
 
 artifacts:

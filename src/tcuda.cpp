@@ -72,16 +72,10 @@ static void annotateKernel(terra_State *T, llvm::Module *M, llvm::Function *kern
     std::vector<METADATA_ROOT_TYPE *> vals;
     llvm::NamedMDNode *annot = M->getOrInsertNamedMetadata("nvvm.annotations");
     llvm::MDString *str = llvm::MDString::get(ctx, name);
-#if LLVM_VERSION <= 35
-    vals.push_back(kernel);
-    vals.push_back(str);
-    vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), value));
-#else
     vals.push_back(llvm::ValueAsMetadata::get(kernel));
     vals.push_back(str);
     vals.push_back(llvm::ConstantAsMetadata::get(
             llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), value)));
-#endif
     llvm::MDNode *node = llvm::MDNode::get(ctx, vals);
     annot->addOperand(node);
 }
@@ -317,11 +311,7 @@ int terra_toptx(lua_State *L) {
     moduleToPTX(T, M, major, minor, &ptx, libdevice);
     if (dumpmodule) {
         fprintf(stderr, "CUDA Module:\n");
-#if LLVM_VERSION < 38
-        M->dump();
-#else
         M->print(llvm::errs(), nullptr);
-#endif
         fprintf(stderr, "Generated PTX:\n%s\n", ptx.c_str());
     }
     lua_pushstring(L, ptx.c_str());

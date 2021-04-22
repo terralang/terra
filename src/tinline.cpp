@@ -10,24 +10,12 @@
 using namespace llvm;
 
 ManualInliner::ManualInliner(TargetMachine *TM, Module *m) {
-// Trick the Module-at-a-time inliner into running on a single SCC
-// First we run it on the (currently empty) module to initialize
-// the inlining pass with the Analysis passes it needs.
-#if LLVM_VERSION <= 35
-    DataLayout *TD = new DataLayout(*TM->getDataLayout());
-#endif
+    // Trick the Module-at-a-time inliner into running on a single SCC
+    // First we run it on the (currently empty) module to initialize
+    // the inlining pass with the Analysis passes it needs.
 
-#if LLVM_VERSION <= 35
-    PM.add(new DataLayoutPass(*TD));
-#elif LLVM_VERSION <= 36
-    PM.add(new DataLayoutPass());
-#else
     PM.add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
-#endif
 
-#if LLVM_VERSION >= 33 && LLVM_VERSION <= 36
-    TM->addAnalysisPasses(PM);
-#endif
     SI = (CallGraphSCCPass *)createFunctionInliningPass();
     PM.add(SI);
     PM.run(*m);
