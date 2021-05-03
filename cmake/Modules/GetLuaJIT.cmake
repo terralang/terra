@@ -1,6 +1,6 @@
 include(FindPackageHandleStandardArgs)
 
-set(TERRA_LUA "luajit" CACHE STRING "Build Terra against the specified Lua implementation")
+set(TERRA_LUA moonjit CACHE STRING "Build Terra against the specified Lua implementation")
 
 if(TERRA_LUA STREQUAL "luajit")
   set(LUAJIT_NAME "LuaJIT")
@@ -24,43 +24,20 @@ elseif(TERRA_LUA STREQUAL "moonjit")
   set(LUAJIT_VERSION_EXTRA -dev)
   set(LUAJIT_COMMIT "eb7168839138591e0d2a1751122966603a8b87c8")
   set(LUAJIT_URL_PREFIX "https://github.com/moonjit/moonjit/archive/")
-elseif(TERRA_LUA STREQUAL "external")
-  set(LUAJIT_NAME "LuaJIT")
-  set(LUAJIT_BASE "luajit")
-  if(DEFINED EXTERNAL_LUAJIT_VERSION)
-    string(REGEX MATCHALL
-      "^([0-9]+)\.([0-9]+)\.([0-9]+)(-.*)$"
-      LUAJIT_VERSION_PARTS EXTERNAL_LUAJIT_VERSION)
-    set(LUAJIT_VERSION_MAJOR ${CMAKE_MATCH_1})
-    set(LUAJIT_VERSION_MINOR ${CMAKE_MATCH_2})
-    set(LUAJIT_VERSION_PATCH ${CMAKE_MATCH_3})
-    set(LUAJIT_VERSION_EXTRA ${CMAKE_MATCH_4})
-  endif()
 else()
-  message(FATAL_ERROR "TERRA_LUA must be one of 'luajit', 'moonjit', 'external'")
+  message(FATAL_ERROR "TERRA_LUA must be one of 'luajit', 'moonjit'")
 endif()
-if(NOT LUAJIT_COMMIT STREQUAL "")
+
+if(NOT LUAJIT_VERSION_COMMIT STREQUAL "")
   set(LUAJIT_BASENAME "${LUAJIT_NAME}-${LUAJIT_COMMIT}")
   set(LUAJIT_URL "${LUAJIT_URL_PREFIX}/${LUAJIT_COMMIT}.tar.gz")
 else()
   set(LUAJIT_BASENAME "${LUAJIT_NAME}-${LUAJIT_VERSION_MAJOR}.${LUAJIT_VERSION_MINOR}.${LUAJIT_VERSION_PATCH}${LUAJIT_VERSION_EXTRA}")
   set(LUAJIT_URL "${LUAJIT_URL_PREFIX}/${LUAJIT_BASENAME}.tar.gz")
 endif()
-
-if(NOT TERRA_LUA STREQUAL "external")
-  set(LUAJIT_TAR "${PROJECT_BINARY_DIR}/${LUAJIT_BASENAME}.tar.gz")
-else()
-  set(LUAJIT_TAR "${PROJECT_BINARY_DIR}/${LUAJIT_TARNAME}")
-endif()
-
-if(LUAJIT_COMMIT STREQUAL "")
-  set(LUAJIT_SOURCE_DIR "${PROJECT_BINARY_DIR}/${LUAJIT_BASENAME}" CACHE STRING "")
-else()
-  set(LUAJIT_SOURCE_DIR "${PROJECT_BINARY_DIR}/${LUAJIT_COMMIT}" CACHE STRING "")
-endif()
-
+set(LUAJIT_TAR "${PROJECT_BINARY_DIR}/${LUAJIT_BASENAME}.tar.gz")
+set(LUAJIT_SOURCE_DIR "${PROJECT_BINARY_DIR}/${LUAJIT_BASENAME}")
 set(LUAJIT_HEADER_BASENAMES lua.h lualib.h lauxlib.h luaconf.h)
-
 if(WIN32)
   set(LUAJIT_INSTALL_PREFIX "${LUAJIT_SOURCE_DIR}/src")
   set(LUAJIT_INCLUDE_DIR "${LUAJIT_INSTALL_PREFIX}")
@@ -86,9 +63,7 @@ string(CONCAT
   "${CMAKE_SHARED_LIBRARY_SUFFIX}"
 )
 
-if(NOT TERRA_LUA STREQUAL "external")
-  file(DOWNLOAD "${LUAJIT_URL}" "${LUAJIT_TAR}")
-endif()
+file(DOWNLOAD "${LUAJIT_URL}" "${LUAJIT_TAR}")
 
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E tar xzf "${LUAJIT_TAR}"

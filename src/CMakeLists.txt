@@ -15,12 +15,15 @@ if(TERRA_ENABLE_CUDA)
   endforeach()
 endif()
 
+message("Clang Resource Directory: ${CLANG_RESOURCE_DIR}")
+
 add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/internalizedfiles.h"
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua"
     "${PROJECT_SOURCE_DIR}/lib/std.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
+    LuaJIT
   COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   VERBATIM
@@ -41,13 +44,13 @@ foreach(LUA_SRC ${TERRA_LIB_LUA_SRC})
   list(APPEND TERRA_LIB_LUA_GEN "${PROJECT_BINARY_DIR}/${LUA_H_GEN}")
   add_custom_command(
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
-    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" LuaJIT
     COMMAND ${LUAJIT_EXECUTABLE} -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
     VERBATIM
   )
   add_custom_command(
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_H_GEN}"
-    DEPENDS "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
+    DEPENDS "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}" LuaJIT
     COMMAND "${LUAJIT_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/genheader.lua" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}" "${PROJECT_BINARY_DIR}/${LUA_H_GEN}"
     VERBATIM
   )
@@ -213,8 +216,10 @@ set_source_files_properties(
     EXTERNAL_OBJECT true
     GENERATED true)
 
+add_dependencies(TerraLibrary LuaJIT)
 add_dependencies(TerraLibrary LLVMObjectFiles)
 
+add_dependencies(TerraLibraryShared LuaJIT)
 add_dependencies(TerraLibraryShared LLVMObjectFiles)
 
 set_target_properties(TerraLibraryShared PROPERTIES PREFIX "")
@@ -382,6 +387,10 @@ foreach(TERRA_TEST ${TERRA_TESTS})
   add_test(NAME ${TERRA_TEST}
     COMMAND $<TARGET_FILE:TerraExecutable> ${TERRA_TEST}
     WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tests
+  )
+  set_tests_properties(
+    ${TERRA_TEST} PROPERTIES
+    ENVIRONMENT "LUA_PATH=./?.lua"
   )
 endforeach()
 foreach(TERRA_TEST ${TERRA_TESTS_INSTALL})

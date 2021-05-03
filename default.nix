@@ -24,13 +24,21 @@ in stdenv.mkDerivation rec {
   nativeBuildInputs = [ pkgs.cmake ];
 
   buildInputs = with llvmPackages;
-    [ luajit llvm clang-unwrapped pkgs.libxml2 pkgs.ncurses ]
-    ++ lib.optional enableCUDA cuda;
+    [
+      luajit
+      (pkgs.symlinkJoin {
+        name = "llvmClangMerged";
+        paths = [ llvm clang-unwrapped ];
+      })
+      pkgs.libxml2
+      pkgs.ncurses
+      pkgs.gcc
+    ] ++ lib.optional enableCUDA cuda;
 
-  #doCheck = true;
+  doCheck = true;
   enableParallelBuilding = true;
   hardeningDisable = [ "fortify" ];
-  outputs = [ "bin" "dev" "out" ];
+  # outputs = [ "bin" "dev" "out" ];
 
   patches = [ ./nix-cflags.patch ];
   postPatch = ''
@@ -40,8 +48,6 @@ in stdenv.mkDerivation rec {
 
   cmakeFlags = lib.concatStringsSep " " ([ "-DTERRA_ENABLE_CMAKE=ON" ]
     ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON");
-
-  # checkPhase = "(cd tests && ../terra run)";
 
   meta = with lib; {
     description = "A low-level counterpart to Lua";
