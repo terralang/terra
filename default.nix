@@ -32,7 +32,6 @@ in stdenv.mkDerivation rec {
       })
       pkgs.libxml2
       pkgs.ncurses
-      pkgs.gcc
     ] ++ lib.optional enableCUDA cuda;
 
   doCheck = true;
