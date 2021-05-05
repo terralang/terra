@@ -3069,6 +3069,11 @@ static int terra_disassemble(lua_State *L) {
 
 static bool FindLinker(terra_State *T, LLVM_PATH_TYPE *linker, const char *target) {
 #ifndef _WIN32
+    const char* linker_name = getenv("CC");
+    if(!linker_name)
+        linker_name = getenv("CXX");
+    if(!linker_name)
+        linker_name = "gcc"
     *linker = *sys::findProgramByName(getenv("CXX"));
     return *linker == "";
 #else
