@@ -267,6 +267,8 @@ add_custom_target(
     ${LUAJIT_OBJECTS}
 )
 
+set(LUAJIT_LIBRARY ${LUAJIT_STATIC_LIBRARY})
+
 mark_as_advanced(
   LUAJIT_BASENAME
   LUAJIT_URL

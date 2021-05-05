@@ -58,13 +58,14 @@ if(WIN32 AND TERRA_SLIB_INCLUDE_LUAJIT)
   message(FATAL_ERROR "TERRA_SLIB_INCLUDE_LUAJIT is not supported on Windows")
 endif()
 
-find_package(LuaJIT REQUIRED)
-find_program(LUAJIT_EXECUTABLE luajit REQUIRED)
-
 include(GNUInstallDirs)
 include(VersionNumber)
 include(BuildDirs)
+
 # include(GetLuaJIT)
+find_package(LuaJIT REQUIRED)
+find_program(LUAJIT_EXECUTABLE luajit REQUIRED)
+
 include(ExtractLLVM)
 
 if(LLVM_VERSION_MAJOR GREATER 9)
