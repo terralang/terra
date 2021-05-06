@@ -24,7 +24,7 @@ add_custom_command(
     "${PROJECT_SOURCE_DIR}/lib/std.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
     LuaJIT
-  COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
+  COMMAND "${LUAJIT_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" "${PROJECT_BINARY_DIR}/internalizedfiles.h" "${CLANG_RESOURCE_DIR}" "%.h$" "${CLANG_RESOURCE_DIR}" "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   VERBATIM
 )
@@ -45,7 +45,7 @@ foreach(LUA_SRC ${TERRA_LIB_LUA_SRC})
   add_custom_command(
     OUTPUT "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
     DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" LuaJIT
-    COMMAND ${LUAJIT_EXECUTABLE} -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
+    COMMAND "${LUAJIT_EXECUTABLE}" -bg "${CMAKE_CURRENT_SOURCE_DIR}/${LUA_SRC}" "${PROJECT_BINARY_DIR}/${LUA_BC_GEN}"
     VERBATIM
   )
   add_custom_command(
