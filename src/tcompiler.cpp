@@ -274,7 +274,7 @@ int terra_inittarget(lua_State *L) {
     if (TT->CPU == "generic") {
         TT->CPU = "x86-64";
     }
-    
+
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
     else {
@@ -3069,12 +3069,10 @@ static int terra_disassemble(lua_State *L) {
 
 static bool FindLinker(terra_State *T, LLVM_PATH_TYPE *linker, const char *target) {
 #ifndef _WIN32
-    const char* linker_name = getenv("CC");
-    if(!linker_name)
-        linker_name = getenv("CXX");
-    if(!linker_name)
-        linker_name = "gcc"
-    *linker = *sys::findProgramByName(getenv("CXX"));
+    const char *linker_name = getenv("CC");
+    if (!linker_name) linker_name = getenv("CXX");
+    if (!linker_name) linker_name = "gcc";
+    *linker = *sys::findProgramByName(linker_name);
     return *linker == "";
 #else
     lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
