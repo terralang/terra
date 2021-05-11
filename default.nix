@@ -6,6 +6,12 @@
 let
 
   luajit = pkgs.luajit.overrideAttrs (old: rec {
+    src = pkgs.fetchFromGitHub {
+      owner = "LuaJIT";
+      repo = "LuaJIT";
+      rev = "9143e86498436892cb4316550be4d45b68a61224";
+      sha256 = "1zw1yr0375d6jr5x20zvkvk76hkaqamjynbswpl604w6r6id070b";
+    };
     preBuild = ''
       substituteInPlace ./src/Makefile \
         --replace "default all:	$(TARGET_T)" "default all:	$(ALL_T)"
@@ -33,6 +39,8 @@ in stdenv.mkDerivation rec {
       pkgs.libxml2
       pkgs.ncurses
     ] ++ lib.optional enableCUDA cuda;
+
+  INCLUDE_PATH = "${lib.getDev stdenv.cc.libc}/include;${luajit}/include";
 
   doCheck = true;
   enableParallelBuilding = true;
