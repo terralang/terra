@@ -11,12 +11,12 @@ jobs:
         env:
           CHECK_CLANG_FORMAT: 1
   build:
-    name: Build (os=${{ matrix.os }}, llvm=${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, lua=${{ matrix.lua }})
+    name: Build (${{ matrix.os }}, llvm-${{ matrix.llvm }}, cmake=${{ matrix.cmake }}, cuda=${{ matrix.cuda }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, ${{ matrix.lua }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ['ubuntu-16.04', 'macos-10.15']
-        llvm: ['3.5', '3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
+        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
@@ -44,15 +44,11 @@ jobs:
             static: '0'
           - os: 'macos-10.15'
             slib: '0'
-          # FIXME: https://github.com/terralang/terra/issues/479
+          # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-10.15'
             llvm: '10'
-          - os: 'macos-10.15'
-            llvm: '11'
 
           # CMake
-          - llvm: '3.5'
-            cmake: '1'
           - llvm: '5.0'
             cmake: '0'
           - llvm: '7'
@@ -75,8 +71,6 @@ jobs:
             lua: 'moonjit'
 
           # CUDA: only LLVM 9
-          - llvm: '3.5'
-            cuda: '1'
           - llvm: '3.8'
             cuda: '1'
           - llvm: '5.0'
@@ -92,9 +86,7 @@ jobs:
           - llvm: '11'
             cuda: '1'
 
-          # no-static: only LLVM 9
-          - llvm: '3.5'
-            static: '0'
+          # no-static: only LLVM 8
           - llvm: '3.8'
             static: '0'
           - llvm: '5.0'
@@ -103,7 +95,7 @@ jobs:
             static: '0'
           - llvm: '7'
             static: '0'
-          - llvm: '8'
+          - llvm: '9'
             static: '0'
           - llvm: '10'
             static: '0'
@@ -111,8 +103,6 @@ jobs:
             static: '0'
 
           # no-slib: only LLVM 9
-          - llvm: '3.5'
-            slib: '0'
           - llvm: '3.8'
             slib: '0'
           - llvm: '5.0'
@@ -129,8 +119,6 @@ jobs:
             slib: '0'
 
           # Moonjit: only LLVM 9
-          - llvm: '3.5'
-            lua: 'moonjit'
           - llvm: '3.8'
             lua: 'moonjit'
           - llvm: '5.0'
@@ -158,6 +146,11 @@ jobs:
           SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
           SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
           TERRA_LUA: ${{ matrix.lua }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: terra
+          path: |
+            *.zip
   docker:
     name: Docker
     runs-on: ubuntu-latest

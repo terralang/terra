@@ -174,7 +174,7 @@ if [[ $(uname) = Darwin ]]; then
 
   # workaround for https://github.com/terralang/terra/issues/365
   if [[ ! -e /usr/include ]]; then
-    export INCLUDE_PATH="$(xcrun --sdk macosx --show-sdk-path)/usr/include"
+    export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
   fi
 
   export PATH=$PWD:$PATH
@@ -207,15 +207,6 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_LUA=$TERRA_LUA
     )
   fi
-  if [[ $(uname) = Darwin ]]; then
-    # Hack: CMake tries to be smart and use XCode's copy of Clang by
-    # default. This causes LuaJIT to not build on Mojave and later
-    # (math.h not found) if the header package is not installed.
-    CMAKE_FLAGS+=(
-      -DCMAKE_C_COMPILER=$(which ${CC:-clang})
-      -DCMAKE_CXX_COMPILER=$(which ${CXX:-clang++})
-    )
-  fi
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
@@ -230,8 +221,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       popd
   fi
 
-  # Only deploy CMake builds, and only with LLVM 6.
-  if [[ $LLVM_CONFIG = llvm-config-6.0 && $USE_CUDA -eq 1 && ( $CC = gcc || $(uname) = Darwin ) ]]; then
+  # Only deploy CMake builds, and only with LLVM 9.
+  if [[ $LLVM_CONFIG = llvm-config-9 && $USE_CUDA -eq 1 && $TERRA_LUA = luajit ]]; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
     zip -q -r $RELEASE_NAME.zip $RELEASE_NAME

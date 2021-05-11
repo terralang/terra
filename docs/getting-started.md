@@ -14,7 +14,7 @@ Setup
 Installing Terra
 ----------------
 
-Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/zdevito/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On OSX, you need the Xcode Command Line Tools; On Linux you need the `gcc` toolchain (`build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013 installed.
+Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On OSX, you need the Xcode Command Line Tools; On Linux you need the `gcc` toolchain (`build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013 installed.
 
 Running Terra
 -------------
@@ -236,7 +236,7 @@ Terra has switch statements to generate them.
     else
         default_thing()
     end
-    
+
 The end on the last case may be omitted if the switch statement has an else
 
     switch expr do
@@ -260,7 +260,7 @@ Functions
 We have already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
     terra sort2(a : int, b : int) : {int,int} --the return type is optional
-        if a < b then   
+        if a < b then
             return a, b
         else
             return b, a
@@ -386,7 +386,7 @@ See the [API reference](api.html#function) for the full behavior.
 Scoping Rules
 -------------
 
-Like any language, Terra has a set of rules for how it resolves symbos like the function name `add1` when it sees them in an expression. Because Terra code is nested inside of Lua code, these scoping rules are more complicated that a non-embedded langauge.
+Like any language, Terra has a set of rules for how it resolves symbols like the function name `add1` when it sees them in an expression. Because Terra code is nested inside of Lua code, these scoping rules are more complicated than in a non-embedded language.
 
 When the Terra compiler looks up a symbol like `add1` it first looks in the local (lexical) environment of the `terra` function. If it doesn't find the symbol, then it continues the search in the enclosing (Lua) environment using Lua's scoping rules for local/global variables. If the compiler finds a Lua value, then it converts it to a Terra value where possible. Let's look at a few examples:
 
@@ -403,7 +403,7 @@ When the Terra compiler looks up a symbol like `add1` it first looks in the loca
 
 Here `N` is a Lua value of type `number`. When `powN` is defined, the value of `N` is looked up in the Lua environment and inlined into the function as an `int` literal.
 
-Since `N` is resolved when `powN` is defined, changing `N` after `powN` is compiled will not change the behavior of `powN`.  
+Since `N` is resolved when `powN` is defined, changing `N` after `powN` is compiled will not change the behavior of `powN`.
 
 Think of `terra powN(...` as a _constructor_ for a Terra function. It takes some initial values like `N` to create the and initialize the Terra function. Changing `N` after this constructor runs won't change the constructed object.
 
@@ -804,7 +804,7 @@ We've already seen examples of Lua code calling Terra functions. In general, you
     assert( foo( {1,2.3} ) == 3.3)
     assert( foo( {b = 1, a = 2.3} ) == 3 )
 
-More examples are in `tests/luabridge*.t`.  
+More examples are in `tests/luabridge*.t`.
 
 It is also possible to call Lua functions from Terra. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primitive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
 
@@ -921,11 +921,11 @@ This behavior is actually just syntax sugar for an escape expression.  In Terra,
 
 ### Quotes ###
 
-A quote allows you to generate a single Terra expression or statement outside of a Terra function. They are frequently used in combination with escapes to generate code. Quotes create the individual expressions and escapes are used stitch them together.
+A quote allows you to generate a single Terra expression or statement outside of a Terra function. They are frequently used in combination with escapes to generate code. Quotes create the individual expressions and escapes are used to stitch them together.
 
 	function addone(a)
 		--return quotation that
-		--represents adding 1 to a    
+		--represents adding 1 to a
 		return `a + 1
     end
 	terra doit()
@@ -1114,7 +1114,7 @@ In general, macros are just syntax sugar for escapes where each argument to the 
     terra f()
         var a,b = 1,2
         [ foo(`a,`b,`3) ]
-        -- equivlent
+        -- equivalent
         mfoo(a,b,3)
     end
 
@@ -1127,7 +1127,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
 
 ### Windows ###
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/zdevito/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+For instructions on installing Terra in Windows see this [readme](https://github.com/terralang/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
 
 
 ### Linux/OSX ###
@@ -1137,7 +1137,7 @@ The easiest way to get a working LLVM/Clang install is to download the download 
 
 Now get the Terra sources:
 
-    git clone https://github.com/zdevito/terra
+    git clone https://github.com/terralang/terra
 
 To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
 
@@ -1173,7 +1173,7 @@ A simple example initializes Terra and then runs code from the file specified in
         terra_init(L);
         for(int i = 1; i < argc; i++)
         	//run the terra code in each file
-            if(terra_dofile(L,argv[i]))  
+            if(terra_dofile(L,argv[i]))
                 return 1; //error
         return 0;
     }

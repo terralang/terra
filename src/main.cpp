@@ -138,7 +138,6 @@ void usage() {
            "    -g enable debugging symbols\n"
            "    -h print this help message\n"
            "    -i enter the REPL after processing source files\n"
-           "    -m use LLVM's MCJIT\n"
            "    -e 'chunk' : execute command-line 'chunk' of code\n"
            "    -  Execute stdin instead of script and stop parsing options\n");
 }
@@ -150,12 +149,11 @@ void parse_args(lua_State *L, int argc, char **argv, terra_Options *options,
                                        {"verbose", 0, NULL, 'v'},
                                        {"debugsymbols", 0, NULL, 'g'},
                                        {"interactive", 0, NULL, 'i'},
-                                       {"mcjit", 0, NULL, 'm'},
                                        {"execute", required_argument, NULL, 'e'},
                                        {NULL, 0, NULL, 0}};
     /*  Parse commandline options  */
     opterr = 0;
-    while ((ch = getopt_long(argc, argv, "+hvgime:p:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "+hvgie:p:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'v':
                 options->verbose++;
@@ -165,9 +163,6 @@ void parse_args(lua_State *L, int argc, char **argv, terra_Options *options,
                 break;
             case 'g':
                 options->debug++;
-                break;
-            case 'm':
-                options->usemcjit = 1;
                 break;
             case 'e':
                 options->cmd_line_chunk = (char *)malloc(strlen(optarg) + 1);
