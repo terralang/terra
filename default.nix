@@ -1,18 +1,27 @@
-{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib, stdenv ? pkgs.stdenv
-, fetchurl ? pkgs.fetchurl, fetchFromGitHub ? pkgs.fetchFromGitHub
-, llvmPackages ? pkgs.llvmPackages_10, ncurses ? pkgs.ncurses
-, cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
-, enableCUDA ? false, cudaPackages ? pkgs.cudaPackages }:
+{ sources ? import ./nix/sources.nix, enableCUDA ? false }:
 
 let
+
+  overlay = _: pkgs: { niv = (import sources.niv { }).niv; };
+
+  pkgs = import sources.nixpkgs {
+    overlays = [ overlay ];
+    config = { };
+  };
+
+  inherit (pkgs)
+    lib fetchurl fetchFromGitHub ncurses cmake libxml2 symlinkJoin cudaPackages;
+
+  llvmPackages = pkgs.llvmPackages_10;
+  stdenv = llvmPackages.stdenv;
+  cuda = cudaPackages.cudatoolkit_11;
+
   luajitRev = "9143e86498436892cb4316550be4d45b68a61224";
   luajitArchive = "LuaJIT-${luajitRev}.tar.gz";
   luajitSrc = fetchurl {
     url = "https://github.com/LuaJIT/LuaJIT/archive/${luajitRev}.tar.gz";
     sha256 = "0kasmyk40ic4b9dwd4wixm0qk10l88ardrfimwmq36yc5dhnizmy";
   };
-
-  cuda = cudaPackages.cudatoolkit_11;
 
 in stdenv.mkDerivation rec {
   pname = "terra";
