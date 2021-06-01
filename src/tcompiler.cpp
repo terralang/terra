@@ -1044,7 +1044,11 @@ struct CCallingConv {
     PointerType *Ptr(Type *t) { return PointerType::getUnqual(t); }
     Value *ConvertPrimitive(IRBuilder<> *B, Value *src, Type *dstType, bool issigned) {
         if (!dstType->isIntegerTy()) return src;
-        return B->CreateIntCast(src, dstType, issigned);
+        if (dstType == Type::getInt1Ty(*CU->TT->ctx)) {
+            return B->CreateICmpNE(src, ConstantInt::get(src->getType(), 0));
+        } else {
+            return B->CreateIntCast(src, dstType, issigned);
+        }
     }
     void EmitEntry(IRBuilder<> *B, Obj *ftype, Function *func,
                    std::vector<Value *> *variables) {
@@ -1808,7 +1812,12 @@ struct FunctionEmitter {
 
         if (fBase->isIntegerTy()) {
             if (tBase->isIntegerTy()) {
-                return B->CreateIntCast(exp, to->type, from->issigned);
+                if (to->islogical) {
+                    return B->CreateZExt(B->CreateICmpNE(exp, ConstantInt::get(fBase, 0)),
+                                         tBase);
+                } else {
+                    return B->CreateIntCast(exp, to->type, from->issigned);
+                }
             } else if (tBase->isFloatingPointTy()) {
                 if (from->issigned) {
                     return B->CreateSIToFP(exp, to->type);
