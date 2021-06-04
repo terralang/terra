@@ -234,7 +234,7 @@ bool OneTimeInit(struct terra_State *T) {
 #ifdef PRINT_LLVM_TIMING_STATS
         AddLLVMOptions(1, "-time-passes");
 #endif
-#ifndef __arm__
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(__PPC__)
         AddLLVMOptions(1, "-x86-asm-syntax=intel");
 #endif
         InitializeAllTargets();
