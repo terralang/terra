@@ -1,16 +1,9 @@
-{ sources ? import ./nix/sources.nix, enableCUDA ? false }:
+{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib, fetchurl ? pkgs.fetchurl
+, fetchFromGitHub ? pkgs.fetchFromGitHub, ncurses ? pkgs.ncurses
+, cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
+, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false }:
 
 let
-
-  overlay = _: pkgs: { niv = (import sources.niv { }).niv; };
-
-  pkgs = import sources.nixpkgs {
-    overlays = [ overlay ];
-    config = { };
-  };
-
-  inherit (pkgs)
-    lib fetchurl fetchFromGitHub ncurses cmake libxml2 symlinkJoin cudaPackages;
 
   llvmPackages = pkgs.llvmPackages_10;
   stdenv = llvmPackages.stdenv;
@@ -22,6 +15,17 @@ let
     url = "https://github.com/LuaJIT/LuaJIT/archive/${luajitRev}.tar.gz";
     sha256 = "0kasmyk40ic4b9dwd4wixm0qk10l88ardrfimwmq36yc5dhnizmy";
   };
+  llvmMerged = symlinkJoin {
+    name = "llvmClangMerged";
+    paths = with llvmPackages; [
+      llvm.out
+      llvm.dev
+      llvm.lib
+      clang-unwrapped.out
+      clang-unwrapped.dev
+      clang-unwrapped.lib
+    ];
+  };
 
 in stdenv.mkDerivation rec {
   pname = "terra";
@@ -30,14 +34,7 @@ in stdenv.mkDerivation rec {
   src = ./.;
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [
-    (symlinkJoin {
-      name = "llvmClangMerged";
-      paths = with llvmPackages; [ llvm clang-unwrapped ];
-    })
-    ncurses
-    libxml2
-  ] ++ lib.optional enableCUDA cuda;
+  buildInputs = [ llvmMerged ncurses libxml2 ] ++ lib.optional enableCUDA cuda;
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"
@@ -50,10 +47,20 @@ in stdenv.mkDerivation rec {
   hardeningDisable = [ "fortify" ];
   outputs = [ "bin" "dev" "out" "static" ];
 
-  patches = [ ./nix-cflags.patch ./disable-luajit-file-download.patch ];
+  patches = [
+    ./nix/cflags.patch
+    ./nix/disable-luajit-file-download.patch
+    ./nix/add-test-paths.patch
+  ];
+
+  INCLUDE_PATH = "${llvmMerged}/lib/clang/10.0.1/include";
+
   postPatch = ''
     substituteInPlace src/terralib.lua \
       --subst-var-by NIX_LIBC_INCLUDE ${lib.getDev stdenv.cc.libc}/include
+
+    substituteInPlace src/CMakeLists.txt \
+      --subst-var INCLUDE_PATH
   '';
 
   preConfigure = ''
