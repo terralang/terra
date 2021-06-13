@@ -25,7 +25,6 @@ let
         clang-unwrapped.out
         clang-unwrapped.dev
         clang-unwrapped.lib
-        libclang.dev
       ] else [
         llvm
         clang-unwrapped
@@ -72,7 +71,6 @@ in stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
-    exit 1
     install -Dm755 -t $bin/bin bin/terra
     install -Dm755 -t $out/lib lib/terra${stdenv.hostPlatform.extensions.sharedLibrary}
     install -Dm644 -t $static/lib lib/libterra_s.a
