@@ -44,7 +44,7 @@ in stdenv.mkDerivation rec {
     "-DHAS_TERRA_VERSION=0"
     "-DTERRA_VERSION=release-1.0.0-beta3"
     "-DTERRA_LUA=luajit"
-    "-DLLVM_INSTALL_PREFIX=${llvmMerged}"
+    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/10.0.1"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
   doCheck = true;
@@ -57,8 +57,6 @@ in stdenv.mkDerivation rec {
     ./nix/disable-luajit-file-download.patch
     # ./nix/add-test-paths.patch
   ];
-
-  INCLUDE_PATH = "${llvmMerged}/lib/clang/10.0.1/include";
 
   postPatch = ''
     substituteInPlace src/terralib.lua \
