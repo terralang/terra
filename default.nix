@@ -17,14 +17,19 @@ let
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
-    paths = with llvmPackages; [
-      llvm.out
-      llvm.dev
-      llvm.lib
-      clang-unwrapped.out
-      clang-unwrapped.dev
-      clang-unwrapped.lib
-    ];
+    paths = with llvmPackages;
+      if llvm ? dev then [
+        llvm.out
+        llvm.dev
+        llvm.lib
+        clang-unwrapped.out
+        clang-unwrapped.dev
+        clang-unwrapped.lib
+        libclang.dev
+      ] else [
+        llvm
+        clang-unwrapped
+      ];
   };
 
 in stdenv.mkDerivation rec {
@@ -40,6 +45,7 @@ in stdenv.mkDerivation rec {
     "-DHAS_TERRA_VERSION=0"
     "-DTERRA_VERSION=release-1.0.0-beta3"
     "-DTERRA_LUA=luajit"
+    "-DLLVM_INSTALL_PREFIX=${llvmMerged}"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
   doCheck = true;
@@ -50,7 +56,7 @@ in stdenv.mkDerivation rec {
   patches = [
     ./nix/cflags.patch
     ./nix/disable-luajit-file-download.patch
-    ./nix/add-test-paths.patch
+    # ./nix/add-test-paths.patch
   ];
 
   INCLUDE_PATH = "${llvmMerged}/lib/clang/10.0.1/include";
@@ -58,9 +64,6 @@ in stdenv.mkDerivation rec {
   postPatch = ''
     substituteInPlace src/terralib.lua \
       --subst-var-by NIX_LIBC_INCLUDE ${lib.getDev stdenv.cc.libc}/include
-
-    substituteInPlace src/CMakeLists.txt \
-      --subst-var INCLUDE_PATH
   '';
 
   preConfigure = ''
@@ -69,6 +72,7 @@ in stdenv.mkDerivation rec {
   '';
 
   installPhase = ''
+    exit 1
     install -Dm755 -t $bin/bin bin/terra
     install -Dm755 -t $out/lib lib/terra${stdenv.hostPlatform.extensions.sharedLibrary}
     install -Dm644 -t $static/lib lib/libterra_s.a
