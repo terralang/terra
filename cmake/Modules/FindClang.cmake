@@ -44,7 +44,6 @@ find_program(CLANG_EXECUTABLE
 )
 
 set(CLANG_RESOURCE_DIR "${LLVM_INSTALL_PREFIX}/lib/clang/${LLVM_PACKAGE_VERSION}" CACHE PATH "Allows overriding where the include directory is found")
-message(NOTICE "CLANG_RESOURCE_DIR: ${CLANG_RESOURCE_DIR}")
 
 if(CLANG_LIBRARIES AND CLANG_INCLUDE_DIRS AND CLANG_EXECUTABLE)
   message(STATUS "Clang libraries: ${CLANG_LIBRARIES}")

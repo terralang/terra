@@ -31,6 +31,8 @@ let
       ];
   };
 
+  clangVersion = llvmPackages.clang-unwrapped.version;
+
 in stdenv.mkDerivation rec {
   pname = "terra";
   version = "1.0.0-beta3";
@@ -44,7 +46,7 @@ in stdenv.mkDerivation rec {
     "-DHAS_TERRA_VERSION=0"
     "-DTERRA_VERSION=release-1.0.0-beta3"
     "-DTERRA_LUA=luajit"
-    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/10.0.1"
+    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/${clangVersion}"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
   doCheck = true;
@@ -52,11 +54,7 @@ in stdenv.mkDerivation rec {
   hardeningDisable = [ "fortify" ];
   outputs = [ "bin" "dev" "out" "static" ];
 
-  patches = [
-    ./nix/cflags.patch
-    ./nix/disable-luajit-file-download.patch
-    # ./nix/add-test-paths.patch
-  ];
+  patches = [ ./nix/cflags.patch ./nix/disable-luajit-file-download.patch ];
 
   postPatch = ''
     substituteInPlace src/terralib.lua \
