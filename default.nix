@@ -1,4 +1,4 @@
-{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib, fetchurl ? pkgs.fetchurl
+{ pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
 , fetchFromGitHub ? pkgs.fetchFromGitHub, ncurses ? pkgs.ncurses
 , cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
 , cudaPackages ? pkgs.cudaPackages, enableCUDA ? false }:
@@ -10,22 +10,31 @@ let
   cuda = cudaPackages.cudatoolkit_11;
 
   luajitRev = "9143e86498436892cb4316550be4d45b68a61224";
-  luajitArchive = "LuaJIT-${luajitRev}.tar.gz";
-  luajitSrc = fetchurl {
-    url = "https://github.com/LuaJIT/LuaJIT/archive/${luajitRev}.tar.gz";
-    sha256 = "0kasmyk40ic4b9dwd4wixm0qk10l88ardrfimwmq36yc5dhnizmy";
+  luajitBase = "LuaJIT-${luajitRev}";
+  luajitArchive = "${luajitBase}.tar.gz";
+  luajitSrc = fetchFromGitHub {
+    owner = "LuaJIT";
+    repo = "LuaJIT";
+    rev = luajitRev;
+    sha256 = "1zw1yr0375d6jr5x20zvkvk76hkaqamjynbswpl604w6r6id070b";
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
-    paths = with llvmPackages; [
-      llvm.out
-      llvm.dev
-      llvm.lib
-      clang-unwrapped.out
-      clang-unwrapped.dev
-      clang-unwrapped.lib
-    ];
+    paths = with llvmPackages;
+      if llvm ? dev then [
+        llvm.out
+        llvm.dev
+        llvm.lib
+        clang-unwrapped.out
+        clang-unwrapped.dev
+        clang-unwrapped.lib
+      ] else [
+        llvm
+        clang-unwrapped
+      ];
   };
+
+  clangVersion = llvmPackages.clang-unwrapped.version;
 
 in stdenv.mkDerivation rec {
   pname = "terra";
@@ -38,8 +47,9 @@ in stdenv.mkDerivation rec {
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"
-    "-DTERRA_VERSION=release-1.0.0-beta3"
+    "-DTERRA_VERSION=${version}"
     "-DTERRA_LUA=luajit"
+    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/${clangVersion}"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
   doCheck = true;
@@ -47,25 +57,21 @@ in stdenv.mkDerivation rec {
   hardeningDisable = [ "fortify" ];
   outputs = [ "bin" "dev" "out" "static" ];
 
-  patches = [
-    ./nix/cflags.patch
-    ./nix/disable-luajit-file-download.patch
-    ./nix/add-test-paths.patch
-  ];
-
-  INCLUDE_PATH = "${llvmMerged}/lib/clang/10.0.1/include";
+  patches = [ ./nix/cflags.patch ];
 
   postPatch = ''
+    sed -i '/file(DOWNLOAD "''${LUAJIT_URL}" "''${LUAJIT_TAR}")/d' \
+      cmake/Modules/GetLuaJIT.cmake
+
     substituteInPlace src/terralib.lua \
       --subst-var-by NIX_LIBC_INCLUDE ${lib.getDev stdenv.cc.libc}/include
-
-    substituteInPlace src/CMakeLists.txt \
-      --subst-var INCLUDE_PATH
   '';
 
   preConfigure = ''
     mkdir -p build
-    cp ${luajitSrc} build/${luajitArchive}
+    ln -s ${luajitSrc} build/${luajitBase}
+    tar --mode="a+rwX" -chzf build/${luajitArchive} -C build ${luajitBase}
+    rm build/${luajitBase}
   '';
 
   installPhase = ''
