@@ -429,6 +429,7 @@ local function invokeuserfunction(anchor, what, speculate, userfn,  ...)
     return success, result
 end
 terra.fulltrace = false
+terra.slimtrace = false
 -- override the lua traceback function to be aware of Terra compilation contexts
 function debug.traceback(msg,level)
     level = level or 1
@@ -455,23 +456,25 @@ function debug.traceback(msg,level)
         else
             local short_src,currentline,linedefined = di.short_src,di.currentline,di.linedefined
             local file,outsideline = di.source:match("^@$terra$(.*)$terra$(%d+)$")
-            if file then
-                short_src = file
-                currentline = currentline and (currentline + outsideline - 1)
-                linedefined = linedefined and (linedefined + outsideline - 1)
-            end
-            lines:insert(("\n\t%s:"):format(short_src))
-            if di.currentline and di.currentline >= 0 then
-                lines:insert(("%d:"):format(currentline))
-            end
-            if di.namewhat ~= "" then
-                lines:insert((" in function '%s'"):format(di.name))
-            elseif di.what == "main" then
-                lines:insert(" in main chunk")
-            elseif di.what == "C" then
-                lines:insert( (" at %s"):format(tostring(di.func)))    
-            else
-                lines:insert((" in function <%s:%d>"):format(short_src,linedefined))
+            if not terra.slimtrace or di.source:match(".*terralib%.lua$") == nil then
+                if file then
+                    short_src = file
+                    currentline = currentline and (currentline + outsideline - 1)
+                    linedefined = linedefined and (linedefined + outsideline - 1)
+                end
+                lines:insert(("\n\t%s:"):format(short_src))
+                if di.currentline and di.currentline >= 0 then
+                    lines:insert(("%d:"):format(currentline))
+                end
+                if di.namewhat ~= "" then
+                    lines:insert((" in function '%s'"):format(di.name))
+                elseif di.what == "main" then
+                    lines:insert(" in main chunk")
+                elseif di.what == "C" then
+                    lines:insert( (" at %s"):format(tostring(di.func)))    
+                else
+                    lines:insert((" in function <%s:%d>"):format(short_src,linedefined))
+                end
             end
         end
         level = level + 1
