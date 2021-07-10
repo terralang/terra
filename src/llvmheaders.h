@@ -60,7 +60,7 @@
 #include "llvmheaders_90.h"
 #elif LLVM_VERSION == 100
 #include "llvmheaders_100.h"
-#elif LLVM_VERSION >= 110 && LLVM_VERSION < 120
+#elif LLVM_VERSION >= 110 && LLVM_VERSION < 130
 #include "llvmheaders_110.h"
 #else
 #error "unsupported LLVM version"

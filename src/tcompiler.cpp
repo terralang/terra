@@ -22,8 +22,6 @@ extern "C" {
 
 #if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
-#else
-#include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
 #endif
 
 #include "llvm/Support/Atomic.h"
@@ -390,7 +388,7 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
 #else
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
 #endif
-            .setUseOrcMCJITReplacement(true);
+            ;
 #endif
 
     CU->ee = eb.create();
@@ -2488,9 +2486,7 @@ struct FunctionEmitter {
         DEBUG_ONLY(T) {
             MDNode *scope = debugScopeForFile(customfilename ? customfilename
                                                              : obj->string("filename"));
-            B->SetCurrentDebugLocation(DebugLoc::get(
-                    customfilename ? customlinenumber : obj->number("linenumber"), 0,
-                    scope));
+            B->SetCurrentDebugLocation(DILocation::get(scope->getContext(), customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
         }
     }
 

@@ -197,13 +197,11 @@ add_dependencies(TerraObjectFiles TerraGeneratedFiles)
 add_library(TerraLibrary
   STATIC
     $<TARGET_OBJECTS:TerraObjectFiles>
-    ${ALL_LLVM_OBJECTS}
     ${LUAJIT_OBJECTS}
 )
 add_library(TerraLibraryShared
   SHARED
     $<TARGET_OBJECTS:TerraObjectFiles>
-    ${ALL_LLVM_OBJECTS}
     ${LUAJIT_OBJECTS}
 )
 
@@ -231,8 +229,7 @@ set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${
 target_link_libraries(TerraLibraryShared
   PRIVATE
     ${LUAJIT_LIBRARIES}
-    ${ALL_LLVM_LIBRARIES}
-    ${LLVM_SYSTEM_LIBRARIES}
+    -lclang-cpp
 )
 
 if(APPLE)
@@ -333,6 +330,8 @@ elseif(UNIX)
       -Wl,--whole-archive
       TerraLibrary
       -Wl,--no-whole-archive
+      LLVM
+      -lclang-cpp
       ${LUAJIT_LIBRARIES}
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
