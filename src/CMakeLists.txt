@@ -2,6 +2,10 @@
 ### Terra Generated Source Files
 ###
 
+if(LLVM_VERSION_MAJOR GREATER 11)
+    set(ALL_LLVM_LIBRARIES clang-cpp LLVM)
+endif()
+
 if(TERRA_ENABLE_CUDA)
   list(APPEND TERRA_CUDA_INCLUDE_DIRS
     ${CUDA_INCLUDE_DIRS}
@@ -197,11 +201,13 @@ add_dependencies(TerraObjectFiles TerraGeneratedFiles)
 add_library(TerraLibrary
   STATIC
     $<TARGET_OBJECTS:TerraObjectFiles>
+    ${ALL_LLVM_OBJECTS}
     ${LUAJIT_OBJECTS}
 )
 add_library(TerraLibraryShared
   SHARED
     $<TARGET_OBJECTS:TerraObjectFiles>
+    ${ALL_LLVM_OBJECTS}
     ${LUAJIT_OBJECTS}
 )
 
@@ -229,7 +235,8 @@ set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${
 target_link_libraries(TerraLibraryShared
   PRIVATE
     ${LUAJIT_LIBRARIES}
-    -lclang-cpp
+    ${ALL_LLVM_LIBRARIES}
+    ${LLVM_SYSTEM_LIBRARIES}
 )
 
 if(APPLE)
@@ -330,8 +337,6 @@ elseif(UNIX)
       -Wl,--whole-archive
       TerraLibrary
       -Wl,--no-whole-archive
-      LLVM
-      -lclang-cpp
       ${LUAJIT_LIBRARIES}
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
