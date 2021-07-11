@@ -22,6 +22,10 @@ extern "C" {
 
 #if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
+#else
+#if LLVM_VERSION < 120
+#include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
+#endif
 #endif
 
 #include "llvm/Support/Atomic.h"
@@ -387,6 +391,9 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
 #else
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
+#endif
+#if LLVM_VERSION < 120
+            .setUseOrcMCJITReplacement(true)
 #endif
             ;
 #endif
@@ -2486,7 +2493,15 @@ struct FunctionEmitter {
         DEBUG_ONLY(T) {
             MDNode *scope = debugScopeForFile(customfilename ? customfilename
                                                              : obj->string("filename"));
-            B->SetCurrentDebugLocation(DILocation::get(scope->getContext(), customfilename ? customlinenumber : obj->number("linenumber"), 0, scope));
+#if LLVM_VERSION < 120
+            B->SetCurrentDebugLocation(DebugLoc::get(
+                    customfilename ? customlinenumber : obj->number("linenumber"), 0,
+                    scope));
+#else
+            B->SetCurrentDebugLocation(DILocation::get(scope->getContext(), 
+                    customfilename ? customlinenumber : obj->number("linenumber"), 0,
+                    scope));
+#endif
         }
     }
 
