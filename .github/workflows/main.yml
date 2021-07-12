@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   check_format:
     name: Check Format
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-16.04', 'macos-10.15']
+        os: ['ubuntu-16.04', 'ubuntu-18.04', 'macos-10.15']
         llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -23,6 +23,24 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # LLVM 3.8 only on Ubuntu 16.04, all others on Ubuntu 18.04
+          - os: 'ubuntu-16.04'
+            llvm: '5.0'
+          - os: 'ubuntu-16.04'
+            llvm: '6.0'
+          - os: 'ubuntu-16.04'
+            llvm: '7'
+          - os: 'ubuntu-16.04'
+            llvm: '8'
+          - os: 'ubuntu-16.04'
+            llvm: '9'
+          - os: 'ubuntu-16.04'
+            llvm: '10'
+          - os: 'ubuntu-16.04'
+            llvm: '11'
+          - os: 'ubuntu-18.04'
+            llvm: '3.8'
+
           # macOS: exclude LLVM 5.0, 8-11 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
