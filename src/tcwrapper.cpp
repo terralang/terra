@@ -333,8 +333,8 @@ public:
                                       SourceLocation(), SourceLocation());
 #else
         return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0,
-                                      FPOptionsOverride::getFromOpaqueInt(0),
-                                      TInfo, SourceLocation(), SourceLocation());
+                                      FPOptionsOverride::getFromOpaqueInt(0), TInfo,
+                                      SourceLocation(), SourceLocation());
 #endif
     }
     IntegerLiteral *LiteralZero() {

@@ -2498,7 +2498,8 @@ struct FunctionEmitter {
                     customfilename ? customlinenumber : obj->number("linenumber"), 0,
                     scope));
 #else
-            B->SetCurrentDebugLocation(DILocation::get(scope->getContext(), 
+            B->SetCurrentDebugLocation(DILocation::get(
+                    scope->getContext(),
                     customfilename ? customlinenumber : obj->number("linenumber"), 0,
                     scope));
 #endif
