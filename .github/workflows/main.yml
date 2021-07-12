@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-16.04', 'ubuntu-18.04', 'macos-10.15']
-        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11']
+        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11', '12']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
@@ -38,10 +38,12 @@ jobs:
             llvm: '10'
           - os: 'ubuntu-16.04'
             llvm: '11'
+          - os: 'ubuntu-16.04'
+            llvm: '12'
           - os: 'ubuntu-18.04'
             llvm: '3.8'
 
-          # macOS: exclude LLVM 5.0, 8-11 make, cuda/no-static/no-slib
+          # macOS: exclude LLVM 5.0, 8-12 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
           - os: 'macos-10.15'
@@ -55,6 +57,9 @@ jobs:
             cmake: '0'
           - os: 'macos-10.15'
             llvm: '11'
+            cmake: '0'
+          - os: 'macos-10.15'
+            llvm: '12'
             cmake: '0'
           - os: 'macos-10.15'
             cuda: '1'
@@ -103,6 +108,8 @@ jobs:
             cuda: '1'
           - llvm: '11'
             cuda: '1'
+          - llvm: '12'
+            cuda: '1'
 
           # no-static: only LLVM 8
           - llvm: '3.8'
@@ -118,6 +125,8 @@ jobs:
           - llvm: '10'
             static: '0'
           - llvm: '11'
+            static: '0'
+          - llvm: '12'
             static: '0'
 
           # no-slib: only LLVM 9
@@ -135,6 +144,8 @@ jobs:
             slib: '0'
           - llvm: '11'
             slib: '0'
+          - llvm: '12'
+            slib: '0'
 
           # Moonjit: only LLVM 9
           - llvm: '3.8'
@@ -150,6 +161,8 @@ jobs:
           - llvm: '10'
             lua: 'moonjit'
           - llvm: '11'
+            lua: 'moonjit'
+          - llvm: '12'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
