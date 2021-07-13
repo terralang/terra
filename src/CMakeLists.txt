@@ -2,10 +2,6 @@
 ### Terra Generated Source Files
 ###
 
-if(LLVM_VERSION_MAJOR GREATER 11)
-    set(ALL_LLVM_LIBRARIES clang-cpp LLVM)
-endif()
-
 if(TERRA_ENABLE_CUDA)
   list(APPEND TERRA_CUDA_INCLUDE_DIRS
     ${CUDA_INCLUDE_DIRS}
