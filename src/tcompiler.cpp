@@ -957,13 +957,13 @@ struct CCallingConv {
     }
 
     template <typename FnOrCall>
-    void addSRetAttr(FnOrCall *r, int idx) {
-        r->addAttribute(idx, Attribute::StructRet);
+    void addSRetAttr(FnOrCall *r, int idx, Type* ty) {
+        r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
         r->addAttribute(idx, Attribute::NoAlias);
     }
     template <typename FnOrCall>
-    void addByValAttr(FnOrCall *r, int idx) {
-        r->addAttribute(idx, Attribute::ByVal);
+    void addByValAttr(FnOrCall *r, int idx, Type* ty) {
+        r->addAttribute(idx, llvm::Attribute::getWithByValType(*CU->TT->ctx, ty));
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
@@ -976,14 +976,14 @@ struct CCallingConv {
         addExtAttrIfNeeded(info->returntype.type, r, 0);
         int argidx = 1;
         if (info->returntype.kind == C_AGGREGATE_MEM) {
-            addSRetAttr(r, argidx);
+            addSRetAttr(r, argidx, info->returntype.cctype);
             argidx++;
         }
         for (size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument *v = &info->paramtypes[i];
             if (v->kind == C_AGGREGATE_MEM) {
 #ifndef _WIN32
-                addByValAttr(r, argidx);
+                addByValAttr(r, argidx, v->cctype);
 #endif
             }
             addExtAttrIfNeeded(v->type, r, argidx);
