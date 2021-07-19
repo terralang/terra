@@ -958,12 +958,20 @@ struct CCallingConv {
 
     template <typename FnOrCall>
     void addSRetAttr(FnOrCall *r, int idx, Type* ty) {
+#if LLVM_VERSION < 120
+        r->addAttribute(idx, Attribute::StructRet);
+#else
         r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+#endif
         r->addAttribute(idx, Attribute::NoAlias);
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx, Type* ty) {
-        r->addAttribute(idx, llvm::Attribute::getWithByValType(*CU->TT->ctx, ty));
+#if LLVM_VERSION < 120
+        r->addAttribute(idx, Attribute::ByVal);
+#else
+        r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
+#endif
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
