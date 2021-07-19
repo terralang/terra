@@ -957,7 +957,7 @@ struct CCallingConv {
     }
 
     template <typename FnOrCall>
-    void addSRetAttr(FnOrCall *r, int idx, Type* ty) {
+    void addSRetAttr(FnOrCall *r, int idx, Type *ty) {
 #if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::StructRet);
 #else
@@ -966,7 +966,7 @@ struct CCallingConv {
         r->addAttribute(idx, Attribute::NoAlias);
     }
     template <typename FnOrCall>
-    void addByValAttr(FnOrCall *r, int idx, Type* ty) {
+    void addByValAttr(FnOrCall *r, int idx, Type *ty) {
 #if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::ByVal);
 #else
