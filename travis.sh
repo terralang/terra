@@ -26,7 +26,16 @@ fi
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-12 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-12-dev clang-12 libclang-12-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-12:/usr/share/llvm-12
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-12/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-11 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
@@ -81,7 +90,13 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-12
+    ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/clang clang-12
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-12.0.1-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
     curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-11.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-11.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-11

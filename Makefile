@@ -86,7 +86,7 @@ LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100 110 111"
+LLVM_NEEDS_CXX14="100 110 111 120"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
 CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
 else
@@ -108,7 +108,7 @@ LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
                       -lclangAnalysis \
                       -lclangEdit -lclangAST -lclangLex -lclangBasic
 
-CLANG_AST_MATCHERS = "80 90 100 110 111"
+CLANG_AST_MATCHERS = "80 90 100 110 111 120"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
 LLVM_LIBRARY_FLAGS += -lclangASTMatchers
 endif
@@ -229,9 +229,15 @@ release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB)
     
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
+	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang|Polly)"  > build/llvm_objects/llvm_list
 	# extract needed LLVM objects based on a dummy linker invocation
-	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
+	cd build/llvm_objects; for lib in $$(cat llvm_list); do \
+		DIR=$$(basename $$lib .a); \
+		mkdir -p $$DIR; \
+		pushd $$DIR; \
+		ar x $$lib; \
+		popd; \
+	done
 	# include all luajit objects, since the entire lua interface is used in terra 
 
 

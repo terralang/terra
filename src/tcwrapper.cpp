@@ -328,8 +328,14 @@ public:
     }
     CStyleCastExpr *CreateCast(QualType Ty, CastKind Kind, Expr *E) {
         TypeSourceInfo *TInfo = Context->getTrivialTypeSourceInfo(Ty, SourceLocation());
+#if LLVM_VERSION < 120
         return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0, TInfo,
                                       SourceLocation(), SourceLocation());
+#else
+        return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0,
+                                      FPOptionsOverride::getFromOpaqueInt(0), TInfo,
+                                      SourceLocation(), SourceLocation());
+#endif
     }
     IntegerLiteral *LiteralZero() {
         unsigned IntSize = static_cast<unsigned>(Context->getTypeSize(Context->IntTy));

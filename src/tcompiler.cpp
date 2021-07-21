@@ -23,7 +23,9 @@ extern "C" {
 #if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
 #else
+#if LLVM_VERSION < 120
 #include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
+#endif
 #endif
 
 #include "llvm/Support/Atomic.h"
@@ -390,7 +392,10 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
 #else
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
 #endif
-            .setUseOrcMCJITReplacement(true);
+#if LLVM_VERSION < 120
+            .setUseOrcMCJITReplacement(true)
+#endif
+            ;
 #endif
 
     CU->ee = eb.create();
@@ -952,13 +957,21 @@ struct CCallingConv {
     }
 
     template <typename FnOrCall>
-    void addSRetAttr(FnOrCall *r, int idx) {
+    void addSRetAttr(FnOrCall *r, int idx, Type *ty) {
+#if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::StructRet);
+#else
+        r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+#endif
         r->addAttribute(idx, Attribute::NoAlias);
     }
     template <typename FnOrCall>
-    void addByValAttr(FnOrCall *r, int idx) {
+    void addByValAttr(FnOrCall *r, int idx, Type *ty) {
+#if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::ByVal);
+#else
+        r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
+#endif
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
@@ -971,14 +984,14 @@ struct CCallingConv {
         addExtAttrIfNeeded(info->returntype.type, r, 0);
         int argidx = 1;
         if (info->returntype.kind == C_AGGREGATE_MEM) {
-            addSRetAttr(r, argidx);
+            addSRetAttr(r, argidx, info->returntype.cctype);
             argidx++;
         }
         for (size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument *v = &info->paramtypes[i];
             if (v->kind == C_AGGREGATE_MEM) {
 #ifndef _WIN32
-                addByValAttr(r, argidx);
+                addByValAttr(r, argidx, v->cctype);
 #endif
             }
             addExtAttrIfNeeded(v->type, r, argidx);
@@ -2488,9 +2501,16 @@ struct FunctionEmitter {
         DEBUG_ONLY(T) {
             MDNode *scope = debugScopeForFile(customfilename ? customfilename
                                                              : obj->string("filename"));
+#if LLVM_VERSION < 120
             B->SetCurrentDebugLocation(DebugLoc::get(
                     customfilename ? customlinenumber : obj->number("linenumber"), 0,
                     scope));
+#else
+            B->SetCurrentDebugLocation(DILocation::get(
+                    scope->getContext(),
+                    customfilename ? customlinenumber : obj->number("linenumber"), 0,
+                    scope));
+#endif
         }
     }
 
