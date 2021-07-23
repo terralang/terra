@@ -166,7 +166,7 @@ jobs:
           TERRA_LUA: ${{ matrix.lua }}
       - uses: actions/upload-artifact@v2
         with:
-          name: terra
+          name: terra-${{ matrix.os }}-llvm-${{ matrix.llvm }}
           path: |
             *.zip
   docker:
