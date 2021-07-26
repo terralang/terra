@@ -62,6 +62,8 @@
 #include "llvmheaders_100.h"
 #elif LLVM_VERSION >= 110 && LLVM_VERSION < 120
 #include "llvmheaders_110.h"
+#elif LLVM_VERSION == 120
+#include "llvmheaders_120.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion

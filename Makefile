@@ -86,7 +86,7 @@ LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100 110 111"
+LLVM_NEEDS_CXX14="100 110 111 120"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
 CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
 else
@@ -101,37 +101,37 @@ DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.dylib"
 TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
-LLVM_LIBRARY_FLAGS += $(LUAJIT_LIB)
-LLVM_LIBRARY_FLAGS += $(shell $(LLVM_CONFIG) --ldflags) -L$(CLANG_PREFIX)/lib
-LLVM_LIBRARY_FLAGS += -lclangFrontend -lclangDriver \
-                      -lclangSerialization -lclangCodeGen -lclangParse -lclangSema \
-                      -lclangAnalysis \
-                      -lclangEdit -lclangAST -lclangLex -lclangBasic
+CLANG_LIBS += libclangFrontend.a \
+	libclangDriver.a \
+	libclangSerialization.a \
+	libclangCodeGen.a \
+	libclangParse.a \
+	libclangSema.a \
+	libclangAnalysis.a \
+	libclangEdit.a \
+	libclangAST.a \
+	libclangLex.a \
+	libclangBasic.a
 
-CLANG_AST_MATCHERS = "80 90 100 110 111"
+CLANG_AST_MATCHERS = "80 90 100 110 111 120"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
-LLVM_LIBRARY_FLAGS += -lclangASTMatchers
+CLANG_LIBS += libclangASTMatchers.a
 endif
 
-# by default, Terra includes only the pieces of the LLVM libraries it needs,
-#  but this can be a problem if third-party-libraries that also need LLVM are
-#  used - allow the user to request that some/all of the LLVM components be
-#  included and re-exported in their entirety
+# Get full path to clang libaries
+CLANG_LIBFILES := $(patsubst %, $(CLANG_PREFIX)/lib/%, $(CLANG_LIBS))
+
 ifeq "$(LLVMVERGT4)" "1"
     LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
+	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
 else
 	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
+	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles)
 endif
-ifneq ($(REEXPORT_LLVM_COMPONENTS),)
-  REEXPORT_LIBS := $(shell $(LLVM_CONFIG) --libs $(REEXPORT_LLVM_COMPONENTS))
-  ifneq ($(findstring $(UNAME), Linux FreeBSD),)
-    LLVM_LIBRARY_FLAGS += -Wl,--whole-archive $(REEXPORT_LIBS) -Wl,--no-whole-archive
-  else
-    LLVM_LIBRARY_FLAGS += $(REEXPORT_LIBS:%=-Wl,-force_load,%)
-  endif
-  LLVM_LIBRARY_FLAGS += $(filter-out $(REEXPORT_LIBS),$(LLVM_LIBS))
-else
-  LLVM_LIBRARY_FLAGS += $(LLVM_LIBS)
+
+LLVM_POLLY = "100 110 111 120"
+ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))
+	LLVM_LIBFILES += $(shell $(LLVM_CONFIG) --libdir)/libPolly*.a
 endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
@@ -148,6 +148,8 @@ endif
 ifeq ($(UNAME), FreeBSD)
 SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
+
+SUPPORT_LIBRARY_FLAGS += -lffi -ledit -lxml2
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
@@ -229,11 +231,15 @@ release/include/terra/%.h:  $(LUAJIT_INCLUDE)/%.h $(LUAJIT_LIB)
     
 build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
-	$(CXX) -o /dev/null $(addprefix build/, $(LIBOBJS) $(EXEOBJS)) $(LLVM_LIBRARY_FLAGS) $(SUPPORT_LIBRARY_FLAGS) $(LFLAGS) -Wl,-t 2>&1 | egrep "lib(LLVM|clang)"  > build/llvm_objects/llvm_list
-	# extract needed LLVM objects based on a dummy linker invocation
-	< build/llvm_objects/llvm_list $(LUAJIT) src/unpacklibraries.lua build/llvm_objects
-	# include all luajit objects, since the entire lua interface is used in terra 
-
+	# Extract Luajit + all LLVM & Clang libraries
+	cd build/llvm_objects; for lib in $(LUAJIT_LIB) $(LLVM_LIBFILES) $(CLANG_LIBFILES); do \
+		echo Extracing objects from $$lib; \
+		DIR=$$(basename $$lib .a); \
+		mkdir -p $$DIR; \
+		cd $$DIR; \
+		ar x $$lib; \
+		cd ..; \
+	done
 
 build/lua_objects/lj_obj.o:    $(LUAJIT_LIB)
 	mkdir -p build/lua_objects
