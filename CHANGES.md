@@ -10,7 +10,7 @@ The following changes are included in this release:
 
 ## Added features
 
-  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10 and 11
+  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11 and 12
   * Support for CUDA 9.2
   * Support for Visual Studio 2015, 2017 and 2019 on Windows
   * New CMake-based build system replaces Make/NMake on all platforms
