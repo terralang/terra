@@ -123,10 +123,15 @@ CLANG_LIBFILES := $(patsubst %, $(CLANG_PREFIX)/lib/%, $(CLANG_LIBS))
 
 ifeq "$(LLVMVERGT4)" "1"
     LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
-	LLVM_LIBFILES = $(shell $(LLVM_CONFIG) --libfiles --link-static)
+	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
 else
 	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
-	LLVM_LIBFILES = $(shell $(LLVM_CONFIG) --libfiles)
+	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles)
+endif
+
+LLVM_POLLY = "100 110 111 120"
+ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))
+	LLVM_LIBFILES += $(shell $(LLVM_CONFIG) --libdir)/libPolly*.a
 endif
 
 # llvm sometimes requires ncurses and libz, check if they have the symbols, and add them if they do
@@ -145,6 +150,11 @@ SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
 SUPPORT_LIBRARY_FLAGS += -lffi -ledit
+
+LLVM_LIBXML2 := "110 111"
+ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_LIBXML2)))
+	SUPPORT_LIBRARY_FLAGS += -lxml2
+endif
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
@@ -228,12 +238,11 @@ build/llvm_objects/llvm_list:    $(addprefix build/, $(LIBOBJS) $(EXEOBJS))
 	mkdir -p build/llvm_objects/luajit
 	# Extract Luajit + all LLVM & Clang libraries
 	cd build/llvm_objects; for lib in $(LUAJIT_LIB) $(LLVM_LIBFILES) $(CLANG_LIBFILES); do \
-		echo ---$$lib---; \
+		echo Extracing objects from $$lib; \
 		DIR=$$(basename $$lib .a); \
 		mkdir -p $$DIR; \
 		cd $$DIR; \
 		ar x $$lib; \
-		ls; \
 		cd ..; \
 	done
 
