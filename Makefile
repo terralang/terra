@@ -149,12 +149,7 @@ ifeq ($(UNAME), FreeBSD)
 SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
-SUPPORT_LIBRARY_FLAGS += -lffi -ledit
-
-LLVM_LIBXML2 := "110 111"
-ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_LIBXML2)))
-	SUPPORT_LIBRARY_FLAGS += -lxml2
-endif
+SUPPORT_LIBRARY_FLAGS += -lffi -ledit -lxml2
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
