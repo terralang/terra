@@ -14,7 +14,7 @@ Setup
 Installing Terra
 ----------------
 
-Terra currently runs on Mac OS X, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On OSX, you need the Xcode Command Line Tools; On Linux you need the `gcc` toolchain (`build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013 installed.
+Terra currently runs on macOS, Linux, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to accomplish. The binaries do not require any dependencies for most operations. For interaction with the C ecosystem, such as including C header files or creating executable and shared libraries, you need to have the right development tools installed. On macOS, you need the Xcode (either Command Line Tools or a full installation); on Linux you need either the GCC or Clang toolchains (e.g., `build-essential` package in Ubuntu); and for Windows you need a copy of Microsoft Visual Studio 2013, 2015, 2017 or 2019 installed.
 
 Running Terra
 -------------
