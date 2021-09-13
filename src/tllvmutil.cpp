@@ -94,7 +94,8 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
             TheTarget->createMCSubtargetInfo(TripleName, CPU, FeaturesStr);
     assert(STI && "Unable to create subtarget info!");
 
-    MCContext Ctx(MAI, MRI, NULL);
+    llvm::Triple TRI(llvm::sys::getProcessTriple());
+    MCContext Ctx(TRI, MAI, MRI, NULL);
     MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI, Ctx);
     assert(DisAsm && "Unable to create disassembler!");
 
@@ -231,7 +232,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
                 }
                 VMap[fn] = newfn;
                 SmallVector<ReturnInst *, 8> Returns;
-                CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
+                CloneFunctionInto(newfn, fn, VMap, CloneFunctionChangeType::DifferentModule, Returns, "", NULL, NULL, this);
                 DISubprogram *SP = fn->getSubprogram();
 
                 Function *F = cast<Function>(MapValue(fn, VMap, RF_None, NULL, this));
