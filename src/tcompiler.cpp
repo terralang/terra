@@ -1864,7 +1864,11 @@ struct FunctionEmitter {
         Value *result = UndefValue::get(toT->type);
         VectorType *vt = cast<VectorType>(toT->type);
         Type *integerType = Type::getInt32Ty(*CU->TT->ctx);
+#if LLVM_VERSION < 130
+        for (size_t i = 0; i < vt->getNumElements(); i++)
+#else
         for (size_t i = 0; i < vt->getArrayNumElements(); i++)
+#endif
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
     }
@@ -2379,6 +2383,8 @@ struct FunctionEmitter {
             VectorType *vt = cast<VectorType>(cond->getType());
 #if LLVM_VERSION < 90
             resultType = VectorType::get(resultType, vt->getNumElements());
+#elif LLVM_VERSION < 130
+            resultType = VectorType::get(resultType, vt->getNumElements(), false);
 #else
             resultType = VectorType::get(resultType, vt->getArrayNumElements(), false);
 #endif

@@ -331,6 +331,10 @@ public:
 #if LLVM_VERSION < 120
         return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0, TInfo,
                                       SourceLocation(), SourceLocation());
+#elif LLVM_VERSION < 130
+        return CStyleCastExpr::Create(*Context, Ty, VK_RValue, Kind, E, 0,
+                                      FPOptionsOverride::getFromOpaqueInt(0), TInfo,
+                                      SourceLocation(), SourceLocation());
 #else
         return CStyleCastExpr::Create(*Context, Ty, VK_PRValue, Kind, E, 0,
                                       FPOptionsOverride::getFromOpaqueInt(0), TInfo,
