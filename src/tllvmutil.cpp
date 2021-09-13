@@ -241,7 +241,9 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #if LLVM_VERSION < 130
                 CloneFunctionInto(newfn, fn, VMap, true, Returns, "", NULL, NULL, this);
 #else
-                CloneFunctionInto(newfn, fn, VMap, CloneFunctionChangeType::DifferentModule, Returns, "", NULL, NULL, this);
+                CloneFunctionInto(newfn, fn, VMap,
+                                  CloneFunctionChangeType::DifferentModule, Returns, "",
+                                  NULL, NULL, this);
 #endif
                 DISubprogram *SP = fn->getSubprogram();
 

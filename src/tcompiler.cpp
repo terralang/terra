@@ -2386,7 +2386,8 @@ struct FunctionEmitter {
 #elif LLVM_VERSION < 130
             resultType = VectorType::get(resultType, vt->getNumElements(), false);
 #else
-            resultType = VectorType::get(resultType, vt->getElementCount().getKnownMinValue(), false);
+            resultType = VectorType::get(resultType,
+                                         vt->getElementCount().getKnownMinValue(), false);
 #endif
         }
         return B->CreateTrunc(cond, resultType);
