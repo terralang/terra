@@ -1867,7 +1867,7 @@ struct FunctionEmitter {
 #if LLVM_VERSION < 130
         for (size_t i = 0; i < vt->getNumElements(); i++)
 #else
-        for (size_t i = 0; i < vt->getArrayNumElements(); i++)
+        for (size_t i = 0; i < vt->getElementCount().getKnownMinValue(); i++)
 #endif
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
@@ -2386,7 +2386,7 @@ struct FunctionEmitter {
 #elif LLVM_VERSION < 130
             resultType = VectorType::get(resultType, vt->getNumElements(), false);
 #else
-            resultType = VectorType::get(resultType, vt->getArrayNumElements(), false);
+            resultType = VectorType::get(resultType, vt->getElementCount().getKnownMinValue(), false);
 #endif
         }
         return B->CreateTrunc(cond, resultType);
