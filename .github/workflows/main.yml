@@ -76,10 +76,6 @@ jobs:
           - os: 'macos-10.15'
             llvm: '10'
 
-          # Ignore LLVM 13 on macOS until https://github.com/elliottslaughter/llvm-build/ has released llvm 13
-          - os: 'macos-10.15'
-            llvm: '13'
-
           # CMake
           - llvm: '5.0'
             cmake: '0'
