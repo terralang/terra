@@ -73,7 +73,7 @@ if [[ $(uname) = Linux ]]; then
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
   elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-3.8 main"
+    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-3.8 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo bash -c "echo 'Package: *' >> /etc/apt/preferences.d/llvm-600"
     sudo bash -c "echo 'Pin: origin apt.llvm.org' >> /etc/apt/preferences.d/llvm-600"
