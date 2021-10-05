@@ -20,7 +20,7 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
 fi
 
 if [[ -n $DOCKER_BUILD ]]; then
-    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM
+    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $( [[ $DOCKER_LLVM = "3.8" ]] && echo upstream )
     exit 0
 fi
 
