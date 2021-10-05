@@ -72,6 +72,7 @@ if [[ $(uname) = Linux ]]; then
     sudo apt-get install -qq llvm-5.0-dev clang-5.0 libclang-5.0-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
   elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
+    sudo apt-get install -qq libedit-dev
     wget https://releases.llvm.org/3.8.1/clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
     tar xf clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
     ln -s clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04/bin/llvm-config llvm-config-3.8
