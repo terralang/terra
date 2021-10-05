@@ -15,36 +15,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-16.04', 'ubuntu-18.04', 'macos-10.15']
-        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
+        os: ['ubuntu-18.04', 'macos-10.15']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # LLVM 3.8 only on Ubuntu 16.04, all others on Ubuntu 18.04
-          - os: 'ubuntu-16.04'
-            llvm: '5.0'
-          - os: 'ubuntu-16.04'
-            llvm: '6.0'
-          - os: 'ubuntu-16.04'
-            llvm: '7'
-          - os: 'ubuntu-16.04'
-            llvm: '8'
-          - os: 'ubuntu-16.04'
-            llvm: '9'
-          - os: 'ubuntu-16.04'
-            llvm: '10'
-          - os: 'ubuntu-16.04'
-            llvm: '11'
-          - os: 'ubuntu-16.04'
-            llvm: '12'
-          - os: 'ubuntu-16.04'
-            llvm: '13'
-          - os: 'ubuntu-18.04'
-            llvm: '3.8'
-
           # macOS: exclude LLVM 5.0, 8-13 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
@@ -99,8 +77,6 @@ jobs:
             lua: 'moonjit'
 
           # CUDA: only LLVM 9
-          - llvm: '3.8'
-            cuda: '1'
           - llvm: '5.0'
             cuda: '1'
           - llvm: '6.0'
@@ -119,8 +95,6 @@ jobs:
             cuda: '1'
 
           # no-static: only LLVM 8
-          - llvm: '3.8'
-            static: '0'
           - llvm: '5.0'
             static: '0'
           - llvm: '6.0'
@@ -139,8 +113,6 @@ jobs:
             static: '0'
 
           # no-slib: only LLVM 9
-          - llvm: '3.8'
-            slib: '0'
           - llvm: '5.0'
             slib: '0'
           - llvm: '6.0'
@@ -159,8 +131,6 @@ jobs:
             slib: '0'
 
           # Moonjit: only LLVM 9
-          - llvm: '3.8'
-            lua: 'moonjit'
           - llvm: '5.0'
             lua: 'moonjit'
           - llvm: '6.0'
@@ -200,12 +170,19 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: [ubuntu-16.04, ubuntu-18.04, ubuntu-20.04]
+        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04']
+        llvm: ['3.8', '6.0']
+        exclude:
+          - distro: 'ubuntu-18.04'
+            llvm: '3.8'
+          - distro: 'ubuntu-20.04'
+            llvm: '3.8'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
+          DOCKER_LLVM: ${{ matrix.llvm }}
   nix:
     name: Nix Build (nixpkgs-${{ matrix.nixpkgs }}, enableCUDA=${{ matrix.cuda }})
     runs-on: ubuntu-latest
