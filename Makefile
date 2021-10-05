@@ -86,7 +86,7 @@ LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100 110 111 120"
+LLVM_NEEDS_CXX14="100 110 111 120 130"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
 CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
 else
@@ -113,7 +113,7 @@ CLANG_LIBS += libclangFrontend.a \
 	libclangLex.a \
 	libclangBasic.a
 
-CLANG_AST_MATCHERS = "80 90 100 110 111 120"
+CLANG_AST_MATCHERS = "80 90 100 110 111 120 130"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
 CLANG_LIBS += libclangASTMatchers.a
 endif
@@ -129,7 +129,7 @@ else
 	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles)
 endif
 
-LLVM_POLLY = "100 110 111 120"
+LLVM_POLLY = "100 110 111 120 130"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))
 	LLVM_LIBFILES += $(shell $(LLVM_CONFIG) --libdir)/libPolly*.a
 endif

@@ -26,7 +26,16 @@ fi
 
 if [[ $(uname) = Linux ]]; then
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-13 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev libpfm4-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-13/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-12 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
@@ -90,7 +99,13 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
+    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-13.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-13
+    ln -s clang+llvm-13.0.0-x86_64-apple-darwin/bin/clang clang-13
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.0-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
     curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-12
