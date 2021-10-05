@@ -73,10 +73,10 @@ if [[ $(uname) = Linux ]]; then
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
   elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
     wget https://releases.llvm.org/3.8.1/clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-    tar xf clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04.tar.xz
-    ln -s clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04/bin/llvm-config llvm-config-3.8
-    ln -s clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04/bin/clang clang-3.8
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-3.8.0-x86_64-linux-gnu-ubuntu-16.04
+    tar xf clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz
+    ln -s clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04/bin/llvm-config llvm-config-3.8
+    ln -s clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04/bin/clang clang-3.8
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-3.8.1-x86_64-linux-gnu-ubuntu-16.04
   else
     echo "Don't know this LLVM version: $LLVM_CONFIG"
     exit 1
