@@ -56,7 +56,7 @@ jobs:
 
           # Linux: make build is broken on Ubuntu 18.04 with Ubuntu 16.04 binaries
           - os: 'ubuntu-18.04'
-            llvm: '5.0'
+            llvm: '3.8'
             cmake: '0'
 
           # CMake
