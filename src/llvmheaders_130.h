@@ -31,7 +31,3 @@
 #define LLVM_PATH_TYPE std::string
 #define RAW_FD_OSTREAM_NONE sys::fs::OF_None
 #define RAW_FD_OSTREAM_BINARY sys::fs::OF_None
-#define HASFNATTR(attr) \
-    getAttributes().hasAttribute(AttributeSet::FunctionIndex, Attribute ::attr)
-#define ADDFNATTR(attr) addFnAttr(Attribute ::attr)
-#define ATTRIBUTE Attributes
