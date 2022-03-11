@@ -1302,8 +1302,10 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["preserve_allcc"] = CallingConv::PreserveAll;
         ccmap["cxx_fast_tlscc"] = CallingConv::CXX_FAST_TLS;
         ccmap["ghccc"] = CallingConv::GHC;
+#if LLVM_VERSION >= 100
         ccmap["tailcc"] = CallingConv::Tail;
         ccmap["cfguard_checkcc"] = CallingConv::CFGuard_Check;
+#endif
         ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
         ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
         ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
