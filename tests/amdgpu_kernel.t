@@ -1,5 +1,6 @@
 if terralib.llvm_version < 90 then
   print("LLVM is too old, skipping AMD GPU test...")
+  return
 end
 
 local arch = 'gfx908'
