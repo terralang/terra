@@ -1313,8 +1313,12 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
         ccmap["arm_aapcscc"] = CallingConv::ARM_AAPCS;
         ccmap["arm_aapcs_vfpcc"] = CallingConv::ARM_AAPCS_VFP;
+#if LLVM_VERSION >= 80
         ccmap["aarch64_vector_pcs"] = CallingConv::AArch64_VectorCall;
+#endif
+#if LLVM_VERSION >= 100
         ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
+#endif
         ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
         ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
         ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
