@@ -1326,8 +1326,8 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
 #if LLVM_VERSION >= 39
         ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
-#endif
         ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
+#endif
         ccmap["ptx_kernel"] = CallingConv::PTX_Kernel;
         ccmap["ptx_device"] = CallingConv::PTX_Device;
         ccmap["x86_64_sysvcc"] = CallingConv::X86_64_SysV;
