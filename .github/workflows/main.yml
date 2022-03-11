@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-18.04', 'macos-10.15']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
@@ -170,13 +170,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04']
-        llvm: ['3.8', '6.0']
+        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-21.10']
+        llvm: ['3.8', '6.0', '13']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
           - distro: 'ubuntu-20.04'
             llvm: '3.8'
+          - distro: 'ubuntu-21.10'
+            llvm: '3.8'
+          - distro: 'ubuntu-21.10'
+            llvm: '6.0'
+          - distro: 'ubuntu-16.04'
+            llvm: '13'
+          - distro: 'ubuntu-18.04'
+            llvm: '13'
+          - distro: 'ubuntu-20.04'
+            llvm: '13'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
