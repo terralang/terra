@@ -1286,6 +1286,70 @@ static GlobalVariable *EmitGlobalVariable(TerraCompilationUnit *CU, Obj *global,
     return gv;
 }
 
+static CallingConv::ID ParseCallingConv(const char *cc) {
+    // LLVM does not provide a way to parse this programmatically, so
+    // we're just going to replicate the table from:
+    // https://github.com/llvm/llvm-project/blob/61814586620deca51ecf6477e19c6afa8e28ad90/llvm/lib/IR/AsmWriter.cpp#L290
+    static std::map<std::string, CallingConv::ID> ccmap;
+    static bool init = false;
+    if (!init) {
+        init = true;
+        ccmap["fastcc"] = CallingConv::Fast;
+        ccmap["coldcc"] = CallingConv::Cold;
+        ccmap["webkit_jscc"] = CallingConv::WebKit_JS;
+        ccmap["anyregcc"] = CallingConv::AnyReg;
+        ccmap["preserve_mostcc"] = CallingConv::PreserveMost;
+        ccmap["preserve_allcc"] = CallingConv::PreserveAll;
+        ccmap["cxx_fast_tlscc"] = CallingConv::CXX_FAST_TLS;
+        ccmap["ghccc"] = CallingConv::GHC;
+        ccmap["tailcc"] = CallingConv::Tail;
+        ccmap["cfguard_checkcc"] = CallingConv::CFGuard_Check;
+        ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
+        ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
+        ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
+        ccmap["x86_regcallcc"] = CallingConv::X86_RegCall;
+        ccmap["x86_vectorcallcc"] = CallingConv::X86_VectorCall;
+        ccmap["intel_ocl_bicc"] = CallingConv::Intel_OCL_BI;
+        ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
+        ccmap["arm_aapcscc"] = CallingConv::ARM_AAPCS;
+        ccmap["arm_aapcs_vfpcc"] = CallingConv::ARM_AAPCS_VFP;
+        ccmap["aarch64_vector_pcs"] = CallingConv::AArch64_VectorCall;
+        ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
+        ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
+        ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
+        ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
+        ccmap["ptx_kernel"] = CallingConv::PTX_Kernel;
+        ccmap["ptx_device"] = CallingConv::PTX_Device;
+        ccmap["x86_64_sysvcc"] = CallingConv::X86_64_SysV;
+        ccmap["win64cc"] = CallingConv::Win64;
+        ccmap["spir_func"] = CallingConv::SPIR_FUNC;
+        ccmap["spir_kernel"] = CallingConv::SPIR_KERNEL;
+        ccmap["swiftcc"] = CallingConv::Swift;
+#if LLVM_VERSION >= 130
+        ccmap["swifttailcc"] = CallingConv::SwiftTail;
+#endif
+        ccmap["x86_intrcc"] = CallingConv::X86_INTR;
+        ccmap["hhvmcc"] = CallingConv::HHVM;
+        ccmap["hhvm_ccc"] = CallingConv::HHVM_C;
+        ccmap["amdgpu_vs"] = CallingConv::AMDGPU_VS;
+        ccmap["amdgpu_ls"] = CallingConv::AMDGPU_LS;
+        ccmap["amdgpu_hs"] = CallingConv::AMDGPU_HS;
+        ccmap["amdgpu_es"] = CallingConv::AMDGPU_ES;
+        ccmap["amdgpu_gs"] = CallingConv::AMDGPU_GS;
+        ccmap["amdgpu_ps"] = CallingConv::AMDGPU_PS;
+        ccmap["amdgpu_cs"] = CallingConv::AMDGPU_CS;
+        ccmap["amdgpu_kernel"] = CallingConv::AMDGPU_KERNEL;
+#if LLVM_VERSION >= 120
+        ccmap["amdgpu_gfx"] = CallingConv::AMDGPU_Gfx;
+#endif
+    }
+    auto entry = ccmap.find(cc);
+    if (entry == ccmap.end()) {
+        assert(false && "no such calling convention");
+    }
+    return entry->second;
+}
+
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State *L);
 
@@ -1388,6 +1452,10 @@ struct FunctionEmitter {
                     fstate->func->addFnAttr(Attribute::OptimizeNone);
                     fstate->func->addFnAttr(Attribute::NoInline);
                 }
+            }
+            if (funcobj->hasfield("callingconv")) {
+                const char *callingconv = funcobj->string("callingconv");
+                fstate->func->setCallingConv(ParseCallingConv(callingconv));
             }
             if (funcobj->hasfield("noreturn")) {
                 if (funcobj->boolean("noreturn")) {

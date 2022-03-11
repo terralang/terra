@@ -557,6 +557,10 @@ function T.terrafunction:setoptimized(v)
     assert(not (self.definition.alwaysinline and self.definition.dontoptimize),
            "setinlined(true) and setoptimized(false) are incompatible")
 end
+function T.terrafunction:setcallingconv(v)
+    assert(self:isdefined(), "attempting to set the calling convention of an undefined function")
+    self.definition.callingconv = tostring(v)
+end
 function T.terrafunction:setnoreturn(v)
     assert(self:isdefined(), "attempting to set the noreturn state of an undefined function")
     self.definition.noreturn = not not v
