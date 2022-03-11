@@ -1,3 +1,7 @@
+if terralib.llvm_version < 90 then
+  print("LLVM is too old, skipping AMD GPU test...")
+end
+
 local arch = 'gfx908'
 local amd_target = terralib.newtarget {
   Triple = 'amdgcn-amd-amdhsa',
