@@ -1309,7 +1309,9 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
         ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
         ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
+#if LLVM_VERSION >= 40
         ccmap["x86_regcallcc"] = CallingConv::X86_RegCall;
+#endif
         ccmap["x86_vectorcallcc"] = CallingConv::X86_VectorCall;
         ccmap["intel_ocl_bicc"] = CallingConv::Intel_OCL_BI;
         ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
@@ -1322,12 +1324,16 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
 #endif
         ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
+#if LLVM_VERSION >= 39
         ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
+#endif
         ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
         ccmap["ptx_kernel"] = CallingConv::PTX_Kernel;
         ccmap["ptx_device"] = CallingConv::PTX_Device;
         ccmap["x86_64_sysvcc"] = CallingConv::X86_64_SysV;
+#if LLVM_VERSION >= 50
         ccmap["win64cc"] = CallingConv::Win64;
+#endif
         ccmap["spir_func"] = CallingConv::SPIR_FUNC;
         ccmap["spir_kernel"] = CallingConv::SPIR_KERNEL;
         ccmap["swiftcc"] = CallingConv::Swift;
@@ -1337,14 +1343,22 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["x86_intrcc"] = CallingConv::X86_INTR;
         ccmap["hhvmcc"] = CallingConv::HHVM;
         ccmap["hhvm_ccc"] = CallingConv::HHVM_C;
+#if LLVM_VERSION >= 39
         ccmap["amdgpu_vs"] = CallingConv::AMDGPU_VS;
+#if LLVM_VERSION >= 60
         ccmap["amdgpu_ls"] = CallingConv::AMDGPU_LS;
+#endif
+#if LLVM_VERSION >= 50
         ccmap["amdgpu_hs"] = CallingConv::AMDGPU_HS;
+#endif
+#if LLVM_VERSION >= 60
         ccmap["amdgpu_es"] = CallingConv::AMDGPU_ES;
+#endif
         ccmap["amdgpu_gs"] = CallingConv::AMDGPU_GS;
         ccmap["amdgpu_ps"] = CallingConv::AMDGPU_PS;
         ccmap["amdgpu_cs"] = CallingConv::AMDGPU_CS;
         ccmap["amdgpu_kernel"] = CallingConv::AMDGPU_KERNEL;
+#endif
 #if LLVM_VERSION >= 120
         ccmap["amdgpu_gfx"] = CallingConv::AMDGPU_Gfx;
 #endif
