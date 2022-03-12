@@ -278,6 +278,18 @@ Get or set the pretty name for the function. This is useful when viewing generat
 
 When `true` function when be always inlined. When `false` the function will never be inlined. By default, functions will be inlined at the discretion of LLVM's function inliner.
 
+---
+
+    func:setoptimized(bool)
+
+All Terra functions are optimized by default (equivalent of Clang `-O3`). Pass `false` to this method to disable optimization (equivalent of Clang `-O0`).
+
+---
+
+    func:setcallingconv(string)
+
+Set the calling convention of the function. LLVM's default calling convention is used by default. Valid values are the same as can be specified in [LLVM's text-based assembly language](https://llvm.org/docs/LangRef.html#calling-conventions). (Note that, as of the time of writing, the official LLVM documentation is incomplete, particularly for target-specific calling conventions. For additional calling conventions, it may be necessary to consult the [source code directly](https://github.com/llvm/llvm-project/blob/llvmorg-13.0.0/llvm/lib/IR/AsmWriter.cpp#L289-L339).)
+
 Types
 -----
 

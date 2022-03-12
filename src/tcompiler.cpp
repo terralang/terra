@@ -1286,6 +1286,89 @@ static GlobalVariable *EmitGlobalVariable(TerraCompilationUnit *CU, Obj *global,
     return gv;
 }
 
+static CallingConv::ID ParseCallingConv(const char *cc) {
+    // LLVM does not provide a way to parse this programmatically, so
+    // we're just going to replicate the table from llvm/lib/IR/AsmWriter.cpp
+    static std::map<std::string, CallingConv::ID> ccmap;
+    static bool init = false;
+    if (!init) {
+        init = true;
+        ccmap["fastcc"] = CallingConv::Fast;
+        ccmap["coldcc"] = CallingConv::Cold;
+        ccmap["webkit_jscc"] = CallingConv::WebKit_JS;
+        ccmap["anyregcc"] = CallingConv::AnyReg;
+        ccmap["preserve_mostcc"] = CallingConv::PreserveMost;
+        ccmap["preserve_allcc"] = CallingConv::PreserveAll;
+        ccmap["cxx_fast_tlscc"] = CallingConv::CXX_FAST_TLS;
+        ccmap["ghccc"] = CallingConv::GHC;
+#if LLVM_VERSION >= 100
+        ccmap["tailcc"] = CallingConv::Tail;
+        ccmap["cfguard_checkcc"] = CallingConv::CFGuard_Check;
+#endif
+        ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
+        ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
+        ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
+#if LLVM_VERSION >= 40
+        ccmap["x86_regcallcc"] = CallingConv::X86_RegCall;
+#endif
+        ccmap["x86_vectorcallcc"] = CallingConv::X86_VectorCall;
+        ccmap["intel_ocl_bicc"] = CallingConv::Intel_OCL_BI;
+        ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
+        ccmap["arm_aapcscc"] = CallingConv::ARM_AAPCS;
+        ccmap["arm_aapcs_vfpcc"] = CallingConv::ARM_AAPCS_VFP;
+#if LLVM_VERSION >= 80
+        ccmap["aarch64_vector_pcs"] = CallingConv::AArch64_VectorCall;
+#endif
+#if LLVM_VERSION >= 100
+        ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
+#endif
+        ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
+#if LLVM_VERSION >= 39
+        ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
+        ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
+#endif
+        ccmap["ptx_kernel"] = CallingConv::PTX_Kernel;
+        ccmap["ptx_device"] = CallingConv::PTX_Device;
+        ccmap["x86_64_sysvcc"] = CallingConv::X86_64_SysV;
+#if LLVM_VERSION >= 50
+        ccmap["win64cc"] = CallingConv::Win64;
+#endif
+        ccmap["spir_func"] = CallingConv::SPIR_FUNC;
+        ccmap["spir_kernel"] = CallingConv::SPIR_KERNEL;
+        ccmap["swiftcc"] = CallingConv::Swift;
+#if LLVM_VERSION >= 130
+        ccmap["swifttailcc"] = CallingConv::SwiftTail;
+#endif
+        ccmap["x86_intrcc"] = CallingConv::X86_INTR;
+        ccmap["hhvmcc"] = CallingConv::HHVM;
+        ccmap["hhvm_ccc"] = CallingConv::HHVM_C;
+#if LLVM_VERSION >= 39
+        ccmap["amdgpu_vs"] = CallingConv::AMDGPU_VS;
+#if LLVM_VERSION >= 60
+        ccmap["amdgpu_ls"] = CallingConv::AMDGPU_LS;
+#endif
+#if LLVM_VERSION >= 50
+        ccmap["amdgpu_hs"] = CallingConv::AMDGPU_HS;
+#endif
+#if LLVM_VERSION >= 60
+        ccmap["amdgpu_es"] = CallingConv::AMDGPU_ES;
+#endif
+        ccmap["amdgpu_gs"] = CallingConv::AMDGPU_GS;
+        ccmap["amdgpu_ps"] = CallingConv::AMDGPU_PS;
+        ccmap["amdgpu_cs"] = CallingConv::AMDGPU_CS;
+        ccmap["amdgpu_kernel"] = CallingConv::AMDGPU_KERNEL;
+#endif
+#if LLVM_VERSION >= 120
+        ccmap["amdgpu_gfx"] = CallingConv::AMDGPU_Gfx;
+#endif
+    }
+    auto entry = ccmap.find(cc);
+    if (entry == ccmap.end()) {
+        assert(false && "no such calling convention");
+    }
+    return entry->second;
+}
+
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State *L);
 
@@ -1378,20 +1461,24 @@ struct FunctionEmitter {
 
             if (funcobj->hasfield("alwaysinline")) {
                 if (funcobj->boolean("alwaysinline")) {
-                    fstate->func->ADDFNATTR(AlwaysInline);
+                    fstate->func->addFnAttr(Attribute::AlwaysInline);
                 } else {
-                    fstate->func->ADDFNATTR(NoInline);
+                    fstate->func->addFnAttr(Attribute::NoInline);
                 }
             }
             if (funcobj->hasfield("dontoptimize")) {
                 if (funcobj->boolean("dontoptimize")) {
-                    fstate->func->ADDFNATTR(OptimizeNone);
-                    fstate->func->ADDFNATTR(NoInline);
+                    fstate->func->addFnAttr(Attribute::OptimizeNone);
+                    fstate->func->addFnAttr(Attribute::NoInline);
                 }
+            }
+            if (funcobj->hasfield("callingconv")) {
+                const char *callingconv = funcobj->string("callingconv");
+                fstate->func->setCallingConv(ParseCallingConv(callingconv));
             }
             if (funcobj->hasfield("noreturn")) {
                 if (funcobj->boolean("noreturn")) {
-                    fstate->func->ADDFNATTR(NoReturn);
+                    fstate->func->addFnAttr(Attribute::NoReturn);
                 }
             }
 
