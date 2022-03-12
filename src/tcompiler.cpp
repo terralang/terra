@@ -1288,8 +1288,7 @@ static GlobalVariable *EmitGlobalVariable(TerraCompilationUnit *CU, Obj *global,
 
 static CallingConv::ID ParseCallingConv(const char *cc) {
     // LLVM does not provide a way to parse this programmatically, so
-    // we're just going to replicate the table from:
-    // https://github.com/llvm/llvm-project/blob/61814586620deca51ecf6477e19c6afa8e28ad90/llvm/lib/IR/AsmWriter.cpp#L290
+    // we're just going to replicate the table from llvm/lib/IR/AsmWriter.cpp
     static std::map<std::string, CallingConv::ID> ccmap;
     static bool init = false;
     if (!init) {
