@@ -25,10 +25,11 @@ if [[ -n $DOCKER_BUILD ]]; then
 fi
 
 if [[ $(uname) = Linux ]]; then
+  distro_name="$(lsb_release -cs)"
   sudo apt-get update -qq
   if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-13 main"
+    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-13 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev libpfm4-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
@@ -37,7 +38,7 @@ if [[ $(uname) = Linux ]]; then
     fi
   elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-12 main"
+    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-12 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-12-dev clang-12 libclang-12-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-12:/usr/share/llvm-12
@@ -46,7 +47,7 @@ if [[ $(uname) = Linux ]]; then
     fi
   elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-11 main"
+    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-11 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
