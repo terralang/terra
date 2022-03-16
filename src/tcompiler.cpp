@@ -2002,8 +2002,9 @@ struct FunctionEmitter {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
+            unsigned as = addr->getType()->getPointerAddressSpace();
             // create bitcasts of src and dest address
-            Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
+            Type *t = Type::getInt8PtrTy(*CU->TT->ctx, as);
             // addr_dst
             Value *addr_dst = B->CreateBitCast(addr, t);
             // addr_src
