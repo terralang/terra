@@ -13,10 +13,6 @@ local amd_target = terralib.newtarget {
 local wgx = terralib.intrinsic("llvm.amdgcn.workgroup.id.x",{} -> int32)
 local wix = terralib.intrinsic("llvm.amdgcn.workitem.id.x",{} -> int32)
 
-terra f(a : float, x : float, y : float)
-  return a * x + y
-end
-
 local workgroup_size = 256
 
 terra saxpy(num_elements : uint64, alpha : float,
@@ -28,5 +24,15 @@ terra saxpy(num_elements : uint64, alpha : float,
 end
 saxpy:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy}, {}, amd_target)
+struct i2 {
+  x : int,
+  y : int,
+}
+terra f()
+  -- Allocas use an address space in AMDGPU target, make sure that is respected.
+  var x = i2 {1, 1}
+end
+f:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))
