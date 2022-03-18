@@ -39,5 +39,15 @@ terra g(x : i2)
 end
 g:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g}, {}, amd_target)
+terra sub_i2(a : i2, b : i2)
+  return [i2]({ a.x - b.x, a.y - b.y })
+end
+
+terra h(y : i2)
+    var i = [i2]({0, 0})
+    var x = sub_i2(i, y)
+end
+h:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g, h=h}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))
