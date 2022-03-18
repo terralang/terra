@@ -1998,7 +1998,8 @@ struct FunctionEmitter {
         entry.obj("type", &entryType);
         if (entry.boolean("inunion") ||
             isPointerToFunction(addr->getType()->getPointerElementType())) {
-            Type *resultType = PointerType::getUnqual(getType(&entryType)->type);
+            unsigned as = addr->getType()->getPointerAddressSpace();
+            Type *resultType = PointerType::get(getType(&entryType)->type, as);
             addr = B->CreateBitCast(addr, resultType);
         }
 
@@ -2010,14 +2011,16 @@ struct FunctionEmitter {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
-            unsigned as = addr->getType()->getPointerAddressSpace();
+            unsigned as_dst = addr->getType()->getPointerAddressSpace();
             // create bitcasts of src and dest address
-            Type *t = Type::getInt8PtrTy(*CU->TT->ctx, as);
+            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
             // addr_dst
-            Value *addr_dst = B->CreateBitCast(addr, t);
+            Value *addr_dst = B->CreateBitCast(addr, t_dst);
             // addr_src
             Value *addr_src = l->getOperand(0);
-            addr_src = B->CreateBitCast(addr_src, t);
+            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
+            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
+            addr_src = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
 #if LLVM_VERSION <= 90
             unsigned a1 = 0;
