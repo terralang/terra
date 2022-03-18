@@ -28,9 +28,15 @@ struct i2 {
   x : int,
   y : int,
 }
-terra f()
-  -- Allocas use an address space in AMDGPU target, make sure that is respected.
-  var x = i2 {1, 1}
+
+terra sub_i2(a : i2, b : i2)
+  return [i2]({ a.x - b.x, a.y - b.y })
+end
+
+-- Allocas use an address space in AMDGPU target, make sure that is respected.
+terra f(y : i2)
+  var i = [i2]({0, 0})
+  var x = sub_i2(i, y)
 end
 f:setcallingconv("amdgpu_kernel")
 

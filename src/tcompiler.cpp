@@ -1005,9 +1005,12 @@ struct CCallingConv {
         if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
             // create bitcasts of src and dest address
             Value *addr_src = l->getOperand(0);
-            Type *t = Type::getInt8PtrTy(*CU->TT->ctx);
-            Value *addr_dest = B->CreateBitCast(addr_dst, t);
-            Value *addr_source = B->CreateBitCast(addr_src, t);
+            unsigned as_src = addr_dst->getType()->getPointerAddressSpace();
+            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
+            unsigned as_dst = addr_dst->getType()->getPointerAddressSpace();
+            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
+            Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
+            Value *addr_source = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
 #if LLVM_VERSION <= 90
             unsigned a1 = 0;
@@ -1054,7 +1057,7 @@ struct CCallingConv {
         return fn;
     }
 
-    PointerType *Ptr(Type *t) { return PointerType::getUnqual(t); }
+    PointerType *Ptr(Type *t, unsigned as = 0) { return PointerType::get(t, as); }
     Value *ConvertPrimitive(IRBuilder<> *B, Value *src, Type *dstType, bool issigned) {
         if (!dstType->isIntegerTy()) return src;
         if (dstType == Type::getInt1Ty(*CU->TT->ctx)) {
@@ -1087,7 +1090,8 @@ struct CCallingConv {
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
-                    Value *dest = B->CreateBitCast(v, Ptr(p->cctype));
+                    unsigned as = v->getType()->getPointerAddressSpace();
+                    Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
                     int N = p->GetNumberOfTypesInParamList();
                     for (int j = 0; j < N; j++) {
                         B->CreateStore(&*ai, CreateConstGEP2_32(B, dest, 0, j));
@@ -1112,8 +1116,9 @@ struct CCallingConv {
             B->CreateRetVoid();
         } else if (C_AGGREGATE_REG == kind) {
             Value *dest = CreateAlloca(B, info->returntype.type->type);
+            unsigned as = dest->getType()->getPointerAddressSpace();
             emitStoreAgg(B, info->returntype.type->type, result, dest);
-            Value *result = B->CreateBitCast(dest, Ptr(info->returntype.cctype));
+            Value *result = B->CreateBitCast(dest, Ptr(info->returntype.cctype, as));
             if (info->returntype.GetNumberOfTypesInParamList() == 1)
                 result = CreateConstGEP2_32(B, result, 0, 0);
             B->CreateRet(B->CreateLoad(result));
@@ -1148,8 +1153,9 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_REG: {
                     Value *scratch = CreateAlloca(B, a->type->type);
+                    unsigned as = scratch->getType()->getPointerAddressSpace();
                     emitStoreAgg(B, a->type->type, actual, scratch);
-                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype));
+                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
                     int N = a->GetNumberOfTypesInParamList();
                     for (int j = 0; j < N; j++) {
                         arguments.push_back(
@@ -1177,7 +1183,9 @@ struct CCallingConv {
                 aggregate = arguments[0];
             } else {  // C_AGGREGATE_REG
                 aggregate = CreateAlloca(B, info.returntype.type->type);
-                Value *casted = B->CreateBitCast(aggregate, Ptr(info.returntype.cctype));
+                unsigned as = aggregate->getType()->getPointerAddressSpace();
+                Value *casted =
+                        B->CreateBitCast(aggregate, Ptr(info.returntype.cctype, as));
                 if (info.returntype.GetNumberOfTypesInParamList() == 1)
                     casted = CreateConstGEP2_32(B, casted, 0, 0);
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
@@ -1990,7 +1998,8 @@ struct FunctionEmitter {
         entry.obj("type", &entryType);
         if (entry.boolean("inunion") ||
             isPointerToFunction(addr->getType()->getPointerElementType())) {
-            Type *resultType = PointerType::getUnqual(getType(&entryType)->type);
+            unsigned as = addr->getType()->getPointerAddressSpace();
+            Type *resultType = PointerType::get(getType(&entryType)->type, as);
             addr = B->CreateBitCast(addr, resultType);
         }
 
@@ -2002,14 +2011,16 @@ struct FunctionEmitter {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
-            unsigned as = addr->getType()->getPointerAddressSpace();
+            unsigned as_dst = addr->getType()->getPointerAddressSpace();
             // create bitcasts of src and dest address
-            Type *t = Type::getInt8PtrTy(*CU->TT->ctx, as);
+            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
             // addr_dst
-            Value *addr_dst = B->CreateBitCast(addr, t);
+            Value *addr_dst = B->CreateBitCast(addr, t_dst);
             // addr_src
             Value *addr_src = l->getOperand(0);
-            addr_src = B->CreateBitCast(addr_src, t);
+            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
+            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
+            addr_src = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
 #if LLVM_VERSION <= 90
             unsigned a1 = 0;
