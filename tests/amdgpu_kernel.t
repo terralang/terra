@@ -28,26 +28,17 @@ struct i2 {
   x : int,
   y : int,
 }
-terra f()
-  -- Allocas use an address space in AMDGPU target, make sure that is respected.
-  var x = i2 {1, 1}
-end
-f:setcallingconv("amdgpu_kernel")
-
--- Another pattern that requires being careful about the addrspace.
-terra g(x : i2)
-end
-g:setcallingconv("amdgpu_kernel")
 
 terra sub_i2(a : i2, b : i2)
   return [i2]({ a.x - b.x, a.y - b.y })
 end
 
-terra h(y : i2)
-    var i = [i2]({0, 0})
-    var x = sub_i2(i, y)
+-- Allocas use an address space in AMDGPU target, make sure that is respected.
+terra f(y : i2)
+  var i = [i2]({0, 0})
+  var x = sub_i2(i, y)
 end
-h:setcallingconv("amdgpu_kernel")
+f:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g, h=h}, {}, amd_target)
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))
