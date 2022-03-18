@@ -1184,7 +1184,8 @@ struct CCallingConv {
             } else {  // C_AGGREGATE_REG
                 aggregate = CreateAlloca(B, info.returntype.type->type);
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
-                Value *casted = B->CreateBitCast(aggregate, Ptr(info.returntype.cctype, as));
+                Value *casted =
+                        B->CreateBitCast(aggregate, Ptr(info.returntype.cctype, as));
                 if (info.returntype.GetNumberOfTypesInParamList() == 1)
                     casted = CreateConstGEP2_32(B, casted, 0, 0);
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
