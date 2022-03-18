@@ -34,5 +34,10 @@ terra f()
 end
 f:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f}, {}, amd_target)
+-- Another pattern that requires being careful about the addrspace.
+terra g(x : i2)
+end
+g:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))

@@ -1054,7 +1054,7 @@ struct CCallingConv {
         return fn;
     }
 
-    PointerType *Ptr(Type *t) { return PointerType::getUnqual(t); }
+    PointerType *Ptr(Type *t, unsigned as = 0) { return PointerType::get(t, as); }
     Value *ConvertPrimitive(IRBuilder<> *B, Value *src, Type *dstType, bool issigned) {
         if (!dstType->isIntegerTy()) return src;
         if (dstType == Type::getInt1Ty(*CU->TT->ctx)) {
@@ -1087,7 +1087,8 @@ struct CCallingConv {
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
-                    Value *dest = B->CreateBitCast(v, Ptr(p->cctype));
+                    unsigned as = v->getType()->getPointerAddressSpace();
+                    Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
                     int N = p->GetNumberOfTypesInParamList();
                     for (int j = 0; j < N; j++) {
                         B->CreateStore(&*ai, CreateConstGEP2_32(B, dest, 0, j));
