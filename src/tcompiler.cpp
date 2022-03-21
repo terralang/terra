@@ -773,9 +773,9 @@ struct CCallingConv {
         ArgumentKind kind;
         TType *type;   // orignal type for the object
         Type *cctype;  // if type == C_AGGREGATE_REG, this is a struct that holds a list
-                       // of the values that goes into the registers if type ==
-                       // CC_PRIMITIVE, this is the struct that this type appear in the
-                       // argument list and the type should be coerced to
+                       // of the values that goes into the registers
+                       // if type == CC_PRIMITIVE, this is the struct that this type
+                       // appear in the argument list and the type should be coerced to
         Argument() {}
         Argument(ArgumentKind kind, TType *type, Type *cctype = NULL) {
             this->kind = kind;
@@ -1005,7 +1005,7 @@ struct CCallingConv {
         if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
             // create bitcasts of src and dest address
             Value *addr_src = l->getOperand(0);
-            unsigned as_src = addr_dst->getType()->getPointerAddressSpace();
+            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
             Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
             unsigned as_dst = addr_dst->getType()->getPointerAddressSpace();
             Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
