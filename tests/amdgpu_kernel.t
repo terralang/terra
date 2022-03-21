@@ -25,8 +25,8 @@ end
 saxpy:setcallingconv("amdgpu_kernel")
 
 struct i2 {
-  x : int,
-  y : int,
+  x : int32,
+  y : int32,
 }
 
 terra sub_i2(a : i2, b : i2)
@@ -40,5 +40,22 @@ terra f(y : i2)
 end
 f:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f}, {}, amd_target)
+struct i3 {
+  x : int64,
+  y : int64,
+  z : int64,
+}
+
+terra sub_i3(a : i3, b : i3)
+  return [i3]({ a.x - b.x, a.y - b.y, a.z - b.z })
+end
+
+-- Same with a struct large enough to force passing by value.
+terra g(y : i3)
+  var i = [i3]({0, 0, 0})
+  var x = sub_i3(i, y)
+end
+g:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))

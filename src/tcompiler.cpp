@@ -877,7 +877,9 @@ struct CCallingConv {
     Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint) {
         TType *t = Ty->Get(type);
 
-        if (!t->type->isAggregateType()) {
+        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
+
+        if (is_amdgpu || !t->type->isAggregateType()) {
             if (t->type->isFloatingPointTy() || t->type->isVectorTy())
                 ++*usedfloat;
             else
@@ -920,7 +922,9 @@ struct CCallingConv {
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero);
 
-#ifdef _WIN32
+// #ifdef _WIN32
+        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
+        if (is_amdgpu) {
         // windows classifies empty structs as pass by pointer, but we need a return value
         // of unit (an empty tuple) to be translated to void. So if it is unit, force the
         // return value to be void by overriding the normal classification decision
@@ -928,7 +932,8 @@ struct CCallingConv {
             info->returntype = Argument(C_AGGREGATE_REG, info->returntype.type,
                                         StructType::get(*CU->TT->ctx));
         }
-#endif
+        }
+// #endif
 
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM
