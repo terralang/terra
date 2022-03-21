@@ -877,15 +877,19 @@ struct CCallingConv {
     Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint) {
         TType *t = Ty->Get(type);
 
-        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
-
-        if (is_amdgpu || !t->type->isAggregateType()) {
+        if (!t->type->isAggregateType()) {
             if (t->type->isFloatingPointTy() || t->type->isVectorTy())
                 ++*usedfloat;
             else
                 ++*usedint;
             bool usei1 = t->islogical && !t->type->isVectorTy();
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
+        }
+
+        // On AMDGPU, can't pass through memory, need to always explode to registers.
+        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
+        if (is_amdgpu) {
+          return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
