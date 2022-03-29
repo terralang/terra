@@ -900,7 +900,7 @@ struct CCallingConv {
         // On AMDGPU, can't pass through memory, need to always explode to registers.
         bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
         if (is_amdgpu) {
-          return Argument(C_AGGREGATE_REG, t, t->type);
+            return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
@@ -937,18 +937,22 @@ struct CCallingConv {
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero);
 
-// #ifdef _WIN32
+#ifndef _WIN32
+        // need this logic on AMDGPU as well
         bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
         if (is_amdgpu) {
-        // windows classifies empty structs as pass by pointer, but we need a return value
-        // of unit (an empty tuple) to be translated to void. So if it is unit, force the
-        // return value to be void by overriding the normal classification decision
-        if (Ty->IsUnitType(&returntype)) {
-            info->returntype = Argument(C_AGGREGATE_REG, info->returntype.type,
-                                        StructType::get(*CU->TT->ctx));
+#endif
+            // windows classifies empty structs as pass by pointer, but we need a return
+            // value of unit (an empty tuple) to be translated to void. So if it is unit,
+            // force the return value to be void by overriding the normal classification
+            // decision
+            if (Ty->IsUnitType(&returntype)) {
+                info->returntype = Argument(C_AGGREGATE_REG, info->returntype.type,
+                                            StructType::get(*CU->TT->ctx));
+            }
+#ifndef _WIN32
         }
-        }
-// #endif
+#endif
 
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM
@@ -1086,18 +1090,19 @@ struct CCallingConv {
             return B->CreateIntCast(src, dstType, issigned);
         }
     }
-    void EmitEntryAggReg(IRBuilder<> *B, Value *dest, Type *arg_type, Function::arg_iterator &ai) {
-      StructType *st = dyn_cast<StructType>(arg_type);
-      if (st) {
-        int N = st->getNumElements();
-        for (int j = 0; j < N; j++) {
-          Type *elt_type = st->getElementType(j);
-          EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, 0, j), elt_type, ai);
+    void EmitEntryAggReg(IRBuilder<> *B, Value *dest, Type *arg_type,
+                         Function::arg_iterator &ai) {
+        StructType *st = dyn_cast<StructType>(arg_type);
+        if (st) {
+            int N = st->getNumElements();
+            for (int j = 0; j < N; j++) {
+                Type *elt_type = st->getElementType(j);
+                EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, 0, j), elt_type, ai);
+            }
+        } else {
+            B->CreateStore(&*ai, dest);
+            ++ai;
         }
-      } else {
-        B->CreateStore(&*ai, dest);
-        ++ai;
-      }
     }
     void EmitEntry(IRBuilder<> *B, Obj *ftype, Function *func,
                    std::vector<Value *> *variables) {
@@ -1160,17 +1165,19 @@ struct CCallingConv {
         }
     }
 
-    void EmitCallAggReg(IRBuilder<> *B, Value *value, Type *param_type, std::vector<Value *> &arguments) {
-      StructType *st = dyn_cast<StructType>(param_type);
-      if (st) {
-        int N = st->getNumElements();
-        for (int j = 0; j < N; j++) {
-          Type *elt_type = st->getElementType(j);
-          EmitCallAggReg(B, CreateConstGEP2_32(B, value, 0, j), elt_type, arguments);
+    void EmitCallAggReg(IRBuilder<> *B, Value *value, Type *param_type,
+                        std::vector<Value *> &arguments) {
+        StructType *st = dyn_cast<StructType>(param_type);
+        if (st) {
+            int N = st->getNumElements();
+            for (int j = 0; j < N; j++) {
+                Type *elt_type = st->getElementType(j);
+                EmitCallAggReg(B, CreateConstGEP2_32(B, value, 0, j), elt_type,
+                               arguments);
+            }
+        } else {
+            arguments.push_back(B->CreateLoad(value));
         }
-      } else {
-        arguments.push_back(B->CreateLoad(value));
-      }
     }
 
     Value *EmitCall(IRBuilder<> *B, Obj *ftype, Obj *paramtypes, Value *callee,
@@ -1228,10 +1235,11 @@ struct CCallingConv {
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
                 StructType *type = cast<StructType>(info.returntype.cctype);
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
-                if (info.returntype.GetNumberOfTypesInParamList() == 1)
+                if (info.returntype.GetNumberOfTypesInParamList() == 1) {
                     do {
                         casted = CreateConstGEP2_32(B, casted, 0, 0);
                     } while ((type = dyn_cast<StructType>(type->getElementType(0))));
+                }
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
@@ -1263,8 +1271,7 @@ struct CCallingConv {
                         do {
                             rt = type->getElementType(0);
                         } while ((type = dyn_cast<StructType>(rt)));
-                    }
-                        break;
+                    } break;
                     default:
                         rt = info->returntype.cctype;
                         break;
