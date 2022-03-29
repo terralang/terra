@@ -782,9 +782,20 @@ struct CCallingConv {
             this->type = type;
             this->cctype = cctype ? cctype : type->type;
         }
+        int GetNumberOfTypesInParamList(Type *type) {
+            StructType *st = dyn_cast<StructType>(type);
+            if (st) {
+                size_t total = 0;
+                for (auto elt_type : st->elements()) {
+                    total += GetNumberOfTypesInParamList(elt_type);
+                }
+                return total;
+            }
+            return 1;
+        }
         int GetNumberOfTypesInParamList() {
             if (C_AGGREGATE_REG == this->kind)
-                return cast<StructType>(this->cctype)->getNumElements();
+                return GetNumberOfTypesInParamList(this->cctype);
             return 1;
         }
     };
@@ -1075,6 +1086,19 @@ struct CCallingConv {
             return B->CreateIntCast(src, dstType, issigned);
         }
     }
+    void EmitEntryAggReg(IRBuilder<> *B, Value *dest, Type *arg_type, Function::arg_iterator &ai) {
+      StructType *st = dyn_cast<StructType>(arg_type);
+      if (st) {
+        int N = st->getNumElements();
+        for (int j = 0; j < N; j++) {
+          Type *elt_type = st->getElementType(j);
+          EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, 0, j), elt_type, ai);
+        }
+      } else {
+        B->CreateStore(&*ai, dest);
+        ++ai;
+      }
+    }
     void EmitEntry(IRBuilder<> *B, Obj *ftype, Function *func,
                    std::vector<Value *> *variables) {
         Classification *info = ClassifyFunction(ftype);
@@ -1101,11 +1125,7 @@ struct CCallingConv {
                 case C_AGGREGATE_REG: {
                     unsigned as = v->getType()->getPointerAddressSpace();
                     Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
-                    int N = p->GetNumberOfTypesInParamList();
-                    for (int j = 0; j < N; j++) {
-                        B->CreateStore(&*ai, CreateConstGEP2_32(B, dest, 0, j));
-                        ++ai;
-                    }
+                    EmitEntryAggReg(B, dest, p->cctype, ai);
                 } break;
             }
         }
@@ -1127,13 +1147,30 @@ struct CCallingConv {
             Value *dest = CreateAlloca(B, info->returntype.type->type);
             unsigned as = dest->getType()->getPointerAddressSpace();
             emitStoreAgg(B, info->returntype.type->type, result, dest);
-            Value *result = B->CreateBitCast(dest, Ptr(info->returntype.cctype, as));
-            if (info->returntype.GetNumberOfTypesInParamList() == 1)
-                result = CreateConstGEP2_32(B, result, 0, 0);
+            StructType *type = cast<StructType>(info->returntype.cctype);
+            Value *result = B->CreateBitCast(dest, Ptr(type, as));
+            if (info->returntype.GetNumberOfTypesInParamList() == 1) {
+                do {
+                    result = CreateConstGEP2_32(B, result, 0, 0);
+                } while (type = dyn_cast<StructType>(type->getElementType(0)));
+            }
             B->CreateRet(B->CreateLoad(result));
         } else {
             assert(!"unhandled return value");
         }
+    }
+
+    void EmitCallAggReg(IRBuilder<> *B, Value *value, Type *param_type, std::vector<Value *> &arguments) {
+      StructType *st = dyn_cast<StructType>(param_type);
+      if (st) {
+        int N = st->getNumElements();
+        for (int j = 0; j < N; j++) {
+          Type *elt_type = st->getElementType(j);
+          EmitCallAggReg(B, CreateConstGEP2_32(B, value, 0, j), elt_type, arguments);
+        }
+      } else {
+        arguments.push_back(B->CreateLoad(value));
+      }
     }
 
     Value *EmitCall(IRBuilder<> *B, Obj *ftype, Obj *paramtypes, Value *callee,
@@ -1165,11 +1202,7 @@ struct CCallingConv {
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     emitStoreAgg(B, a->type->type, actual, scratch);
                     Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
-                    int N = a->GetNumberOfTypesInParamList();
-                    for (int j = 0; j < N; j++) {
-                        arguments.push_back(
-                                B->CreateLoad(CreateConstGEP2_32(B, casted, 0, j)));
-                    }
+                    EmitCallAggReg(B, casted, a->cctype, arguments);
                 } break;
             }
         }
@@ -1193,14 +1226,26 @@ struct CCallingConv {
             } else {  // C_AGGREGATE_REG
                 aggregate = CreateAlloca(B, info.returntype.type->type);
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
-                Value *casted =
-                        B->CreateBitCast(aggregate, Ptr(info.returntype.cctype, as));
+                StructType *type = cast<StructType>(info.returntype.cctype);
+                Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
                 if (info.returntype.GetNumberOfTypesInParamList() == 1)
-                    casted = CreateConstGEP2_32(B, casted, 0, 0);
+                    do {
+                        casted = CreateConstGEP2_32(B, casted, 0, 0);
+                    } while (type = dyn_cast<StructType>(type->getElementType(0)));
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
             return B->CreateLoad(aggregate);
+        }
+    }
+    void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
+        StructType *st = dyn_cast<StructType>(type);
+        if (st) {
+            for (auto elt_type : st->elements()) {
+                GatherArgumentsAggReg(elt_type, arguments);
+            }
+        } else {
+            arguments.push_back(type);
         }
     }
     FunctionType *CreateFunctionType(Classification *info, bool isvararg) {
@@ -1213,8 +1258,12 @@ struct CCallingConv {
                     case 0:
                         rt = Type::getVoidTy(*CU->TT->ctx);
                         break;
-                    case 1:
-                        rt = cast<StructType>(info->returntype.cctype)->getElementType(0);
+                    case 1: {
+                        StructType *type = cast<StructType>(info->returntype.cctype);
+                        do {
+                            rt = type;
+                        } while (type = dyn_cast<StructType>(type->getElementType(0)));
+                    }
                         break;
                     default:
                         rt = info->returntype.cctype;
@@ -1240,11 +1289,7 @@ struct CCallingConv {
                     arguments.push_back(Ptr(a->type->type));
                     break;
                 case C_AGGREGATE_REG: {
-                    int N = a->GetNumberOfTypesInParamList();
-                    for (int j = 0; j < N; j++) {
-                        arguments.push_back(
-                                cast<StructType>(a->cctype)->getElementType(j));
-                    }
+                    GatherArgumentsAggReg(a->cctype, arguments);
                 } break;
             }
         }
