@@ -24,21 +24,71 @@ terra saxpy(num_elements : uint64, alpha : float,
 end
 saxpy:setcallingconv("amdgpu_kernel")
 
+-- Run some tests to make sure AMDGPU codegen is working. In particular:
+--  * AMDGPU uses a non-zero address space for allocas
+--  * AMDGPU requires structs to be passed by registers rather than the stack.
+
+struct i1 {
+  x : int32,
+}
+
+terra sub_i1(a : i1, b : i1)
+  return [i1]({ a.x - b.x })
+end
+
 struct i2 {
-  x : int,
-  y : int,
+  x : int32,
+  y : int32,
 }
 
 terra sub_i2(a : i2, b : i2)
   return [i2]({ a.x - b.x, a.y - b.y })
 end
 
--- Allocas use an address space in AMDGPU target, make sure that is respected.
-terra f(y : i2)
-  var i = [i2]({0, 0})
-  var x = sub_i2(i, y)
+-- Make sure this struct is large enough to trip over size limits if
+-- we don't do the right thing.
+struct i3 {
+  x : int64,
+  y : int64,
+  z : int64,
+}
+
+terra sub_i3(a : i3, b : i3)
+  return [i3]({ a.x - b.x, a.y - b.y, a.z - b.z })
+end
+
+-- Nested structs.
+struct i3p {
+  p : i3,
+}
+
+terra sub_i3p(a : i3p, b : i3p)
+  return [i3p]({ sub_i3(a.p, b.p) })
+end
+
+terra f(y : i1)
+  var i = [i1]({0})
+  var x = sub_i1(i, y)
 end
 f:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f}, {}, amd_target)
+terra g(y : i2)
+  var i = [i2]({0, 0})
+  var x = sub_i2(i, y)
+end
+g:setcallingconv("amdgpu_kernel")
+
+terra h(y : i3)
+  var i = [i3]({0, 0, 0})
+  var x = sub_i3(i, y)
+end
+h:setcallingconv("amdgpu_kernel")
+
+terra k(y : i3p)
+  var i = [i3p]({ [i3]({ 0, 0, 0}) })
+  var x = sub_i3p(i, y)
+end
+k:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g, h=h, k=k}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))
