@@ -1152,7 +1152,7 @@ struct CCallingConv {
             if (info->returntype.GetNumberOfTypesInParamList() == 1) {
                 do {
                     result = CreateConstGEP2_32(B, result, 0, 0);
-                } while (type = dyn_cast<StructType>(type->getElementType(0)));
+                } while ((type = dyn_cast<StructType>(type->getElementType(0))));
             }
             B->CreateRet(B->CreateLoad(result));
         } else {
@@ -1231,7 +1231,7 @@ struct CCallingConv {
                 if (info.returntype.GetNumberOfTypesInParamList() == 1)
                     do {
                         casted = CreateConstGEP2_32(B, casted, 0, 0);
-                    } while (type = dyn_cast<StructType>(type->getElementType(0)));
+                    } while ((type = dyn_cast<StructType>(type->getElementType(0))));
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
@@ -1261,8 +1261,8 @@ struct CCallingConv {
                     case 1: {
                         StructType *type = cast<StructType>(info->returntype.cctype);
                         do {
-                            rt = type;
-                        } while (type = dyn_cast<StructType>(type->getElementType(0)));
+                            rt = type->getElementType(0);
+                        } while ((type = dyn_cast<StructType>(rt)));
                     }
                         break;
                     default:
