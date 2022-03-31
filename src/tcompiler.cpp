@@ -2610,15 +2610,26 @@ struct FunctionEmitter {
                        "please upgrade to 5.0.0 or higher");
 #endif
                 AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
-                AtomicRMWInst *a = B->CreateAtomicRMW(op, addrexp, valueexp, ordering
+                bool has_alignment = attr.hasfield("alignment");
+#if LLVM_VERSION >= 130
+                MaybeAlign alignment;
+                if (has_alignment) {
+                  alignment = MaybeAlign(attr.number("alignment"));
+                }
+#endif
+                AtomicRMWInst *a = B->CreateAtomicRMW(op, addrexp, valueexp,
+#if LLVM_VERSION >= 130
+                                                      alignment,
+#endif
+                                                      ordering
 #if LLVM_VERSION >= 50
                                                       ,
                                                       syncscope
 #endif
                 );
                 a->setVolatile(attr.boolean("isvolatile"));
-                if (attr.hasfield("alignment")) {
-#if LLVM_VERSION >= 110
+                if (has_alignment) {
+#if LLVM_VERSION >= 110 && LLVM_VERSION < 130
                     a->setAlignment(Align(attr.number("alignment")));
 #else
                     assert(false &&
