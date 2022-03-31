@@ -2614,7 +2614,7 @@ struct FunctionEmitter {
 #if LLVM_VERSION >= 130
                 MaybeAlign alignment;
                 if (has_alignment) {
-                  alignment = MaybeAlign(attr.number("alignment"));
+                    alignment = MaybeAlign(attr.number("alignment"));
                 }
 #endif
                 AtomicRMWInst *a = B->CreateAtomicRMW(op, addrexp, valueexp,
