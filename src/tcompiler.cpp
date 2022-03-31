@@ -2603,7 +2603,13 @@ struct FunctionEmitter {
                         B->CreateAtomicRMW(op, addrexp, valueexp, ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (attr.hasfield("alignment")) {
+#if LLVM_VERSION <= 90
+                    a->setAlignment(attr.number("alignment"));
+#elif LLVM_VERSION <= 100
+                    a->setAlignment(MaybeAlign(attr.number("alignment")));
+#else
                     a->setAlignment(Align(attr.number("alignment")));
+#endif
                 }
                 return a;
             } break;
