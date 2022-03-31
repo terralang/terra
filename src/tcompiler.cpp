@@ -2608,7 +2608,9 @@ struct FunctionEmitter {
 #if LLVM_VERSION >= 110
                     a->setAlignment(Align(attr.number("alignment")));
 #else
-                    assert(false && "atomicrmw does not support alignment in this version of LLVM, please upgrade to 11.0.0 or higher");
+                    assert(false &&
+                           "atomicrmw does not support alignment in this version of "
+                           "LLVM, please upgrade to 11.0.0 or higher");
 #endif
                 }
                 return a;
