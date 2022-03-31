@@ -1485,6 +1485,7 @@ static AtomicOrdering ParseAtomicOrdering(const char *ordering) {
     return entry->second;
 }
 
+#if LLVM_VERSION >= 50
 static SyncScope::ID ParseAtomicSyncScope(Module *M, const char *syncscope) {
     if (!syncscope) return SyncScope::System;
 
@@ -1508,6 +1509,7 @@ static SyncScope::ID ParseAtomicSyncScope(Module *M, const char *syncscope) {
     }
     return entry->second;
 }
+#endif
 
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State *L);
@@ -2598,11 +2600,22 @@ struct FunctionEmitter {
                 exp->obj("attrs", &attr);
                 Value *addrexp = emitExp(&addr);
                 Value *valueexp = emitExp(&value);
+                bool has_syncscope = attr.hasfield("syncscope");
+#if LLVM_VERSION >= 50
                 SyncScope::ID syncscope = ParseAtomicSyncScope(
-                        M, attr.hasfield("syncscope") ? attr.string("syncscope") : NULL);
+                        M, has_syncscope ? attr.string("syncscope") : NULL);
+#else
+                assert(not has_syncscope &&
+                       "atomicrmw does not support syncscope in this version of LLVM, "
+                       "please upgrade to 5.0.0 or higher");
+#endif
                 AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
-                AtomicRMWInst *a =
-                        B->CreateAtomicRMW(op, addrexp, valueexp, ordering, syncscope);
+                AtomicRMWInst *a = B->CreateAtomicRMW(op, addrexp, valueexp, ordering
+#if LLVM_VERSION >= 50
+                                                      ,
+                                                      syncscope
+#endif
+                );
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (attr.hasfield("alignment")) {
 #if LLVM_VERSION >= 110
