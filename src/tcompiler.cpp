@@ -2629,8 +2629,10 @@ struct FunctionEmitter {
                 );
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (has_alignment) {
-#if LLVM_VERSION >= 110 && LLVM_VERSION < 130
+#if LLVM_VERSION >= 110
+#if LLVM_VERSION < 130
                     a->setAlignment(Align(attr.number("alignment")));
+#endif
 #else
                     assert(false &&
                            "atomicrmw does not support alignment in this version of "
