@@ -1,7 +1,7 @@
 terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
-  terralib.atomicrmw("add", x, y, {ordering = "monotonic"})
-  terralib.atomicrmw("add", x, z, {ordering = "monotonic", syncscope = "singlethread"})
-  terralib.atomicrmw("add", x, w, {ordering = "monotonic", align = 1})
+  terralib.atomicrmw("add", x, y, {ordering = "seq_cst"})
+  terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
+  terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread"})
   terralib.atomicrmw("add", x, u, {ordering = "monotonic", isvolatile = true})
 end
 atomic_add:printpretty(false)

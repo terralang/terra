@@ -2605,12 +2605,10 @@ struct FunctionEmitter {
                         B->CreateAtomicRMW(op, addrexp, valueexp, ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (attr.hasfield("alignment")) {
-#if LLVM_VERSION <= 90
-                    a->setAlignment(attr.number("alignment"));
-#elif LLVM_VERSION <= 100
-                    a->setAlignment(MaybeAlign(attr.number("alignment")));
-#else
+#if LLVM_VERSION >= 110
                     a->setAlignment(Align(attr.number("alignment")));
+#else
+                    assert(false && "atomicrmw does not support alignment in this version of LLVM, please upgrade to 11.0.0 or higher");
 #endif
                 }
                 return a;
