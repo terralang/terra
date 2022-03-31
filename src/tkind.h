@@ -14,6 +14,7 @@ struct terra_State;
     _(array, "array")                         \
     _(arrayconstructor, "arrayconstructor")   \
     _(assignment, "assignment")               \
+    _(atomicrmw, "atomicrmw")                 \
     _(attrload, "attrload")                   \
     _(attrstore, "attrstore")                 \
     _(block, "block")                         \

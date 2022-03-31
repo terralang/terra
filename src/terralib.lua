@@ -57,6 +57,7 @@ param = unevaluatedparam(ident name, luaexpression? type)
 structdef = (luaexpression? metatype, structlist records)
 
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
+atomicattr = (string? syncscope, string ordering, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
 Label = (string displayname, number id)
 tree = 
@@ -100,6 +101,7 @@ tree =
      | constant(cdata value, Type type)
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
+     | atomicrmw(string operator, tree address, tree value, atomicattr attrs)
      | debuginfo(string customfilename, number customlinenumber)
      | arrayconstructor(Type? oftype,tree* expressions)
      | vectorconstructor(Type? oftype,tree* expressions)
@@ -3000,6 +3002,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 end
                 local value = insertcast(checkexp(e.value),addr.type.type)
                 return e:copy { address = addr, value = value }:withtype(terra.types.unit)
+            elseif e:is "atomicrmw" then
+                local addr = checkexp(e.address)
+                if not addr.type:ispointer() then
+                    diag:reporterror(e,"address must be a pointer but found ",addr.type)
+                    return e:aserror()
+                end
+                local value = insertcast(checkexp(e.value),addr.type.type)
+                return e:copy { address = addr, value = value }:withtype(terra.types.unit)
             elseif e:is "apply" then
                 return checkapply(e,location)
             elseif e:is "method" then
@@ -3565,8 +3575,11 @@ local function createattributetable(q)
     if type(attr) ~= "table" then
         error("attributes must be a table, not a " .. type(attr))
     end
+    if attr.align ~= nil and type(attr.align) ~= "number" then
+        error("align attribute must be a number, not a " .. type(attr.align))
+    end
     return T.attr(attr.nontemporal and true or false, 
-                  type(attr.align) == "number" and attr.align or nil,
+                  attr.align or nil,
                   attr.isvolatile and true or false)
 end
 
@@ -3584,6 +3597,40 @@ terra.attrstore = terra.internalmacro( function(diag,tree,addr,value,attr)
     return typecheck(newobject(tree,T.attrstore,addr,value,createattributetable(attr)))
 end)
 
+local function createatomicattributetable(q)
+    local attr = q:asvalue()
+    if type(attr) ~= "table" then
+        error("attributes must be a table, not a " .. type(attr))
+    end
+    if attr.syncscope ~= nil and type(attr.syncscope) ~= "string" then
+        error("syncscope attribute must be a number, not a " .. type(attr.syncscope))
+    end
+    if attr.ordering == nil then
+        error("ordering attribute must be specified for atomic operations")
+    end
+    if type(attr.ordering) ~= "string" then
+        error("ordering attribute must be a string, not a " .. type(attr.ordering))
+    end
+    if attr.align ~= nil and type(attr.align) ~= "number" then
+        error("align attribute must be a number, not a " .. type(attr.align))
+    end
+    return T.atomicattr(
+        attr.syncscope or nil,
+        attr.ordering or nil,
+        attr.align or nil,
+        attr.isvolatile and true or false)
+end
+
+terra.atomicrmw = terra.internalmacro( function(diag,tree,op,addr,value,attr)
+    if not op or not addr or not value or not attr then
+        error("atomicrmw requires four arguments")
+    end
+    local op_value = op:asvalue()
+    if type(op_value) ~= "string" then
+      error("operator argument to atomicrmw must be a string, not a " .. type(op_value))
+    end
+    return typecheck(newobject(tree,T.atomicrmw,op_value,addr,value,createatomicattributetable(attr)))
+end)
 
 -- END GLOBAL MACROS
 
@@ -3698,6 +3745,9 @@ function prettystring(toptree,breaklines)
     end
     local function emitAttr(a)
         emit("{ nontemporal = %s, align = %s, isvolatile = %s }",a.nontemporal,a.alignment or "native",a.isvolatile)
+    end
+    local function emitAtomicAttr(a)
+        emit('{ syncscope = "%s", ordering = "%s", align = %s, isvolatile = %s }',a.syncscope or "",a.ordering,a.alignment or "native",a.isvolatile)
     end
     function emitStmt(s)
         if s:is "block" then
@@ -3955,6 +4005,16 @@ function prettystring(toptree,breaklines)
             emitExp(e.value)
             emit(", ")
             emitAttr(e.attrs)
+            emit(")")
+        elseif e:is "atomicrmw" then
+            emit("atomicrmw(")
+            emit('"' .. e.operator .. '"')
+            emit(", ")
+            emitExp(e.address)
+            emit(", ")
+            emitExp(e.value)
+            emit(", ")
+            emitAtomicAttr(e.attrs)
             emit(")")
         elseif e:is "luaobject" then
             if terra.types.istype(e.value) then

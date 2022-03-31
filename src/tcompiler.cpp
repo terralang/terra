@@ -1438,6 +1438,75 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
     return entry->second;
 }
 
+static AtomicRMWInst::BinOp ParseAtomicBinOp(const char *op) {
+    static std::map<std::string, AtomicRMWInst::BinOp> opmap;
+    static bool init = false;
+    if (!init) {
+        init = true;
+        opmap["xchg"] = AtomicRMWInst::BinOp::Xchg;
+        opmap["add"] = AtomicRMWInst::BinOp::Add;
+        opmap["sub"] = AtomicRMWInst::BinOp::Sub;
+        opmap["and"] = AtomicRMWInst::BinOp::And;
+        opmap["nand"] = AtomicRMWInst::BinOp::Nand;
+        opmap["or"] = AtomicRMWInst::BinOp::Or;
+        opmap["xor"] = AtomicRMWInst::BinOp::Xor;
+        opmap["max"] = AtomicRMWInst::BinOp::Max;
+        opmap["min"] = AtomicRMWInst::BinOp::Min;
+        opmap["umax"] = AtomicRMWInst::BinOp::UMax;
+        opmap["umin"] = AtomicRMWInst::BinOp::UMin;
+        opmap["fadd"] = AtomicRMWInst::BinOp::FAdd;
+        opmap["fsub"] = AtomicRMWInst::BinOp::FSub;
+    }
+    auto entry = opmap.find(op);
+    if (entry == opmap.end()) {
+        assert(false && "no such atomic binop");
+    }
+    return entry->second;
+}
+
+static AtomicOrdering ParseAtomicOrdering(const char *ordering) {
+    static std::map<std::string, AtomicOrdering> ordermap;
+    static bool init = false;
+    if (!init) {
+        init = true;
+        ordermap["unordered"] = AtomicOrdering::Unordered;
+        ordermap["monotonic"] = AtomicOrdering::Monotonic;
+        ordermap["acquire"] = AtomicOrdering::Acquire;
+        ordermap["release"] = AtomicOrdering::Release;
+        ordermap["acq_rel"] = AtomicOrdering::AcquireRelease;
+        ordermap["seq_cst"] = AtomicOrdering::SequentiallyConsistent;
+    }
+    auto entry = ordermap.find(ordering);
+    if (entry == ordermap.end()) {
+        assert(false && "no such atomic ordering");
+    }
+    return entry->second;
+}
+
+static SyncScope::ID ParseAtomicSyncScope(Module *M, const char *syncscope) {
+    if (!syncscope) return SyncScope::System;
+
+    static std::map<std::string, SyncScope::ID> scopemap;
+    static bool init = false;
+    if (!init) {
+        init = true;
+
+        // Fetch the registered memory scopes from LLVM.
+        // Note: these are often target specific.
+        SmallVector<StringRef, 16> scopes;
+        M->getContext().getSyncScopeNames(scopes);
+
+        for (auto scope : scopes) {
+            scopemap[scope.str()] = M->getContext().getOrInsertSyncScopeID(scope);
+        }
+    }
+    auto entry = scopemap.find(syncscope);
+    if (entry == scopemap.end()) {
+        assert(false && "no such memory scope");
+    }
+    return entry->second;
+}
+
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State *L);
 
@@ -2518,6 +2587,25 @@ struct FunctionEmitter {
                     store->setMetadata("nontemporal", MDNode::get(*CU->TT->ctx, list));
                 }
                 return Constant::getNullValue(typeOfValue(exp)->type);
+            } break;
+            case T_atomicrmw: {
+                AtomicRMWInst::BinOp op = ParseAtomicBinOp(exp->string("operator"));
+                Obj addr, value, attr;
+                exp->obj("address", &addr);
+                exp->obj("value", &value);
+                exp->obj("attrs", &attr);
+                Value *addrexp = emitExp(&addr);
+                Value *valueexp = emitExp(&value);
+                SyncScope::ID syncscope = ParseAtomicSyncScope(
+                        M, attr.hasfield("syncscope") ? attr.string("syncscope") : NULL);
+                AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
+                AtomicRMWInst *a =
+                        B->CreateAtomicRMW(op, addrexp, valueexp, ordering, syncscope);
+                a->setVolatile(attr.boolean("isvolatile"));
+                if (attr.hasfield("alignment")) {
+                    a->setAlignment(Align(attr.number("alignment")));
+                }
+                return a;
             } break;
             case T_debuginfo: {
                 customfilename = exp->string("customfilename");
