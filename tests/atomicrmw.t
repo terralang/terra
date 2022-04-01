@@ -1,5 +1,6 @@
 local has_syncscope = terralib.llvm_version >= 50
-local has_align = terralib.llvm_version >= 110
+-- FIXME: Setting alignment causes a crash on Linux
+local has_align = false -- terralib.llvm_version >= 110
 local has_fadd = terralib.llvm_version >= 90
 
 terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
