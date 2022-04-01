@@ -720,9 +720,9 @@ Please note that the precise sets of available intrinsics depends on the LLVM ve
 
 Performs a load on the address `addr` with the attributes `attrs`. The attributes must be a literal table with one or more of the following keys:
 
-  * `nontemporal` (optional): if `true`, performs a non-temporal load.
+  * `nontemporal` (optional): if `true`, the load is non-temporal.
   * `align` (optional): specifies the alignment of `addr`.
-  * `isvolatile` (optional): if `true`, `addr` is considered volatile.
+  * `isvolatile` (optional): if `true`, the contents of `addr` are considered volatile.
 
 For example, the following `attrload` returns `123`:
 
@@ -748,7 +748,7 @@ The following attributes may be specified (note that this list is **not** the sa
   * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
   * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
   * `align` (optional): specifies the alignment of `addr`. Note that unlike `attrload`, the value of `align` must be *greater than or equal to* the size of the contents of `addr` ([see here](https://llvm.org/docs/LangRef.html#atomicrmw-instruction)).
-  * `isvolatile` (optional): if `true`, `addr` is considered volatile.
+  * `isvolatile` (optional): if `true`, the contents of `addr` are considered volatile.
 
 For example, the following `atomicrmw` writes `21` into `i` and returns `1` (with acquire/release consistency):
 
