@@ -6,6 +6,8 @@ print("atomicrmw test settings: synscope " .. tostring(has_syncscope) .. ", alig
 
 
 
+-- Basic cases: integers with ordering/syncscope/alignment
+
 terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   terralib.atomicrmw("add", x, y, {ordering = "seq_cst"})
   terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
@@ -48,6 +50,8 @@ assert(add() == 54321)
 
 
 
+-- Returns previous value
+
 terra atomic_add_and_return(x : &int, y : int)
   return terralib.atomicrmw("add", x, y, {ordering = "acq_rel"})
 end
@@ -67,6 +71,8 @@ assert(add_and_return() == 22)
 
 
 
+-- Floating point
+
 if has_fadd then
   terra atomic_fadd(x : &double, y : double)
     terralib.atomicrmw("fadd", x, y, {ordering = "monotonic"})
@@ -85,3 +91,25 @@ if has_fadd then
   print(fadd())
   assert(fadd() == 21.0)
 end
+
+
+-- Pointers
+
+terra atomic_xchg_pointer(x : &&int, y : &int)
+  return terralib.atomicrmw("xchg", x, y, {ordering = "acq_rel"})
+end
+atomic_add_and_return:printpretty(false)
+atomic_add_and_return:disas()
+
+terra xchg_pointer()
+  var i : int = 1
+  var j : int = 20
+  var k = &i
+
+  var r = atomic_xchg_pointer(&k, &j)
+
+  return r == &i and k == &j
+end
+
+print(xchg_pointer())
+assert(xchg_pointer())
