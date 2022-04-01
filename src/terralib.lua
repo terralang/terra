@@ -3009,7 +3009,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return e:aserror()
                 end
                 local value = insertcast(checkexp(e.value),addr.type.type)
-                return e:copy { address = addr, value = value }:withtype(terra.types.unit)
+                return e:copy { address = addr, value = value }:withtype(addr.type.type)
             elseif e:is "apply" then
                 return checkapply(e,location)
             elseif e:is "method" then

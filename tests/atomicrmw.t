@@ -3,6 +3,8 @@ local has_syncscope = terralib.llvm_version >= 50
 local has_align = false -- terralib.llvm_version >= 110
 local has_fadd = terralib.llvm_version >= 90
 
+
+
 terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   terralib.atomicrmw("add", x, y, {ordering = "seq_cst"})
   terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
@@ -36,6 +38,27 @@ end
 
 print(add())
 assert(add() == 54321)
+
+
+
+terra atomic_add_and_return(x : &int, y : int)
+  return terralib.atomicrmw("add", x, y, {ordering = "acq_rel"})
+end
+atomic_add_and_return:printpretty(false)
+atomic_add_and_return:disas()
+
+terra add_and_return()
+  var i : int = 1
+
+  var r = atomic_add_and_return(&i, 20)
+
+  return r + i
+end
+
+print(add_and_return())
+assert(add_and_return() == 22)
+
+
 
 if has_fadd then
   terra atomic_fadd(x : &double, y : double)
