@@ -1,7 +1,8 @@
 local has_syncscope = terralib.llvm_version >= 50
--- FIXME: Setting alignment causes a crash on Linux
-local has_align = false -- terralib.llvm_version >= 110
+local has_align = terralib.llvm_version >= 110
 local has_fadd = terralib.llvm_version >= 90
+
+print("atomicrmw test settings: synscope " .. tostring(has_syncscope) .. ", align " .. tostring(has_align) .. ", fadd " .. tostring(has_fadd))
 
 
 
@@ -11,7 +12,7 @@ terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   escape
     if has_syncscope and has_align then
       emit quote
-        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread", align = 1})
+        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread", align = 16})
       end
     elseif has_syncscope then
       emit quote
@@ -28,12 +29,18 @@ end
 atomic_add:printpretty(false)
 atomic_add:disas()
 
+local c = terralib.includec("stdlib.h")
+
 terra add()
-  var i : int = 1
+  var i : &int
+  if c.posix_memalign([&&opaque](&i), 16, terralib.sizeof(int)) ~= 0 then
+    return 0
+  end
 
-  atomic_add(&i, 20, 300, 4000, 50000)
+  @i = 1
+  atomic_add(i, 20, 300, 4000, 50000)
 
-  return i
+  return @i
 end
 
 print(add())
