@@ -37,7 +37,7 @@ local c = terralib.includecstring [[
 #else
 #include "malloc.h"
 
-int posix_memalign(void **memptr, size_t alignment, size_t size) {
+int posix_memalign(void **p, size_t a, size_t s) {
   *p = _aligned_malloc(s, a);
   return *p ? 0 : errno;
 }
