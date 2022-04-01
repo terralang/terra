@@ -31,7 +31,18 @@ end
 atomic_add:printpretty(false)
 atomic_add:disas()
 
-local c = terralib.includec("stdlib.h")
+local c = terralib.includecstring [[
+#ifndef _WIN32
+#include "stdlib.h"
+#else
+#include "malloc.h"
+
+int posix_memalign(void **memptr, size_t alignment, size_t size) {
+  *p = _aligned_malloc(s, a);
+  return *p ? 0 : errno;
+}
+#endif
+]]
 
 terra add()
   var i : &int
