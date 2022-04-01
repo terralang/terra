@@ -690,6 +690,71 @@ Create a new macro. The function will be invoked at compile time for each call i
 
 True if `t` is a macro.
 
+Built-in Macros
+---------------
+
+The following macros are built in to Terra.
+
+---
+
+    sizeof(T)
+    terralib.sizeof(T)
+
+Returns the size of the Terra type `T`.
+
+---
+
+    terralib.intrinsic(name, type)
+
+Returns a Terra function that calls the LLVM intrinsic corresponding to `name`, with the type `type`. For example, LLVM provides the following intrinsic for `sqrt`:
+
+    local sqrt = terralib.intrinsic("llvm.sqrt.f32", float -> float)
+
+Now `sqrt` can be called, and this should generate efficient code for the target platform.
+
+Please note that the precise sets of available intrinsics depends on the LLVM version and the target platform, and is not under Terra's control.
+
+---
+
+    terralib.attrload(addr, attrs)
+
+Performs a load on the address `addr` with the attributes `attrs`. The attributes must be a literal table with one or more of the following keys:
+
+  * `nontemporal` (optional): if `true`, performs a non-temporal load.
+  * `align` (optional): specifies the alignment of `addr`.
+  * `isvolatile` (optional): if `true`, `addr` is considered volatile.
+
+For example, the following `attrload` returns `123`:
+
+    var i = 123
+    terralib.attrload(&i, { align = 1 })
+
+---
+
+    terralib.attrstore(addr, value, attrs)
+
+Performs a store on the address `addr` with the value `value` and attributes `attrs`. The attributes are the same as for `attrload`, above.
+
+---
+
+    terralib.atomicrmw(op, addr, value, atomicattrs)
+
+**Experimental.** Performs an atomic read-modify-write (RMW) operation on the address `addr` with the value `value` and operator `op`. The operation is performed atomically. Returns the original value at `addr`.
+
+The valid operations that can be performed are specified in the [LLVM documentation](https://llvm.org/docs/LangRef.html#atomicrmw-instruction). Note that `fadd` and `fsub` operations require floating-point types; most other operations require integer (or pointer) types. The specific set of available operations may depend on the LLVM version and target platform.
+
+The following attributes may be specified (note that this list is **not** the same as for `attrload`):
+
+  * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
+  * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
+  * `align` (optional): specifies the alignment of `addr`. Note that unlike `attrload`, the value of `align` must be *greater than or equal to* the size of the contents of `addr` ([see here](https://llvm.org/docs/LangRef.html#atomicrmw-instruction)).
+  * `isvolatile` (optional): if `true`, `addr` is considered volatile.
+
+For example, the following `atomicrmw` writes `21` into `i` and returns `1` (with acquire/release consistency):
+
+    var i = 1
+    terralib.atomicrmw("add", &i, 20, {ordering = "acq_rel"})
+
 Exotypes (Structs)
 ------------------
 
