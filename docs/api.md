@@ -697,13 +697,6 @@ The following macros are built in to Terra.
 
 ---
 
-    sizeof(T)
-    terralib.sizeof(T)
-
-Returns the size of the Terra type `T`.
-
----
-
     terralib.intrinsic(name, type)
 
 Returns a Terra function that calls the LLVM intrinsic corresponding to `name`, with the type `type`. For example, LLVM provides the following intrinsic for `sqrt`:
