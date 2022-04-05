@@ -1979,6 +1979,7 @@ struct FunctionEmitter {
     if (baseT->isIntegerTy()) {      \
         return B->Create##op(a, b);  \
     } else {                         \
+        B->setFastMathFlags(FastMathFlags::getFast()); \
         return B->CreateF##op(a, b); \
     }
 #define RETURN_SOP(op)                   \
@@ -1989,6 +1990,7 @@ struct FunctionEmitter {
             return B->CreateU##op(a, b); \
         }                                \
     } else {                             \
+        B->setFastMathFlags(FastMathFlags::getFast()); \
         return B->CreateF##op(a, b);     \
     }
         switch (kind) {
@@ -2308,6 +2310,7 @@ struct FunctionEmitter {
                             Obj a, b;
                             exps.objAt(0, &a);
                             exps.objAt(1, &b);
+                            B->setFastMathFlags(FastMathFlags::getFast());
                             return B->CreateFAdd(emitExp(&a), emitExp(&b));
                         } else {
                             assert(!"NYI - integer +");
