@@ -775,11 +775,11 @@ end
 -- COMPILATION UNIT
 local compilationunit = {}
 compilationunit.__index = compilationunit
-function terra.newcompilationunit(target,opt)
+function terra.newcompilationunit(target,opt,flags)
     assert(terra.istarget(target),"expected a target object")
     return setmetatable({ symbols = newweakkeytable(), 
                           collectfunctions = opt,
-                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt,flags),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
@@ -798,7 +798,7 @@ end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
-terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
+terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true,{fastmath="none"}) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
@@ -4165,7 +4165,25 @@ function terra.saveobj(filename,filekind,env,arguments,target,optimize)
     if type(filekind) ~= "string" then
         filekind,env,arguments,target,optimize = nil,filekind,env,arguments,target
     end
-    local cu = terra.newcompilationunit(target or terra.nativetarget,false)
+    local flags
+    if type(optimize) == "boolean" then
+      flags = {}
+    elseif type(optimize) == "table" then
+      flags = optimize
+      optimize = optimize["optimize"]
+    elseif optimize ~= nil then
+      error("expected optimize to be a boolean or string but found " .. type(optimize))
+    end
+
+    if flags["fastmath"] == nil then
+      flags["fastmath"] = "none"
+    elseif type(flags["fastmath"]) == "boolean" then
+      flags["fastmath"] = flags["fastmath"] and "fast" or "none"
+    elseif type(flags["fastmath"]) ~= "string" then
+      error("expected fastmath option to be a boolean or string but found " .. type(flags["fastmath"]))
+    end
+
+    local cu = terra.newcompilationunit(target or terra.nativetarget,false,flags)
     for k,v in pairs(env) do
         if not T.globalvalue:isclassof(v) then error("expected terra global or function but found "..terra.type(v)) end
         cu:addvalue(k,v)

@@ -348,6 +348,11 @@ int terra_initcompilationunit(lua_State *L) {
     CU->C = T->C;
     CU->C->nreferences++;
     CU->optimize = lua_toboolean(L, 2);
+    Obj flags;
+    flags.initFromStack(L, 3);
+    if (flags.hasfield("fastmath")) {
+      CU->fastmath = flags.string("fastmath");
+    }
 
     CU->M = new Module("terra", *TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
