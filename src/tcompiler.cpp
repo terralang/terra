@@ -374,7 +374,11 @@ int terra_initcompilationunit(lua_State *L) {
             } else if (strcmp(flag, "arcp") == 0) {
                 fastmath.setAllowReciprocal();
             } else if (strcmp(flag, "contract") == 0) {
+#if LLVM_VERSION < 70
+                fastmath.setAllowContract(true);
+#else
                 fastmath.setAllowContract();
+#endif
             } else if (strcmp(flag, "afn") == 0) {
                 fastmath.setApproxFunc();
             } else if (strcmp(flag, "reassoc") == 0) {
