@@ -388,7 +388,11 @@ int terra_initcompilationunit(lua_State *L) {
                 fastmath.setAllowReassoc();
 #endif
             } else if (strcmp(flag, "fast") == 0) {
+#if LLVM_VERSION < 60
                 fastmath.setFast();
+#else
+                fastmath.setUnsafeAlgebra();
+#endif
             } else {
                 assert(false && "unrecognized fast math flag");
             }
