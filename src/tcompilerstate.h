@@ -55,7 +55,7 @@ struct TerraCompilationUnit {
     int nreferences;
     // configuration
     bool optimize;
-    std::string fastmath;
+    llvm::FastMathFlags fastmath;
 
     // LLVM state used in compiltion unit
     terra_State *T;

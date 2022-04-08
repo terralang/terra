@@ -80,6 +80,14 @@ struct Obj {
         pop(2);
         return r;
     }
+    const char *string(int index) {
+        push();
+        lua_pushinteger(L, index);
+        lua_gettable(L, -2);
+        const char *r = luaL_checkstring(L, -1);
+        pop(2);
+        return r;
+    }
     const char *asstring(const char *field) {
         push();
         lua_getfield(L, LUA_GLOBALSINDEX, "tostring");
@@ -123,6 +131,14 @@ struct Obj {
     bool hasfield(const char *field) {
         push();
         lua_getfield(L, -1, field);
+        bool isNil = lua_isnil(L, -1);
+        pop(2);
+        return !isNil;
+    }
+    bool hasfield(int index) {
+        push();
+        lua_pushinteger(L, index);
+        lua_gettable(L, -2);
         bool isNil = lua_isnil(L, -1);
         pop(2);
         return !isNil;
