@@ -1835,6 +1835,7 @@ struct FunctionEmitter {
                 if (baseT->isIntegerTy()) {
                     return B->CreateNeg(a);
                 } else {
+                    B->setFastMathFlags(CU->fastmath);
                     return B->CreateFNeg(a);
                 }
                 break;
@@ -1850,6 +1851,7 @@ struct FunctionEmitter {
     if (baseT->isIntegerTy() || t->type->isPointerTy()) {  \
         return B->CreateICmp(CmpInst::ICMP_##op, a, b);    \
     } else {                                               \
+        B->setFastMathFlags(CU->fastmath);                 \
         return B->CreateFCmp(CmpInst::FCMP_##u##op, a, b); \
     }
 #define RETURN_SOP(op, u)                                    \
@@ -1860,6 +1862,7 @@ struct FunctionEmitter {
             return B->CreateICmp(CmpInst::ICMP_U##op, a, b); \
         }                                                    \
     } else {                                                 \
+        B->setFastMathFlags(CU->fastmath);                   \
         return B->CreateFCmp(CmpInst::FCMP_##u##op, a, b);   \
     }
 
