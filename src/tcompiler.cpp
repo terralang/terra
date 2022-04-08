@@ -381,9 +381,9 @@ int terra_initcompilationunit(lua_State *L) {
                 fastmath.setAllowContract();
 #endif
 #endif
+#if LLVM_VERSION >= 60
             } else if (strcmp(flag, "afn") == 0) {
                 fastmath.setApproxFunc();
-#if LLVM_VERSION >= 60
             } else if (strcmp(flag, "reassoc") == 0) {
                 fastmath.setAllowReassoc();
 #endif
