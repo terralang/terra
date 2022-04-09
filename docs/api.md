@@ -1094,7 +1094,7 @@ The `fastmath` key in an optimization profile may take any of the following valu
   * `"flag"`: A string specifying a single fast-math flag enables just that one flag. All other flags are disabled.
   * `{"flag1", "flag2"}`: A list of strings specifying zero or more fast-math flags enable all of the listed flags. All other flags are disabled.
 
-The list of valid LLVM fast-math flags can be seen [here](https://llvm.org/docs/LangRef.html#fast-math-flags). Note that the precise set of available flags may depend on the LLVM version, and it outside of Terra's control.
+The list of valid LLVM fast-math flags can be seen [here](https://llvm.org/docs/LangRef.html#fast-math-flags). Note that the precise set of available flags may depend on the LLVM version, and is outside of Terra's control.
 
 Examples:
 
