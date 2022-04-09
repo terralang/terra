@@ -351,13 +351,13 @@ int terra_initcompilationunit(lua_State *L) {
 
     int ref_table = lobj_newreftable(L);
     {
-        Obj optflags;
+        Obj profile;
         lua_pushvalue(L, 3);
-        optflags.initFromStack(L, ref_table);
-        assert(optflags.hasfield("fastmath"));
+        profile.initFromStack(L, ref_table);
+        assert(profile.hasfield("fastmath"));
 
         Obj mathflags;
-        bool ok = optflags.obj("fastmath", &mathflags);
+        bool ok = profile.obj("fastmath", &mathflags);
         assert(ok);
 
         llvm::FastMathFlags fastmath;
