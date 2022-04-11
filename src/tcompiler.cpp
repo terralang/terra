@@ -349,6 +349,59 @@ int terra_initcompilationunit(lua_State *L) {
     CU->C->nreferences++;
     CU->optimize = lua_toboolean(L, 2);
 
+    int ref_table = lobj_newreftable(L);
+    {
+        Obj profile;
+        lua_pushvalue(L, 3);
+        profile.initFromStack(L, ref_table);
+        assert(profile.hasfield("fastmath"));
+
+        Obj mathflags;
+        bool ok = profile.obj("fastmath", &mathflags);
+        assert(ok);
+
+        llvm::FastMathFlags fastmath;
+        for (int i = 1; mathflags.hasfield(i); i++) {
+            const char *flag = mathflags.string(i);
+            // Thanks to LLVM's lack of support for parsing these values,
+            // we have to do this by hand.
+            if (strcmp(flag, "nnan") == 0) {
+                fastmath.setNoNaNs();
+            } else if (strcmp(flag, "ninf") == 0) {
+                fastmath.setNoInfs();
+            } else if (strcmp(flag, "nsz") == 0) {
+                fastmath.setNoSignedZeros();
+            } else if (strcmp(flag, "arcp") == 0) {
+                fastmath.setAllowReciprocal();
+#if LLVM_VERSION >= 50
+            } else if (strcmp(flag, "contract") == 0) {
+#if LLVM_VERSION < 70
+                fastmath.setAllowContract(true);
+#else
+                fastmath.setAllowContract();
+#endif
+#endif
+#if LLVM_VERSION >= 60
+            } else if (strcmp(flag, "afn") == 0) {
+                fastmath.setApproxFunc();
+            } else if (strcmp(flag, "reassoc") == 0) {
+                fastmath.setAllowReassoc();
+#endif
+            } else if (strcmp(flag, "fast") == 0) {
+#if LLVM_VERSION < 60
+                fastmath.setUnsafeAlgebra();
+#else
+                fastmath.setFast();
+#endif
+            } else {
+                assert(false && "unrecognized fast math flag");
+            }
+        }
+
+        CU->fastmath = fastmath;
+    }
+    lobj_removereftable(L, ref_table);
+
     CU->M = new Module("terra", *TT->ctx);
     CU->M->setTargetTriple(TT->Triple);
     CU->M->setDataLayout(TT->tm->createDataLayout());
@@ -1794,6 +1847,7 @@ struct FunctionEmitter {
                 if (baseT->isIntegerTy()) {
                     return B->CreateNeg(a);
                 } else {
+                    B->setFastMathFlags(CU->fastmath);
                     return B->CreateFNeg(a);
                 }
                 break;
@@ -1809,6 +1863,7 @@ struct FunctionEmitter {
     if (baseT->isIntegerTy() || t->type->isPointerTy()) {  \
         return B->CreateICmp(CmpInst::ICMP_##op, a, b);    \
     } else {                                               \
+        B->setFastMathFlags(CU->fastmath);                 \
         return B->CreateFCmp(CmpInst::FCMP_##u##op, a, b); \
     }
 #define RETURN_SOP(op, u)                                    \
@@ -1819,6 +1874,7 @@ struct FunctionEmitter {
             return B->CreateICmp(CmpInst::ICMP_U##op, a, b); \
         }                                                    \
     } else {                                                 \
+        B->setFastMathFlags(CU->fastmath);                   \
         return B->CreateFCmp(CmpInst::FCMP_##u##op, a, b);   \
     }
 
@@ -1975,21 +2031,23 @@ struct FunctionEmitter {
 
         Type *baseT = getPrimitiveType(t);
 
-#define RETURN_OP(op)                \
-    if (baseT->isIntegerTy()) {      \
-        return B->Create##op(a, b);  \
-    } else {                         \
-        return B->CreateF##op(a, b); \
+#define RETURN_OP(op)                      \
+    if (baseT->isIntegerTy()) {            \
+        return B->Create##op(a, b);        \
+    } else {                               \
+        B->setFastMathFlags(CU->fastmath); \
+        return B->CreateF##op(a, b);       \
     }
-#define RETURN_SOP(op)                   \
-    if (baseT->isIntegerTy()) {          \
-        if (t->issigned) {               \
-            return B->CreateS##op(a, b); \
-        } else {                         \
-            return B->CreateU##op(a, b); \
-        }                                \
-    } else {                             \
-        return B->CreateF##op(a, b);     \
+#define RETURN_SOP(op)                     \
+    if (baseT->isIntegerTy()) {            \
+        if (t->issigned) {                 \
+            return B->CreateS##op(a, b);   \
+        } else {                           \
+            return B->CreateU##op(a, b);   \
+        }                                  \
+    } else {                               \
+        B->setFastMathFlags(CU->fastmath); \
+        return B->CreateF##op(a, b);       \
     }
         switch (kind) {
             case T_add:
@@ -2308,6 +2366,7 @@ struct FunctionEmitter {
                             Obj a, b;
                             exps.objAt(0, &a);
                             exps.objAt(1, &b);
+                            B->setFastMathFlags(CU->fastmath);
                             return B->CreateFAdd(emitExp(&a), emitExp(&b));
                         } else {
                             assert(!"NYI - integer +");

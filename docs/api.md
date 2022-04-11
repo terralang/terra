@@ -1083,7 +1083,26 @@ If `filetype` is missing then it is inferred from the extension. `functiontable`
 
 To cross-compile objects for a different architecture, you can specific a [target](#targets) object, which describes the architecture to compile for. Otherwise `saveobj` will use the native architecture.
 
-If `optimize` is `false` then LLVM optimizations are skipped when generating the output file. Otherwise optimizations are enabled.
+By default, `saveobj` compiles code with the equivalent of Clang `-O3`. This optimization profile can be customized to either disable optimizations, or to enable additional, potentially unsafe fast-math optimizations. The possible values of `optimize` are:
+
+  * `true` or `false`: Enable or disable optimizations (equivalent of `-O3`). Default is enabled. Does not include any fast-math optimizations.
+  * `{optimize = ..., fastmath = ...}`: A table specifying an optimization profile. The `optimize` key takes boolean values `true` or `false` as described above (default `true` if left unspecified). The possible values for `fastmath` are described below.
+
+The `fastmath` key in an optimization profile may take any of the following values:
+
+  * `true` or `false`: Enable or disable all [LLVM fast-math flags](https://llvm.org/docs/LangRef.html#fast-math-flags). Default is `false` if unspecified.
+  * `"flag"`: A string specifying a single fast-math flag enables just that one flag. All other flags are disabled.
+  * `{"flag1", "flag2"}`: A list of strings specifying zero or more fast-math flags enable all of the listed flags. All other flags are disabled.
+
+The list of valid LLVM fast-math flags can be seen [here](https://llvm.org/docs/LangRef.html#fast-math-flags). Note that the precise set of available flags may depend on the LLVM version, and is outside of Terra's control.
+
+Examples:
+
+```
+terralib.saveobj("a.o", {main=main}, nil, nil, false) -- Disable optimizations.
+terralib.saveobj("a.o", {main=main}, nil, nil, {fastmath=true}) -- Enable all fast-math optimizations.
+terralib.saveobj("a.o", {main=main}, nil, nil, {fastmath={"contract", "nnan"}}) -- Enable contract and nnan.
+```
 
 Targets
 -------

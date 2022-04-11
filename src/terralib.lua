@@ -772,14 +772,43 @@ function terra.target:getorcreatecstruct(displayname,tagged)
     return typ
 end
 
+local function createoptimizationprofile(profile)
+    if type(profile) ~= "table" then
+        error("expected optimization profile to be a table but found " .. type(profile))
+    end
+
+    -- Handle fastmath flag.
+    local fastmath = profile["fastmath"]
+    if fastmath == nil then
+        fastmath = {}
+    elseif type(fastmath) == "boolean" then
+        fastmath = fastmath and {"fast"} or {}
+    elseif type(fastmath) == "string" then
+        fastmath = {fastmath}
+    elseif type(fastmath) == "table" then
+        for _, v in ipairs(fastmath) do
+            if type(v) ~= "string" then
+                error("expected fastmath to be a string but found " .. type(v))
+            end
+        end
+        -- Ok, leave it alone.
+    else
+      error("expected fastmath to be a boolean or string but found " .. type(fastmath))
+    end
+    profile["fastmath"] = fastmath -- Write it back.
+
+    return profile
+end
+
 -- COMPILATION UNIT
 local compilationunit = {}
 compilationunit.__index = compilationunit
-function terra.newcompilationunit(target,opt)
+function terra.newcompilationunit(target,opt,profile)
     assert(terra.istarget(target),"expected a target object")
+    profile = createoptimizationprofile(profile)
     return setmetatable({ symbols = newweakkeytable(), 
                           collectfunctions = opt,
-                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
+                          llvm_cu = cdatawithdestructor(terra.initcompilationunit(target.llvm_target,opt,profile),terra.freecompilationunit) },compilationunit) -- mapping from Types,Functions,Globals,Constants -> llvm value associated with them for this compilation
 end
 function compilationunit:addvalue(k,v)
     if type(k) ~= "string" then k,v = nil,k end
@@ -798,7 +827,7 @@ end
 function compilationunit:dump() terra.dumpmodule(self.llvm_cu) end
 
 terra.nativetarget = terra.newtarget {}
-terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true) -- compilation unit used for JIT compilation, will eventually specify the native architecture
+terra.jitcompilationunit = terra.newcompilationunit(terra.nativetarget,true,{fastmath=false}) -- compilation unit used for JIT compilation, will eventually specify the native architecture
 
 terra.llvm_gcdebugmetatable = { __gc = function(obj)
     print("GC IS CALLED")
@@ -4165,7 +4194,17 @@ function terra.saveobj(filename,filekind,env,arguments,target,optimize)
     if type(filekind) ~= "string" then
         filekind,env,arguments,target,optimize = nil,filekind,env,arguments,target
     end
-    local cu = terra.newcompilationunit(target or terra.nativetarget,false)
+    local profile
+    if optimize == nil or type(optimize) == "boolean" then
+      profile = {}
+    elseif type(optimize) == "table" then
+      profile = optimize
+      optimize = optimize["optimize"]
+    else
+      error("expected optimize to be a boolean or table but found " .. type(optimize))
+    end
+
+    local cu = terra.newcompilationunit(target or terra.nativetarget,false,profile)
     for k,v in pairs(env) do
         if not T.globalvalue:isclassof(v) then error("expected terra global or function but found "..terra.type(v)) end
         cu:addvalue(k,v)
