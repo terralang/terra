@@ -94,14 +94,14 @@ jobs:
           - llvm: '13'
             cuda: '1'
 
-          # no-static: only LLVM 8
+          # no-static: only LLVM 9
           - llvm: '5.0'
             static: '0'
           - llvm: '6.0'
             static: '0'
           - llvm: '7'
             static: '0'
-          - llvm: '9'
+          - llvm: '8'
             static: '0'
           - llvm: '10'
             static: '0'
