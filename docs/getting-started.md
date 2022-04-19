@@ -243,7 +243,7 @@ constant) options.
 Note that, unlike C++, `case` statements must currently be nested
 directly beneath the corresponding `switch`; also, no `break`
 statements are required. (If you use `break`, it will break out of the
-corresponding outermost loop, if any, or otherwise be an error.)
+corresponding innermost loop, if any, or otherwise be an error.)
 
 An optional `else` may be used to specify a default fall-through case.
 
