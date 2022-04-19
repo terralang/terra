@@ -176,6 +176,8 @@ loops and the addition of switch statements.
 
 ### If Statements ###
 
+If statements in Terra work like Lua.
+
     if a or b and not c then
         C.printf("then\n")
     elseif c then
@@ -185,6 +187,10 @@ loops and the addition of switch statements.
     end
 
 ### Loops ###
+
+Terra's `while` and `repeat` loops work the same as Lua. The optional
+keyword `break` may be used to exit out of the loop early. Note that,
+like Lua, there is no `continue` keyword.
 
     var a = 0
     while a < 10 do
@@ -204,7 +210,7 @@ loops and the addition of switch statements.
         a = a + 1
     end
 
-Terra also includes `for` loop. This example counts from 0 up to but not including 10:
+Terra also includes `for` loops, **but with different behavior from Lua**. This example counts from 0 up to but not including 10:
 
     for i = 0,10 do
         C.printf("%d\n",i)
@@ -212,7 +218,7 @@ Terra also includes `for` loop. This example counts from 0 up to but not includi
 
 This is different from Lua's behavior (which is inclusive of 10) since Terra uses 0-based indexing and pointer arithmetic in contrast with Lua's 1-based indexing. Ideally, Lua and Terra would use the same indexing rules. However, Terra code needs to frequently do pointer arithmetic and interface with C code both of which are cumbersome with 1-based indexing. Alternatively, patching Lua to make it 0-based would make the flavor of Lua bundled with Terra incompatible with existing Lua code.
 
-Lua also has a `for` loop that operates using iterators. This is not yet implemented (NYI) in Terra, but a version will be added eventually.
+Lua also has a `for` loop that operates using iterators. This is not yet implemented (NYI) in Terra, but a version may be added in the future.
 
 The loop may also specify an option step parameter:
 
@@ -220,10 +226,11 @@ The loop may also specify an option step parameter:
         c.printf("%d\n",i) --0, 2, 4, ...
     end
 
-### Switch statement ###
+### Switch statements ###
 
-Due to the utility of branch tables for high-performance cellular automata,
-Terra has switch statements to generate them.
+**Experimental.** Similar to C++ and other languages, Terra provides a
+`switch` statement that branches between multiple (compile-time
+constant) options.
 
     switch expr do
        case 1 then
@@ -233,6 +240,13 @@ Terra has switch statements to generate them.
        end
     end
 
+Note that, unlike C++, `case` statements must currently be nested
+directly beneath the corresponding `switch`; also, no `break`
+statements are required. (If you use `break`, it will break out of the
+corresponding outermost loop, if any, or otherwise be an error.)
+
+An optional `else` may be used to specify a default fall-through case.
+
     switch expr do
         case 1 then
             first_thing()
@@ -241,7 +255,8 @@ Terra has switch statements to generate them.
         default_thing()
     end
 
-The end on the last case may be omitted if the switch statement has an else
+The `end` on the last `case` may be omitted if the `switch` statement
+has an `else`.
 
     switch expr do
         case 1 then
@@ -257,6 +272,16 @@ Terra includes goto statements. Use them wisely. They are included since they ca
     ::loop::
     C.printf("y\n")
     goto loop
+
+### Defer ###
+
+**Experimental.** The `defer` statement allows a function call to be deferred to the bottom of the containing block of code.
+
+    do
+        var f = C.fopen("some_file.txt", "r")
+        defer C.fclose(f) -- This file gets closed...
+        C.fprintf(f, "Hello defer\n")
+    end                   -- ... at the end of the block.
 
 Functions
 ---------
