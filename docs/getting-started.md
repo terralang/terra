@@ -644,18 +644,19 @@ Unlike C, you can use the select operator `a.b` on pointers. This has the effect
         return pc.real --sugar for (@pc).real
     end
 
-Like functions, symbols in struct definitions are resolved when the struct is defined, and can be linked together using `and`.
+Like functions, symbols in struct definitions are resolved when the struct is defined. Mutually recursive structs are fine as long as the definitions are placed back to back with no other intervening Lua statements. Otherwise, the struct can be declared prior to its definition to allow this.
 
     struct C --declaration
     struct A {
         b : &B
-    --and is required since A refers to B
-    } and struct B {
+    }
+    -- ok, no intervening Lua statements
+    struct B {
         a : &A
         c : &C
-    --you can mix struct and function
-    --definitions
-    } and terra myfunc()
+    }
+    -- you can mix struct and function definitions
+    terra myfunc()
     end
 
     struct C { i : int }
