@@ -7,7 +7,7 @@ let
 
   llvmPackages = pkgs.llvmPackages_10;
   stdenv = llvmPackages.stdenv;
-  cuda = if cudaPackages then cudaPackages.cudatoolkit_11 else cudatoolkit;
+  cuda = if cudaPackages then cudaPackages.cudatoolkit_11 else pkgs.cudatoolkit;
 
   luajitRev = "9143e86498436892cb4316550be4d45b68a61224";
   luajitBase = "LuaJIT-${luajitRev}";
