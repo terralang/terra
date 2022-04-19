@@ -218,12 +218,18 @@ Terra also includes `for` loops, **but with different behavior from Lua**. This 
 
 This is different from Lua's behavior (which is inclusive of 10) since Terra uses 0-based indexing and pointer arithmetic in contrast with Lua's 1-based indexing. Ideally, Lua and Terra would use the same indexing rules. However, Terra code needs to frequently do pointer arithmetic and interface with C code both of which are cumbersome with 1-based indexing. Alternatively, patching Lua to make it 0-based would make the flavor of Lua bundled with Terra incompatible with existing Lua code.
 
-Lua also has a `for` loop that operates using iterators. This is not yet implemented (NYI) in Terra, but a version may be added in the future.
-
 The loop may also specify an option step parameter:
 
     for i = 0,10,2 do
-        c.printf("%d\n",i) --0, 2, 4, ...
+        C.printf("%d\n",i) --0, 2, 4, ...
+    end
+
+### Iterators ###
+
+**Experimental.** Terra has experimental support for iterators via the [`__for` metamethod](api.html#exotypes-structs). When a Terra type implements `__for`, it can be iterated with the following syntax:
+
+    for i in Range {0,10} do
+        C.printf("%d\n",i)
     end
 
 ### Switch statements ###

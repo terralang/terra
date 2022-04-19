@@ -831,9 +831,36 @@ A _Lua_ function called after the type is complete but before the compiler retur
 
 ----
 
-    castedexp = __cast(from,to,exp)`
+    castedexp = __cast(from,to,exp)
 
 A _Lua_ function that can define conversions between your type and another type. `from` is the type of `exp`, and `to` is the type that is required.  For type `mystruct`, `__cast` will be called when either `from` or `to` is of type `mystruct` or type `&mystruct`. If there is a valid conversion, then the method should return `castedexp` where `castedexp` is the expression that converts `exp` to `to`. Otherwise, it should report a descriptive error using the `error` function. The Terra compiler will try any applicable `__cast` metamethod until it finds one that works (i.e. does not call `error`).
+
+----
+
+    __for(iterable,body)
+
+**Experimental.** A _Lua_ function that generates the loop to iterate
+the specified type. The value of `iterable` will be an expression that
+generates a value of the specified type. The `body` is a Lua function
+that, when called with the loop iterator variable, executes one
+iteration of the loop. **Note that both `iterable` and the argument to
+`body` must be protected from multiple evaluation.** The result of the
+`__for` metamethod must be a quote.
+
+For example, an implementation of a simple `Range` type might look like:
+
+    struct Range {
+        a : int
+        b : int
+    }
+    Range.metamethods.__for = function(iter,body)
+        return quote
+            var it = iter
+            for i = it.a,it.b do
+                [body(i)]
+            end
+        end
+    end
 
 ----
 
