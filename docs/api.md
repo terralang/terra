@@ -119,15 +119,15 @@ Generic
 All Terra objects have a string representation that you can use for debugging.
 
 ---
-    terra.islist(t)
-    terra.isfunction(t)
-    terra.types.istype(t)
-    terra.isquote(t)
-    terra.issymbol(t)
-    terra.ismacro(t)
-    terra.isglobalvar(t)
-    terra.islabel(t)
-    terra.isoverloadedfunction(t)
+    terralib.islist(t)
+    terralib.isfunction(t)
+    terralib.types.istype(t)
+    terralib.isquote(t)
+    terralib.issymbol(t)
+    terralib.ismacro(t)
+    terralib.isglobalvar(t)
+    terralib.islabel(t)
+    terralib.isoverloadedfunction(t)
 
 Checks that a particular object is a type of Terra class.
 
@@ -137,18 +137,18 @@ Checks that a particular object is a type of Terra class.
 
 Extended version of `type(o)` with the following definition:
 
-    function terra.type(t)
-       if terra.isfunction(t) then return "terrafunction"
-       elseif terra.types.istype(t) then return "terratype"
-       elseif terra.ismacro(t) then return "terramacro"
-       elseif terra.isglobalvar(t) then return "terraglobalvariable"
-       elseif terra.isquote(t) then return "terraquote"
-       elseif terra.istree(t) then return "terratree"
-       elseif terra.islist(t) then return "list"
-       elseif terra.issymbol(t) then return "terrasymbol"
-       elseif terra.isfunction(t) then return "terrafunction"
-       elseif terra.islabel(t) then return "terralabel"
-       elseif terra.isoverloadedfunction(t) then return "overloadedterrafunction"
+    function terralib.type(t)
+       if terralib.isfunction(t) then return "terrafunction"
+       elseif terralib.types.istype(t) then return "terratype"
+       elseif terralib.ismacro(t) then return "terramacro"
+       elseif terralib.isglobalvar(t) then return "terraglobalvariable"
+       elseif terralib.isquote(t) then return "terraquote"
+       elseif terralib.istree(t) then return "terratree"
+       elseif terralib.islist(t) then return "list"
+       elseif terralib.issymbol(t) then return "terrasymbol"
+       elseif terralib.isfunction(t) then return "terrafunction"
+       elseif terralib.islabel(t) then return "terralabel"
+       elseif terralib.isoverloadedfunction(t) then return "overloadedterrafunction"
        else return type(t) end
     end
 
@@ -672,6 +672,23 @@ Constant expressions are a subset of Terra expressions whose values are guarante
     terralib.isconstant(obj)
 
 True if `obj` is a Terra constant.
+
+Label
+-----
+
+Labels are abstract code locations that can be used e.g., with the `goto` statement. Like symbols, label values allow programmatic generation of code locations.
+
+---
+
+    terralib.islabel(l)
+
+True if `l` is a label.
+
+---
+
+    label([displayname])
+
+Construct a new label. This label will be unique from any other label, even if it has the same `displayname`. `displayname` is an optional name that will be printed out in error messages when this label is encountered.
 
 Macro
 -----

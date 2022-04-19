@@ -267,11 +267,21 @@ has an `else`.
 
 ### Gotos ###
 
-Terra includes goto statements. Use them wisely. They are included since they can be useful when generating code for embedded languages.
+Terra includes `goto` statements. Use them wisely. They are included since they can be useful when generating code for embedded languages.
 
     ::loop::
     C.printf("y\n")
     goto loop
+
+The target of a `goto` must be a label, either written into the code (as above) or [generated programmatically via the API](api.html#label):
+
+    local loop = label()
+    terra yes()
+        ::[loop]::
+        C.printf("y\n")
+        goto loop
+    end
+    yes()
 
 ### Defer ###
 
