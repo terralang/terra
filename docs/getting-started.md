@@ -86,7 +86,7 @@ To actually begin writing Terra code, we introduce a Terra function with the key
 Unlike Lua, arguments to Terra functions are explicitly typed. Terra uses a simple static type propagation to infer the return type of the `addone` function. You can also explicitly specify it:
 
     terra addone(a : int) : int
-    	return a + 1
+        return a + 1
     end
 
 The last line of the first example invokes the Terra function from the top-level context. This is an example of the interaction between Terra and Lua.
@@ -326,7 +326,7 @@ Compilation occurs when functions are first called. In this example, when `doit(
 Functions are typechecked when they are defined. If they refer to other functions, those functions must already be defined, or
 you will get an error:
 
-    terra iseven(n : uint32)
+    terra iseven(n : uint32) : bool
         if n == 0 then
             return true
         else
@@ -339,15 +339,15 @@ you will get an error:
 To make mutual recursion easier, Terra allows multiple functions to be defined at once as long as there are no other Lua
 statements between the definitions:
 
-    terra iseven(n : uint32)
+    terra iseven(n : uint32) : bool
         if n == 0 then
             return true
         else
-        	-- OK! isodd defined at the same time.
+            -- OK! isodd defined at the same time.
             return isodd(n - 1)
         end
     end
-    terra isodd(n : uint32)
+    terra isodd(n : uint32) : bool
         if n == 0 then
             return false
         else
@@ -357,9 +357,9 @@ statements between the definitions:
 
 Alternatively, you can declare a function before defining it:
 
-	terra isodd :: uint32 -> bool
+    terra isodd :: uint32 -> bool
 
-	terra iseven(n : uint32)
+    terra iseven(n : uint32) : bool
         ...
     end
     terra isodd(n : uint32)
@@ -372,7 +372,7 @@ Like Lua function definitions, Terra function definitions can insert directly in
 
     local mytable = {}
     terra mytable.myfunction()
-    	C.printf("myfunction in mytable\n")
+        C.printf("myfunction in mytable\n")
     end
 
 ### Terra Functions Are Lua Objects ###
@@ -396,17 +396,17 @@ The symbol `foo` is just a Lua _variable_ whose _value_ is a Terra function. Lua
 
     --this is Lua code:
     > add1:disas()
-	definition 	{double}->{double}
+    definition     {double}->{double}
 
-	define double @add111(double) {
-	entry:
-	  %1 = fadd double %0, %0
-	  ret double %1
-	}
+    define double @add111(double) {
+    entry:
+      %1 = fadd double %0, %0
+      ret double %1
+    }
 
-	assembly for function at address 0xa2ef030
-	0:		vaddsd	XMM0, XMM0, XMM0
-	4:		ret
+    assembly for function at address 0xa2ef030
+    0:      vaddsd  XMM0, XMM0, XMM0
+    4:      ret
 
 You can also force a function to be compiled:
 
@@ -415,9 +415,9 @@ You can also force a function to be compiled:
 Or look at a textual representation of the type-checked code
 
     > add1:printpretty()
-	add1 = terra(a : double) : {double}
-    	return a + a
-	end
+    add1 = terra(a : double) : {double}
+        return a + a
+    end
 
 \* The actual syntax sugar is slightly more complicated to support function declarations.
 See the [API reference](api.html#function) for the full behavior.
@@ -617,7 +617,7 @@ If you want to specify a particular type for the elements of the array you can u
 Vectors are like arrays, but also allow you to perform vector-wide operations:
 
     terra saxpy(a :float,  X : vector(float,3), Y : vector(float,3),)
-    	return a*X + Y
+        return a*X + Y
     end
 
 They serve as an abstraction of the SIMD instructions (like Intel's SSE or Arm's NEON ISAs), allowing you to write vectorized code. The constructors `vector` and `vectorof` create vectors, and behave similarly to arrays:
@@ -646,19 +646,19 @@ Unlike C, you can use the select operator `a.b` on pointers. This has the effect
 
 Like functions, symbols in struct definitions are resolved when the struct is defined, and can be linked together using `and`.
 
-	struct C --declaration
-	struct A {
-		b : &B
-	--and is required since A refers to B
-	} and struct B {
-		a : &A
-		c : &C
-	--you can mix struct and function
-	--definitions
-	} and terra myfunc()
-	end
+    struct C --declaration
+    struct A {
+        b : &B
+    --and is required since A refers to B
+    } and struct B {
+        a : &A
+        c : &C
+    --you can mix struct and function
+    --definitions
+    } and terra myfunc()
+    end
 
-	struct C { i : int }
+    struct C { i : int }
 
 Terra has no explicit union type. Instead, you can declare that you want two or more elements of the struct to share the same memory:
 
@@ -816,9 +816,9 @@ Like the `.` selection operator, the `:` method operator can also be used direct
 
 To make defining methods easier, we provide a syntax sugar.
 
-	terra Complex:add(rhs : Complex) : Complex
-		...
-	end
+    terra Complex:add(rhs : Complex) : Complex
+        ...
+    end
 
 is equivalent to
 
@@ -864,12 +864,12 @@ The file `tests/terralua.t` includes more examples. The file `tests/terraluameth
 
 since we cannot determine the Terra types that function will return, Lua functions do not return values to Terra functions by default. To convert a Lua function into a Terra function that does return a value, you first need to `cast` it to a Terra function type:
 
-	function luaadd(a,b) return a + b end
-	terraadd = terralib.cast( {int,int} -> int, luaadd)
+    function luaadd(a,b) return a + b end
+    terraadd = terralib.cast( {int,int} -> int, luaadd)
 
-	terra doit()
-		return terraadd(3,4)
-	end
+    terra doit()
+        return terraadd(3,4)
+    end
 
 Meta-programming Terra with Lua
 ===============================
@@ -882,51 +882,51 @@ The operators we provide are adapted from [multi-stage programming](http://www.c
 
 Escapes allow you to splice the result of a Lua expression into Terra code. Here is an example:
 
-	function get5()
-		return 5
-	end
-	terra foobar()
-		return [ get5() + 1 ]
-	end
-	foobar:printpretty()
-	> output:
-	> foobar0 = terra() : {int32}
-	> 	return 6
-	> end
+    function get5()
+        return 5
+    end
+    terra foobar()
+        return [ get5() + 1 ]
+    end
+    foobar:printpretty()
+    > output:
+    > foobar0 = terra() : {int32}
+    >     return 6
+    > end
 
 When the function is defined, the Lua expression inside the brackets (`[]`) is evaluated to the Lua value `6`  which is then used in the Terra code. The Lua value is converted to a Terra value based on the rules for [compile-time conversions](api.html#compiletime-conversions) in the API reference (e.g. numbers are converted to Terra constants, global variables are converted into references to that global).
 
 Escapes can appear where any expression or statement normally appears. When they appear as statements or at the end of en expression list, multiple values can be spliced in place by returning a Lua array:
 
-	terra return123()
-		--escape appends 2 values:
-		return 1, [ {2,3} ]
-	end
+    terra return123()
+        --escape appends 2 values:
+        return 1, [ {2,3} ]
+    end
 
 You can also use escapes to programmatically choose fields or functions:
 
-	local myfield = "foo"
-	local mymethod = "bar"
-	terra fieldsandfunctions()
-		var fields = myobj.[myfield]
-		var methods = myobj:[mymethod]()
-	end
+    local myfield = "foo"
+    local mymethod = "bar"
+    terra fieldsandfunctions()
+        var fields = myobj.[myfield]
+        var methods = myobj:[mymethod]()
+    end
 
 Lua expressions inside an escape can refer to the variables defined inside a Terra function. For instance, this example chooses which variable to return based on a Lua parameter:
 
-	local choosefirst = true
-	local function choose(a,b)
-		if choosefirst then
-			return a
-		else
-			return b
-		end
-	end
-	terra doit(a : double)
-		var first = C.sin(a)
-		var second = C.cos(a)
-		return [ choose(first,second) ]
-	end
+    local choosefirst = true
+    local function choose(a,b)
+        if choosefirst then
+            return a
+        else
+            return b
+        end
+    end
+    terra doit(a : double)
+        var first = C.sin(a)
+        var second = C.cos(a)
+        return [ choose(first,second) ]
+    end
 
 Since Lua and Terra can refer to the same set of variables, we say that they _share_ the same lexical scope.
 
@@ -962,30 +962,30 @@ This behavior is actually just syntax sugar for an escape expression.  In Terra,
 
 A quote allows you to generate a single Terra expression or statement outside of a Terra function. They are frequently used in combination with escapes to generate code. Quotes create the individual expressions and escapes are used to stitch them together.
 
-	function addone(a)
-		--return quotation that
-		--represents adding 1 to a
-		return `a + 1
+    function addone(a)
+        --return quotation that
+        --represents adding 1 to a
+        return `a + 1
     end
-	terra doit()
-		var first = 1
-		--call addone to generate
-		--expression first + 1 + 1
-		return [ addone(addone(first)) ]
-	end
+    terra doit()
+        var first = 1
+        --call addone to generate
+        --expression first + 1 + 1
+        return [ addone(addone(first)) ]
+    end
 
 
 If you want to create a group of statements rather than expressions, you can using the `quote` keyword:
 
-	local printit = quote
-		C.printf("a quotestatement")
-	end
+    local printit = quote
+        C.printf("a quotestatement")
+    end
 
-	terra doit()
-		--print twice
-		printit
-		printit
-	end
+    terra doit()
+        --print twice
+        printit
+        printit
+    end
 
 The `quote` keyword can also include an optional `in` statement that creates an expression:
 
@@ -1211,7 +1211,7 @@ A simple example initializes Terra and then runs code from the file specified in
         //initialize the terra state in lua
         terra_init(L);
         for(int i = 1; i < argc; i++)
-        	//run the terra code in each file
+            //run the terra code in each file
             if(terra_dofile(L,argv[i]))
                 return 1; //error
         return 0;
