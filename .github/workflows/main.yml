@@ -110,7 +110,7 @@ jobs:
           - llvm: '13'
             static: '0'
 
-          # no-slib: only LLVM 9
+          # no-slib: only LLVM 9-10
           - llvm: '5.0'
             slib: '0'
           - llvm: '6.0'
@@ -118,8 +118,6 @@ jobs:
           - llvm: '7'
             slib: '0'
           - llvm: '8'
-            slib: '0'
-          - llvm: '10'
             slib: '0'
           - llvm: '11'
             slib: '0'
