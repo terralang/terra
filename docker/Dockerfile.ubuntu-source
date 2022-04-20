@@ -13,11 +13,14 @@ RUN apt-get update -qq && \
     apt-get install -qq build-essential cmake git wget libedit-dev && \
     mkdir /llvm && \
     cd /llvm && \
-    wget https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvm/llvm-project-$llvm.src.tar.xz && \
-    tar xf llvm-project-$llvm.src.tar.xz && \
+    wget https://releases.llvm.org/$llvm/llvm-$llvm.src.tar.xz && \
+    wget https://releases.llvm.org/$llvm/cfe-$llvm.src.tar.xz && \
+    tar xf llvm-$llvm.src.tar.xz && \
+    tar xf cfe-$llvm.src.tar.xz && \
+    mv cfe-$llvm.src llvm-$llvm.src/tools/clang && \
     mkdir build install && \
     cd build && \
-    cmake ../llvm-project-$llvm.src/llvm -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF -DLLVM_ENABLE_PROJECTS=clang && \
+    cmake ../llvm-$llvm.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF && \
     make install -j$threads && \
     cd .. && \
     rm -rf llvm-project-$llvm.src* build && \
