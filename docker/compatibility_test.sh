@@ -14,6 +14,6 @@ threads="$6"
 cd terra_install
 
 for version in $test_versions; do
-    docker build --build-arg release=$version -t terralang/terra:$distro-$version-test -f ../docker/Dockerfile.$distro-test .
+    docker build --build-arg release=$version -t terralang/terra:$distro-$version-test -f ../docker/Dockerfile.$distro${variant:+-}$variant-test .
     docker rmi terralang/terra:$distro-$version-test
 done
