@@ -3,6 +3,7 @@ ARG release=16.04
 FROM ubuntu:$release
 
 ARG llvm=6.0
+ARG threads=4
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -20,5 +21,5 @@ RUN apt-get update -qq && \
     apt-get install -qq build-essential cmake git llvm-$llvm-dev libclang-$llvm-dev clang-$llvm libedit-dev libncurses5-dev zlib1g-dev && \
     cd /terra/build && \
     cmake -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
-    make install -j4 && \
-    ctest --output-on-failure -j4
+    make install -j$threads && \
+    ctest --output-on-failure -j$threads
