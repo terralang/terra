@@ -23,8 +23,8 @@ RUN apt-get update -qq && \
     cmake ../llvm-$llvm.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF && \
     make install -j$threads && \
     cd .. && \
-    rm -rf llvm-project-$llvm.src* build && \
+    rm -rf llvm-$llvm.src* cfe-$llvm.src* build && \
     cd /terra/build && \
-    cmake -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
+    cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
     make install -j$threads && \
     ctest --output-on-failure -j$threads
