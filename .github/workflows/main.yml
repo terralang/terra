@@ -187,9 +187,15 @@ jobs:
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+  compat:
+    name: Compatibility Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" 9.0.0 source 2
       - uses: actions/upload-artifact@v2
         with:
-          name: docker-${{ matrix.distro }}-llvm-${{ matrix.llvm }}
+          name: docker-ubuntu-18.04-llvm-9.0
           path: |
             *.zip
   nix:
