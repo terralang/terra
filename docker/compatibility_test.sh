@@ -10,11 +10,13 @@ variant="$5"
 
 ./docker/build.sh ${distro}-${build_version} $llvm $variant
 
-docker cp $(docker create --rm terralang/terra:${distro}-${build_version}):/terra_install .
+tmp=$(docker create terralang/terra:${distro}-${build_version})
+docker cp $tmp:/terra_install .
+docker rm $tmp
 
 cd terra_install
 
 for version in $test_versions; do
-    docker build --build-arg release=$version -t terralang/terra:$distro-$version-test -f docker/Dockerfile.$distro${variant:+-}$variant-test .
+    docker build --build-arg release=$version -t terralang/terra:$distro-$version-test -f ../docker/Dockerfile.$distro${variant:+-}$variant-test .
     docker rmi terralang/terra:$distro-$version-test
 done
