@@ -9,7 +9,7 @@ variant="$3"
 docker build --build-arg release=$release --build-arg llvm=$llvm -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro${variant:+-}$variant .
 
 # Copy files out of container and make release.
-tmp=$(docker create terralang/terra:${distro}-${build_version})
+tmp=$(docker create terralang/terra:$distro-$release)
 docker cp $tmp:/terra_install .
 docker rm $tmp
 
