@@ -15,7 +15,7 @@ docker cp $tmp:/terra_install .
 docker rm $tmp
 
 if command -v zip; then
-    RELEASE_NAME=terra-$distro$release-llvm$llvm-`uname -m`-`git rev-parse --short HEAD`
+    RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
     mv terra_install $RELEASE_NAME
     zip -q -r $RELEASE_NAME.zip $RELEASE_NAME
     mv $RELEASE_NAME terra_install
