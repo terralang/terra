@@ -8,7 +8,7 @@ test_versions="$3"
 llvm="$4"
 variant="$5"
 
-./build.sh ${distro}-${build_version} $llvm $variant
+./docker/build.sh ${distro}-${build_version} $llvm $variant
 
 docker cp $(docker create --rm terralang/terra:${distro}-${build_version}):/terra_install .
 
