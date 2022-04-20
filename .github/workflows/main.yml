@@ -187,6 +187,11 @@ jobs:
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+      - uses: actions/upload-artifact@v2
+        with:
+          name: docker-${{ matrix.distro }}-llvm-${{ matrix.llvm }}
+          path: |
+            *.zip
   nix:
     name: Nix Build (nixpkgs-${{ matrix.nixpkgs }}, enableCUDA=${{ matrix.cuda }})
     runs-on: ubuntu-latest
