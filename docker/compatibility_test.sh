@@ -7,8 +7,9 @@ build_version="$2"
 test_versions="$3"
 llvm="$4"
 variant="$5"
+threads="$6"
 
-./docker/build.sh ${distro}-${build_version} $llvm $variant
+./docker/build.sh "${distro}-${build_version}" "$llvm" "$variant" "$threads"
 
 cd terra_install
 
