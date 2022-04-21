@@ -1,14 +1,14 @@
 environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-      LLVM_VERSION: 13.0.0
+      LLVM_VERSION: 11.0.1
       LLVM_VERSION_SHORT: 130
       VS_MAJOR_VERSION: 17
 
 install:
-  - appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-windows-msvc17.7z
-  - 7z x clang+llvm-13.0.0-x86_64-windows-msvc17.7z
-  - set LLVM_DIR=%CD%\clang+llvm-13.0.0-x86_64-windows-msvc17
+  - appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+  - 7z x clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+  - set LLVM_DIR=%CD%\clang+llvm-11.0.1-x86_64-windows-msvc17
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
   - set CMAKE_PREFIX_PATH=%LLVM_DIR%
