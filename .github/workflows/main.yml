@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
+        os: ['windows-2022'] # ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
         cmake: ['0', '1']
         cuda: ['0', '1']
