@@ -187,6 +187,17 @@ jobs:
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+  compat:
+    name: Compatibility Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" 13.0.0 prebuilt 2
+      - uses: actions/upload-artifact@v2
+        with:
+          name: docker-ubuntu-18.04-llvm-13.0
+          path: |
+            *.zip
   nix:
     name: Nix Build (nixpkgs-${{ matrix.nixpkgs }}, enableCUDA=${{ matrix.cuda }})
     runs-on: ubuntu-latest
