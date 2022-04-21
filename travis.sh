@@ -78,7 +78,7 @@ if [[ $(uname) = Linux ]]; then
   fi
 
   if [[ $USE_CUDA -eq 1 ]]; then
-    ./docker/install_cuda.sh
+    ./docker/install_cuda.sh sudo
   fi
 fi
 
