@@ -162,7 +162,8 @@ jobs:
         with:
           name: terra-${{ matrix.os }}-llvm-${{ matrix.llvm }}
           path: |
-            *.zip
+            *.tar.xz
+            *.7z
   docker:
     name: Docker
     runs-on: ubuntu-latest
@@ -201,7 +202,8 @@ jobs:
         with:
           name: docker-ubuntu-18.04-llvm-13.0
           path: |
-            *.zip
+            *.tar.xz
+            *.7z
   nix:
     name: Nix Build (nixpkgs-${{ matrix.nixpkgs }}, enableCUDA=${{ matrix.cuda }})
     runs-on: ubuntu-latest
