@@ -17,7 +17,7 @@ docker rm $tmp
 if command -v zip; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
     mv terra_install $RELEASE_NAME
-    zip -q -r $RELEASE_NAME.zip $RELEASE_NAME
+    tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
     mv $RELEASE_NAME terra_install
 else
     echo "The zip program is not available. Can't make a release."
