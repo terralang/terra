@@ -159,7 +159,7 @@ fi
 if [[ $(uname) = MINGW* ]]; then
   if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-windows-msvc17.7z
-    7z x -y clang+llvm-13.0.0-x86_64-windows-msvc17.tar.xz
+    7z x -y clang+llvm-13.0.0-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.0-x86_64-windows-msvc17
   fi
 
