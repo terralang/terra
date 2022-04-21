@@ -161,6 +161,14 @@ if [[ $(uname) = MINGW* ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-13.0.0-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.0-x86_64-windows-msvc17
+  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-windows-msvc17.7z
+    7z x -y clang+llvm-12.0.1-x86_64-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-12.0.1-x86_64-windows-msvc17
+  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+    7z x -y clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.1-x86_64-windows-msvc17
   fi
 
   export CMAKE_GENERATOR="Visual Studio 17 2022"

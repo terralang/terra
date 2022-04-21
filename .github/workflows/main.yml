@@ -72,9 +72,9 @@ jobs:
           - os: 'windows-2022'
             llvm: '10'
           - os: 'windows-2022'
-            llvm: '11'
-          - os: 'windows-2022'
             llvm: '12'
+          - os: 'windows-2022'
+            llvm: '13'
           - os: 'windows-2022'
             cmake: '0'
 
