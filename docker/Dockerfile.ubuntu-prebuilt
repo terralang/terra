@@ -15,6 +15,7 @@ RUN apt-get update -qq && \
     tar xf clang+llvm-$llvm-x86_64-linux-gnu.tar.xz && \
     mv clang+llvm-$llvm-x86_64-linux-gnu /llvm && \
     rm clang+llvm-$llvm-x86_64-linux-gnu.tar.xz && \
+    /terra/docker/install_cuda.sh && \
     cd /terra/build && \
     cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
     make install -j$threads && \
