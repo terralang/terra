@@ -10,7 +10,6 @@ environment:
       VS_MAJOR_VERSION: 17
 
 install:
-  - set
   - appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-%LLVM_VERSION%/clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc17.7z
   - 7z x clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%.7z
   - set CMAKE_PREFIX_PATH=%CD%\clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%
