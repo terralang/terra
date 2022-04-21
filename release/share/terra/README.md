@@ -119,11 +119,6 @@ On macOS with Homebrew, the following should be sufficient:
 brew install cmake llvm@6
 ```
 
-Note that in Ubuntu, the LLVM packages for versions < 6 are broken in
-Ubuntu 16.04 and older. Please either upgrade to LLVM 6 or Ubuntu
-18.04, or build LLVM from source, or else use GNU Make on these
-systems (see below).
-
 Terra also supports an older build system based on GNU Make (for Linux
 and macOS only). This build system is deprecated, and in the vast
 majority of circumstances CMake is both preferred and substantially
@@ -131,7 +126,7 @@ more flexible.
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **6.0**. The following versions are also supported:
+The current recommended version of LLVM is **13.0**. The following versions are also supported:
 
 | Version | CI Coverage | CUDA | Notes |
 | ------- | ----------- | ---- | ----- |
@@ -163,14 +158,14 @@ the following recipe has been known to work with Terra. The same
 basic procedure should work for all LLVM versions >= 3.8.
 
 ```
-wget https://releases.llvm.org/9.0.0/llvm-9.0.0.src.tar.xz
-wget https://releases.llvm.org/9.0.0/cfe-9.0.0.src.tar.xz
-tar xf llvm-9.0.0.src.tar.xz
-tar xf cfe-9.0.0.src.tar.xz
-mv cfe-9.0.0.src llvm-9.0.0.src/tools/clang
+wget https://releases.llvm.org/13.0.0/llvm-13.0.0.src.tar.xz
+wget https://releases.llvm.org/13.0.0/cfe-13.0.0.src.tar.xz
+tar xf llvm-13.0.0.src.tar.xz
+tar xf cfe-13.0.0.src.tar.xz
+mv cfe-13.0.0.src llvm-13.0.0.src/tools/clang
 mkdir build install
 cd build
-cmake ../llvm-9.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
+cmake ../llvm-13.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
 make install -j4 # tune this for how many cores you have
 ```
 

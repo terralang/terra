@@ -3,6 +3,7 @@ ARG release=16.04
 FROM ubuntu:$release
 
 ENV DEBIAN_FRONTEND noninteractive
+ENV CI 1 # skip CUDA tests
 
 COPY . /terra_install
 

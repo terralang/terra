@@ -6,6 +6,7 @@ ARG llvm=6.0
 ARG threads=4
 
 ENV DEBIAN_FRONTEND noninteractive
+ENV CI 1 # skip CUDA tests
 
 COPY . /terra
 

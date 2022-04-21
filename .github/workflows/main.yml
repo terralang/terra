@@ -16,13 +16,17 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-18.04', 'macos-10.15']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # Linux: exclude LLVM 13
+          - os: 'ubuntu-18.04'
+            llvm: '13'
+
           # macOS: exclude LLVM 5.0, 8-13 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
@@ -158,29 +162,30 @@ jobs:
         with:
           name: terra-${{ matrix.os }}-llvm-${{ matrix.llvm }}
           path: |
-            *.zip
+            terra-*.tar.xz
+            terra-*.7z
   docker:
     name: Docker
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-21.10']
-        llvm: ['3.8', '6.0', '13']
+        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
+        llvm: ['3.8', '6.0', '12']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
           - distro: 'ubuntu-20.04'
             llvm: '3.8'
-          - distro: 'ubuntu-21.10'
+          - distro: 'ubuntu-22.04'
             llvm: '3.8'
-          - distro: 'ubuntu-21.10'
+          - distro: 'ubuntu-22.04'
             llvm: '6.0'
           - distro: 'ubuntu-16.04'
-            llvm: '13'
+            llvm: '12'
           - distro: 'ubuntu-18.04'
-            llvm: '13'
+            llvm: '12'
           - distro: 'ubuntu-20.04'
-            llvm: '13'
+            llvm: '12'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -197,7 +202,8 @@ jobs:
         with:
           name: docker-ubuntu-18.04-llvm-13.0
           path: |
-            *.zip
+            terra-*.tar.xz
+            terra-*.7z
   nix:
     name: Nix Build (nixpkgs-${{ matrix.nixpkgs }}, enableCUDA=${{ matrix.cuda }})
     runs-on: ubuntu-latest

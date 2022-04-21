@@ -78,11 +78,7 @@ if [[ $(uname) = Linux ]]; then
   fi
 
   if [[ $USE_CUDA -eq 1 ]]; then
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/cuda-repo-ubuntu1604_9.2.148-1_amd64.deb
-    sudo dpkg -i cuda-repo-ubuntu1604_9.2.148-1_amd64.deb
-    sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
-    sudo apt-get update -qq
-    sudo apt-get install -qq cuda-toolkit-9.2
+    ./docker/install_cuda.sh sudo
   fi
 fi
 
@@ -152,19 +148,6 @@ if [[ $(uname) = Darwin ]]; then
     exit 1
   fi
 
-  if [[ $USE_CUDA -eq 1 ]]; then
-    curl -L -o cuda.dmg https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers/cuda_9.2.148_mac
-    echo "defb095aa002301f01b2f41312c9b1630328847800baa1772fe2bbb811d5fa9f  cuda.dmg" | shasum -c -a 256
-    hdiutil attach cuda.dmg
-    # This is probably the "correct" way to do it, but it times out on Travis.
-    # /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/MacOS/CUDAMacOSXInstaller --accept-eula --silent --no-window --install-package=cuda-toolkit
-    # There is a bug in GNU Tar 1.31 which causes a crash; stick to 1.30 for now.
-    brew tap elliottslaughter/tap
-    brew install gnu-tar@1.30
-    sudo gtar xf /Volumes/CUDAMacOSXInstaller/CUDAMacOSXInstaller.app/Contents/Resources/payload/cuda_mac_installer_tk.tar.gz -C / --no-overwrite-dir --no-same-owner
-    hdiutil detach /Volumes/CUDAMacOSXInstaller
-  fi
-
   # workaround for https://github.com/terralang/terra/issues/365
   if [[ ! -e /usr/include ]]; then
     export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
@@ -214,11 +197,11 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       popd
   fi
 
-  # Only deploy CMake builds, and only with LLVM 9.
-  if [[ $LLVM_CONFIG = llvm-config-9 && $SLIB_INCLUDE_LLVM -eq 1 && ( $USE_CUDA -eq 1 || $(uname) == Darwin ) && $TERRA_LUA = luajit ]]; then
+  # Only deploy CMake builds, and only with LLVM 13.
+  if [[ $LLVM_CONFIG = llvm-config-13 && $SLIB_INCLUDE_LLVM -eq 1 && $(uname) == Darwin && $TERRA_LUA = luajit ]]; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
-    zip -q -r $RELEASE_NAME.zip $RELEASE_NAME
+    tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
     mv $RELEASE_NAME install
   fi
 else
