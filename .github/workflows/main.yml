@@ -58,7 +58,7 @@ jobs:
           - os: 'macos-10.15'
             llvm: '10'
 
-          # Windows: exclude LLVM 5.0-12, make
+          # Windows: exclude LLVM 5.0-10,13, make
           - os: 'windows-2022'
             llvm: '5.0'
           - os: 'windows-2022'
@@ -71,8 +71,6 @@ jobs:
             llvm: '9'
           - os: 'windows-2022'
             llvm: '10'
-          - os: 'windows-2022'
-            llvm: '12'
           - os: 'windows-2022'
             llvm: '13'
           - os: 'windows-2022'

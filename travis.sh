@@ -214,7 +214,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
 
   CTEST_FLAGS=()
   if [[ $(uname) = MINGW* ]]; then
-    CTEST_FLAGS+=(--config Release)
+    CTEST_FLAGS+=(-C Release)
   fi
   ctest --output-on-failure "${CTEST_FLAGS[@]}" -j${THREADS:-2}
   popd
