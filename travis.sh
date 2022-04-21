@@ -209,7 +209,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
   if [[ $(uname) = MINGW* ]]; then
-    cmake --build . --target INSTALL --config Release -j${threads:-4}
+    cmake --build . --target INSTALL --config Release
   else
     make install -j${THREADS:-2}
   fi

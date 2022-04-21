@@ -2,11 +2,11 @@ environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       LLVM_VERSION: 12.0.1
-      LLVM_VERSION_SHORT: 130
+      LLVM_VERSION_SHORT: 120
       VS_MAJOR_VERSION: 17
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       LLVM_VERSION: 11.0.1
-      LLVM_VERSION_SHORT: 130
+      LLVM_VERSION_SHORT: 110
       VS_MAJOR_VERSION: 17
 
 install:
@@ -21,9 +21,6 @@ install:
 
   - set TERRA_DIR=%CD%
 
-  - ps: git describe --tags | ForEach-Object { $_ -replace "release-", "" } | Set-Content terra_version.txt
-  - set /p TERRA_VERSION=<terra_version.txt
-
 build_script:
   - cd build
   - cmake .. -DCMAKE_INSTALL_PREFIX=%CD%\..\install -DCMAKE_GENERATOR_PLATFORM=x64
@@ -31,9 +28,8 @@ build_script:
   - cd ..
 
   # Package for release
-  - set TERRA_SHARE_PATH=%TERRA_DIR%\install\share\terra
   - ps: |
-        If($Env:LLVM_VERSION_SHORT -eq 60) {
+        If($Env:LLVM_VERSION_SHORT -eq 120) {
           $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
           Rename-Item install "$Env:RELEASE_NAME"
           7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
