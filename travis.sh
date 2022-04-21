@@ -88,13 +88,13 @@ fi
 
 if [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
-    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-13.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-13
     ln -s clang+llvm-13.0.0-x86_64-apple-darwin/bin/clang clang-13
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.0-x86_64-apple-darwin
   elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
-    curl -L -O https://github.com/elliottslaughter/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-12.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-12
     ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/clang clang-12
