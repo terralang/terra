@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-18.04', 'macos-10.15']
+        os: ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -57,6 +57,26 @@ jobs:
           # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-10.15'
             llvm: '10'
+
+          # Windows: exclude LLVM 5.0-12, make
+          - os: 'windows-2022'
+            llvm: '5.0'
+          - os: 'windows-2022'
+            llvm: '6.0'
+          - os: 'windows-2022'
+            llvm: '7'
+          - os: 'windows-2022'
+            llvm: '8'
+          - os: 'windows-2022'
+            llvm: '9'
+          - os: 'windows-2022'
+            llvm: '10'
+          - os: 'windows-2022'
+            llvm: '11'
+          - os: 'windows-2022'
+            llvm: '12'
+          - os: 'windows-2022'
+            cmake: '0'
 
           # CMake
           - llvm: '5.0'
@@ -148,6 +168,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
+        shell: bash
         env:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
           CLANG: clang-${{ matrix.llvm }}
