@@ -1,5 +1,9 @@
 environment:
   matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
+      LLVM_VERSION: 13.0.0
+      LLVM_VERSION_SHORT: 130
+      VS_MAJOR_VERSION: 17
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       LLVM_VERSION: 7.0.0
       LLVM_VERSION_SHORT: 70
@@ -30,9 +34,12 @@ environment:
 install:
   # Hopefully temporary lines
   - if /I "%LLVM_VERSION_SHORT%" GEQ "40" (set BINARY_SOURCE_USER=Mx7f)
-  - appveyor DownloadFile https://github.com/%BINARY_SOURCE_USER%/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
-  - 7z x llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z
-  - set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
+  - if /I "%LLVM_VERSION_SHORT%" LEQ "70" (appveyor DownloadFile https://github.com/%BINARY_SOURCE_USER%/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "130" (appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-windows-msvc17.7z)
+  - if /I "%LLVM_VERSION_SHORT%" LEQ "70" (7z x llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt.7z)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "130" (7z x clang+llvm-13.0.0-x86_64-windows-msvc17.7z)
+  - if /I "%LLVM_VERSION_SHORT%" LEQ "70" (set LLVM_DIR=%CD%\llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "130" (set LLVM_DIR=%CD%\clang+llvm-13.0.0-x86_64-windows-msvc17)
   - set CLANG_RESOURCE_DIRECTORY=%LLVM_DIR%\lib\clang\%LLVM_VERSION%
 
   - set CMAKE_PREFIX_PATH=%LLVM_DIR%
