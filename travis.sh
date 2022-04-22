@@ -178,9 +178,9 @@ if [[ $(uname) = MINGW* ]]; then
     echo "PATH=$PATH"
     echo "CUDA_TOOLKIT_ROOT_DIR=$CUDA_TOOLKIT_ROOT_DIR"
     ls "$CUDA_TOOLKIT_ROOT_DIR"
-    which nvcc
-    export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6"
-    which nvcc
+    which nvcc || true
+    export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6/bin"
+    which nvcc || true
   fi
 
   export CMAKE_GENERATOR="Visual Studio 17 2022"
