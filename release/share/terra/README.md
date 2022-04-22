@@ -48,7 +48,7 @@ You can also run it on already written files:
     $ ./terra tests/hello.t
     hello, world
 
-Terra can also be used as a library from C by linking against `libterra.a` (windows:  `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra_s.a` (windows:  `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
     //simple.cpp
@@ -71,11 +71,11 @@ This program can then be compiled by linking against the Terra library
 
     # Linux
     c++ simple.cpp -o simple -I<path-to-terra-folder>/terra/include \
-    -L<path-to-terra-folder>/lib -lterra -ldl -pthread
+    -L<path-to-terra-folder>/lib -lterra_s -ldl -pthread
 
     # OSX
     c++ simple.cpp -o simple -I<path-to-terra-folder>/terra/include \
-    -L<path-to-terra-folder>/lib -lterra \
+    -L<path-to-terra-folder>/lib -lterra_s \
     -pagezero_size 10000 -image_base 100000000
 
 Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
@@ -152,10 +152,9 @@ The following versions were previously supported by Terra:
 
 ### Instructions for Building LLVM from Source
 
-LLVM provides [binary releases](https://releases.llvm.org/), but these
-can sometimes be out of date. If you need to build LLVM from source,
-the following recipe has been known to work with Terra. The same
-basic procedure should work for all LLVM versions >= 3.8.
+If you need to build LLVM from source, the following recipe has been
+known to work with Terra. The same basic procedure should work for all
+LLVM versions >= 3.8.
 
 ```
 wget https://releases.llvm.org/13.0.0/llvm-13.0.0.src.tar.xz
@@ -168,6 +167,10 @@ cd build
 cmake ../llvm-13.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
 make install -j4 # tune this for how many cores you have
 ```
+
+There are also [pre-built binaries
+available](https://github.com/terralang/llvm-build) that follow this
+basic recipe, and should be usable with Terra.
 
 ### Building Terra with CMake (Linux, macOS)
 
