@@ -1,25 +1,50 @@
 environment:
   matrix:
-    # - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-    #   LLVM_VERSION: 12.0.1
-    #   LLVM_VERSION_SHORT: 120
-    #   VS_MAJOR_VERSION: 17
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
       LLVM_VERSION: 11.0.1
       LLVM_VERSION_SHORT: 110
       VS_MAJOR_VERSION: 17
       USE_CUDA: 1
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14 # Just use LLVM built with VS 2015
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 7.0.0
+      LLVM_VERSION_SHORT: 70
+      VS_MAJOR_VERSION: 14
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 6.0.1
+      LLVM_VERSION_SHORT: 60
+      VS_MAJOR_VERSION: 14
+      USE_CUDA: 1
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 6.0.1
+      LLVM_VERSION_SHORT: 60
+      VS_MAJOR_VERSION: 14
+      USE_CUDA: 1
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
+      LLVM_VERSION: 5.0.2
+      LLVM_VERSION_SHORT: 50
+      VS_MAJOR_VERSION: 14
 
 install:
-  - appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-%LLVM_VERSION%/clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc17.7z
-  - 7z x clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%.7z
-  - set CMAKE_PREFIX_PATH=%CD%\clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%
+  - set LLVM_BASE_NAME=llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
+  - set LLVM_URL=https://github.com/Mx7f/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/%LLVM_BASE_NAME%.7z
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "110" (set LLVM_BASE_NAME=clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc17)
+  - if /I "%LLVM_VERSION_SHORT%" GEQ "110" (set LLVM_URL=https://github.com/terralang/llvm-build/releases/download/llvm-%LLVM_VERSION%/%LLVM_BASE_NAME%.7z)
+
+  - appveyor DownloadFile %LLVM_URL%
+  - 7z x %LLVM_BASE_NAME%.7z
+  - set CMAKE_PREFIX_PATH=%CD%\%LLVM_BASE_NAME%
 
   - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe -FileName cuda.exe)
   - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_11.6 cudart_11.6)
   - if /I "%USE_CUDA%" EQU "1" (set PATH=%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin)
-
-  - set TERRA_DIR=%CD%
 
 build_script:
   - cd build
@@ -29,7 +54,7 @@ build_script:
 
   # Package for release
   - ps: |
-        If($Env:LLVM_VERSION_SHORT -eq 120) {
+        If($Env:LLVM_VERSION_SHORT -eq 110) {
           $Env:RELEASE_NAME = "terra-Windows-x86_64-$(git rev-parse --short HEAD)"
           Rename-Item install "$Env:RELEASE_NAME"
           7z a "$Env:RELEASE_NAME.zip" "$Env:RELEASE_NAME"
