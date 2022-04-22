@@ -44,9 +44,9 @@ install:
   - 7z x %LLVM_BASE_NAME%.7z
   - set CMAKE_PREFIX_PATH=%CD%\%LLVM_BASE_NAME%
 
-  - if %USE_CUDA% EQU 1 (appveyor DownloadFile https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe -FileName cuda.exe)
-  - if %USE_CUDA% EQU 1 (.\cuda -s nvcc_11.6 cudart_11.6)
-  - if %USE_CUDA% EQU 1 (set "PATH=%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin")
+  - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe -FileName cuda.exe)
+  - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_11.6 cudart_11.6)
+  - if /I "%USE_CUDA%" EQU "1" (set "PATH=%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin")
 
 build_script:
   - cd build
