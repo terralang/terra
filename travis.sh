@@ -156,6 +156,24 @@ if [[ $(uname) = Darwin ]]; then
   export PATH=$PWD:$PATH
 fi
 
+if [[ $(uname) = MINGW* ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+    7z x -y clang+llvm-11.0.1-x86_64-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.1-x86_64-windows-msvc17
+  fi
+
+  if [[ $USE_CUDA -eq 1 ]]; then
+    curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
+    ./cuda_11.6.2_511.65_windows.exe -s nvcc_11.6 cudart_11.6
+    export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6/bin"
+  fi
+
+  export CMAKE_GENERATOR="Visual Studio 17 2022"
+  export CMAKE_GENERATOR_PLATFORM=x64
+  export CMAKE_GENERATOR_TOOLSET="host=x64"
+fi
+
 if [[ $USE_CMAKE -eq 1 ]]; then
   CMAKE_FLAGS=()
   if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
@@ -183,11 +201,25 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       -DTERRA_LUA=$TERRA_LUA
     )
   fi
+  if [[ $USE_CUDA -eq 1 ]]; then
+    # Terra should autodetect, but force an error if it doesn't work.
+    CMAKE_FLAGS+=(
+      -DTERRA_ENABLE_CUDA=ON
+    )
+  fi
 
   pushd build
   cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
-  make install -j${THREADS:-2}
-  ctest --output-on-failure -j${THREADS:-2}
+  if [[ $(uname) = MINGW* ]]; then
+    cmake --build . --target INSTALL --config Release
+  else
+    make install -j${THREADS:-2}
+  fi
+
+  # Skip ctest on Windows; this is currently broken.
+  if [[ $(uname) != MINGW* ]]; then
+    ctest --output-on-failure -j${THREADS:-2}
+  fi
   popd
 
   # Skip this on macOS because it spews too much on Mojave and newer.
@@ -197,11 +229,15 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       popd
   fi
 
-  # Only deploy CMake builds, and only with LLVM 13.
-  if [[ $LLVM_CONFIG = llvm-config-13 && $SLIB_INCLUDE_LLVM -eq 1 && $(uname) == Darwin && $TERRA_LUA = luajit ]]; then
-    RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-`uname -m`-`git rev-parse --short HEAD`
+  # Only deploy CMake builds, and only with LLVM 13 (macOS) and 11 (Windows).
+  if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+    RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
-    tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
+    if [[ $(uname) = MINGW* ]]; then
+      7z a -t7z $RELEASE_NAME.7z $RELEASE_NAME
+    else
+      tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
+    fi
     mv $RELEASE_NAME install
   fi
 else

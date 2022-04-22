@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-18.04', 'macos-10.15']
+        os: ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -58,6 +58,26 @@ jobs:
           - os: 'macos-10.15'
             llvm: '10'
 
+          # Windows: exclude LLVM 5.0-10,12-13, make
+          - os: 'windows-2022'
+            llvm: '5.0'
+          - os: 'windows-2022'
+            llvm: '6.0'
+          - os: 'windows-2022'
+            llvm: '7'
+          - os: 'windows-2022'
+            llvm: '8'
+          - os: 'windows-2022'
+            llvm: '9'
+          - os: 'windows-2022'
+            llvm: '10'
+          - os: 'windows-2022'
+            llvm: '12'
+          - os: 'windows-2022'
+            llvm: '13'
+          - os: 'windows-2022'
+            cmake: '0'
+
           # CMake
           - llvm: '5.0'
             cmake: '0'
@@ -80,7 +100,7 @@ jobs:
           - cmake: '0'
             lua: 'moonjit'
 
-          # CUDA: only LLVM 9
+          # CUDA: only LLVM 11
           - llvm: '5.0'
             cuda: '1'
           - llvm: '6.0'
@@ -88,17 +108,17 @@ jobs:
           - llvm: '7'
             cuda: '1'
           - llvm: '8'
+            cuda: '1'
+          - llvm: '9'
             cuda: '1'
           - llvm: '10'
             cuda: '1'
-          - llvm: '11'
-            cuda: '1'
           - llvm: '12'
             cuda: '1'
           - llvm: '13'
             cuda: '1'
 
-          # no-static: only LLVM 9-10
+          # no-static: only LLVM 9
           - llvm: '5.0'
             static: '0'
           - llvm: '6.0'
@@ -107,6 +127,8 @@ jobs:
             static: '0'
           - llvm: '8'
             static: '0'
+          - llvm: '10'
+            static: '0'
           - llvm: '11'
             static: '0'
           - llvm: '12'
@@ -114,7 +136,7 @@ jobs:
           - llvm: '13'
             static: '0'
 
-          # no-slib: only LLVM 9-10
+          # no-slib: only LLVM 9
           - llvm: '5.0'
             slib: '0'
           - llvm: '6.0'
@@ -123,6 +145,8 @@ jobs:
             slib: '0'
           - llvm: '8'
             slib: '0'
+          - llvm: '10'
+            slib: '0'
           - llvm: '11'
             slib: '0'
           - llvm: '12'
@@ -130,7 +154,7 @@ jobs:
           - llvm: '13'
             slib: '0'
 
-          # Moonjit: only LLVM 9-10
+          # Moonjit: only LLVM 9
           - llvm: '5.0'
             lua: 'moonjit'
           - llvm: '6.0'
@@ -138,6 +162,8 @@ jobs:
           - llvm: '7'
             lua: 'moonjit'
           - llvm: '8'
+            lua: 'moonjit'
+          - llvm: '10'
             lua: 'moonjit'
           - llvm: '11'
             lua: 'moonjit'
@@ -148,6 +174,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
+        shell: bash
         env:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
           CLANG: clang-${{ matrix.llvm }}
@@ -200,7 +227,7 @@ jobs:
       - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" 13.0.0 prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
-          name: docker-ubuntu-18.04-llvm-13.0
+          name: docker-ubuntu-18.04-llvm-13
           path: |
             terra-*.tar.xz
             terra-*.7z
