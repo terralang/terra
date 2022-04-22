@@ -174,13 +174,9 @@ if [[ $(uname) = MINGW* ]]; then
   if [[ $USE_CUDA -eq 1 ]]; then
     curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
     ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
-    export CUDA_TOOLKIT_ROOT_DIR="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.6"
-    echo "PATH=$PATH"
-    echo "CUDA_TOOLKIT_ROOT_DIR=$CUDA_TOOLKIT_ROOT_DIR"
-    ls "$CUDA_TOOLKIT_ROOT_DIR"
-    which nvcc || true
+    # Note: this is MinGW syntax. By some sort of magic, this gets translated
+    # back into normal Windows paths (C:/...) on invoking an external program.
     export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6/bin"
-    which nvcc || true
   fi
 
   export CMAKE_GENERATOR="Visual Studio 17 2022"

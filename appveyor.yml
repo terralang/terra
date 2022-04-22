@@ -17,7 +17,7 @@ install:
 
   - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe -FileName cuda.exe)
   - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_11.6 cudart_11.6)
-  - if /I "%USE_CUDA%" EQU "1" (set CUDA_TOOLKIT_ROOT_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6)
+  - if /I "%USE_CUDA%" EQU "1" (set PATH=%PATH%;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.6\bin)
 
   - set TERRA_DIR=%CD%
 
