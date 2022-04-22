@@ -174,6 +174,7 @@ if [[ $(uname) = MINGW* ]]; then
   if [[ $USE_CUDA -eq 1 ]]; then
     curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
     ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
+    export CUDA_TOOLKIT_ROOT_DIR="C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6"
   fi
 
   export CMAKE_GENERATOR="Visual Studio 17 2022"
