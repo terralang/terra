@@ -265,11 +265,14 @@ The `end` on the last `case` may be omitted if the `switch` statement
 has an `else`.
 
     switch expr do
-        case 1 then
-            first_thing()
+    case 1 then
+        first_thing()
     else
         default_thing()
     end
+
+In this case is it idiomatic to dedent the `case` because it aligns
+with the final `end`.
 
 ### Gotos ###
 
@@ -387,7 +390,7 @@ So far, we have been treating `terra` functions as special constructs in the top
 
     terra foo()
     end
-l
+
 Is just syntax sugar for\*:
 
     foo = terra()
