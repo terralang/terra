@@ -100,7 +100,7 @@ jobs:
           - cmake: '0'
             lua: 'moonjit'
 
-          # CUDA: only LLVM 9
+          # CUDA: only LLVM 11
           - llvm: '5.0'
             cuda: '1'
           - llvm: '6.0'
@@ -109,9 +109,9 @@ jobs:
             cuda: '1'
           - llvm: '8'
             cuda: '1'
-          - llvm: '10'
+          - llvm: '9'
             cuda: '1'
-          - llvm: '11'
+          - llvm: '10'
             cuda: '1'
           - llvm: '12'
             cuda: '1'

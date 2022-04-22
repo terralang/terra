@@ -8,15 +8,17 @@ environment:
       LLVM_VERSION: 11.0.1
       LLVM_VERSION_SHORT: 110
       VS_MAJOR_VERSION: 17
+      USE_CUDA: 1
 
 install:
   - appveyor DownloadFile https://github.com/terralang/llvm-build/releases/download/llvm-%LLVM_VERSION%/clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc17.7z
   - 7z x clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%.7z
   - set CMAKE_PREFIX_PATH=%CD%\clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc%VS_MAJOR_VERSION%
 
-  - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.nvidia.com/compute/cuda/9.2/Prod2/local_installers2/cuda_9.2.148_windows -FileName cuda.exe)
-  - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_9.2 cudart_9.2)
-  - if /I "%USE_CUDA%" EQU "1" (set CUDA_DIR=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v9.2)
+https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
+
+  - if /I "%USE_CUDA%" EQU "1" (appveyor DownloadFile https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe -FileName cuda.exe)
+  - if /I "%USE_CUDA%" EQU "1" (.\cuda -s nvcc_11.6 cudart_11.6)
 
   - set TERRA_DIR=%CD%
 
@@ -44,12 +46,12 @@ artifacts:
   - path: 'terra-*.zip'
     name: terra_release
 
-deploy:
-  description: '$(APPVEYOR_REPO_TAG_NAME)'
-  provider: GitHub
-  auth_token:
-    secure: yN5vuhZjUW+MkntZ51StgL0qmgfjXbY8k6QlAyy/rxMV1YcRxmN2fO8KQxOefEhA
-  artifact: terra_release
-  force_update: true
-  on:
-    appveyor_repo_tag: true
+# deploy:
+#   description: '$(APPVEYOR_REPO_TAG_NAME)'
+#   provider: GitHub
+#   auth_token:
+#     secure: yN5vuhZjUW+MkntZ51StgL0qmgfjXbY8k6QlAyy/rxMV1YcRxmN2fO8KQxOefEhA
+#   artifact: terra_release
+#   force_update: true
+#   on:
+#     appveyor_repo_tag: true

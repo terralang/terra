@@ -171,6 +171,11 @@ if [[ $(uname) = MINGW* ]]; then
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.1-x86_64-windows-msvc17
   fi
 
+  if [[ $USE_CUDA -eq 1 ]]; then
+    curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
+    ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
+  fi
+
   export CMAKE_GENERATOR="Visual Studio 17 2022"
   export CMAKE_GENERATOR_PLATFORM=x64
   export CMAKE_GENERATOR_TOOLSET="host=x64"
@@ -225,8 +230,8 @@ if [[ $USE_CMAKE -eq 1 ]]; then
       popd
   fi
 
-  # Only deploy CMake builds, and only with LLVM 13.
-  if [[ $LLVM_CONFIG = llvm-config-13 && $SLIB_INCLUDE_LLVM -eq 1 && $(uname) == Darwin && $TERRA_LUA = luajit ]]; then
+  # Only deploy CMake builds, and only with LLVM 13 (macOS) and 11 (Windows).
+  if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
     if [[ $(uname) = MINGW* ]]; then
