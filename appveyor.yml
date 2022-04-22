@@ -37,8 +37,6 @@ install:
   - set LLVM_URL=https://github.com/Mx7f/llvm-package-windows/releases/download/clang-%LLVM_VERSION%-nvptx/%LLVM_BASE_NAME%.7z
   - if %LLVM_VERSION_SHORT% GEQ 110 (set LLVM_BASE_NAME=clang+llvm-%LLVM_VERSION%-x86_64-windows-msvc17)
   - if %LLVM_VERSION_SHORT% GEQ 110 (set LLVM_URL=https://github.com/terralang/llvm-build/releases/download/llvm-%LLVM_VERSION%/%LLVM_BASE_NAME%.7z)
-  - echo %LLVM_BASE_NAME%
-  - echo %LLVM_URL%
 
   - appveyor DownloadFile %LLVM_URL%
   - 7z x %LLVM_BASE_NAME%.7z

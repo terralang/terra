@@ -227,7 +227,7 @@ jobs:
       - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" 13.0.0 prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
-          name: docker-ubuntu-18.04-llvm-13.0
+          name: docker-ubuntu-18.04-llvm-13
           path: |
             terra-*.tar.xz
             terra-*.7z

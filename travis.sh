@@ -157,15 +157,7 @@ if [[ $(uname) = Darwin ]]; then
 fi
 
 if [[ $(uname) = MINGW* ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
-    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-windows-msvc17.7z
-    7z x -y clang+llvm-13.0.0-x86_64-windows-msvc17.7z
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.0-x86_64-windows-msvc17
-  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
-    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-windows-msvc17.7z
-    7z x -y clang+llvm-12.0.1-x86_64-windows-msvc17.7z
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-12.0.1-x86_64-windows-msvc17
-  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.0.1/clang+llvm-11.0.1-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-11.0.1-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.0.1-x86_64-windows-msvc17
@@ -173,7 +165,7 @@ if [[ $(uname) = MINGW* ]]; then
 
   if [[ $USE_CUDA -eq 1 ]]; then
     curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
-    ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
+    ./cuda_11.6.2_511.65_windows.exe -s nvcc_11.6 cudart_11.6
     export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6/bin"
   fi
 
@@ -210,7 +202,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     )
   fi
   if [[ $USE_CUDA -eq 1 ]]; then
-    # Terra should autodetect, but this is to force an error if it doesn't work.
+    # Terra should autodetect, but force an error if it doesn't work.
     CMAKE_FLAGS+=(
       -DTERRA_ENABLE_CUDA=ON
     )
