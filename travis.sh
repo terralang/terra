@@ -174,8 +174,6 @@ if [[ $(uname) = MINGW* ]]; then
   if [[ $USE_CUDA -eq 1 ]]; then
     curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
     ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
-    # Note: this is MinGW syntax. By some sort of magic, this gets translated
-    # back into normal Windows paths (C:/...) on invoking an external program.
     export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6/bin"
   fi
 
@@ -240,7 +238,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
   fi
 
   # Only deploy CMake builds, and only with LLVM 13 (macOS) and 11 (Windows).
-  if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+  if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
     RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
     mv install $RELEASE_NAME
     if [[ $(uname) = MINGW* ]]; then
