@@ -175,6 +175,12 @@ if [[ $(uname) = MINGW* ]]; then
     curl -L -O https://developer.download.nvidia.com/compute/cuda/11.6.2/local_installers/cuda_11.6.2_511.65_windows.exe
     ./cuda_11.6.2_511.65_windows.exe  -s nvcc_11.6 cudart_11.6
     export CUDA_TOOLKIT_ROOT_DIR="C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v11.6"
+    echo "PATH=$PATH"
+    echo "CUDA_TOOLKIT_ROOT_DIR=$CUDA_TOOLKIT_ROOT_DIR"
+    ls "$CUDA_TOOLKIT_ROOT_DIR"
+    which nvcc
+    export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.6"
+    which nvcc
   fi
 
   export CMAKE_GENERATOR="Visual Studio 17 2022"
@@ -210,6 +216,7 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     )
   fi
   if [[ $USE_CUDA -eq 1 ]]; then
+    # Terra should autodetect, but this is to force an error if it doesn't work.
     CMAKE_FLAGS+=(
       -DTERRA_ENABLE_CUDA=ON
     )
