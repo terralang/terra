@@ -202,7 +202,7 @@ if CUDA is not found. In order to force CUDA on or off, add the
 following CMake flag:
 
 ```
--DTERRA_ENABLE_CMAKE=ON # or OFF
+-DTERRA_ENABLE_CUDA=ON # or OFF
 ```
 
 For more details on how CMake detects CUDA, see [the FindCUDA
