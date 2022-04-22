@@ -159,11 +159,11 @@ known to work with Terra. The same basic procedure should work for all
 LLVM versions >= 3.8.
 
 ```
-wget https://releases.llvm.org/13.0.0/llvm-13.0.0.src.tar.xz
-wget https://releases.llvm.org/13.0.0/cfe-13.0.0.src.tar.xz
+wget https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.0/llvm-13.0.0.src.tar.xz
+wget https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.0/clang-13.0.0.src.tar.xz
 tar xf llvm-13.0.0.src.tar.xz
-tar xf cfe-13.0.0.src.tar.xz
-mv cfe-13.0.0.src llvm-13.0.0.src/tools/clang
+tar xf clang-13.0.0.src.tar.xz
+mv clang-13.0.0.src llvm-13.0.0.src/tools/clang
 mkdir build install
 cd build
 cmake ../llvm-13.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
