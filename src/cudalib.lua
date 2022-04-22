@@ -29,7 +29,7 @@ terralib.CUDAParams.entries = { { "gridDimX", uint },
 function cudalib.toptx(module,dumpmodule,version,profile)
     dumpmodule,version = not not dumpmodule,assert(tonumber(version))
     profile = profile or {fastmath=false}
-    local cu = terralib.newcompilationunit(terra.cudatarget, false, profile) -- TODO: add nvptx target options here
+    local cu = terralib.newcompilationunit(terra.getcudatarget(), false, profile) -- TODO: add nvptx target options here
     local annotations = terra.newlist{} -- list of annotations { functionname, annotationname, annotationvalue } to be tagged
     local function addkernel(k,fn)
         fn:setinlined(true)

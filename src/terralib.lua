@@ -4239,8 +4239,12 @@ if terra.cudalibpaths and terra.cudahome then
 	end
 end                       
 
-if terra.cudahome and terra.toptximpl then
-  terra.cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
+local cudatarget
+function terra.getcudatarget()
+    if cudatarget == nil then
+        cudatarget = terra.newtarget {Triple = 'nvptx64-nvidia-cuda', FloatABIHard = true}
+    end
+    return cudatarget
 end
 
 
