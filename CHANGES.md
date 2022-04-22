@@ -10,17 +10,27 @@ The following changes are included in this release:
 
 ## Added features
 
-  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11 and 12
-  * Support for CUDA 9.2
-  * Support for Visual Studio 2015, 2017 and 2019 on Windows
+  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11, 12 and 13
+  * Support for CUDA 9, 10 and 11
+  * Support for Visual Studio 2015, 2017, 2019 and 2022 on Windows
   * New CMake-based build system replaces Make/NMake on all platforms
   * Upgrade to LuaJIT 2.1 (from Git) by default
+  * Added optional support for Moonjit, a LuaJIT fork that works on PPC64le
   * Added `terralib.linkllvmstring` to link bitcode modules directly from memory
   * Allow types defined via `ffi.cdef` to be used as Terra types as well
   * Support for "module" definitions in ASDL, which allow ASTs to be namespaced
   * Added command line flag `-e` to evaluate a Terra expression
   * Added `terralib.version` which contains the version string, or `unknown` if this can't be detected
-  * Added `optimize` flag to `terralib.saveobj` to optionally disable LLVM optimizations for better compile times
+  * Added `optimize` flag to `terralib.saveobj` to specify an optimization profile. Currently optimization profiles can be used to disable optimizations, or to enable fast-math flags
+  * Added support for all fast-math optimizations supported by LLVM
+  * Added support for `:setcallingconv()` on Terra functions to set the calling convention (with any supported LLVM calling convention)
+
+## Experimental features added
+
+  * Added `terralib.atomicrmw` to support atomic read-modify-write operations
+  * Added `switch` statement
+  * Added support for AMD GPU code generation (with LLVM 13)
+  * Added support for Nix derivation, and merged upstream into NixOS
 
 ## Deprecated features
 
@@ -37,8 +47,9 @@ The following changes are included in this release:
 
 ## Infrastructure improvements
 
-  * Automated tests with Travis (Linux, macOS) and AppVeyor (Windows)
-  * Automated tests for various Linux distros (currently Ubuntu 16.04, 18.04, 20.04) via Docker
+  * Automated tests with GitHub Actions (Linux, macOS, Windows) and AppVeyor (Windows)
+  * Automated tests for various Linux distros (currently Ubuntu 18.04, 20.04, 22.04) via Docker
+  * Automated Linux "compability" tests (cross-distro-version tests for binary compatibility)
   * Automated release build infrastructure
 
 ## Bug fixes
@@ -51,6 +62,9 @@ The following changes are included in this release:
   * Fix auto-detection of AVX support
   * Fixes for building on FreeBSD
   * Fix auto-detection of library type when file name ends in `[^.]bc`
+  * Fixes for PPC64le
+  * Fixes for AMD GPU
+  * Fixes for performance regressions in NVIDIA CUDA code generation in LLVM 13 (as compared to LLVM 3.8, the last release that supported NVVM)
 
 # Release 2016-03-25
 
