@@ -310,7 +310,7 @@ Primitive types.
 
 Constructs a pointer to `typ`.
 
-Equivalently, this can be written as:
+**Experimental.** Equivalently, this can be written as:
 
     terralib.types.pointer(typ, [addrspace])
 
