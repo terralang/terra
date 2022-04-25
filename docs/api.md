@@ -752,6 +752,17 @@ Performs a store on the address `addr` with the value `value` and attributes `at
 
 ---
 
+    terralib.fence(fenceattrs)
+
+**Experimental.** Issues a fence operation. Depending on the attributes specified, prevents reordering of atomic instructions around the fence. The semantics of this operation are determined by [LLVM](https://llvm.org/docs/LangRef.html#fence-instruction).
+
+The following attributes may be specified (note that this list is **not** the same as for `attrload`):
+
+  * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
+  * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
+
+---
+
     terralib.atomicrmw(op, addr, value, atomicattrs)
 
 **Experimental.** Performs an atomic read-modify-write (RMW) operation on the address `addr` with the value `value` and operator `op`. The operation is performed atomically. Returns the original value at `addr`.
