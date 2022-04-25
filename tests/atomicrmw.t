@@ -11,7 +11,7 @@ print("atomicrmw test settings: synscope " .. tostring(has_syncscope) .. ", alig
 terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   terralib.atomicrmw("add", x, y, {ordering = "seq_cst"})
   terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
-  terralib.fence("release")
+  terralib.fence({ordering = "release"})
   escape
     if has_syncscope and has_align then
       emit quote
@@ -27,7 +27,7 @@ terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
       end
     end
   end
-  terralib.fence("acquire")
+  terralib.fence({ordering = "acquire"})
   terralib.atomicrmw("add", x, u, {ordering = "monotonic", isvolatile = true})
 end
 atomic_add:printpretty(false)
