@@ -595,14 +595,19 @@ Global Variables
 Global variables are Terra values that are shared among all Terra functions.
 
 ---
-    global(type,[init,name,isextern])
-    global(init,[name,isextern])
+    global(type,[init,name,isextern,isconstant,addrspace])
+    global(init,[name,isextern,isconstant,addrspace])
 
 Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If `init` is specified, this [completes](#types) the type.
 
 `init` can also be a [Quote](#quote), which will be treated as a [constant expression](#constants) used to initialized the global.
 `name` is used as the debugging name for the global.
+
 If `isextern` is true, then this global is bound to an externally defined variable with the name `name`.
+
+If `isconstant` is true, then the contents of the global are considered to be constant.
+
+If `addrspace` is not `nil`, then the global is placed in the corresponding [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type). Note that the semantics of non-zero address spaces are target-specific.
 
 ---
 
