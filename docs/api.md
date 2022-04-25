@@ -310,12 +310,6 @@ Primitive types.
 
 Constructs a pointer to `typ`.
 
-**Experimental.** Equivalently, this can be written as:
-
-    terralib.types.pointer(typ, [addrspace])
-
-This allows an [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type) to be specified. Note that the semantics of non-zero address spaces are target-specific.
-
 ---
 
     typ[N]
@@ -477,6 +471,11 @@ Wrapper around `ffi.sizeof`. Completes the `terratype` and returns its size in b
 
 Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
 
+---
+
+    terralib.types.pointer(typ, [addrspace])
+
+**Experimental.** Alternative spelling for `&typ` that allows an [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type) to be specified. Note that the semantics of non-zero address spaces are target-specific.
 
 
 Quotes
