@@ -2664,13 +2664,15 @@ struct FunctionEmitter {
                        "please upgrade to 5.0.0 or higher");
 #endif
                 AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
-                if (ordering == AtomicOrdering::Unordered || ordering == AtomicOrdering::Monotonic) {
-                    assert(false && "fence does not support unordered or monotonic ordering");
+                if (ordering == AtomicOrdering::Unordered ||
+                    ordering == AtomicOrdering::Monotonic) {
+                    assert(false &&
+                           "fence does not support unordered or monotonic ordering");
                 }
                 FenceInst *a = B->CreateFence(ordering
 #if LLVM_VERSION >= 50
-                                                      ,
-                                                      syncscope
+                                              ,
+                                              syncscope
 #endif
                 );
                 return a;
