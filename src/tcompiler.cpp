@@ -2651,6 +2651,30 @@ struct FunctionEmitter {
                 }
                 return Constant::getNullValue(typeOfValue(exp)->type);
             } break;
+            case T_fence: {
+                Obj attr;
+                exp->obj("attrs", &attr);
+                bool has_syncscope = attr.hasfield("syncscope");
+#if LLVM_VERSION >= 50
+                SyncScope::ID syncscope = ParseAtomicSyncScope(
+                        M, has_syncscope ? attr.string("syncscope") : NULL);
+#else
+                assert(not has_syncscope &&
+                       "fence does not support syncscope in this version of LLVM, "
+                       "please upgrade to 5.0.0 or higher");
+#endif
+                AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
+                if (ordering == AtomicOrdering::Unordered || ordering == AtomicOrdering::Monotonic) {
+                    assert(false && "fence does not support unordered or monotonic ordering");
+                }
+                FenceInst *a = B->CreateFence(ordering
+#if LLVM_VERSION >= 50
+                                                      ,
+                                                      syncscope
+#endif
+                );
+                return a;
+            } break;
             case T_atomicrmw: {
                 AtomicRMWInst::BinOp op = ParseAtomicBinOp(exp->string("operator"));
                 Obj addr, value, attr;

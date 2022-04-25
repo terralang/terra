@@ -27,6 +27,7 @@ struct terra_State;
     _(dereference, "@")                       \
     _(div, "/")                               \
     _(eq, "==")                               \
+    _(fence, "fence")                         \
     _(float, "float")                         \
     _(fornum, "fornum")                       \
     _(functype, "functype")                   \

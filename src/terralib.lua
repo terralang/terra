@@ -57,6 +57,7 @@ param = unevaluatedparam(ident name, luaexpression? type)
 structdef = (luaexpression? metatype, structlist records)
 
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
+fenceattr = (string? syncscope, string ordering)
 atomicattr = (string? syncscope, string ordering, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
 Label = (string displayname, number id)
@@ -101,6 +102,7 @@ tree =
      | constant(cdata value, Type type)
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
+     | fence(fenceattr attrs)
      | atomicrmw(string operator, tree address, tree value, atomicattr attrs)
      | debuginfo(string customfilename, number customlinenumber)
      | arrayconstructor(Type? oftype,tree* expressions)
@@ -3031,6 +3033,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 end
                 local value = insertcast(checkexp(e.value),addr.type.type)
                 return e:copy { address = addr, value = value }:withtype(terra.types.unit)
+            elseif e:is "fence" then
+                return e:copy{}:withtype(terra.types.unit)
             elseif e:is "atomicrmw" then
                 local addr = checkexp(e.address)
                 if not addr.type:ispointer() then
@@ -3642,6 +3646,32 @@ terra.attrstore = terra.internalmacro( function(diag,tree,addr,value,attr)
     return typecheck(newobject(tree,T.attrstore,addr,value,createattributetable(attr)))
 end)
 
+local function createfenceattributetable(q)
+    local attr = q:asvalue()
+    if type(attr) ~= "table" then
+        error("attributes must be a table, not a " .. type(attr))
+    end
+    if attr.syncscope ~= nil and type(attr.syncscope) ~= "string" then
+        error("syncscope attribute must be a number, not a " .. type(attr.syncscope))
+    end
+    if attr.ordering == nil then
+        error("ordering attribute must be specified for fence operations")
+    end
+    if type(attr.ordering) ~= "string" then
+        error("ordering attribute must be a string, not a " .. type(attr.ordering))
+    end
+    return T.fenceattr(
+        attr.syncscope or nil,
+        attr.ordering or nil)
+end
+
+terra.fence = terra.internalmacro( function(diag,tree,attr)
+    if not attr then
+        error("fence requires one argument")
+    end
+    return typecheck(newobject(tree,T.fence,createfenceattributetable(attr)))
+end)
+
 local function createatomicattributetable(q)
     local attr = q:asvalue()
     if type(attr) ~= "table" then
@@ -3790,6 +3820,9 @@ function prettystring(toptree,breaklines)
     end
     local function emitAttr(a)
         emit("{ nontemporal = %s, align = %s, isvolatile = %s }",a.nontemporal,a.alignment or "native",a.isvolatile)
+    end
+    local function emitFenceAttr(a)
+        emit('{ syncscope = "%s", ordering = "%s" }',a.syncscope or "",a.ordering)
     end
     local function emitAtomicAttr(a)
         emit('{ syncscope = "%s", ordering = "%s", align = %s, isvolatile = %s }',a.syncscope or "",a.ordering,a.alignment or "native",a.isvolatile)
@@ -4050,6 +4083,10 @@ function prettystring(toptree,breaklines)
             emitExp(e.value)
             emit(", ")
             emitAttr(e.attrs)
+            emit(")")
+        elseif e:is "fence" then
+            emit("fence(")
+            emitFenceAttr(e.attrs)
             emit(")")
         elseif e:is "atomicrmw" then
             emit("atomicrmw(")
