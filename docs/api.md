@@ -310,6 +310,12 @@ Primitive types.
 
 Constructs a pointer to `typ`.
 
+Equivalently, this can be written as:
+
+    terralib.types.pointer(typ, [addrspace])
+
+This allows an [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type) to be specified. Note that the semantics of non-zero address spaces are target-specific.
+
 ---
 
     typ[N]
@@ -326,6 +332,8 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
     parameters -> returntype
 
 Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type like `int`. If `returntype` is a list, a `tuple` of the values in the list is the type returned from the function.
+
+To specify a void return type, use the empty tuple `{}`.
 
 ---
 
