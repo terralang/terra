@@ -7,7 +7,12 @@ let
 
   llvmPackages = pkgs.llvmPackages_10;
   stdenv = llvmPackages.stdenv;
-  cuda = if cudaPackages ? cudatoolkit_11 then cudaPackages.cudatoolkit_11 else pkgs.cudatoolkit;
+  cuda = if cudaPackages ? cudatoolkit_11 then [
+           cudaPackages.cudatoolkit_11
+         ] else [
+           cudaPackages.cuda_nvcc
+           cudaPackages.cuda_cudart
+         ];
 
   luajitRev = "9143e86498436892cb4316550be4d45b68a61224";
   luajitBase = "LuaJIT-${luajitRev}";
@@ -43,7 +48,7 @@ in stdenv.mkDerivation rec {
   src = ./.;
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ llvmMerged ncurses libxml2 ] ++ lib.optional enableCUDA cuda;
+  buildInputs = [ llvmMerged ncurses libxml2 ] ++ lib.optionals enableCUDA cuda;
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"
