@@ -327,6 +327,8 @@ Constructs a vector of `N` instances of type `typ`. `N` must be an integer and `
 
 Constructs a function pointer. Both  `parameters`  and `returns` can be lists of types (e.g. `{int,int}`) or a single type like `int`. If `returntype` is a list, a `tuple` of the values in the list is the type returned from the function.
 
+To specify a void return type, use the empty tuple `{}`.
+
 ---
 
     struct { field0 : type0, ..., fieldN : typeN }
@@ -469,6 +471,11 @@ Wrapper around `ffi.sizeof`. Completes the `terratype` and returns its size in b
 
 Wrapper around `ffi.offsetof`. Completes the `terratype` and returns the offset in bytes of `field` inside `terratype`.
 
+---
+
+    terralib.types.pointer(typ, [addrspace])
+
+**Experimental.** Alternative spelling for `&typ` that allows an [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type) to be specified. Note that the semantics of non-zero address spaces are target-specific.
 
 
 Quotes
@@ -595,14 +602,19 @@ Global Variables
 Global variables are Terra values that are shared among all Terra functions.
 
 ---
-    global(type,[init,name,isextern])
-    global(init,[name,isextern])
+    global(type,[init,name,isextern,isconstant,addrspace])
+    global(init,[name,isextern,isconstant,addrspace])
 
 Creates a new global variable of type `type` given the initial value `init`. Either `type` or `init` must be specified. If `type` is not specified we attempt to infer it from `init`. If `init` is not specified the global is left uninitialized. `init` is converted to a Terra value using the normal conversion [rules](#converting-between-lua-values-and-terra-values). If `init` is specified, this [completes](#types) the type.
 
 `init` can also be a [Quote](#quote), which will be treated as a [constant expression](#constants) used to initialized the global.
 `name` is used as the debugging name for the global.
+
 If `isextern` is true, then this global is bound to an externally defined variable with the name `name`.
+
+If `isconstant` is true, then the contents of the global are considered to be constant.
+
+If `addrspace` is not `nil`, then the global is placed in the corresponding [LLVM address space](https://llvm.org/docs/LangRef.html#pointer-type). Note that the semantics of non-zero address spaces are target-specific.
 
 ---
 
@@ -744,6 +756,17 @@ For example, the following `attrload` returns `123`:
     terralib.attrstore(addr, value, attrs)
 
 Performs a store on the address `addr` with the value `value` and attributes `attrs`. The attributes are the same as for `attrload`, above.
+
+---
+
+    terralib.fence(fenceattrs)
+
+**Experimental.** Issues a fence operation. Depending on the attributes specified, prevents reordering of atomic instructions around the fence. The semantics of this operation are determined by [LLVM](https://llvm.org/docs/LangRef.html#fence-instruction).
+
+The following attributes may be specified (note that this list is **not** the same as for `attrload`):
+
+  * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
+  * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
 
 ---
 

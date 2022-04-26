@@ -28,6 +28,7 @@ The following changes are included in this release:
 ## Experimental features added
 
   * Added `terralib.atomicrmw` to support atomic read-modify-write operations
+  * Added `terralib.fence` to support fence operations
   * Added `switch` statement
   * Added support for AMD GPU code generation (with LLVM 13)
   * Added support for Nix derivation, and merged upstream into NixOS
