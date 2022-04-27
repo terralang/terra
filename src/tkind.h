@@ -20,6 +20,7 @@ struct terra_State;
     _(block, "block")                         \
     _(breakstat, "breakstat")                 \
     _(cast, "cast")                           \
+    _(cmpxchg, "cmpxchg")                     \
     _(constant, "constant")                   \
     _(constructor, "constructor")             \
     _(debuginfo, "debuginfo")                 \
