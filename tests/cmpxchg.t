@@ -27,22 +27,32 @@ terra test_cmpxchg()
   @i = 1
   var r1 = cmpxchg_arm(i, 20, 300)
   -- Should be failure and value should be 1.
-  if not (r1._0 == 1 and r1._1 == false) then
-    return false
+  if r1._0 ~= 1 then
+    return 1
+  end
+  if r1._1 ~= false then
+    return 2
   end
 
   var r2 = cmpxchg_arm(i, 1, 123)
   -- Should be success and value should be 1.
-  if not (r1._0 == 1 and r1._1 == true) then
-    return false
+  if r2._0 ~= 1 then
+    return 3
+  end
+  if r2._1 ~= true then
+    return 4
   end
 
   var r3 = cmpxchg_arm(i, 123, 456)
   -- Should be success and value should be 123.
-  if not (r1._0 == 123 and r1._1 == true) then
-    return false
+  if r3._0 ~= 123 then
+    return 4
+  end
+  if r3._1 ~= true then
+    return 5
   end
 
-  return true
+  return 6
 end
-assert(test_cmpxchg())
+print(test_cmpxchg())
+assert(test_cmpxchg() == 6)
