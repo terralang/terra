@@ -2678,12 +2678,11 @@ struct FunctionEmitter {
                 return a;
             } break;
             case T_cmpxchg: {
-                Obj addr, cmpvalue, newvalue, attr, typ;
+                Obj addr, cmpvalue, newvalue, attr;
                 exp->obj("address", &addr);
                 exp->obj("cmp", &cmpvalue);
                 exp->obj("new", &newvalue);
                 exp->obj("attrs", &attr);
-                exp->obj("type", &typ);
                 Value *addrexp = emitExp(&addr);
                 Value *cmpexp = emitExp(&cmpvalue);
                 Value *newexp = emitExp(&newvalue);
@@ -2735,7 +2734,7 @@ struct FunctionEmitter {
                 Value *a_success = B->CreateExtractValue(a, ArrayRef<unsigned>(1));
                 Value *a_success_i8 = B->CreateZExt(a_success, B->getInt8Ty());
                 Type *elt_types[2] = {a_result->getType(), B->getInt8Ty()};
-                Type *result_type = getType(&typ)->type;
+                Type *result_type = typeOfValue(exp)->type;
                 Value *result = UndefValue::get(result_type);
                 result = B->CreateInsertValue(result, a_result, ArrayRef<unsigned>(0));
                 result =
