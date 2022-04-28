@@ -14,6 +14,13 @@ for i = 2,#arg,2 do
         end
     end
 end
+-- Hack: we can't get the actual return code of the above command
+-- without LUAJIT_ENABLE_LUA52COMPAT (which might break
+-- compatibility), so we have to make do with checking that we got
+-- non-zero entries in our list of files.
+if #listoffiles == 0 then
+    assert(false, "unable to find any files to include")
+end
 
 local ContentTemplate = [[
 static const uint8_t headerfile_%d[] = { %s 0x0};
