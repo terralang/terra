@@ -2677,6 +2677,71 @@ struct FunctionEmitter {
                 );
                 return a;
             } break;
+            case T_cmpxchg: {
+                Obj addr, cmpvalue, newvalue, attr, typ;
+                exp->obj("address", &addr);
+                exp->obj("cmp", &cmpvalue);
+                exp->obj("new", &newvalue);
+                exp->obj("attrs", &attr);
+                exp->obj("type", &typ);
+                Value *addrexp = emitExp(&addr);
+                Value *cmpexp = emitExp(&cmpvalue);
+                Value *newexp = emitExp(&newvalue);
+                bool has_syncscope = attr.hasfield("syncscope");
+#if LLVM_VERSION >= 50
+                SyncScope::ID syncscope = ParseAtomicSyncScope(
+                        M, has_syncscope ? attr.string("syncscope") : NULL);
+#else
+                assert(not has_syncscope &&
+                       "cmpxchg does not support syncscope in this version of LLVM, "
+                       "please upgrade to 5.0.0 or higher");
+#endif
+                AtomicOrdering success_ordering =
+                        ParseAtomicOrdering(attr.string("success_ordering"));
+                AtomicOrdering failure_ordering =
+                        ParseAtomicOrdering(attr.string("failure_ordering"));
+                bool has_alignment = attr.hasfield("alignment");
+#if LLVM_VERSION >= 130
+                MaybeAlign alignment;
+                if (has_alignment) {
+                    alignment = MaybeAlign(attr.number("alignment"));
+                }
+#endif
+                AtomicCmpXchgInst *a =
+                        B->CreateAtomicCmpXchg(addrexp, cmpexp, newexp,
+#if LLVM_VERSION >= 130
+                                               alignment,
+#endif
+                                               success_ordering, failure_ordering
+#if LLVM_VERSION >= 50
+                                               ,
+                                               syncscope
+#endif
+                        );
+                a->setVolatile(attr.boolean("isvolatile"));
+                a->setWeak(attr.boolean("isweak"));
+                if (has_alignment) {
+#if LLVM_VERSION >= 110
+#if LLVM_VERSION < 130
+                    a->setAlignment(Align(attr.number("alignment")));
+#endif
+#else
+                    assert(false &&
+                           "cmpxchg does not support alignment in this version of "
+                           "LLVM, please upgrade to 11.0.0 or higher");
+#endif
+                }
+                Value *a_result = B->CreateExtractValue(a, ArrayRef<unsigned>(0));
+                Value *a_success = B->CreateExtractValue(a, ArrayRef<unsigned>(1));
+                Value *a_success_i8 = B->CreateZExt(a_success, B->getInt8Ty());
+                Type *elt_types[2] = {a_result->getType(), B->getInt8Ty()};
+                Type *result_type = getType(&typ)->type;
+                Value *result = UndefValue::get(result_type);
+                result = B->CreateInsertValue(result, a_result, ArrayRef<unsigned>(0));
+                result =
+                        B->CreateInsertValue(result, a_success_i8, ArrayRef<unsigned>(1));
+                return result;
+            } break;
             case T_atomicrmw: {
                 AtomicRMWInst::BinOp op = ParseAtomicBinOp(exp->string("operator"));
                 Obj addr, value, attr;

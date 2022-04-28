@@ -58,6 +58,7 @@ structdef = (luaexpression? metatype, structlist records)
 
 attr = (boolean nontemporal, number? alignment, boolean isvolatile)
 fenceattr = (string? syncscope, string ordering)
+cmpxchgattr = (string? syncscope, string success_ordering, string failure_ordering, number? alignment, boolean isvolatile, boolean isweak)
 atomicattr = (string? syncscope, string ordering, number? alignment, boolean isvolatile)
 Symbol = (Type type, string displayname, number id)
 Label = (string displayname, number id)
@@ -103,6 +104,7 @@ tree =
      | attrstore(tree address, tree value, attr attrs)
      | attrload(tree address, attr attrs)
      | fence(fenceattr attrs)
+     | cmpxchg(tree address, tree cmp, tree new, cmpxchgattr attrs)
      | atomicrmw(string operator, tree address, tree value, atomicattr attrs)
      | debuginfo(string customfilename, number customlinenumber)
      | arrayconstructor(Type? oftype,tree* expressions)
@@ -3035,6 +3037,19 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return e:copy { address = addr, value = value }:withtype(terra.types.unit)
             elseif e:is "fence" then
                 return e:copy{}:withtype(terra.types.unit)
+            elseif e:is "cmpxchg" then
+                local addr = checkexp(e.address)
+                if not addr.type:ispointer() then
+                    diag:reporterror(e,"address must be a pointer but found ",addr.type)
+                    return e:aserror()
+                end
+                if not (addr.type.type:isintegral() or addr.type.type:ispointer()) then
+                  diag:reporterror(e,"for cmpxchg address must be a pointer to an integral or pointer type, but found ", addr.type.type)
+                  return e:aserror()
+                end
+                local cmp = insertcast(checkexp(e.cmp),addr.type.type)
+                local new = insertcast(checkexp(e.new),addr.type.type)
+                return e:copy { address = addr, cmp = cmp, new = new }:withtype(terra.types.tuple(addr.type.type, bool))
             elseif e:is "atomicrmw" then
                 local addr = checkexp(e.address)
                 if not addr.type:ispointer() then
@@ -3672,6 +3687,45 @@ terra.fence = terra.internalmacro( function(diag,tree,attr)
     return typecheck(newobject(tree,T.fence,createfenceattributetable(attr)))
 end)
 
+local function createcmpxchgattributetable(q)
+    local attr = q:asvalue()
+    if type(attr) ~= "table" then
+        error("attributes must be a table, not a " .. type(attr))
+    end
+    if attr.syncscope ~= nil and type(attr.syncscope) ~= "string" then
+        error("syncscope attribute must be a number, not a " .. type(attr.syncscope))
+    end
+    if attr.success_ordering == nil then
+        error("success_ordering attribute must be specified for cmpxchg operations")
+    end
+    if type(attr.success_ordering) ~= "string" then
+        error("success_ordering attribute must be a string, not a " .. type(attr.success_ordering))
+    end
+    if attr.failure_ordering == nil then
+        error("failure_ordering attribute must be specified for cmpxchg operations")
+    end
+    if type(attr.failure_ordering) ~= "string" then
+        error("failure_ordering attribute must be a string, not a " .. type(attr.failure_ordering))
+    end
+    if attr.align ~= nil and type(attr.align) ~= "number" then
+        error("align attribute must be a number, not a " .. type(attr.align))
+    end
+    return T.cmpxchgattr(
+        attr.syncscope or nil,
+        attr.success_ordering or nil,
+        attr.failure_ordering or nil,
+        attr.align or nil,
+        attr.isvolatile and true or false,
+        attr.isweak and true or false)
+end
+
+terra.cmpxchg = terra.internalmacro( function(diag,tree,addr,cmp,new,attr)
+    if not addr or not cmp or not new or not attr then
+        error("cmpxchg requires four arguments")
+    end
+    return typecheck(newobject(tree,T.cmpxchg,addr,cmp,new,createcmpxchgattributetable(attr)))
+end)
+
 local function createatomicattributetable(q)
     local attr = q:asvalue()
     if type(attr) ~= "table" then
@@ -3823,6 +3877,9 @@ function prettystring(toptree,breaklines)
     end
     local function emitFenceAttr(a)
         emit('{ syncscope = "%s", ordering = "%s" }',a.syncscope or "",a.ordering)
+    end
+    local function emitCmpxchgAttr(a)
+        emit('{ syncscope = "%s", success_ordering = "%s", failure_ordering = "%s", align = %s, isvolatile = %s, isweak = %s }',a.syncscope or "",a.success_ordering,a.failure_ordering,a.alignment or "native",a.isvolatile,a.isweak)
     end
     local function emitAtomicAttr(a)
         emit('{ syncscope = "%s", ordering = "%s", align = %s, isvolatile = %s }',a.syncscope or "",a.ordering,a.alignment or "native",a.isvolatile)
@@ -4087,6 +4144,16 @@ function prettystring(toptree,breaklines)
         elseif e:is "fence" then
             emit("fence(")
             emitFenceAttr(e.attrs)
+            emit(")")
+        elseif e:is "cmpxchg" then
+            emit("cmpxchg(")
+            emitExp(e.address)
+            emit(", ")
+            emitExp(e.cmp)
+            emit(", ")
+            emitExp(e.new)
+            emit(", ")
+            emitCmpxchgAttr(e.attrs)
             emit(")")
         elseif e:is "atomicrmw" then
             emit("atomicrmw(")

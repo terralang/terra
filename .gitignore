@@ -1,4 +1,6 @@
 /build
+/docs/_site
+/docs/_vendor
 /install
 /release/bin
 /release/lib

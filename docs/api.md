@@ -759,14 +759,35 @@ Performs a store on the address `addr` with the value `value` and attributes `at
 
 ---
 
-    terralib.fence(fenceattrs)
+    terralib.fence(attrs)
 
 **Experimental.** Issues a fence operation. Depending on the attributes specified, prevents reordering of atomic instructions around the fence. The semantics of this operation are determined by [LLVM](https://llvm.org/docs/LangRef.html#fence-instruction).
 
-The following attributes may be specified (note that this list is **not** the same as for `attrload`):
+The following attributes may be specified (note that the list of allowed attributes is specific to each kind of atomic operation):
 
   * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
   * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
+
+---
+
+    terralib.cmpxchg(addr, cmp, new, attrs)
+
+**Experimental.** Performs an atomic compare-and-exchange (cmpxchg) operation on the address `addr`. If the value at `addr` is the same as `cmp`, writes the value `new` at the address, otherwise the value at the address is unmodified. Returns a tuple containing the original value at `addr` (regardless of whether the exchange succeeds), as well as a boolean that specifies whether the exchange succeeded or not.
+
+The following attributes may be specified (note that the list of allowed attributes is specific to each kind of atomic operation):
+
+  * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
+  * `success_ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints) that applies *if the exchange is successful*.
+  * `failure_ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints) that applies *if the exchange fails*.
+  * `align` (optional): specifies the alignment of `addr`. Note that unlike `attrload`, the value of `align` must be *greater than or equal to* the size of the contents of `addr` ([see here](https://llvm.org/docs/LangRef.html#cmpxchg-instruction)).
+  * `isvolatile` (optional): if `true`, the contents of `addr` are considered volatile.
+  * `isweak` (optional): if `true`, then spurious failure is allowed. The operation may not write even if `cmp` matches `new`.
+
+For example, the in following example code, the first `cmpxchg` fails (assuming a single thread of execution), returning `{1, false}`, while the second succeeds with `{1, true}`. The final value of `i` is `4`.
+
+    var i = 1
+    terralib.cmpxchg(&i, 2, 3, {success_ordering = "acq_rel", failure_ordering = "monotonic"})
+    terralib.cmpxchg(&i, 1, 4, {success_ordering = "acq_rel", failure_ordering = "monotonic"})
 
 ---
 
@@ -776,14 +797,14 @@ The following attributes may be specified (note that this list is **not** the sa
 
 The valid operations that can be performed are specified in the [LLVM documentation](https://llvm.org/docs/LangRef.html#atomicrmw-instruction). Note that `fadd` and `fsub` operations require floating-point types; most other operations require integer (or pointer) types. The specific set of available operations may depend on the LLVM version and target platform.
 
-The following attributes may be specified (note that this list is **not** the same as for `attrload`):
+The following attributes may be specified (note that the list of allowed attributes is specific to each kind of atomic operation):
 
   * `syncscope` (optional): an [LLVM syncscope](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints). Note that many of these values are target-specific.
   * `ordering` (**required**): an [LLVM memory ordering](https://llvm.org/docs/LangRef.html#atomic-memory-ordering-constraints).
   * `align` (optional): specifies the alignment of `addr`. Note that unlike `attrload`, the value of `align` must be *greater than or equal to* the size of the contents of `addr` ([see here](https://llvm.org/docs/LangRef.html#atomicrmw-instruction)).
   * `isvolatile` (optional): if `true`, the contents of `addr` are considered volatile.
 
-For example, the following `atomicrmw` writes `21` into `i` and returns `1` (with acquire/release consistency):
+For example, the following `atomicrmw` writes `21` into `i` and returns `1` (assuming a single thread of execution):
 
     var i = 1
     terralib.atomicrmw("add", &i, 20, {ordering = "acq_rel"})
