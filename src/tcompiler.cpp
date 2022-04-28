@@ -1816,8 +1816,13 @@ struct FunctionEmitter {
         return a;
     }
 
-    Value *emitAddressOf(Obj *exp) {
+    Value *emitAddressOf(Obj *exp, Obj *as_type=NULL) {
         Value *v = emitExp(exp, false);
+        if (as_type != NULL) {
+          Type *t = typeOfValue(as_type)->type;
+          if (t->getPointerAddressSpace() != v->getType()->getPointerAddressSpace())
+            v = B->CreateAddrSpaceCast(v, t);
+        }
         if (exp->boolean("lvalue")) return v;
         Value *addr = CreateAlloca(B, typeOfValue(exp)->type);
         B->CreateStore(v, addr);
@@ -1826,7 +1831,7 @@ struct FunctionEmitter {
 
     Value *emitUnary(Obj *exp, Obj *ao) {
         T_Kind kind = exp->kind("operator");
-        if (T_addressof == kind) return emitAddressOf(ao);
+        if (T_addressof == kind) return emitAddressOf(ao, exp);
 
         TType *t = typeOfValue(exp);
         Type *baseT = getPrimitiveType(t);
