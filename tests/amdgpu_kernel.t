@@ -90,5 +90,14 @@ terra k(y : i3p)
 end
 k:setcallingconv("amdgpu_kernel")
 
-local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g, h=h, k=k}, {}, amd_target)
+-- Address of stack variable.
+terra m(z : &int)
+  var x = 0
+  var y = &x
+  @y = 123
+  z[0] = x
+end
+m:setcallingconv("amdgpu_kernel")
+
+local ir = terralib.saveobj(nil, "llvmir", {saxpy=saxpy, f=f, g=g, h=h, k=k, m=m}, {}, amd_target)
 assert(string.match(ir, "define dso_local amdgpu_kernel void @saxpy"))
