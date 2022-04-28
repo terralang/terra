@@ -2696,8 +2696,10 @@ struct FunctionEmitter {
                        "cmpxchg does not support syncscope in this version of LLVM, "
                        "please upgrade to 5.0.0 or higher");
 #endif
-                AtomicOrdering success_ordering = ParseAtomicOrdering(attr.string("success_ordering"));
-                AtomicOrdering failure_ordering = ParseAtomicOrdering(attr.string("failure_ordering"));
+                AtomicOrdering success_ordering =
+                        ParseAtomicOrdering(attr.string("success_ordering"));
+                AtomicOrdering failure_ordering =
+                        ParseAtomicOrdering(attr.string("failure_ordering"));
                 bool has_alignment = attr.hasfield("alignment");
 #if LLVM_VERSION >= 130
                 MaybeAlign alignment;
@@ -2705,17 +2707,17 @@ struct FunctionEmitter {
                     alignment = MaybeAlign(attr.number("alignment"));
                 }
 #endif
-                AtomicCmpXchgInst *a = B->CreateAtomicCmpXchg(addrexp, cmpexp, newexp,
+                AtomicCmpXchgInst *a =
+                        B->CreateAtomicCmpXchg(addrexp, cmpexp, newexp,
 #if LLVM_VERSION >= 130
-                                                              alignment,
+                                               alignment,
 #endif
-                                                              success_ordering,
-                                                              failure_ordering
+                                               success_ordering, failure_ordering
 #if LLVM_VERSION >= 50
-                                                              ,
-                                                              syncscope
+                                               ,
+                                               syncscope
 #endif
-                );
+                        );
                 a->setVolatile(attr.boolean("isvolatile"));
                 a->setWeak(attr.boolean("isweak"));
                 if (has_alignment) {
@@ -2736,7 +2738,8 @@ struct FunctionEmitter {
                 Type *result_type = getType(&typ)->type;
                 Value *result = UndefValue::get(result_type);
                 result = B->CreateInsertValue(result, a_result, ArrayRef<unsigned>(0));
-                result = B->CreateInsertValue(result, a_success_i8, ArrayRef<unsigned>(1));
+                result =
+                        B->CreateInsertValue(result, a_success_i8, ArrayRef<unsigned>(1));
                 return result;
             } break;
             case T_atomicrmw: {
