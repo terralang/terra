@@ -1818,15 +1818,20 @@ struct FunctionEmitter {
 
     Value *emitAddressOf(Obj *exp, Obj *as_type = NULL) {
         Value *v = emitExp(exp, false);
+        // if it's not already an lvalue, root it
+        if (!exp->boolean("lvalue")) {
+            Value *addr = CreateAlloca(B, typeOfValue(exp)->type);
+            B->CreateStore(v, addr);
+            v = addr;
+        }
+
+        // make sure it has the correct addrspace (if requested)
         if (as_type != NULL) {
             Type *t = typeOfValue(as_type)->type;
             if (t->getPointerAddressSpace() != v->getType()->getPointerAddressSpace())
                 v = B->CreateAddrSpaceCast(v, t);
         }
-        if (exp->boolean("lvalue")) return v;
-        Value *addr = CreateAlloca(B, typeOfValue(exp)->type);
-        B->CreateStore(v, addr);
-        return addr;
+        return v;
     }
 
     Value *emitUnary(Obj *exp, Obj *ao) {
