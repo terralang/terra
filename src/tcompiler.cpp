@@ -1816,12 +1816,12 @@ struct FunctionEmitter {
         return a;
     }
 
-    Value *emitAddressOf(Obj *exp, Obj *as_type=NULL) {
+    Value *emitAddressOf(Obj *exp, Obj *as_type = NULL) {
         Value *v = emitExp(exp, false);
         if (as_type != NULL) {
-          Type *t = typeOfValue(as_type)->type;
-          if (t->getPointerAddressSpace() != v->getType()->getPointerAddressSpace())
-            v = B->CreateAddrSpaceCast(v, t);
+            Type *t = typeOfValue(as_type)->type;
+            if (t->getPointerAddressSpace() != v->getType()->getPointerAddressSpace())
+                v = B->CreateAddrSpaceCast(v, t);
         }
         if (exp->boolean("lvalue")) return v;
         Value *addr = CreateAlloca(B, typeOfValue(exp)->type);
