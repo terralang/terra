@@ -366,11 +366,11 @@ end
 
 function cudalib.sharedmemory(typ,N)
     local gv = terralib.global(typ[N],nil,nil,N == 0,false,3)
-    return `[&typ](cudalib.nvvm_ptr_shared_to_gen_p0i8_p3i8([terralib.types.pointer(typ,3)](&gv[0])))
+    return `(&gv[0])
 end
 local constant = {
     __toterraexpression = function(self)
-        return `[&self.type](cudalib.nvvm_ptr_constant_to_gen_p0i8_p4i8([terralib.types.pointer(self.type,4)](&[self.global][0])))
+        return `(&[self.global][0])
     end
 }
 function cudalib.isconstant(c)
