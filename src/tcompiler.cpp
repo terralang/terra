@@ -652,13 +652,18 @@ class Types {
             size_t target_id = typ->number("llvm_definingtarget");
             TerraTarget *TT = T->targets[target_id];
             assert(TT);
-            Function *df = TT->external->getFunction(name);
-            assert(df);
-            int argpos = typ->number("llvm_argumentposition");
-            StructType *st = cast<StructType>(
-                    df->getFunctionType()->getParamType(argpos)->getPointerElementType());
-            assert(st);
-            return st;
+            // Important: only use the externally defined type if is was
+            // defined in the current target
+            if (TT == CU->TT) {
+                Function *df = TT->external->getFunction(name);
+                assert(df);
+                int argpos = typ->number("llvm_argumentposition");
+                StructType *st = cast<StructType>(df->getFunctionType()
+                                                          ->getParamType(argpos)
+                                                          ->getPointerElementType());
+                assert(st);
+                return st;
+            }
         }
         std::string name = typ->asstring("name");
         bool isreserved = beginsWith(name, "struct.") || beginsWith(name, "union.");
