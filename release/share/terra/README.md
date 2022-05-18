@@ -166,7 +166,7 @@ tar xf clang-13.0.0.src.tar.xz
 mv clang-13.0.0.src llvm-13.0.0.src/tools/clang
 mkdir build install
 cd build
-cmake ../llvm-13.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
+cmake ../llvm-13.0.0.src -DCMAKE_INSTALL_PREFIX=$PWD/../install -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_TERMINFO=OFF -DLLVM_ENABLE_LIBEDIT=OFF -DLLVM_ENABLE_ZLIB=OFF -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_ENABLE_ASSERTIONS=OFF
 make install -j4 # tune this for how many cores you have
 ```
 
