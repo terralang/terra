@@ -1042,23 +1042,35 @@ struct CCallingConv {
     void addSRetAttr(FnOrCall *r, int idx, Type *ty) {
 #if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::StructRet);
-#else
+#elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+#else
+        r->addParamAttr(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #endif
+#if LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::NoAlias);
+#else
+        r->addParamAttr(idx, Attribute::NoAlias);
+#endif
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx, Type *ty) {
 #if LLVM_VERSION < 120
         r->addAttribute(idx, Attribute::ByVal);
-#else
+#elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
+#else
+        r->addParamAttr(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #endif
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
+#if LLVM_VERSION < 140
         r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
+#else
+        r->addParamAttr(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
+#endif
     }
 
     template <typename FnOrCall>
@@ -1182,7 +1194,7 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     // TODO: check that LLVM optimizes this copy away
-                    emitStoreAgg(B, p->type->type, B->CreateLoad(&*ai), v);
+                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, &*ai), v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1217,7 +1229,7 @@ struct CCallingConv {
                     result = CreateConstGEP2_32(B, result, 0, 0);
                 } while ((type = dyn_cast<StructType>(type->getElementType(0))));
             }
-            B->CreateRet(B->CreateLoad(result));
+            B->CreateRet(B->CreateLoad(type, result));
         } else {
             assert(!"unhandled return value");
         }
@@ -1234,7 +1246,7 @@ struct CCallingConv {
                                arguments);
             }
         } else {
-            arguments.push_back(B->CreateLoad(value));
+            arguments.push_back(B->CreateLoad(param_type, value));
         }
     }
 
@@ -1301,7 +1313,7 @@ struct CCallingConv {
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
-            return B->CreateLoad(aggregate);
+            return B->CreateLoad(info.returntype.type->type, aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -1996,16 +2008,16 @@ struct FunctionEmitter {
     Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(pointer, number);
+            return B->CreateGEP(pointer->getType(), pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(pointer, numNeg);
+            return B->CreateGEP(pointer->getType(), pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
         }
     }
-    Value *emitPointerSub(TType *t, Value *a, Value *b) { return B->CreatePtrDiff(a, b); }
+    Value *emitPointerSub(TType *t, Value *a, Value *b) { return B->CreatePtrDiff(t->type, a, b); }
     Value *emitBinary(Obj *exp, Obj *ao, Obj *bo) {
         TType *t = typeOfValue(exp);
         T_Kind kind = exp->kind("operator");
@@ -2306,7 +2318,8 @@ struct FunctionEmitter {
             Obj type;
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
-            raw = B->CreateLoad(raw);
+            Type *ttype = getType(&type)->type;
+            raw = B->CreateLoad(ttype, raw);
         }
         return raw;
     }
@@ -2415,8 +2428,8 @@ struct FunctionEmitter {
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
-                    Value *result = B->CreateGEP(valueExp, idxExp);
-                    if (!exp->boolean("lvalue")) result = B->CreateLoad(result);
+                    Value *result = B->CreateGEP(aggType->type, valueExp, idxExp);
+                    if (!exp->boolean("lvalue")) result = B->CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
                     return result;
                 }
             } break;
@@ -2528,7 +2541,7 @@ struct FunctionEmitter {
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(output);
+                return B->CreateLoad(toT->type, output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2578,7 +2591,8 @@ struct FunctionEmitter {
 
                 Value *v = emitAddressOf(&obj);
                 Value *result = emitStructSelect(&typ, v, offset);
-                if (!exp->boolean("lvalue")) result = B->CreateLoad(result);
+                Type *ttype = getType(&typ)->type;
+                if (!exp->boolean("lvalue")) result = B->CreateLoad(ttype, result);
                 return result;
             } break;
             case T_constructor:
@@ -2626,7 +2640,9 @@ struct FunctionEmitter {
                 exp->obj("address", &addr);
                 exp->obj("attrs", &attr);
                 Ty->EnsureTypeIsComplete(&type);
-                LoadInst *l = B->CreateLoad(emitExp(&addr));
+                Type *ttype = getType(&type)->type;
+                Value *v = emitExp(&addr);
+                LoadInst *l = B->CreateLoad(ttype, v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
@@ -3039,14 +3055,15 @@ struct FunctionEmitter {
         }
     }
     Value *emitConstructor(Obj *exp, Obj *expressions) {
-        Value *result = CreateAlloca(B, typeOfValue(exp)->type);
+        Type *ttype = typeOfValue(exp)->type;
+        Value *result = CreateAlloca(B, ttype);
         std::vector<Value *> values;
         emitExpressionList(expressions, true, &values);
         for (size_t i = 0; i < values.size(); i++) {
             Value *addr = CreateConstGEP2_32(B, result, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(result);
+        return B->CreateLoad(ttype, result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3233,7 +3250,7 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(vp);
+                Value *v = B->CreateLoad(t->type, vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
