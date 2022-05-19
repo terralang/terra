@@ -1198,7 +1198,11 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     // TODO: check that LLVM optimizes this copy away
-                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, &*ai), v);
+                    emitStoreAgg(B, p->type->type, B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                                                 p->type->type,
+#endif
+                                                                 &*ai), v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1235,7 +1239,11 @@ struct CCallingConv {
                     result_type = type->getElementType(0);
                 } while ((type = dyn_cast<StructType>(result_type)));
             }
-            B->CreateRet(B->CreateLoad(result_type, result));
+            B->CreateRet(B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                       result_type,
+#endif
+                                       result));
         } else {
             assert(!"unhandled return value");
         }
@@ -1252,7 +1260,11 @@ struct CCallingConv {
                                arguments);
             }
         } else {
-            arguments.push_back(B->CreateLoad(value->getType()->getPointerElementType(), value));
+            arguments.push_back(B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                              value->getType()->getPointerElementType(),
+#endif
+                                              value));
         }
     }
 
@@ -1319,7 +1331,11 @@ struct CCallingConv {
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
-            return B->CreateLoad(aggregate->getType()->getPointerElementType(), aggregate);
+            return B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                 aggregate->getType()->getPointerElementType(),
+#endif
+                                 aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -2014,17 +2030,29 @@ struct FunctionEmitter {
     Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer, number);
+            return B->CreateGEP(
+#if LLVM_VERSION >= 140
+                                pointer->getType()->getPointerElementType(),
+#endif
+                                pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer, numNeg);
+            return B->CreateGEP(
+#if LLVM_VERSION >= 140
+                                pointer->getType()->getPointerElementType(),
+#endif
+                                pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
         }
     }
     Value *emitPointerSub(TType *t, Value *a, Value *b) {
-        return B->CreatePtrDiff(a->getType()->getPointerElementType(), a, b);
+        return B->CreatePtrDiff(
+#if LLVM_VERSION >= 140
+                                a->getType()->getPointerElementType(),
+#endif
+                                a, b);
     }
     Value *emitBinary(Obj *exp, Obj *ao, Obj *bo) {
         TType *t = typeOfValue(exp);
@@ -2327,7 +2355,11 @@ struct FunctionEmitter {
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
-            raw = B->CreateLoad(raw->getType()->getPointerElementType(), raw);
+            raw = B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                raw->getType()->getPointerElementType(),
+#endif
+                                raw);
         }
         return raw;
     }
@@ -2436,8 +2468,16 @@ struct FunctionEmitter {
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
-                    Value *result = B->CreateGEP(valueExp->getType()->getPointerElementType(), valueExp, idxExp);
-                    if (!exp->boolean("lvalue")) result = B->CreateLoad(result->getType()->getPointerElementType(), result);
+                    Value *result = B->CreateGEP(
+#if LLVM_VERSION >= 140
+                                                 valueExp->getType()->getPointerElementType(),
+#endif
+                                                 valueExp, idxExp);
+                    if (!exp->boolean("lvalue")) result = B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                                                        result->getType()->getPointerElementType(),
+#endif
+                                                                        result);
                     return result;
                 }
             } break;
@@ -2549,7 +2589,11 @@ struct FunctionEmitter {
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(output->getType()->getPointerElementType(), output);
+                return B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                     output->getType()->getPointerElementType(),
+#endif
+                                     output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2600,7 +2644,11 @@ struct FunctionEmitter {
                 Value *v = emitAddressOf(&obj);
                 Value *result = emitStructSelect(&typ, v, offset);
                 Type *ttype = getType(&typ)->type;
-                if (!exp->boolean("lvalue")) result = B->CreateLoad(result->getType()->getPointerElementType(), result);
+                if (!exp->boolean("lvalue")) result = B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                                                    result->getType()->getPointerElementType(),
+#endif
+                                                                    result);
                 return result;
             } break;
             case T_constructor:
@@ -2650,7 +2698,11 @@ struct FunctionEmitter {
                 Ty->EnsureTypeIsComplete(&type);
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
-                LoadInst *l = B->CreateLoad(v->getType()->getPointerElementType(), v);
+                LoadInst *l = B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                            v->getType()->getPointerElementType(),
+#endif
+                                            v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
@@ -3071,7 +3123,11 @@ struct FunctionEmitter {
             Value *addr = CreateConstGEP2_32(B, result, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(result->getType()->getPointerElementType(), result);
+        return B->CreateLoad(
+#if LLVM_VERSION >= 140
+                             result->getType()->getPointerElementType(),
+#endif
+                             result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3258,7 +3314,11 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(vp->getType()->getPointerElementType(), vp);
+                Value *v = B->CreateLoad(
+#if LLVM_VERSION >= 140
+                                         vp->getType()->getPointerElementType(),
+#endif
+                                         vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
