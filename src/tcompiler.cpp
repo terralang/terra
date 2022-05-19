@@ -1045,12 +1045,12 @@ struct CCallingConv {
 #elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #else
-        r->addParamAttr(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+        r->addParamAttr(idx-1, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #endif
 #if LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::NoAlias);
 #else
-        r->addParamAttr(idx, Attribute::NoAlias);
+        r->addParamAttr(idx-1, Attribute::NoAlias);
 #endif
     }
     template <typename FnOrCall>
@@ -1060,22 +1060,26 @@ struct CCallingConv {
 #elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #else
-        r->addParamAttr(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
+        r->addParamAttr(idx-1, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #endif
     }
     template <typename FnOrCall>
-    void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx) {
+    void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value=false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
 #if LLVM_VERSION < 140
         r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
 #else
-        r->addParamAttr(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
+        if (return_value) {
+          r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
+        } else {
+          r->addParamAttr(idx-1, t->issigned ? Attribute::SExt : Attribute::ZExt);
+        }
 #endif
     }
 
     template <typename FnOrCall>
     void AttributeFnOrCall(FnOrCall *r, Classification *info) {
-        addExtAttrIfNeeded(info->returntype.type, r, 0);
+        addExtAttrIfNeeded(info->returntype.type, r, 0, true);
         int argidx = 1;
         if (info->returntype.kind == C_AGGREGATE_MEM) {
             addSRetAttr(r, argidx, info->returntype.cctype);
@@ -1224,12 +1228,14 @@ struct CCallingConv {
             emitStoreAgg(B, info->returntype.type->type, result, dest);
             StructType *type = cast<StructType>(info->returntype.cctype);
             Value *result = B->CreateBitCast(dest, Ptr(type, as));
+            Type *result_type = type;
             if (info->returntype.GetNumberOfTypesInParamList() == 1) {
                 do {
                     result = CreateConstGEP2_32(B, result, 0, 0);
-                } while ((type = dyn_cast<StructType>(type->getElementType(0))));
+                    result_type = type->getElementType(0);
+                } while ((type = dyn_cast<StructType>(result_type)));
             }
-            B->CreateRet(B->CreateLoad(type, result));
+            B->CreateRet(B->CreateLoad(result_type, result));
         } else {
             assert(!"unhandled return value");
         }
@@ -2008,10 +2014,10 @@ struct FunctionEmitter {
     Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(pointer->getType(), pointer, number);
+            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(pointer->getType(), pointer, numNeg);
+            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
@@ -2191,8 +2197,7 @@ struct FunctionEmitter {
     }
     Value *emitStructSelect(Obj *structType, Value *structPtr, int index) {
         assert(structPtr->getType()->isPointerTy());
-        PointerType *objTy = cast<PointerType>(structPtr->getType());
-        assert(objTy->getElementType()->isStructTy());
+        assert(structPtr->getType()->getPointerElementType()->isStructTy());
         Ty->EnsureTypeIsComplete(structType);
 
         Obj layout;
@@ -2428,8 +2433,8 @@ struct FunctionEmitter {
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
-                    Value *result = B->CreateGEP(aggType->type, valueExp, idxExp);
-                    if (!exp->boolean("lvalue")) result = B->CreateLoad(cast<PointerType>(result->getType())->getElementType(), result);
+                    Value *result = B->CreateGEP(valueExp->getType()->getPointerElementType(), valueExp, idxExp);
+                    if (!exp->boolean("lvalue")) result = B->CreateLoad(result->getType()->getPointerElementType(), result);
                     return result;
                 }
             } break;
