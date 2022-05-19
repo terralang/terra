@@ -2023,7 +2023,9 @@ struct FunctionEmitter {
             return NULL;
         }
     }
-    Value *emitPointerSub(TType *t, Value *a, Value *b) { return B->CreatePtrDiff(t->type, a, b); }
+    Value *emitPointerSub(TType *t, Value *a, Value *b) {
+        return B->CreatePtrDiff(a->getType()->getPointerElementType(), a, b);
+    }
     Value *emitBinary(Obj *exp, Obj *ao, Obj *bo) {
         TType *t = typeOfValue(exp);
         T_Kind kind = exp->kind("operator");
