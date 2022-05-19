@@ -197,7 +197,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '6.0', '12']
+        llvm: ['3.8', '6.0', '12', '14']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
@@ -213,6 +213,12 @@ jobs:
             llvm: '12'
           - distro: 'ubuntu-20.04'
             llvm: '12'
+          - distro: 'ubuntu-16.04'
+            llvm: '14'
+          - distro: 'ubuntu-18.04'
+            llvm: '14'
+          - distro: 'ubuntu-20.04'
+            llvm: '14'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
