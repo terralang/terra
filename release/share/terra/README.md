@@ -143,6 +143,7 @@ The current recommended version of LLVM is **13.0**. The following versions are 
 | 11.0 | :heavy_check_mark: | :heavy_check_mark: | |
 | 12.0 | :heavy_check_mark: | :heavy_check_mark: | |
 | 13.0 | :heavy_check_mark: | :heavy_check_mark: | |
+| 14.0 | :heavy_check_mark: | :heavy_check_mark: | |
 
 The following versions were previously supported by Terra:
 
