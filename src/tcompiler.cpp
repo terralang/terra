@@ -2057,6 +2057,7 @@ struct FunctionEmitter {
         if (at->type->isPointerTy() && (kind == T_add || kind == T_sub)) {
             Ty->EnsurePointsToCompleteType(&aot);
             if (bt->type->isPointerTy()) {
+                assert(kind == T_sub);
                 return emitPointerSub(t, a, b);
             } else {
                 assert(bt->type->isIntegerTy());
