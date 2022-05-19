@@ -1252,7 +1252,7 @@ struct CCallingConv {
                                arguments);
             }
         } else {
-            arguments.push_back(B->CreateLoad(param_type, value));
+            arguments.push_back(B->CreateLoad(value->getType()->getPointerElementType(), value));
         }
     }
 
@@ -1319,7 +1319,7 @@ struct CCallingConv {
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             }
-            return B->CreateLoad(info.returntype.type->type, aggregate);
+            return B->CreateLoad(aggregate->getType()->getPointerElementType(), aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -2324,7 +2324,7 @@ struct FunctionEmitter {
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
-            raw = B->CreateLoad(ttype, raw);
+            raw = B->CreateLoad(raw->getType()->getPointerElementType(), raw);
         }
         return raw;
     }
@@ -2546,7 +2546,7 @@ struct FunctionEmitter {
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(toT->type, output);
+                return B->CreateLoad(output->getType()->getPointerElementType(), output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2597,7 +2597,7 @@ struct FunctionEmitter {
                 Value *v = emitAddressOf(&obj);
                 Value *result = emitStructSelect(&typ, v, offset);
                 Type *ttype = getType(&typ)->type;
-                if (!exp->boolean("lvalue")) result = B->CreateLoad(ttype, result);
+                if (!exp->boolean("lvalue")) result = B->CreateLoad(result->getType()->getPointerElementType(), result);
                 return result;
             } break;
             case T_constructor:
@@ -2647,7 +2647,7 @@ struct FunctionEmitter {
                 Ty->EnsureTypeIsComplete(&type);
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
-                LoadInst *l = B->CreateLoad(ttype, v);
+                LoadInst *l = B->CreateLoad(v->getType()->getPointerElementType(), v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
@@ -3068,7 +3068,7 @@ struct FunctionEmitter {
             Value *addr = CreateConstGEP2_32(B, result, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(ttype, result);
+        return B->CreateLoad(result->getType()->getPointerElementType(), result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3255,7 +3255,7 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(t->type, vp);
+                Value *v = B->CreateLoad(vp->getType()->getPointerElementType(), vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
