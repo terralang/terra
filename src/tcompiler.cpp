@@ -1045,12 +1045,12 @@ struct CCallingConv {
 #elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #else
-        r->addParamAttr(idx-1, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+        r->addParamAttr(idx - 1, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #endif
 #if LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::NoAlias);
 #else
-        r->addParamAttr(idx-1, Attribute::NoAlias);
+        r->addParamAttr(idx - 1, Attribute::NoAlias);
 #endif
     }
     template <typename FnOrCall>
@@ -1060,19 +1060,19 @@ struct CCallingConv {
 #elif LLVM_VERSION < 140
         r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #else
-        r->addParamAttr(idx-1, Attribute::getWithByValType(*CU->TT->ctx, ty));
+        r->addParamAttr(idx - 1, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #endif
     }
     template <typename FnOrCall>
-    void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value=false) {
+    void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
 #if LLVM_VERSION < 140
         r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
 #else
         if (return_value) {
-          r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
+            r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
         } else {
-          r->addParamAttr(idx-1, t->issigned ? Attribute::SExt : Attribute::ZExt);
+            r->addParamAttr(idx - 1, t->issigned ? Attribute::SExt : Attribute::ZExt);
         }
 #endif
     }
@@ -1198,11 +1198,13 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     // TODO: check that LLVM optimizes this copy away
-                    emitStoreAgg(B, p->type->type, B->CreateLoad(
+                    emitStoreAgg(B, p->type->type,
+                                 B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                                                 p->type->type,
+                                         p->type->type,
 #endif
-                                                                 &*ai), v);
+                                         &*ai),
+                                 v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1241,9 +1243,9 @@ struct CCallingConv {
             }
             B->CreateRet(B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                       result_type,
+                    result_type,
 #endif
-                                       result));
+                    result));
         } else {
             assert(!"unhandled return value");
         }
@@ -1262,9 +1264,9 @@ struct CCallingConv {
         } else {
             arguments.push_back(B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                              value->getType()->getPointerElementType(),
+                    value->getType()->getPointerElementType(),
 #endif
-                                              value));
+                    value));
         }
     }
 
@@ -1333,9 +1335,9 @@ struct CCallingConv {
             }
             return B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                 aggregate->getType()->getPointerElementType(),
+                    aggregate->getType()->getPointerElementType(),
 #endif
-                                 aggregate);
+                    aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -2032,16 +2034,16 @@ struct FunctionEmitter {
         if (kind == T_add) {
             return B->CreateGEP(
 #if LLVM_VERSION >= 140
-                                pointer->getType()->getPointerElementType(),
+                    pointer->getType()->getPointerElementType(),
 #endif
-                                pointer, number);
+                    pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
             return B->CreateGEP(
 #if LLVM_VERSION >= 140
-                                pointer->getType()->getPointerElementType(),
+                    pointer->getType()->getPointerElementType(),
 #endif
-                                pointer, numNeg);
+                    pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
@@ -2050,9 +2052,9 @@ struct FunctionEmitter {
     Value *emitPointerSub(TType *t, Value *a, Value *b) {
         return B->CreatePtrDiff(
 #if LLVM_VERSION >= 140
-                                a->getType()->getPointerElementType(),
+                a->getType()->getPointerElementType(),
 #endif
-                                a, b);
+                a, b);
     }
     Value *emitBinary(Obj *exp, Obj *ao, Obj *bo) {
         TType *t = typeOfValue(exp);
@@ -2357,9 +2359,9 @@ struct FunctionEmitter {
             Type *ttype = getType(&type)->type;
             raw = B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                raw->getType()->getPointerElementType(),
+                    raw->getType()->getPointerElementType(),
 #endif
-                                raw);
+                    raw);
         }
         return raw;
     }
@@ -2470,14 +2472,15 @@ struct FunctionEmitter {
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
                     Value *result = B->CreateGEP(
 #if LLVM_VERSION >= 140
-                                                 valueExp->getType()->getPointerElementType(),
+                            valueExp->getType()->getPointerElementType(),
 #endif
-                                                 valueExp, idxExp);
-                    if (!exp->boolean("lvalue")) result = B->CreateLoad(
+                            valueExp, idxExp);
+                    if (!exp->boolean("lvalue"))
+                        result = B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                                                        result->getType()->getPointerElementType(),
+                                result->getType()->getPointerElementType(),
 #endif
-                                                                        result);
+                                result);
                     return result;
                 }
             } break;
@@ -2591,9 +2594,9 @@ struct FunctionEmitter {
                 }
                 return B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                     output->getType()->getPointerElementType(),
+                        output->getType()->getPointerElementType(),
 #endif
-                                     output);
+                        output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2644,11 +2647,12 @@ struct FunctionEmitter {
                 Value *v = emitAddressOf(&obj);
                 Value *result = emitStructSelect(&typ, v, offset);
                 Type *ttype = getType(&typ)->type;
-                if (!exp->boolean("lvalue")) result = B->CreateLoad(
+                if (!exp->boolean("lvalue"))
+                    result = B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                                                    result->getType()->getPointerElementType(),
+                            result->getType()->getPointerElementType(),
 #endif
-                                                                    result);
+                            result);
                 return result;
             } break;
             case T_constructor:
@@ -2700,9 +2704,9 @@ struct FunctionEmitter {
                 Value *v = emitExp(&addr);
                 LoadInst *l = B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                            v->getType()->getPointerElementType(),
+                        v->getType()->getPointerElementType(),
 #endif
-                                            v);
+                        v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
 #if LLVM_VERSION <= 90
@@ -3125,9 +3129,9 @@ struct FunctionEmitter {
         }
         return B->CreateLoad(
 #if LLVM_VERSION >= 140
-                             result->getType()->getPointerElementType(),
+                result->getType()->getPointerElementType(),
 #endif
-                             result);
+                result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3316,9 +3320,9 @@ struct FunctionEmitter {
                 setInsertBlock(cond);
                 Value *v = B->CreateLoad(
 #if LLVM_VERSION >= 140
-                                         vp->getType()->getPointerElementType(),
+                        vp->getType()->getPointerElementType(),
 #endif
-                                         vp);
+                        vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
