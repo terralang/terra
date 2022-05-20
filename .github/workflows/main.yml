@@ -63,7 +63,7 @@ jobs:
           - os: 'macos-10.15'
             llvm: '10'
 
-          # Windows: exclude LLVM 5.0-10,12-13, make
+          # Windows: exclude LLVM 5.0-10,12-14, make
           - os: 'windows-2022'
             llvm: '5.0'
           - os: 'windows-2022'
@@ -80,6 +80,8 @@ jobs:
             llvm: '12'
           - os: 'windows-2022'
             llvm: '13'
+          - os: 'windows-2022'
+            llvm: '14'
           - os: 'windows-2022'
             cmake: '0'
 
