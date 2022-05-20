@@ -112,13 +112,13 @@ If the binary releases are not appropriate, then you can also build Terra from s
 On recent versions of Ubuntu, you can get these dependencies with:
 
 ```
-sudo apt-get install build-essential cmake git llvm-6.0-dev libclang-6.0-dev clang-6.0 libedit-dev libncurses5-dev zlib1g-dev
+sudo apt-get install build-essential cmake git llvm-11-dev libclang-11-dev clang-11 libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
 ```
 
 On macOS with Homebrew, the following should be sufficient:
 
 ```
-brew install cmake llvm@6
+brew install cmake llvm@11
 ```
 
 Terra also supports an older build system based on GNU Make (for Linux
