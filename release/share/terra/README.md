@@ -128,22 +128,22 @@ more flexible.
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **13.0**. The following versions are also supported:
+The current recommended version of LLVM is **13**. The following versions are also supported:
 
-| Version | CI Coverage | CUDA | Notes |
-| ------- | ----------- | ---- | ----- |
-| 3.8 | :heavy_check_mark: | :heavy_check_mark: | |
-| 3.9 | | | |
-| 5.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 6.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 7.0 | :heavy_check_mark: | :heavy_check_mark: | requires CMake |
-| 8.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 9.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 10.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 11.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 12.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 13.0 | :heavy_check_mark: | :heavy_check_mark: | |
-| 14.0 | :heavy_check_mark: | :heavy_check_mark: | |
+| Version | Linux | macOS | Windows | CUDA | AMD GPU \* | Notes |
+| ------- | ----- | ----- | ------- | ---- | ---------- | ----- |
+| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | |
+| 5 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| 6 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| 7 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | requires CMake |
+| 8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 9 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 10 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| 12 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 13 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
+| 14 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
 
 The following versions were previously supported by Terra:
 
@@ -152,6 +152,8 @@ The following versions were previously supported by Terra:
 | 3.5 | 1.0.0-beta3 |
 | 3.6 | 1.0.0-beta3 |
 | 3.7 | 1.0.0-beta3 |
+
+\* Please note that AMD GPU support is currently experimental.
 
 ### Instructions for Building LLVM from Source
 
