@@ -36,6 +36,7 @@ The following changes are included in this release:
 ## Deprecated features
 
   * Deprecated support for Make (Linux, macOS) build system
+  * Deprecated support for LLVM 3.8, 3.9 and 5
 
 ## Removed features
 

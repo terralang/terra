@@ -132,9 +132,9 @@ The current recommended version of LLVM is **13**. The following versions are al
 
 | Version | Linux | macOS | Windows | CUDA | AMD GPU \* | Notes |
 | ------- | ----- | ----- | ------- | ---- | ---------- | ----- |
-| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | |
-| 5 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
+| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | [deprecated](https://github.com/terralang/terra/issues/471) |
+| 5 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
 | 6 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
 | 7 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | requires CMake |
 | 8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
