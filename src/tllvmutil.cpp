@@ -279,7 +279,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
             GlobalVariable *newGV = dest->getGlobalVariable(GV->getName(), true);
             if (!newGV || needsFreshlyNamedConstant(GV, newGV)) {
                 newGV = new GlobalVariable(
-                        *dest, GV->getType()->getElementType(), GV->isConstant(),
+                        *dest, GV->getType()->getPointerElementType(), GV->isConstant(),
                         GV->getLinkage(), NULL, GV->getName(), NULL,
                         GlobalVariable::NotThreadLocal, GV->getType()->getAddressSpace());
                 newGV->copyAttributesFrom(GV);

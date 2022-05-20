@@ -10,7 +10,7 @@ The following changes are included in this release:
 
 ## Added features
 
-  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11, 12 and 13
+  * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11, 12, 13 and 14
   * Support for CUDA 9, 10 and 11
   * Support for Visual Studio 2015, 2017, 2019 and 2022 on Windows
   * New CMake-based build system replaces Make/NMake on all platforms
@@ -30,7 +30,7 @@ The following changes are included in this release:
   * Added `terralib.atomicrmw` to support atomic read-modify-write operations
   * Added `terralib.fence` to support fence operations
   * Added `switch` statement
-  * Added support for AMD GPU code generation (with LLVM 13)
+  * Added support for AMD GPU code generation (with LLVM 13 and up)
   * Added support for Nix derivation, and merged upstream into NixOS
 
 ## Deprecated features

@@ -23,7 +23,11 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
+#if LLVM_VERSION >= 140
+#include "llvm/MC/TargetRegistry.h"
+#else
 #include "llvm/Support/TargetRegistry.h"
+#endif
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Transforms/Utils/Cloning.h"
@@ -44,33 +48,35 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm-c/Linker.h"
 
-#if LLVM_VERSION == 38
+#if LLVM_VERSION < 39
 #include "llvmheaders_38.h"
-#elif LLVM_VERSION == 39
+#elif LLVM_VERSION < 40
 #include "llvmheaders_39.h"
-#elif LLVM_VERSION == 50
+#elif LLVM_VERSION < 60
 #include "llvmheaders_50.h"
-#elif LLVM_VERSION == 60
+#elif LLVM_VERSION < 70
 #include "llvmheaders_60.h"
-#elif LLVM_VERSION >= 70 && LLVM_VERSION < 80
+#elif LLVM_VERSION < 80
 #include "llvmheaders_70.h"
-#elif LLVM_VERSION == 80
+#elif LLVM_VERSION < 90
 #include "llvmheaders_80.h"
-#elif LLVM_VERSION == 90
+#elif LLVM_VERSION < 100
 #include "llvmheaders_90.h"
-#elif LLVM_VERSION == 100
+#elif LLVM_VERSION < 110
 #include "llvmheaders_100.h"
-#elif LLVM_VERSION >= 110 && LLVM_VERSION < 120
+#elif LLVM_VERSION < 120
 #include "llvmheaders_110.h"
-#elif LLVM_VERSION == 120
+#elif LLVM_VERSION < 130
 #include "llvmheaders_120.h"
-#elif LLVM_VERSION == 130
+#elif LLVM_VERSION < 140
 #include "llvmheaders_130.h"
+#elif LLVM_VERSION < 150
+#include "llvmheaders_140.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 100
-#include "llvmheaders_100.h"
+#define LLVM_VERSION 130
+#include "llvmheaders_130.h"
 #endif
 
 #define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))

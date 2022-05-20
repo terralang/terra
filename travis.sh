@@ -20,7 +20,13 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
 fi
 
 if [[ -n $DOCKER_BUILD ]]; then
-    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $( [[ $DOCKER_LLVM = "3.8" ]] && echo upstream )
+    variant=
+    if [[ $DOCKER_LLVM = "3.8" ]]; then
+        variant=upstream
+    elif [[ $DOCKER_LLVM = *"."*"."* ]]; then
+        variant=prebuilt
+    fi
+    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $variant
     exit 0
 fi
 
@@ -83,7 +89,13 @@ if [[ $(uname) = Linux ]]; then
 fi
 
 if [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-14.0.0-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-14.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-14
+    ln -s clang+llvm-14.0.0-x86_64-apple-darwin/bin/clang clang-14
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.0-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-13 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.0/clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-13.0.0-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-13.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-13
@@ -157,7 +169,11 @@ if [[ $(uname) = Darwin ]]; then
 fi
 
 if [[ $(uname) = MINGW* ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-x86_64-windows-msvc17.7z
+    7z x -y clang+llvm-14.0.0-x86_64-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.0-x86_64-windows-msvc17
+  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-11.1.0-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.1.0-x86_64-windows-msvc17
