@@ -20,7 +20,13 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
 fi
 
 if [[ -n $DOCKER_BUILD ]]; then
-    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $( [[ $DOCKER_LLVM = "3.8" || $DOCKER_LLVM = "14" ]] && echo upstream )
+    variant=
+    if [[ $DOCKER_LLVM = "3.8" ]]; then
+        variant=upstream
+    elif [[ $DOCKER_LLVM = *"."*"."* ]]; then
+        variant=prebuilt
+    fi
+    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $variant
     exit 0
 fi
 

@@ -16,18 +16,20 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14']
         cmake: ['0', '1']
         cuda: ['0', '1']
         static: ['0', '1']
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 13
+          # Linux: exclude LLVM 13-14
           - os: 'ubuntu-18.04'
             llvm: '13'
+          - os: 'ubuntu-18.04'
+            llvm: '14'
 
-          # macOS: exclude LLVM 5.0, 8-13 make, cuda/no-static/no-slib
+          # macOS: exclude LLVM 5.0, 8-14 make, cuda/no-static/no-slib
           - os: 'macos-10.15'
             llvm: '5.0'
           - os: 'macos-10.15'
@@ -47,6 +49,9 @@ jobs:
             cmake: '0'
           - os: 'macos-10.15'
             llvm: '13'
+            cmake: '0'
+          - os: 'macos-10.15'
+            llvm: '14'
             cmake: '0'
           - os: 'macos-10.15'
             cuda: '1'
@@ -117,6 +122,8 @@ jobs:
             cuda: '1'
           - llvm: '13'
             cuda: '1'
+          - llvm: '14'
+            cuda: '1'
 
           # no-static: only LLVM 9
           - llvm: '5.0'
@@ -134,6 +141,8 @@ jobs:
           - llvm: '12'
             static: '0'
           - llvm: '13'
+            static: '0'
+          - llvm: '14'
             static: '0'
 
           # no-slib: only LLVM 9
@@ -153,6 +162,8 @@ jobs:
             slib: '0'
           - llvm: '13'
             slib: '0'
+          - llvm: '14'
+            slib: '0'
 
           # Moonjit: only LLVM 9
           - llvm: '5.0'
@@ -170,6 +181,8 @@ jobs:
           - llvm: '12'
             lua: 'moonjit'
           - llvm: '13'
+            lua: 'moonjit'
+          - llvm: '14'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
@@ -197,7 +210,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '6.0', '12', '14']
+        llvm: ['3.8', '6.0', '12', '14.0.0']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
@@ -214,11 +227,11 @@ jobs:
           - distro: 'ubuntu-20.04'
             llvm: '12'
           - distro: 'ubuntu-16.04'
-            llvm: '14'
+            llvm: '14.0.0'
           - distro: 'ubuntu-18.04'
-            llvm: '14'
+            llvm: '14.0.0'
           - distro: 'ubuntu-20.04'
-            llvm: '14'
+            llvm: '14.0.0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
