@@ -610,7 +610,7 @@ You can construct statically sized arrays as well:
     var a : int[4]
     a[0],a[1],a[2],a[3] = 0,1,2,3
 
-In constrast to Lua, Terra uses 0-based indexing since everything is based on offsets. `&int[3]` is a pointer to an array of length 3. `(&int)[3]` is an array of three pointers to integers.
+In contrast to Lua, Terra uses 0-based indexing since everything is based on offsets. `&int[3]` is a pointer to an array of length 3. `(&int)[3]` is an array of three pointers to integers.
 
 The function `array` will construct an array from a variable number of arguments:
 
