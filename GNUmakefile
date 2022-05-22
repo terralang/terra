@@ -36,7 +36,7 @@ ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 UNAME := $(shell uname)
 
 
-PKG_CONFIG = $(shell which pkg-config false)
+PKG_CONFIG = $(shell which pkg-config false | head -1)
 
 AR = ar
 LD = ld
