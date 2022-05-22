@@ -7,7 +7,7 @@
 -include Makefile.inc
 
 # Debian packages name llvm-config with a version number - list them here in preference order
-LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config | head -1)
+LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config14 llvm-config13 llvm-config true | head -1)
 #luajit will be downloaded automatically (it's much smaller than llvm)
 #to override this, set LUAJIT_PREFIX to the home of an already installed luajit
 LUAJIT_PREFIX ?= build
@@ -23,7 +23,7 @@ LLVM_PREFIX = $(shell $(LLVM_CONFIG) --prefix)
 #if clang is not installed in the same prefix as llvm
 #then use the clang in the caller's path
 ifeq ($(wildcard $(LLVM_PREFIX)/bin/clang),)
-CLANG_PREFIX ?= $(dir $(CLANG))..
+CLANG_PREFIX ?= $(dir $(shell $(CLANG) --version |awk '$$1 == "InstalledDir:" { print$$2 }'))
 else
 CLANG_PREFIX ?= $(LLVM_PREFIX)
 endif
@@ -35,6 +35,8 @@ ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 .SECONDARY:
 UNAME := $(shell uname)
 
+
+PKG_CONFIG = $(shell command -v pkg-config)
 
 AR = ar
 LD = ld
@@ -149,7 +151,25 @@ ifeq ($(UNAME), FreeBSD)
 SUPPORT_LIBRARY_FLAGS += -lexecinfo -pthread
 endif
 
-SUPPORT_LIBRARY_FLAGS += -lffi -ledit -lxml2
+LIBFFI_LIBS = $(shell $(PKG_CONFIG) --libs libffi)
+FLAGS += $(shell $(PKG_CONFIG) --cflags libffi)
+ifeq ($(LIBFFI_LIBS),)
+$(error libffi is not installed)
+endif
+
+LIBXML20_LIBS = $(shell $(PKG_CONFIG) --libs libxml-2.0)
+FLAGS += $(shell $(PKG_CONFIG) --cflags libxml-2.0)
+ifeq ($(LIBXML20_LIBS),)
+$(error libxml-2.0 is not installed)
+endif
+
+LIBEDIT_LIBS = $(shell $(PKG_CONFIG) --libs libedit)
+FLAGS += $(shell $(PKG_CONFIG) --cflags libedit)
+ifeq ($(LIBEDIT_LIBS),)
+$(error libedit is not installed)
+endif
+
+SUPPORT_LIBRARY_FLAGS += $(LIBFFI_LIBS) $(LIBXML20_LIBS) $(LIBEDIT_LIBS)
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
