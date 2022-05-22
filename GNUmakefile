@@ -7,13 +7,13 @@
 -include Makefile.inc
 
 # Debian packages name llvm-config with a version number - list them here in preference order
-LLVM_CONFIG ?= $(shell which llvm-config-3.5 llvm-config14 llvm-config13 llvm-config true | head -1)
+LLVM_CONFIG ?= $(shell which llvm-config13 llvm-config14 llvm-config false | head -1)
 #luajit will be downloaded automatically (it's much smaller than llvm)
 #to override this, set LUAJIT_PREFIX to the home of an already installed luajit
 LUAJIT_PREFIX ?= build
 
 # same with clang
-CLANG ?= $(shell which clang-3.5 clang | head -1)
+CLANG ?= $(shell which clang-3.5 clang false | head -1)
 
 CXX ?= $(CLANG)++
 CC ?= $(CLANG)
@@ -36,7 +36,7 @@ ENABLE_CUDA ?= $(shell test -e $(CUDA_HOME) && echo 1 || echo 0)
 UNAME := $(shell uname)
 
 
-PKG_CONFIG = $(shell command -v pkg-config)
+PKG_CONFIG = $(shell which pkg-config false)
 
 AR = ar
 LD = ld
