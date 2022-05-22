@@ -130,7 +130,7 @@ if(WIN32)
     )
   endforeach()
 else()
-  find_program(MAKE_EXE gmake make)
+  find_program(MAKE_EXE NAMES gmake make)
 
   add_custom_command(
     OUTPUT ${LUAJIT_STATIC_LIBRARY} ${LUAJIT_SHARED_LIBRARY_PATHS} ${LUAJIT_EXECUTABLE} ${LUAJIT_INSTALL_HEADERS}
