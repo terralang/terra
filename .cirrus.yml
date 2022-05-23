@@ -1,0 +1,22 @@
+task:
+  name: FreeBSD
+  freebsd_instance:
+    matrix:
+      image_family: freebsd-13-1
+      # image_family: freebsd-12-3
+  env:
+    matrix:
+      LLVM_VERSION: 11
+      LLVM_VERSION: 12
+      LLVM_VERSION: 13
+      LLVM_VERSION: 14
+    matrix:
+      # USE_CMAKE: 0
+      USE_CMAKE: 1
+  install_script: pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
+  script: |
+    export LLVM_CONFIG=llvm-config$LLVM_VERSION
+    export CLANG=clang$LLVM_VERSION
+    export MAKE=gmake
+    export CC=cc
+    bash travis.sh

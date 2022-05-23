@@ -257,5 +257,5 @@ if [[ $USE_CMAKE -eq 1 ]]; then
     mv $RELEASE_NAME install
   fi
 else
-  make LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test -j${THREADS:-2}
+  ${MAKE:-make} LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test -j${THREADS:-2}
 fi
