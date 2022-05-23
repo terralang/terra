@@ -18,7 +18,7 @@ This guide serves as an introduction for programming in Terra. A general underst
 Installing Terra
 ================
 
-Terra currently runs Linux, macOS, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
+Terra currently runs Linux, macOS, FreeBSD, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
 Running Terra
 =============
@@ -121,29 +121,35 @@ On macOS with Homebrew, the following should be sufficient:
 brew install cmake llvm@11
 ```
 
-Terra also supports an older build system based on GNU Make (for Linux
-and macOS only). This build system is deprecated, and in the vast
-majority of circumstances CMake is both preferred and substantially
-more flexible.
+On FreeBSD, use:
+
+```
+pkg install -y cmake llvm11
+```
+
+Terra also supports an older build system based on GNU Make (for
+Linux, macOS and FreeBSD only). This build system is deprecated, and
+in the vast majority of circumstances CMake is both preferred and
+substantially more flexible.
 
 ### Supported LLVM Versions ###
 
 The current recommended version of LLVM is **13**. The following versions are also supported:
 
-| Version | Linux | macOS | Windows | CUDA | AMD GPU \* | Notes |
-| ------- | ----- | ----- | ------- | ---- | ---------- | ----- |
-| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 5 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 6 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
-| 7 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | requires CMake |
-| 8 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 9 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 10 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
-| 12 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 13 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 14 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
+| Version | Linux | macOS | FreeBSD | Windows | CUDA | AMD GPU \* | Notes |
+| ------- | ----- | ----- | ------- | ------- | ---- | ---------- | ----- |
+| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
+| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | | [deprecated](https://github.com/terralang/terra/issues/471) |
+| 5 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
+| 6 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | |
+| 7 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | requires CMake |
+| 8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
+| 9 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
+| 10 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
+| 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| 12 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
+| 13 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
+| 14 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
 
 The following versions were previously supported by Terra:
 
@@ -177,7 +183,7 @@ There are also [pre-built binaries
 available](https://github.com/terralang/llvm-build) that follow this
 basic recipe, and should be usable with Terra.
 
-### Building Terra with CMake (Linux, macOS)
+### Building Terra with CMake (Linux, macOS, FreeBSD)
 
 The basic procedure for building with CMake is the following:
 
@@ -222,7 +228,7 @@ further configure the Terra build via CMake:
   * `TERRA_STATIC_LINK_LUAJIT` (default `ON`): Whether to statically link against LuaJIT or not.
   * `TERRA_SLIB_INCLUDE_LUAJIT` (default `ON`, except on Windows): Whether `libterra_s.a` should include LuaJIT or not.
 
-### Building Terra with GNU Make (Linux, macOS)
+### Building Terra with GNU Make (Linux, macOS, FreeBSD)
 
 Note: This build system is deprecated. Please use CMake instead (see
 above).
