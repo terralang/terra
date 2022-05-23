@@ -22,10 +22,8 @@ extern "C" {
 
 #if LLVM_VERSION < 50
 #include "llvm/ExecutionEngine/MCJIT.h"
-#else
-#if LLVM_VERSION < 120
+#elif LLVM_VERSION < 120
 #include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
-#endif
 #endif
 
 #include "llvm/Support/Atomic.h"
@@ -1040,14 +1038,14 @@ struct CCallingConv {
 
     template <typename FnOrCall>
     void addSRetAttr(FnOrCall *r, int idx, Type *ty) {
-#if LLVM_VERSION < 120
+#if LLVM_VERSION < 50
         r->addAttribute(idx, Attribute::StructRet);
-#elif LLVM_VERSION < 140
-        r->addAttribute(idx, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
+#elif LLVM_VERSION < 120
+        r->addParamAttr(idx - 1, Attribute::StructRet);
 #else
         r->addParamAttr(idx - 1, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #endif
-#if LLVM_VERSION < 140
+#if LLVM_VERSION < 50
         r->addAttribute(idx, Attribute::NoAlias);
 #else
         r->addParamAttr(idx - 1, Attribute::NoAlias);
@@ -1055,10 +1053,10 @@ struct CCallingConv {
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx, Type *ty) {
-#if LLVM_VERSION < 120
+#if LLVM_VERSION < 50
         r->addAttribute(idx, Attribute::ByVal);
-#elif LLVM_VERSION < 140
-        r->addAttribute(idx, Attribute::getWithByValType(*CU->TT->ctx, ty));
+#elif LLVM_VERSION < 120
+        r->addParamAttr(idx - 1, Attribute::ByVal);
 #else
         r->addParamAttr(idx - 1, Attribute::getWithByValType(*CU->TT->ctx, ty));
 #endif
@@ -1066,15 +1064,20 @@ struct CCallingConv {
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
-#if LLVM_VERSION < 140
-        r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
-#else
         if (return_value) {
+#if LLVM_VERSION < 140
+            assert(idx == 0);
+            r->addAttribute(0, t->issigned ? Attribute::SExt : Attribute::ZExt);
+#else
             r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
-        } else {
-            r->addParamAttr(idx - 1, t->issigned ? Attribute::SExt : Attribute::ZExt);
-        }
 #endif
+        } else {
+#if LLVM_VERSION < 50
+            r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
+#else
+            r->addParamAttr(idx - 1, t->issigned ? Attribute::SExt : Attribute::ZExt);
+#endif
+        }
     }
 
     template <typename FnOrCall>
@@ -1110,7 +1113,7 @@ struct CCallingConv {
             Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
             Value *addr_source = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
-#if LLVM_VERSION <= 90
+#if LLVM_VERSION < 100
             unsigned a1 = 0;
 #else
             MaybeAlign a1(0);
@@ -1127,7 +1130,7 @@ struct CCallingConv {
                     StoreInst *st = B->CreateStore(src, addr_dst);
                     return st;
                 }
-#if LLVM_VERSION <= 90
+#if LLVM_VERSION < 100
                 a1 = CU->getDataLayout().getABITypeAlignment(t1);
 #else
                 a1 = MaybeAlign(CU->getDataLayout().getABITypeAlignment(t1));
@@ -1136,7 +1139,7 @@ struct CCallingConv {
                 assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
-#if LLVM_VERSION <= 60
+#if LLVM_VERSION < 70
             Value *m = B->CreateMemCpy(addr_dest, addr_source, size_v, a1);
 #else
             Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
@@ -1200,7 +1203,7 @@ struct CCallingConv {
                     // TODO: check that LLVM optimizes this copy away
                     emitStoreAgg(B, p->type->type,
                                  B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                                          p->type->type,
 #endif
                                          &*ai),
@@ -1242,7 +1245,7 @@ struct CCallingConv {
                 } while ((type = dyn_cast<StructType>(result_type)));
             }
             B->CreateRet(B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     result_type,
 #endif
                     result));
@@ -1263,7 +1266,7 @@ struct CCallingConv {
             }
         } else {
             arguments.push_back(B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     value->getType()->getPointerElementType(),
 #endif
                     value));
@@ -1334,7 +1337,7 @@ struct CCallingConv {
                     B->CreateStore(call, casted);
             }
             return B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     aggregate->getType()->getPointerElementType(),
 #endif
                     aggregate);
@@ -2033,14 +2036,14 @@ struct FunctionEmitter {
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
             return B->CreateGEP(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     pointer->getType()->getPointerElementType(),
 #endif
                     pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
             return B->CreateGEP(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     pointer->getType()->getPointerElementType(),
 #endif
                     pointer, numNeg);
@@ -2217,7 +2220,7 @@ struct FunctionEmitter {
         Value *result = UndefValue::get(toT->type);
         VectorType *vt = cast<VectorType>(toT->type);
         Type *integerType = Type::getInt32Ty(*CU->TT->ctx);
-#if LLVM_VERSION < 130
+#if LLVM_VERSION < 120
         for (size_t i = 0; i < vt->getNumElements(); i++)
 #else
         for (size_t i = 0; i < vt->getElementCount().getKnownMinValue(); i++)
@@ -2358,7 +2361,7 @@ struct FunctionEmitter {
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
             raw = B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                     raw->getType()->getPointerElementType(),
 #endif
                     raw);
@@ -2471,13 +2474,13 @@ struct FunctionEmitter {
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
                     Value *result = B->CreateGEP(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                             valueExp->getType()->getPointerElementType(),
 #endif
                             valueExp, idxExp);
                     if (!exp->boolean("lvalue"))
                         result = B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                                 result->getType()->getPointerElementType(),
 #endif
                                 result);
@@ -2593,7 +2596,7 @@ struct FunctionEmitter {
                     B->CreateStore(in, oe);
                 }
                 return B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                         output->getType()->getPointerElementType(),
 #endif
                         output);
@@ -2649,7 +2652,7 @@ struct FunctionEmitter {
                 Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
                     result = B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                             result->getType()->getPointerElementType(),
 #endif
                             result);
@@ -2703,7 +2706,7 @@ struct FunctionEmitter {
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
                 LoadInst *l = B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                         v->getType()->getPointerElementType(),
 #endif
                         v);
@@ -3128,7 +3131,7 @@ struct FunctionEmitter {
             B->CreateStore(values[i], addr);
         }
         return B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                 result->getType()->getPointerElementType(),
 #endif
                 result);
@@ -3319,7 +3322,7 @@ struct FunctionEmitter {
                 B->CreateBr(cond);
                 setInsertBlock(cond);
                 Value *v = B->CreateLoad(
-#if LLVM_VERSION >= 140
+#if LLVM_VERSION >= 80
                         vp->getType()->getPointerElementType(),
 #endif
                         vp);
