@@ -8,7 +8,7 @@ well-defined stability policy establishes the risks associated with
 use of the software, and the ways such risks are communicated (e.g.,
 version numbers).
 
-Stability comes at a cost. This can includes the possibility of
+Stability comes at a cost. This can include the possibility of
 limiting future expansions of the software, as well as locking in poor
 design decisions. There is also a human cost: for example, stress
 created for the maintainers in assessing the impact of every
