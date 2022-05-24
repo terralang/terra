@@ -1216,7 +1216,7 @@ these debugging facilities are only available on OSX and Linux.
 
     terralib.currenttimeinseconds()
 
-A Lua function that returns the current time in seconds since some fixed time in the past. Useful for performancing tuning Terra code.
+A Lua function that returns the current time in seconds since some fixed time in the past. Useful for performance tuning Terra code.
 
 ---
 
@@ -1251,7 +1251,7 @@ filling in `addr` with the start of the function and `size` with the size of the
     terra terralib.lookupline(fnaddr : &opaque, ip : &opaque, filename : &rawstring, namelength : &uint64, line : &uint64) : bool
 
 Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it.
-Returns `true` if successful, filling in `line` with line on which the instruction occured and `filename` with a pointer to a fixed-width string of to `namemax` characters holding the filename.
+Returns `true` if successful, filling in `line` with line on which the instruction occurred and `filename` with a pointer to a fixed-width string of to `namemax` characters holding the filename.
 Fills up to `namemax` characters of the function's name into `name`.
 
 Embedding Terra inside C code
@@ -1509,7 +1509,7 @@ Writing a parser that directly uses the lexer interface can be tedious. One simp
 The Language and Lexer API
 -------------------------
 
-This section decribes the API for defining languages and interacting with the `lexer` object in detail.
+This section describes the API for defining languages and interacting with the `lexer` object in detail.
 
 ### Language Table ###
 A language extension is defined by a Lua table containing the following fields.
@@ -1524,7 +1524,7 @@ a name for your language used for debugging
 
     entrypoints
 
-A Lua list specifying the keywords that can begin a term in your language. These keywords must not be a Terra or Lua keyword and cannot overlap with entry-points for other loaded languages (In the future, we may allow you to rename entry-points when you load a language to resolve conflicts). These keywords must be valid Lua identifiers (i.e. they must be alphanumeric and cannot start with anumber). In the future, we may expand this to allow arbitrary operators (e.g. `+=`) as well.
+A Lua list specifying the keywords that can begin a term in your language. These keywords must not be a Terra or Lua keyword and cannot overlap with entry-points for other loaded languages (In the future, we may allow you to rename entry-points when you load a language to resolve conflicts). These keywords must be valid Lua identifiers (i.e. they must be alphanumeric and cannot start with a number). In the future, we may expand this to allow arbitrary operators (e.g. `+=`) as well.
 
 ---
 
@@ -1536,13 +1536,13 @@ A Lua list specifying any additional keywords used in your language. Like entry-
 
     expression
 
-(Optional) A Lua method `function(self,lexer)` that is called whenever the parser encounters an entry-point keyword at the beginning of a Lua expression. `self` is your language object, and `lexer` is a Lua object used to interact with Terra's lexer to retrieve tokens and report errors. Its API is decribed below. The `expression` method should return a _constructor_ function `function(environment_function)`. The constructor is called every time the expression is evaluated and should return the value of the expression as it should appear in Lua code.  Its argument, `environment_function`, is a function  that when called, returns the local lexical environment as Lua table from  variable names to values.
+(Optional) A Lua method `function(self,lexer)` that is called whenever the parser encounters an entry-point keyword at the beginning of a Lua expression. `self` is your language object, and `lexer` is a Lua object used to interact with Terra's lexer to retrieve tokens and report errors. Its API is described below. The `expression` method should return a _constructor_ function `function(environment_function)`. The constructor is called every time the expression is evaluated and should return the value of the expression as it should appear in Lua code.  Its argument, `environment_function`, is a function  that when called, returns the local lexical environment as Lua table from  variable names to values.
 
 ---
 
     statement
 
-(Optional) A Lua method `function(self,lexer)` called when the parser encounters an entry-point keyword at the beginning of a Lua _statement_. Similar to `expression`, it returns a constructor function. Additionally, it can return a second argument that is a list of assignements that the statment performs to variables. For instance, the value `{ "a", "b", {"c","d"} }` will behave like the Lua statment `a,b,c.d = constructor(...)`
+(Optional) A Lua method `function(self,lexer)` called when the parser encounters an entry-point keyword at the beginning of a Lua _statement_. Similar to `expression`, it returns a constructor function. Additionally, it can return a second argument that is a list of assignements that the statement performs to variables. For instance, the value `{ "a", "b", {"c","d"} }` will behave like the Lua statement `a,b,c.d = constructor(...)`
 
 ---
 
@@ -1629,7 +1629,7 @@ If `tokentype` matches the `type` of the current token, it returns the token and
 
     lexer:expect(tokentype)
 
-If `tokentype` matches the type of the current token, it returns the token and advances the lexer. Otherwise, it stops parsing an emits an error. It is useful to use when you know what token should appear.
+If `tokentype` matches the type of the current token, it returns the token and advances the lexer. Otherwise, it stops parsing and emits an error. It is useful to use when you know what token should appear.
 
 ---
 
@@ -1689,7 +1689,7 @@ Parses a set of Terra statement from the token stream until it reaches an end of
 Intermediate Representations with Abstract Syntax Description Language
 ======================================================================
 
-[Abstract Syntax Description Language (ASDL)](https://www.usenix.org/legacy/publications/library/proceedings/dsl97/full_papers/wang/wang.pdf) is a way of describing compiler intermediate representations (IR) and other tree- or graph-based data structures in a concise way. It is similar in many ways to algebraic data types, but offers a consistent cross-language specification. ASDL is used in the Python compiler to describe its grammer, and is also used internally in Terra to represent Terra code.
+[Abstract Syntax Description Language (ASDL)](https://www.usenix.org/legacy/publications/library/proceedings/dsl97/full_papers/wang/wang.pdf) is a way of describing compiler intermediate representations (IR) and other tree- or graph-based data structures in a concise way. It is similar in many ways to algebraic data types, but offers a consistent cross-language specification. ASDL is used in the Python compiler to describe its grammar, and is also used internally in Terra to represent Terra code.
 
 We provide a Lua library for parsing ASDL specifications that can be used to implement IR and other data-structures that are useful when building domain-specific languages. It allows you to parse ASDL specifications to create a set of Lua classes (actually specially defined meta-tables) for building IR. The library automatically sets up the classes with constructors for building the IR, and additional methods can be added to the classes using standard Lua method definitions.
 
@@ -1719,7 +1719,7 @@ Creating ASDL Classes
        Real = (number mantissa, number exp)
        #       ^~~~ field type         ^~~~~ field name
 
-       # define a tagged union (aka a variant, descriminated union, sum type)
+       # define a tagged union (aka a variant, discriminated union, sum type)
        # with several optional data types.
        # Here the type Stm has three sub-types
        Stm = Compound(Stm head, Stm next)
