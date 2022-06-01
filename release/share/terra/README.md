@@ -5,6 +5,8 @@ Home Page: https://terralang.org
 
 Community: https://terralang.zulipchat.com
 
+Replit: https://replit.com/@terralang/terra
+
 Build Status:
 [![Build Status](https://github.com/terralang/terra/workflows/CI/badge.svg)](https://github.com/terralang/terra/actions)
 [![Build Status](https://ci.appveyor.com/api/projects/status/github/terralang/terra?branch=master&svg=true)](https://ci.appveyor.com/project/terralang/terra/branch/master)
@@ -15,10 +17,16 @@ Furthermore, you can use Lua to meta-program Terra code. The Lua meta-program ha
 
 This guide serves as an introduction for programming in Terra. A general understanding of the Lua language is very helpful, but not strictly required.
 
+Run Terra in Your Browser via Replit
+====================================
+
+The fastest way to try Terra is via [Replit](https://replit.com/@terralang/terra). You can run Terra in your browser without needing to install anything. Once you get a feel for the language, you can use the instructions below to install Terra on your computer.
+
 Installing Terra
 ================
 
 Terra currently runs Linux, macOS, FreeBSD, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
+
 
 Running Terra
 =============

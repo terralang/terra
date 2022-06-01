@@ -11,6 +11,11 @@ title: Getting Started
 Setup
 =====
 
+Run Terra in Your Browser via Replit
+------------------------------------
+
+The fastest way to try Terra is via [Replit](https://replit.com/@terralang/terra). You can run Terra in your browser without needing to install anything. Once you get a feel for the language, you can use the instructions below to install Terra on your computer.
+
 Installing Terra
 ----------------
 
