@@ -751,12 +751,9 @@ public:
     virtual llvm::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
                                                     std::error_code &EC) override {
         printf("BUGBUG: unexpected call to directory iterator in C header include. "
-               "report this a bug on github.com/zdevito/terra");  // as far as I can tell
-                                                                  // this isn't used by
-                                                                  // the things we are
-                                                                  // using, so I am
-                                                                  // leaving it unfinished
-                                                                  // until this changes.
+               "report this a bug on github.com/terralang/terra");
+        // as far as I can tell this isn't used by the things we are using, so
+        // I am leaving it unfinished until this changes.
         return RFS->dir_begin(Dir, EC);
     }
 
@@ -840,12 +837,9 @@ public:
     virtual clang::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
                                                      std::error_code &EC) override {
         printf("BUGBUG: unexpected call to directory iterator in C header include. "
-               "report this a bug on github.com/zdevito/terra");  // as far as I can tell
-                                                                  // this isn't used by
-                                                                  // the things we are
-                                                                  // using, so I am
-                                                                  // leaving it unfinished
-                                                                  // until this changes.
+               "report this a bug on github.com/terralang/terra");
+        // as far as I can tell this isn't used by the things we are using, so
+        // I am leaving it unfinished until this changes.
         return RFS->dir_begin(Dir, EC);
     }
     llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {

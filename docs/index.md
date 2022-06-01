@@ -524,5 +524,5 @@ As shown in the templating example, Terra allows you to define methods on `struc
         --draw implementation
     end
 
-The functions `J.extends` and `J.implements` are Lua functions that generate the appropriate Terra code to implement a class system. More information is available in our [PLDI Paper](/publications.html). The file [lib/javalike.t](https://github.com/zdevito/terra/blob/master/tests/lib/javalike.t) has one possible implementation of a Java-like class system, while the file [lib/golike.t](https://github.com/zdevito/terra/blob/master/tests/lib/golike.t) is more similar to Google's Go language.
+The functions `J.extends` and `J.implements` are Lua functions that generate the appropriate Terra code to implement a class system. More information is available in our [PLDI Paper](/publications.html). The file [lib/javalike.t](https://github.com/terralang/terra/blob/master/tests/lib/javalike.t) has one possible implementation of a Java-like class system, while the file [lib/golike.t](https://github.com/terralang/terra/blob/master/tests/lib/golike.t) is more similar to Google's Go language.
 

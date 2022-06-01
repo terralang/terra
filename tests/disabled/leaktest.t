@@ -1,4 +1,4 @@
--- Disabled due to non-deterministic failures: https://github.com/zdevito/terra/issues/404
+-- Disabled due to non-deterministic failures: https://github.com/terralang/terra/issues/404
 
 local leak = require "lib.leak"
 

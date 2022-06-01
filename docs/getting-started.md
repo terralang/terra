@@ -32,8 +32,9 @@ To run the REPL:
 
     Terra -- A low-level counterpart to Lua
 
-    Stanford University
-    zdevito@stanford.edu
+    Homepage: https://terralang.org/
+    Project: https://github.com/terralang/terra
+    Community: https://terralang.zulipchat.com/
 
     >
 

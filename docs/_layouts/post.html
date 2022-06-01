@@ -36,8 +36,8 @@
         {% assign current = page.url | downcase | split: '/' %}    
         <!--<p><a href="demo.html">Try Terra Online</a></p>-->
         <a href="/" {% if page.url == '/' %}class='current'{% endif %} >home</a>
-        <a href="https://github.com/zdevito/terra/releases" >downloads</a>
-        <a href="http://github.com/zdevito/terra" >source</a>
+        <a href="https://github.com/terralang/terra/releases" >downloads</a>
+        <a href="http://github.com/terralang/terra" >source</a>
         <a href="getting-started.html" {% if current[1] == 'getting-started.html' %}class='current'{% endif %}>getting started</a>
         <a href="api.html" {% if current[1] == 'api.html' %}class='current'{% endif %}>api reference</a>
         <a href="publications.html" {% if current[1] == 'publications.html' %}class='current'{% endif %}>publications</a>
