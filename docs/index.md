@@ -44,7 +44,7 @@ __Terra__ is a low-level system programming language that is embedded in and met
     terralib.saveobj("helloterra",{ main = hello })
 {: id="introcode"}
 
-Try this example and others in your browser: https://replit.com/@terralang/terra
+Try this example and others in your browser via [Replit](https://replit.com/@terralang/terra).
 
 Like C/C++, Terra is a  **statically-typed**, **compiled language** with manual memory management. 
 But unlike C/C++, it is designed from the beginning to be **meta-programmed from Lua**. 
