@@ -73,7 +73,7 @@ associated with upgrading from a given increment to the next one:
     included in PATCH releases as long as the maintainers reasonably
     believe such changes are low risk.
 
-Note this is similar to, though somewhat less formal than [Semantic
+Note this is less formal than [Semantic
 Versioning](https://semver.org/). The goal is to follow the spirit of
 SemVer without imposing unreasonable cost on the Terra community.
 
