@@ -14,6 +14,7 @@ The following changes are included in this release:
   * Support for LLVM 3.8, 3.9, 5, 6, 7, 8, 9, 10, 11, 12, 13 and 14
   * Support for CUDA 9, 10 and 11
   * Support for Visual Studio 2015, 2017, 2019 and 2022 on Windows
+  * Support for FreeBSD
   * New CMake-based build system replaces Make/NMake on all platforms
   * Upgrade to LuaJIT 2.1 (from Git) by default
   * Added optional support for Moonjit, a LuaJIT fork that works on PPC64le
@@ -36,7 +37,7 @@ The following changes are included in this release:
 
 ## Deprecated features
 
-  * Deprecated support for Make (Linux, macOS) build system
+  * Deprecated support for Make (Linux, macOS, FreeBSD) build system
   * Deprecated support for LLVM 3.8, 3.9 and 5
 
 ## Removed features
@@ -50,7 +51,7 @@ The following changes are included in this release:
 
 ## Infrastructure improvements
 
-  * Automated tests with GitHub Actions (Linux, macOS, Windows) and AppVeyor (Windows)
+  * Automated tests with GitHub Actions (Linux, macOS, Windows), Cirrus (FreeBSD) and AppVeyor (Windows)
   * Automated tests for various Linux distros (currently Ubuntu 18.04, 20.04, 22.04) via Docker
   * Automated Linux "compability" tests (cross-distro-version tests for binary compatibility)
   * Automated release build infrastructure
