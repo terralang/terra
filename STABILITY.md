@@ -40,6 +40,13 @@ associated with upgrading from a given increment to the next one:
     There are no current plans to ever release a version 2.0.0 of
     Terra.
 
+    While no such changes are planned, in theory, a MAJOR increment
+    could be accompanied by *silent* breaking changes. That is, the
+    changes might potentially alter the behavior of user programs
+    without any clear error message or warning to the user. This is
+    obviously a Big Deal&trade; and is a key reason why we do not ever
+    intend to release a 2.0.0 version of Terra.
+
   * An increment in the MINOR position indicates a small, but
     non-zero, risk of breakage. Specific anticipated scenarios are
     discussed below. Users should certainly test their software to
@@ -47,6 +54,17 @@ associated with upgrading from a given increment to the next one:
     upgrade process. Maintainers should document any potentially
     breaking changes to ensure that users have adequate knowledge to
     upgrade.
+
+    While the goal at this level is still to avoid breaking changes,
+    to the extent that there are any, they should be *loud*. That is,
+    any potential change of behavior should be accompanied by a
+    compile error or similar, fatal diagnostic. Issuing a hard error
+    ensures users cannot miss the change. As a result, users can
+    upgrade without fear that their programs will change behavior
+    unexpectedly. If the code compiles and runs, it should be
+    compatible. Of course, even here, there is always a possibility of
+    unintentional silent changes. But these would be considered bugs
+    and would be reverted to maintain compatibility.
 
   * An increment in the PATCH position should never break user
     software. If it does, this is a bug, and should be rolled back in
@@ -61,8 +79,8 @@ SemVer without imposing unreasonable cost on the Terra community.
 
 # Potential Minor Breaking Changes
 
-The following examples of potential breaking changes are anticipated
-in MINOR releases.
+The following specific examples of potential breaking changes are
+anticipated in MINOR releases.
 
   * **LLVM version support.** Terra exposes various LLVM features to
     the user. The LLVM project does not offer backwards compatibility
