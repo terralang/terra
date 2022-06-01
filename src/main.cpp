@@ -349,8 +349,9 @@ static void print_welcome() {
            "Release " TERRA_VERSION_STRING
            "\n"
            "\n"
-           "Stanford University\n"
-           "zdevito@stanford.edu\n"
+           "Homepage: https://terralang.org/\n"
+           "Project: https://github.com/terralang/terra\n"
+           "Community: https://terralang.zulipchat.com/\n"
            "\n");
 }
 static void dotty(lua_State *L) {

@@ -80,7 +80,7 @@ language will be used and what problems crop up in larger systems.
 In our experience, Terra code only requires minor changes to make it work with
 this new release, but feel free to email this list if you run into a situation
 where an update would not be trivial. Looking at the difference in the [unit
-tests](https://github.com/zdevito/terra/tree/master/tests) is useful to see
+tests](https://github.com/terralang/terra/tree/release-2016-03-25/tests) is useful to see
 where APIs and syntax have changed for particular features.
 
 More detailed notes about the changes are below.
@@ -242,15 +242,15 @@ stack traceback:
     error.t:10: Errors reported during evaluating Lua code from Terra
         var c = [dosomethingmore(d)]
                                ^
-    /Users/zdevito/terra/src/terralib.lua:1748: in function 'evalluaexpression'
-    /Users/zdevito/terra/src/terralib.lua:2772: in function 'docheck'
-    /Users/zdevito/terra/src/terralib.lua:2983: in function 'checkexp'
-    /Users/zdevito/terra/src/terralib.lua:2510: in function 'checkexpressions'
-    /Users/zdevito/terra/src/terralib.lua:3150: in function 'checksingle'
-    /Users/zdevito/terra/src/terralib.lua:3184: in function 'checkstmts'
-    /Users/zdevito/terra/src/terralib.lua:3079: in function 'checkblock'
-    /Users/zdevito/terra/src/terralib.lua:3268: in function 'typecheck'
-    /Users/zdevito/terra/src/terralib.lua:1096: in function 'defineobjects'
+    .../terra/src/terralib.lua:1748: in function 'evalluaexpression'
+    .../terra/src/terralib.lua:2772: in function 'docheck'
+    .../terra/src/terralib.lua:2983: in function 'checkexp'
+    .../terra/src/terralib.lua:2510: in function 'checkexpressions'
+    .../terra/src/terralib.lua:3150: in function 'checksingle'
+    .../terra/src/terralib.lua:3184: in function 'checkstmts'
+    .../terra/src/terralib.lua:3079: in function 'checkblock'
+    .../terra/src/terralib.lua:3268: in function 'typecheck'
+    .../terra/src/terralib.lua:1096: in function 'defineobjects'
     error.t:9: in main chunk
 ```
 

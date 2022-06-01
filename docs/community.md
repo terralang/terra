@@ -7,4 +7,4 @@ title: Community
 
 The [mailing list](https://mailman.stanford.edu/mailman/listinfo/terralang) is for general discussion and announcements about Terra.
 
-For bug reports or feature requests, please [create a GitHub issue](https://github.com/zdevito/terra/issues).
+For bug reports or feature requests, please [create a GitHub issue](https://github.com/terralang/terra/issues).
