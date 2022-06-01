@@ -1,10 +1,11 @@
 # Release 1.0.0 (????-??-??)
 
-This release recognizes what has already been true for quite some time: Terra
-is mature and has been tested in a variety of production environments. As a
-result, the version numbers are changing with this release to follow
-[SemVer](https://semver.org/), starting with version number 1.0. Terra is
-expected to remain at 1.x for the forseeable future.
+This release recognizes what has already been true for quite some
+time: Terra is mature and has been tested in a variety of production
+environments. As a result, the version numbers are changing with this
+release to follow our [stability policy](STABILITY.md), starting with
+version number 1.0.0. Terra is expected to remain at 1.x for the
+forseeable future.
 
 The following changes are included in this release:
 
