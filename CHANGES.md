@@ -1,4 +1,4 @@
-# Release 1.0.0 (????-??-??)
+# Release 1.0.0 (2022-06-08)
 
 This release recognizes what has already been true for quite some
 time: Terra is mature and has been tested in a variety of production
