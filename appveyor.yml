@@ -1,7 +1,7 @@
 environment:
   matrix:
     - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
-      LLVM_VERSION: 11.0.1
+      LLVM_VERSION: 11.1.0
       LLVM_VERSION_SHORT: 110
       VS_MAJOR_VERSION: 17
       USE_CUDA: 1
