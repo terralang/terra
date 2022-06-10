@@ -5,11 +5,12 @@ set -e
 distro="$1"
 build_version="$2"
 test_versions="$3"
-llvm="$4"
-variant="$5"
-threads="$6"
+arch="$5"
+llvm="$6"
+variant="$7"
+threads="$8"
 
-./docker/build.sh "${distro}-${build_version}" "$llvm" "$variant" "$threads"
+./docker/build.sh "${distro}-${build_version}" "$arch" "$llvm" "$variant" "$threads"
 
 cd terra_install
 
