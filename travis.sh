@@ -29,6 +29,8 @@ if [[ -n $DOCKER_BUILD ]]; then
         variant=upstream
     elif [[ $DOCKER_LLVM = *"."*"."* ]]; then
         variant=prebuilt
+    elif [[ -n $DOCKER_ARCH ]]; then
+        variant=notest
     fi
     ./docker/build.sh $DOCKER_BUILD "$DOCKER_ARCH" $DOCKER_LLVM $variant
     exit 0
