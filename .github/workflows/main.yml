@@ -241,7 +241,7 @@ jobs:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
   docker_multiarch:
-    name: Docker Multiarch
+    name: Multiarch
     runs-on: ubuntu-latest
     strategy:
       matrix:
