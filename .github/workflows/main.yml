@@ -240,6 +240,28 @@ jobs:
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+  docker_multiarch:
+    name: Docker Multiarch
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: ['ubuntu-22.04']
+        arch: ['arm64', 'ppc64le']
+        llvm: ['11']
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./travis.sh
+        env:
+          DOCKER_BUILD: ${{ matrix.distro }}
+          DOCKER_ARCH: ${{ matrix.arch }}
+          DOCKER_LLVM: ${{ matrix.llvm }}
+          DOCKER_BUILDKIT: 1
+      - uses: actions/upload-artifact@v2
+        with:
+          name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
+          path: |
+            terra-*.tar.xz
+            terra-*.7z
   compat:
     name: Compatibility Test
     runs-on: ubuntu-latest

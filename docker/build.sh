@@ -3,11 +3,14 @@
 set -e
 
 IFS=- read distro release <<< "$1"
-llvm="$2"
-variant="$3"
-threads="$4"
+arch="$2"
+llvm="$3"
+variant="$4"
+threads="$5"
 
-docker build --build-arg release=$release --build-arg llvm=$llvm --build-arg threads=${threads:-4} -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro${variant:+-}$variant .
+set -x
+
+docker build ${arch:+--platform=}$arch --build-arg release=$release --build-arg llvm=$llvm --build-arg threads=${threads:-4} -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro${variant:+-}$variant .
 
 # Copy files out of container and make release.
 tmp=$(docker create terralang/terra:$distro-$release)
