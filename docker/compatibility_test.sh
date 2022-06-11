@@ -10,8 +10,6 @@ llvm="$5"
 variant="$6"
 threads="$7"
 
-set -x
-
 ./docker/build.sh "${distro}-${build_version}" "$arch" "$llvm" "$variant" "$threads"
 
 cd terra_install
