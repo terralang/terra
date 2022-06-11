@@ -5,10 +5,10 @@ set -e
 distro="$1"
 build_version="$2"
 test_versions="$3"
-arch="$5"
-llvm="$6"
-variant="$7"
-threads="$8"
+arch="$4"
+llvm="$5"
+variant="$6"
+threads="$7"
 
 set -x
 
