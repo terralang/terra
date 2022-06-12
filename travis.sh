@@ -31,7 +31,7 @@ if [[ -n $DOCKER_BUILD ]]; then
         variant=prebuilt
     fi
     if [[ -n $DOCKER_ARCH ]]; then
-        variant=${variant}${variant:+-}notest
+        variant=${variant}${variant:+-}multiarch
     fi
     ./docker/build.sh $DOCKER_BUILD "$DOCKER_ARCH" $DOCKER_LLVM $variant
     exit 0
