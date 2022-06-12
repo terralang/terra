@@ -245,9 +245,14 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-22.04']
+        distro: ['ubuntu-18.04', 'ubuntu-20.04']
         arch: ['arm64', 'ppc64le']
         llvm: ['13.0.0']
+        exclude:
+          - distro: 'ubuntu-18.04'
+            arch: 'ppc64le'
+          - distro: 'ubuntu-20.04'
+            arch: 'arm64'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
