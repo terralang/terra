@@ -19,5 +19,4 @@ RUN apt-get update -qq && \
     /terra/docker/install_cuda.sh && \
     cd /terra/build && \
     cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
-    make install -j$threads && \
-    ctest --output-on-failure -j$threads
+    make install -j$threads

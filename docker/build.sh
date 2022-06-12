@@ -8,6 +8,10 @@ llvm="$3"
 variant="$4"
 threads="$5"
 
+if [[ -n $arch ]]; then
+    export DOCKER_BUILDKIT=1
+fi
+
 docker build ${arch:+--platform=}$arch --build-arg release=$release --build-arg llvm=$llvm --build-arg threads=${threads:-4} -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro${variant:+-}$variant .
 
 # Copy files out of container and make release.

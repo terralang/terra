@@ -240,14 +240,14 @@ jobs:
         env:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
-  docker_multiarch:
+  multiarch:
     name: Multiarch
     runs-on: ubuntu-latest
     strategy:
       matrix:
         distro: ['ubuntu-22.04']
         arch: ['arm64', 'ppc64le']
-        llvm: ['11']
+        llvm: ['13.0.0']
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -255,7 +255,6 @@ jobs:
           DOCKER_BUILD: ${{ matrix.distro }}
           DOCKER_ARCH: ${{ matrix.arch }}
           DOCKER_LLVM: ${{ matrix.llvm }}
-          DOCKER_BUILDKIT: 1
       - uses: actions/upload-artifact@v2
         with:
           name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
