@@ -12,10 +12,10 @@ COPY . /terra
 
 RUN apt-get update -qq && \
     apt-get install -qq build-essential cmake git python3 wget && \
-    wget https://github.com/terralang/llvm-build/releases/download/llvm-$llvm/clang+llvm-$llvm-$(uname -m)-linux-gnu.tar.xz && \
-    tar xf clang+llvm-$llvm-$(uname -m)-linux-gnu.tar.xz && \
-    mv clang+llvm-$llvm-$(uname -m)-linux-gnu /llvm && \
-    rm clang+llvm-$llvm-$(uname -m)-linux-gnu.tar.xz && \
+    wget https://github.com/terralang/llvm-build/releases/download/llvm-$llvm/clang+llvm-$llvm-$(uname -m | sed -e s/ppc64le/powerpc64le/)-linux-gnu.tar.xz && \
+    tar xf clang+llvm-$llvm-$(uname -m | sed -e s/ppc64le/powerpc64le/)-linux-gnu.tar.xz && \
+    mv clang+llvm-$llvm-$(uname -m | sed -e s/ppc64le/powerpc64le/)-linux-gnu /llvm && \
+    rm clang+llvm-$llvm-$(uname -m | sed -e s/ppc64le/powerpc64le/)-linux-gnu.tar.xz && \
     /terra/docker/install_cuda.sh && \
     cd /terra/build && \
     cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
