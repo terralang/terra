@@ -271,9 +271,11 @@ int terra_inittarget(lua_State *L) {
     else
         TT->CPU = llvm::sys::getHostCPUName().str();
 
+#if !defined(__arm__) && !defined(__aarch64__) && !defined(__PPC__)
     if (TT->CPU == "generic") {
         TT->CPU = "x86-64";
     }
+#endif
 
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
