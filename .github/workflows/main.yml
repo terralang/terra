@@ -202,7 +202,7 @@ jobs:
           TERRA_LUA: ${{ matrix.lua }}
       - uses: actions/upload-artifact@v2
         with:
-          name: terra-${{ matrix.os }}-llvm-${{ matrix.llvm }}
+          name: terra-${{ matrix.os }}-x86_64-llvm-${{ matrix.llvm }}
           path: |
             terra-*.tar.xz
             terra-*.7z
@@ -274,7 +274,7 @@ jobs:
       - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.0 prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
-          name: docker-ubuntu-18.04-llvm-13
+          name: docker-ubuntu-18.04-x86_64-llvm-13
           path: |
             terra-*.tar.xz
             terra-*.7z
