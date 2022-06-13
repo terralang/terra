@@ -1,6 +1,13 @@
 include(FindPackageHandleStandardArgs)
 
-set(TERRA_LUA moonjit CACHE STRING "Build Terra against the specified Lua implementation")
+if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+  # Moonjit is archived, but we need it to build on PPC64le.
+  set(DEFAULT_TERRA_LUA "moonjit")
+else()
+  set(DEFAULT_TERRA_LUA "luajit")
+endif()
+
+set(TERRA_LUA "${DEFAULT_TERRA_LUA}" CACHE STRING "Build Terra against the specified Lua implementation")
 
 if(TERRA_LUA STREQUAL "luajit")
   set(LUAJIT_NAME "LuaJIT")
@@ -9,7 +16,7 @@ if(TERRA_LUA STREQUAL "luajit")
   set(LUAJIT_VERSION_MINOR 1)
   set(LUAJIT_VERSION_PATCH 0)
   set(LUAJIT_VERSION_EXTRA -beta3)
-  set(LUAJIT_COMMIT "9143e86498436892cb4316550be4d45b68a61224")
+  set(LUAJIT_COMMIT "6053b04815ecbc8eec1e361ceb64e68fb8fac1b3")
   if(NOT LUAJIT_VERSION_COMMIT STREQUAL "")
     set(LUAJIT_URL_PREFIX "https://github.com/LuaJIT/LuaJIT/archive/")
   else()
@@ -26,6 +33,12 @@ elseif(TERRA_LUA STREQUAL "moonjit")
   set(LUAJIT_URL_PREFIX "https://github.com/moonjit/moonjit/archive/")
 else()
   message(FATAL_ERROR "TERRA_LUA must be one of 'luajit', 'moonjit'")
+endif()
+
+if(NOT LUAJIT_VERSION_COMMIT STREQUAL "")
+  message(STATUS "Using Lua: ${LUAJIT_NAME} commit ${LUAJIT_COMMIT}")
+else()
+  message(STATUS "Using Lua: ${LUAJIT_NAME} release ${LUAJIT_VERSION_MAJOR}.${LUAJIT_VERSION_MINOR}.${LUAJIT_VERSION_PATCH}${LUAJIT_VERSION_EXTRA}")
 endif()
 
 if(NOT LUAJIT_VERSION_COMMIT STREQUAL "")
@@ -270,6 +283,7 @@ add_custom_target(
 )
 
 mark_as_advanced(
+  DEFAULT_TERRA_LUA
   LUAJIT_BASENAME
   LUAJIT_URL
   LUAJIT_TAR

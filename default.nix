@@ -14,14 +14,14 @@ let
            cudaPackages.cuda_cudart
          ];
 
-  luajitRev = "9143e86498436892cb4316550be4d45b68a61224";
+  luajitRev = "6053b04815ecbc8eec1e361ceb64e68fb8fac1b3";
   luajitBase = "LuaJIT-${luajitRev}";
   luajitArchive = "${luajitBase}.tar.gz";
   luajitSrc = fetchFromGitHub {
     owner = "LuaJIT";
     repo = "LuaJIT";
     rev = luajitRev;
-    sha256 = "1zw1yr0375d6jr5x20zvkvk76hkaqamjynbswpl604w6r6id070b";
+    sha256 = "1caxm1js877mky8hci1km3ycz2hbwpm6xbyjha72gfc7lr6pc429";
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
@@ -43,7 +43,7 @@ let
 
 in stdenv.mkDerivation rec {
   pname = "terra";
-  version = "1.0.0-beta3";
+  version = "1.0.0";
 
   src = ./.;
 
