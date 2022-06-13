@@ -1,3 +1,13 @@
+# Upcoming Release 1.0.1 (????-??-??)
+
+## Changed behaviors
+
+  * The default Lua has been set back to LuaJIT for all platforms other than PPC64le (where it is still set to Moonjit). As before, this can be configured explicitly with the CMake flag `-DTERRA_LUA` with either `luajit` or `moonjit`
+
+## Experimental features added
+
+  * Binary builds for ARM64 and PPC64le. These platforms were already possible to build from source, but this makes them easier to try out. Note the test suite pass rate is about 96% for ARM64 and 98% for PPC64le. You mileage may vary depending on what features of Terra you use
+
 # Release 1.0.0 (2022-06-08)
 
 This release recognizes what has already been true for quite some
