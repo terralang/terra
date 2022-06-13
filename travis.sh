@@ -20,13 +20,20 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
 fi
 
 if [[ -n $DOCKER_BUILD ]]; then
+    if [[ -n $DOCKER_ARCH ]]; then
+        docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+    fi
+
     variant=
     if [[ $DOCKER_LLVM = "3.8" ]]; then
         variant=upstream
     elif [[ $DOCKER_LLVM = *"."*"."* ]]; then
         variant=prebuilt
     fi
-    ./docker/build.sh $DOCKER_BUILD $DOCKER_LLVM $variant
+    if [[ -n $DOCKER_ARCH ]]; then
+        variant=${variant}${variant:+-}multiarch
+    fi
+    ./docker/build.sh $DOCKER_BUILD "$DOCKER_ARCH" $DOCKER_LLVM $variant
     exit 0
 fi
 

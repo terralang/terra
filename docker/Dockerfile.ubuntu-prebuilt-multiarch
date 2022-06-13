@@ -17,8 +17,8 @@ RUN apt-get update -qq && \
     tar xf clang+llvm-$llvm-$arch-linux-gnu.tar.xz && \
     mv clang+llvm-$llvm-$arch-linux-gnu /llvm && \
     rm clang+llvm-$llvm-$arch-linux-gnu.tar.xz && \
-    /terra/docker/install_cuda.sh && \
+    echo "disabled: /terra/docker/install_cuda.sh" && \
     cd /terra/build && \
     cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install .. && \
     make install -j$threads && \
-    ctest --output-on-failure -j$threads
+    echo "disabled: ctest --output-on-failure -j$threads"

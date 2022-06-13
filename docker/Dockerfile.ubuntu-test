@@ -1,4 +1,4 @@
-ARG release=16.04
+ARG release=18.04
 
 FROM ubuntu:$release
 

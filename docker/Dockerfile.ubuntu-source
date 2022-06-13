@@ -1,4 +1,4 @@
-ARG release=16.04
+ARG release=18.04
 
 FROM ubuntu:$release
 
@@ -14,8 +14,8 @@ RUN apt-get update -qq && \
     apt-get install -qq build-essential cmake git python3 wget && \
     mkdir /llvm && \
     cd /llvm && \
-    wget https://releases.llvm.org/$llvm/llvm-$llvm.src.tar.xz && \
-    wget https://releases.llvm.org/$llvm/cfe-$llvm.src.tar.xz && \
+    wget -nv https://releases.llvm.org/$llvm/llvm-$llvm.src.tar.xz && \
+    wget -nv https://releases.llvm.org/$llvm/cfe-$llvm.src.tar.xz && \
     tar xf llvm-$llvm.src.tar.xz && \
     tar xf cfe-$llvm.src.tar.xz && \
     mv cfe-$llvm.src llvm-$llvm.src/tools/clang && \
