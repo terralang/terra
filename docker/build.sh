@@ -21,7 +21,9 @@ tmp=$(docker create terralang/terra:$distro-$release)
 docker cp $tmp:/terra_install .
 docker rm $tmp
 
-RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-${arch:-$(uname -m)}-`git rev-parse --short HEAD`
+arch_release=$(echo $arch | sed -e s/arm64/aarch64/)
+
+RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/`-${arch_release:-$(uname -m)}-`git rev-parse --short HEAD`
 mv terra_install $RELEASE_NAME
 tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
 mv $RELEASE_NAME terra_install
