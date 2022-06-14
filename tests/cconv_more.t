@@ -729,6 +729,7 @@ terra main()
   if err ~= 0 then
     return err
   end
+  return 0
 end
 
 -- Useful for debugging:
