@@ -824,7 +824,9 @@ struct CCallingConv {
                 pass_struct_as_exploded_values = true;
             } break;
             case Triple::ArchType::ppc:
+#if LLVM_VERSION >= 50
             case Triple::ArchType::ppcle:
+#endif
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
                 // return_empty_struct_as_void = true;
