@@ -819,29 +819,23 @@ struct CCallingConv {
 
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
-        case Triple::ArchType::amdgcn:
-            {
+            case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
                 pass_struct_as_exploded_values = true;
-            }
-            break;
-        case Triple::ArchType::ppc:
-        case Triple::ArchType::ppcle:
-        case Triple::ArchType::ppc64:
-        case Triple::ArchType::ppc64le:
-            {
+            } break;
+            case Triple::ArchType::ppc:
+            case Triple::ArchType::ppcle:
+            case Triple::ArchType::ppc64:
+            case Triple::ArchType::ppc64le: {
                 // return_empty_struct_as_void = true;
                 // pass_struct_as_exploded_values = true;
-            }
-            break;
+            } break;
         }
 
         switch (Triple.getOS()) {
-        case Triple::OSType::Win32:
-            {
+            case Triple::OSType::Win32: {
                 return_empty_struct_as_void = true;
-            }
-            break;
+            } break;
         }
     }
 
