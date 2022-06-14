@@ -809,9 +809,41 @@ struct CCallingConv {
     lua_State *L;
     terra_CompilerState *C;
     Types *Ty;
+    bool pass_struct_as_exploded_values;
+    bool return_empty_struct_as_void;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
-            : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {}
+            : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
+        return_empty_struct_as_void = false;
+        pass_struct_as_exploded_values = false;
+
+        auto Triple = CU->TT->tm->getTargetTriple();
+        switch (Triple.getArch()) {
+        case Triple::ArchType::amdgcn:
+            {
+                return_empty_struct_as_void = true;
+                pass_struct_as_exploded_values = true;
+            }
+            break;
+        case Triple::ArchType::ppc:
+        case Triple::ArchType::ppcle:
+        case Triple::ArchType::ppc64:
+        case Triple::ArchType::ppc64le:
+            {
+                // return_empty_struct_as_void = true;
+                // pass_struct_as_exploded_values = true;
+            }
+            break;
+        }
+
+        switch (Triple.getOS()) {
+        case Triple::OSType::Win32:
+            {
+                return_empty_struct_as_void = true;
+            }
+            break;
+        }
+    }
 
     enum RegisterClass {
         C_NO_CLASS = 0,
@@ -955,9 +987,7 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
 
-        // On AMDGPU, can't pass through memory, need to always explode to registers.
-        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
-        if (is_amdgpu) {
+        if (pass_struct_as_exploded_values) {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
@@ -995,11 +1025,7 @@ struct CCallingConv {
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero);
 
-#ifndef _WIN32
-        // need this logic on AMDGPU as well
-        bool is_amdgpu = strcmp(CU->TT->tm->getTarget().getName(), "amdgcn") == 0;
-        if (is_amdgpu) {
-#endif
+        if (return_empty_struct_as_void) {
             // windows classifies empty structs as pass by pointer, but we need a return
             // value of unit (an empty tuple) to be translated to void. So if it is unit,
             // force the return value to be void by overriding the normal classification
@@ -1008,9 +1034,7 @@ struct CCallingConv {
                 info->returntype = Argument(C_AGGREGATE_REG, info->returntype.type,
                                             StructType::get(*CU->TT->ctx));
             }
-#ifndef _WIN32
         }
-#endif
 
         int nfloat = 0;
         int nint = info->returntype.kind == C_AGGREGATE_MEM
