@@ -817,6 +817,7 @@ struct CCallingConv {
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
         return_empty_struct_as_void = false;
         pass_struct_as_exploded_values = false;
+        pass_float_double_values_for_ppc64 = false;
 
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
