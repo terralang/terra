@@ -646,7 +646,6 @@ terra part2()
     end
   end
 
-  -- FIXME: PPC: double limit is 8 (at 9+ they switch over to sret/byval structs)
   escape
     for i, ti in ipairs(ts) do
       local cti = cts[i]

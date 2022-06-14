@@ -811,6 +811,7 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
+    bool pass_float_double_values_for_ppc64;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
@@ -825,8 +826,7 @@ struct CCallingConv {
             } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
-                // return_empty_struct_as_void = true;
-                // pass_struct_as_exploded_values = true;
+              pass_float_double_values_for_ppc64 = true;
             } break;
         }
 
@@ -981,6 +981,27 @@ struct CCallingConv {
 
         if (pass_struct_as_exploded_values) {
             return Argument(C_AGGREGATE_REG, t, t->type);
+        }
+
+        // PPC64 has a special case for structs of all-float or
+        // all-double registers, up to 8 elements, but otherwise
+        // follows the x86 rules for packing arguments.
+        if (pass_float_double_values_for_ppc64) {
+          StructType *st = dyn_cast<StructType>(t->type);
+          if (st) {
+            bool all_float = true;
+            bool all_double = true;
+            for (auto elt : st->elements()) {
+              all_float = all_float && elt->isFloatTy();
+              all_double = all_double && elt->isDoubleTy();
+            }
+            if (all_float && st->getNumElements() <= 8) {
+              return Argument(C_AGGREGATE_REG, t, t->type);
+            }
+            if (all_double && st->getNumElements() <= 8) {
+              return Argument(C_AGGREGATE_REG, t, t->type);
+            }
+          }
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
