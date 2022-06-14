@@ -1,4 +1,8 @@
-# Upcoming Release 1.0.1 (????-??-??)
+# Release 1.0.1 (2022-06-13)
+
+This release includes no major Terra changes, but upgrades the LuaJIT
+dependency and makes available (experimental) binaries for ARM64 and
+PPC64le.
 
 ## Changed behaviors
 
