@@ -97,14 +97,26 @@ local function generate_aggregate_one_arg_function(name, aggname, N)
   return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x) { " .. statlist:concat(" ") .. " return x; }"
 end
 
-local uniform_names = {"q", "r", "s", "t", "u", "v"}
+local function generate_aggregate_two_arg_function(name, aggname, N)
+  local statlist = terralib.newlist()
+  for i = 1, N do
+    statlist:insert("x.f" .. i .. " += y.f" .. i .. ";")
+  end
+  return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x, " .. aggname .. N .. " y) { " .. statlist:concat(" ") .. " return x; }"
+end
+
+local uniform_names = terralib.newlist({"q", "r", "s", "t", "u", "v"})
 local types = {int8, int16, int32, int64, float, double}
 
-local nonuniform_names = {"w", "x"}
+local nonuniform_names = terralib.newlist({"w", "x"})
 local type_rotations = {
   {int8, int16, int32, int64, double},
   {float, float, int8, int8, int16, int32, int64},
 }
+
+local all_names = terralib.newlist()
+all_names:insertall(uniform_names)
+all_names:insertall(nonuniform_names)
 
 local uniform_scalar_names = {"b", "c", "d", "e", "f", "g"}
 
@@ -156,7 +168,7 @@ do
   definitions:insert(generate_aggregate_one_arg_function("cp", "p", 0))
   definitions:insert("")
 
-  for _, name in ipairs(uniform_names) do
+  for _, name in ipairs(all_names) do
     for N = 1, 9 do
       definitions:insert(
         generate_aggregate_one_arg_function("c" .. name, name, N))
@@ -164,10 +176,10 @@ do
     definitions:insert("")
   end
 
-  for _, name in ipairs(nonuniform_names) do
+  for _, name in ipairs(all_names) do
     for N = 1, 9 do
       definitions:insert(
-        generate_aggregate_one_arg_function("c" .. name, name, N))
+        generate_aggregate_two_arg_function("c2" .. name, name, N))
     end
     definitions:insert("")
   end
@@ -224,6 +236,21 @@ local function generate_aggregate_one_arg_terra(mod, name, aggtyp, N)
   mod[name .. N] = f
 end
 
+local function generate_aggregate_two_arg_terra(mod, name, aggtyp, N)
+  local terra f(x : aggtyp, y : aggtyp)
+    escape
+      for i = 1, N do
+        local field = "f" .. i
+        emit quote x.[field] = x.[field] + y.[field] end
+      end
+    end
+    return x
+  end
+  f:setname(name .. N)
+  f:setinlined(false)
+  mod[name .. N] = f
+end
+
 local t = {}
 
 generate_void_terra(t, "ta0")
@@ -244,15 +271,15 @@ end
 
 generate_aggregate_one_arg_terra(t, "tp", c["p0"], 0)
 
-for _, name in ipairs(uniform_names) do
+for _, name in ipairs(all_names) do
   for N = 1, 9 do
     generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
   end
 end
 
-for _, name in ipairs(nonuniform_names) do
+for _, name in ipairs(all_names) do
   for N = 1, 9 do
-    generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
+    generate_aggregate_two_arg_terra(t, "t2" .. name, c[name .. N], N)
   end
 end
 
@@ -491,7 +518,7 @@ terra part2()
   var tx0 = t.tp0(x0)
 
   escape
-    for _, name in ipairs(uniform_names) do
+    for _, name in ipairs(all_names) do
       for N = 1, 9 do
         local aggtyp = c[name .. N]
         local cfunc = c["c" .. name .. N]
@@ -511,18 +538,20 @@ terra part2()
   end
 
   escape
-    for _, name in ipairs(nonuniform_names) do
+    for _, name in ipairs(all_names) do
       for N = 1, 9 do
         local aggtyp = c[name .. N]
-        local cfunc = c["c" .. name .. N]
-        local tfunc = t["t" .. name .. N]
+        local cfunc = c["c2" .. name .. N]
+        local tfunc = t["t2" .. name .. N]
         emit quote
           var x : aggtyp
           init_fields(x, 10, N)
-          var cx = cfunc(x)
+          var y : aggtyp
+          init_fields(y, 1, N)
+          var cx = cfunc(x, y)
           check_fields(x, 10, N)
           check_fields(cx, 11, N)
-          var tx = tfunc(x)
+          var tx = tfunc(x, y)
           check_fields(x, 10, N)
           check_fields(tx, 11, N)
         end
@@ -532,6 +561,7 @@ terra part2()
 
   return 0
 end
+-- part2:printpretty(false)
 
 terra main()
   var err = part1()
