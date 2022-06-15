@@ -3,35 +3,33 @@
 --
 -- The test covers:
 --
---  * Pass/return void/no arguments.
---
---  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass 1..N values as separate arguments to a function, and return the
---        same type.
---
---  * Same, but with fields of a rotating set of types.
+--  * Pass no arguments and return void.
 --
 --  * Pass/return an empty struct.
+--
+--  * For each type in {int8, int16, int32, int64, float, double}:
+--      * Pass 1..N scalar arguments of this type, and return the same type.
 --
 --  * For each type in {int8, int16, int32, int64, float, double}:
 --      * Pass (and return) a single struct argument with 1..N fields
 --        of the type above.
 --
 --  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass two struct arguments, as above, and return a struct.
+--      * Pass two struct arguments, as above, and return same struct.
 --
---  * Same, but with fields of a rotating set of types.
+--  * As each of the three cases above, but with arguments/fields
+--    picked from a rotating set of types.
 --
 -- A couple notable features (especially compared to cconv.t):
 --
---  * The tests verify that structs are passed by value, by modifying the
---    arguments within the called functions.
+--  * The tests verify that structs are passed by value, ensuring
+--    modifications within the callee do not affect the caller.
 --
 --  * As compared to cconv.t, this test verifies that Terra can call both
 --    itself and C. The latter is particularly important for ensuring we match
 --    the ABI of the system C compiler.
 --
---  * As a bonus, the use of C allows quick comparisons between Clang's and
+--  * As a bonus, the use of C enables comparisons between Clang's and
 --    Terra's output. A command to generate the LLVM IR is shown (commented)
 --    at the bottom of the file.
 
