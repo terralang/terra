@@ -156,7 +156,7 @@ do
   definitions:insert(generate_aggregate_one_arg_function("cp", "p", 0))
   definitions:insert("")
 
-  for i, name in ipairs(uniform_names) do
+  for _, name in ipairs(uniform_names) do
     for N = 1, 9 do
       definitions:insert(
         generate_aggregate_one_arg_function("c" .. name, name, N))
@@ -164,7 +164,7 @@ do
     definitions:insert("")
   end
 
-  for i, name in ipairs(nonuniform_names) do
+  for _, name in ipairs(nonuniform_names) do
     for N = 1, 9 do
       definitions:insert(
         generate_aggregate_one_arg_function("c" .. name, name, N))
@@ -244,13 +244,13 @@ end
 
 generate_aggregate_one_arg_terra(t, "tp", c["p0"], 0)
 
-for i, name in ipairs(uniform_names) do
+for _, name in ipairs(uniform_names) do
   for N = 1, 9 do
     generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
   end
 end
 
-for i, name in ipairs(nonuniform_names) do
+for _, name in ipairs(nonuniform_names) do
   for N = 1, 9 do
     generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
   end
@@ -322,6 +322,7 @@ local check_fields = macro(
     end
   end)
 
+-- Part 1: check all of the scalar argument functions.
 terra part1()
   c.ca0()
   t.ta0()
@@ -483,133 +484,54 @@ end
 part1:compile() -- workaround: function at line 620 has more than 60 upvalues
 -- part1:printpretty(false)
 
+-- Part 2: check the one-arg aggregate functions.
 terra part2()
   var x0 : c.p0
   var cx0 = c.cp0(x0)
   var tx0 = t.tp0(x0)
 
   escape
-    for i, qi in ipairs(qs) do
-      local cqi = cqs[i]
-      local tqi = tqs[i]
-      emit quote
-        var xi : qi
-        init_fields(xi, 10, i)
-        var cxi = cqi(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tqi(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
+    for _, name in ipairs(uniform_names) do
+      for N = 1, 9 do
+        local aggtyp = c[name .. N]
+        local cfunc = c["c" .. name .. N]
+        local tfunc = t["t" .. name .. N]
+        emit quote
+          var x : aggtyp
+          init_fields(x, 10, N)
+          var cx = cfunc(x)
+          check_fields(x, 10, N)
+          check_fields(cx, 11, N)
+          var tx = tfunc(x)
+          check_fields(x, 10, N)
+          check_fields(tx, 11, N)
+        end
       end
     end
   end
 
   escape
-    for i, ri in ipairs(rs) do
-      local cri = crs[i]
-      local tri = trs[i]
-      emit quote
-        var xi : ri
-        init_fields(xi, 10, i)
-        var cxi = cri(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tri(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
-      end
-    end
-  end
-
-  escape
-    for i, si in ipairs(ss) do
-      local csi = css[i]
-      local tsi = tss[i]
-      emit quote
-        var xi : si
-        init_fields(xi, 10, i)
-        var cxi = csi(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tsi(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
-      end
-    end
-  end
-
-  escape
-    for i, ti in ipairs(ts) do
-      local cti = cts[i]
-      local tti = tts[i]
-      emit quote
-        var xi : ti
-        init_fields(xi, 10, i)
-        var cxi = cti(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tti(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
-      end
-    end
-  end
-
-  escape
-    for i, ui in ipairs(us) do
-      local cui = cus[i]
-      local tui = tus[i]
-      emit quote
-        var xi : ui
-        init_fields(xi, 10, i)
-        var cxi = cui(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tui(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
-      end
-    end
-  end
-
-  escape
-    for i, vi in ipairs(vs) do
-      local cvi = cvs[i]
-      local tvi = tvs[i]
-      emit quote
-        var xi : vi
-        init_fields(xi, 10, i)
-        var cxi = cvi(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = tvi(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
-      end
-    end
-  end
-
-  escape
-    for i, wi in ipairs(ws) do
-      local cwi = cws[i]
-      local twi = tws[i]
-      emit quote
-        var xi : wi
-        init_fields(xi, 10, i)
-        var cxi = cwi(xi)
-        check_fields(xi, 10, i)
-        check_fields(cxi, 11, i)
-        var txi = twi(xi)
-        check_fields(xi, 10, i)
-        check_fields(txi, 11, i)
+    for _, name in ipairs(nonuniform_names) do
+      for N = 1, 9 do
+        local aggtyp = c[name .. N]
+        local cfunc = c["c" .. name .. N]
+        local tfunc = t["t" .. name .. N]
+        emit quote
+          var x : aggtyp
+          init_fields(x, 10, N)
+          var cx = cfunc(x)
+          check_fields(x, 10, N)
+          check_fields(cx, 11, N)
+          var tx = tfunc(x)
+          check_fields(x, 10, N)
+          check_fields(tx, 11, N)
+        end
       end
     end
   end
 
   return 0
 end
--- part2:printpretty(false)
 
 terra main()
   var err = part1()
