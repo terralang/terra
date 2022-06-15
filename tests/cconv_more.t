@@ -209,7 +209,7 @@ local function generate_nonuniform_scalar_terra(mod, name, types, N)
   mod[name .. N] = f
 end
 
-local function generate_aggregate_terra(mod, name, aggtyp, N)
+local function generate_aggregate_one_arg_terra(mod, name, aggtyp, N)
   local terra f(x : aggtyp)
     escape
       for i = 1, N do
@@ -242,21 +242,19 @@ for i, type_rotation in ipairs(type_rotations) do
   end
 end
 
-generate_aggregate_terra(t, "tp", c["p0"], 0)
+generate_aggregate_one_arg_terra(t, "tp", c["p0"], 0)
 
 for i, name in ipairs(uniform_names) do
   for N = 1, 9 do
-    generate_aggregate_terra(t, "t" .. name, c[name .. N], N)
+    generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
   end
 end
 
 for i, name in ipairs(nonuniform_names) do
   for N = 1, 9 do
-    generate_aggregate_terra(t, "t" .. name, c[name .. N], N)
+    generate_aggregate_one_arg_terra(t, "t" .. name, c[name .. N], N)
   end
 end
-
-local p0 = c.p0
 
 local qs = {c.q1, c.q2, c.q3, c.q4, c.q5, c.q6, c.q7, c.q8, c.q9}
 local cqs = {c.cq1, c.cq2, c.cq3, c.cq4, c.cq5, c.cq6, c.cq7, c.cq8, c.cq9}
@@ -442,13 +440,51 @@ terra part1()
   teq(c.cg9(100000000, 20000000, 3000000, 400000, 50000, 6000, 700, 80, 9), 123456789)
   teq(t.tg9(100000000, 20000000, 3000000, 400000, 50000, 6000, 700, 80, 9), 123456789)
 
+  teq(c.ch1(1), 1)
+  teq(t.th1(1), 1)
+  teq(c.ch2(1, 2), 3)
+  teq(t.th2(1, 2), 3)
+  teq(c.ch3(1, 2, 3), 6)
+  teq(t.th3(1, 2, 3), 6)
+  teq(c.ch4(1, 2, 3, 4), 10)
+  teq(t.th4(1, 2, 3, 4), 10)
+  teq(c.ch5(1, 2, 3, 4, 5), 15)
+  teq(t.th5(1, 2, 3, 4, 5), 15)
+  teq(c.ch6(1, 2, 3, 4, 5, 6), 21)
+  teq(t.th6(1, 2, 3, 4, 5, 6), 21)
+  teq(c.ch7(1, 2, 3, 4, 5, 6, 7), 28)
+  teq(t.th7(1, 2, 3, 4, 5, 6, 7), 28)
+  teq(c.ch8(1, 2, 3, 4, 5, 6, 7, 8), 36)
+  teq(t.th8(1, 2, 3, 4, 5, 6, 7, 8), 36)
+  teq(c.ch9(1, 2, 3, 4, 5, 6, 7, 8, 9), 45)
+  teq(t.th9(1, 2, 3, 4, 5, 6, 7, 8, 9), 45)
+
+  teq(c.ci1(1), 1)
+  teq(t.ti1(1), 1)
+  teq(c.ci2(1, 2), 3)
+  teq(t.ti2(1, 2), 3)
+  teq(c.ci3(1, 2, 3), 6)
+  teq(t.ti3(1, 2, 3), 6)
+  teq(c.ci4(1, 2, 3, 4), 10)
+  teq(t.ti4(1, 2, 3, 4), 10)
+  teq(c.ci5(1, 2, 3, 4, 5), 15)
+  teq(t.ti5(1, 2, 3, 4, 5), 15)
+  teq(c.ci6(1, 2, 3, 4, 5, 6), 21)
+  teq(t.ti6(1, 2, 3, 4, 5, 6), 21)
+  teq(c.ci7(1, 2, 3, 4, 5, 6, 7), 28)
+  teq(t.ti7(1, 2, 3, 4, 5, 6, 7), 28)
+  teq(c.ci8(1, 2, 3, 4, 5, 6, 7, 8), 36)
+  teq(t.ti8(1, 2, 3, 4, 5, 6, 7, 8), 36)
+  teq(c.ci9(1, 2, 3, 4, 5, 6, 7, 8, 9), 45)
+  teq(t.ti9(1, 2, 3, 4, 5, 6, 7, 8, 9), 45)
+
   return 0
 end
 part1:compile() -- workaround: function at line 620 has more than 60 upvalues
 -- part1:printpretty(false)
 
 terra part2()
-  var x0 : p0
+  var x0 : c.p0
   var cx0 = c.cp0(x0)
   var tx0 = t.tp0(x0)
 
