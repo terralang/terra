@@ -9,13 +9,18 @@
 --      * Pass 1..N values as separate arguments to a function, and return the
 --        same type.
 --
+--  * Same, but with fields of a rotating set of types.
+--
 --  * Pass/return an empty struct.
 --
 --  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass (and return) a struct with 1..N fields of that type.
+--      * Pass (and return) a single struct argument with 1..N fields
+--        of the type above.
 --
---  * Same, but with fields of rotating types (int8, int16, int32, int64,
---    double).
+--  * For each type in {int8, int16, int32, int64, float, double}:
+--      * Pass two struct arguments, as above, and return a struct.
+--
+--  * Same, but with fields of a rotating set of types.
 --
 -- A couple notable features (especially compared to cconv.t):
 --
