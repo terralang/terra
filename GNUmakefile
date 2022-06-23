@@ -99,7 +99,7 @@ ifneq ($(findstring $(UNAME), Linux FreeBSD),)
 DYNFLAGS = -shared -fPIC
 TERRA_STATIC_LIBRARY += -Wl,-export-dynamic -Wl,--whole-archive $(LIBRARY) -Wl,--no-whole-archive
 else
-DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/terra.dylib"
+DYNFLAGS = -dynamiclib -single_module -fPIC -install_name "@rpath/libterra.dylib"
 TERRA_STATIC_LIBRARY =  -Wl,-force_load,$(LIBRARY)
 endif
 
@@ -207,9 +207,11 @@ LIBRARY_NOLUA = release/lib/libterra_nolua.a
 LIBRARY_NOLUA_NOLLVM = release/lib/libterra_nolua_nollvm.a
 LIBRARY_VARIANTS = $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM)
 ifeq ($(UNAME), Darwin)
-DYNLIBRARY = release/lib/terra.dylib
+DYNLIBRARY = release/lib/libterra.dylib
+DYNLIBRARY_LINK = release/lib/terra.dylib
 else
-DYNLIBRARY = release/lib/terra.so
+DYNLIBRARY = release/lib/libterra.so
+DYNLIBRARY_LINK = release/lib/terra.so
 endif
 RELEASE_HEADERS = $(addprefix release/include/terra/,$(LUAHEADERS))
 BIN2C = build/bin2c
@@ -218,7 +220,7 @@ BIN2C = build/bin2c
 -include Makefile.inc
 
 .PHONY:	all clean download purge test release install
-all:	$(EXECUTABLE) $(DYNLIBRARY)
+all:	$(EXECUTABLE) $(DYNLIBRARY) $(DYNLIBRARY_LINK)
 
 test:	all
 	(cd tests; ./run)
@@ -284,6 +286,9 @@ $(LIBRARY_NOLUA_NOLLVM):	$(RELEASE_HEADERS) $(addprefix build/, $(LIBOBJS))
 $(DYNLIBRARY):	$(LIBRARY)
 	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
 
+$(DYNLIBRARY_LINK):	$(DYNLIBRARY)
+	ln -s $(basename $(DYNLIBRARY)) $(DYNLIBRARY_LINK)
+
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	mkdir -p release/bin release/lib
 	$(CXX) $(addprefix build/, $(EXEOBJS)) -o $@ $(LFLAGS) $(TERRA_STATIC_LIBRARY)  $(SUPPORT_LIBRARY_FLAGS)
@@ -304,7 +309,7 @@ build/internalizedfiles.h:	$(PACKAGE_DEPS) src/geninternalizedfiles.lua lib/std.
 
 clean:
 	rm -rf build/*.o build/*.d $(GENERATEDHEADERS)
-	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM) $(DYNLIBRARY) $(RELEASE_HEADERS) build/llvm_objects build/lua_objects
+	rm -rf $(EXECUTABLE) terra $(LIBRARY) $(LIBRARY_NOLUA) $(LIBRARY_NOLUA_NOLLVM) $(DYNLIBRARY) $(DYNLIBRARY_LINK) $(RELEASE_HEADERS) build/llvm_objects build/lua_objects
 
 purge:	clean
 	rm -rf build/*
