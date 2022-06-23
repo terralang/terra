@@ -41,7 +41,7 @@ if ffi.os ~= "Windows" then
       libext = ".dylib"
     end
 
-    local libname = "terra"..libext
+    local libname = "libterra"..libext
 
     local flags = terralib.newlist {"-Wl,-rpath,"..libpath,libpath.."/"..libname}
     local lua_lib = libpath.."/".."libluajit-5.1"..libext
