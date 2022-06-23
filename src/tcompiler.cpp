@@ -811,13 +811,13 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
-    bool pass_float_double_values_for_ppc64;
+    bool pass_uniform_values_for_ppc64;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
         return_empty_struct_as_void = false;
         pass_struct_as_exploded_values = false;
-        pass_float_double_values_for_ppc64 = false;
+        pass_uniform_values_for_ppc64 = false;
 
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
@@ -827,7 +827,7 @@ struct CCallingConv {
             } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
-                pass_float_double_values_for_ppc64 = true;
+                pass_uniform_values_for_ppc64 = true;
             } break;
         }
 
@@ -984,22 +984,36 @@ struct CCallingConv {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
-        // PPC64 has a special case for structs of all-float or
-        // all-double registers, up to 8 elements, but otherwise
-        // follows the x86 rules for packing arguments.
-        if (pass_float_double_values_for_ppc64) {
+        // PPC64 has a special case for uniform structs (of all same-type
+        // values) via registers. The limit appears to be 8 registers; but
+        // some integer values can be packed into one register while float
+        // values cannot. So this allows e.g., 32 int64_t values (fit in 8
+        // int64_t registers) but only 8 float/double values (32-bit float
+        // values are not bitpacked into 64-bit registers).
+        if (pass_uniform_values_for_ppc64) {
             StructType *st = dyn_cast<StructType>(t->type);
             if (st) {
                 bool all_float = true;
                 bool all_double = true;
+                bool all_integral = true;
+                unsigned integer_bitwidth = 0;
                 for (auto elt : st->elements()) {
                     all_float = all_float && elt->isFloatTy();
                     all_double = all_double && elt->isDoubleTy();
+                    all_integral = all_integral && elt->isIntegerTy();
+                    if (integer_bitwidth == 0) {
+                      integer_bitwidth = elt->getScalarSizeInBits();
+                    } else if (integer_bitwidth != elt->getScalarSizeInBits()) {
+                      all_integral = false;
+                    }
                 }
                 if (all_float && st->getNumElements() <= 8) {
                     return Argument(C_AGGREGATE_REG, t, t->type);
                 }
                 if (all_double && st->getNumElements() <= 8) {
+                    return Argument(C_AGGREGATE_REG, t, t->type);
+                }
+                if (all_integral && st->getNumElements() * integer_bitwidth <= 8 * 64) {
                     return Argument(C_AGGREGATE_REG, t, t->type);
                 }
             }
