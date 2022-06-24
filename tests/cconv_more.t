@@ -359,7 +359,7 @@ for _, name in ipairs(all_scalar_names) do
     local ok = check()
     if ok ~= 0 then
       print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
-      error("scalar test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
+      error("scalar test failed for N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype()) .. ": error code " .. tostring(ok))
     end
   end
 end
@@ -385,7 +385,7 @@ for _, name in ipairs(all_names) do
     local ok = check()
     if ok ~= 0 then
       print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
-      error("one-arg aggregate test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
+      error("aggregate test failed for N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype()) .. " where " .. tostring(aggtyp) .. "=" .. tostring(aggtyp:getentries():map(function(f) return tostring(f.field) .. "=" .. tostring(f.type) end)) .. ": error code " .. tostring(ok))
     end
   end
 end
@@ -413,7 +413,7 @@ for _, name in ipairs(all_names) do
     local ok = check()
     if ok ~= 0 then
       print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
-      error("two-arg aggregate test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
+      error("aggregate test failed for N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype()) .. " where " .. tostring(aggtyp) .. "=" .. tostring(aggtyp:getentries():map(function(f) return tostring(f.field) .. "=" .. tostring(f.type) end)) .. ": error code " .. tostring(ok))
     end
   end
 end
