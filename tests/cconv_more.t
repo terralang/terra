@@ -33,8 +33,6 @@
 --    Terra's output. A command to generate the LLVM IR is shown (commented)
 --    at the bottom of the file.
 
-local test = require("test")
-
 local MAX_N = 12 -- Needs to be <= 22 to avoid overflowing uint8.
 
 local ctypes = {
@@ -330,103 +328,92 @@ local check_fields = macro(
     end
   end)
 
--- Part 1: check all of the scalar argument functions.
-terra part1()
+-- Check functions with zero arguments/fields.
+terra check_zero()
   c.ca0()
   t.ta0()
 
-  escape
-    for _, name in ipairs(all_scalar_names) do
-      for N = 1, MAX_N do
-        local arglist = terralib.newlist()
-        local expected_result = 0
-        for i = 1, N do
-          arglist:insert(i)
-          expected_result = expected_result + i
-        end
-        assert(expected_result < 255, "value is too large to fit in uint8, not safe to test")
-        local cfunc = c["c" .. name .. N]
-        local tfunc = t["t" .. name .. N]
-        emit quote
-          teq(cfunc(arglist), expected_result)
-          teq(tfunc(arglist), expected_result)
-        end
-      end
-    end
-  end
-
-  return 0
-end
-part1:compile() -- workaround: function at line 620 has more than 60 upvalues
--- part1:printpretty(false)
-
--- Part 2: check the one-arg aggregate functions.
-terra part2()
   var x0 : c.p0
   var cx0 = c.cp0(x0)
   var tx0 = t.tp0(x0)
+end
+check_zero()
 
-  escape
-    for _, name in ipairs(all_names) do
-      for N = 1, MAX_N do
-        local aggtyp = c[name .. N]
-        local cfunc = c["c" .. name .. N]
-        local tfunc = t["t" .. name .. N]
-        assert(11 * N < 255, "value is too large to fit in uint8, not safe to test")
-        emit quote
-          var x : aggtyp
-          init_fields(x, 10, N)
-          var cx = cfunc(x)
-          check_fields(x, 10, N)
-          check_fields(cx, 11, N)
-          var tx = tfunc(x)
-          check_fields(x, 10, N)
-          check_fields(tx, 11, N)
-        end
-      end
+-- Check functions of scalar arguments.
+for _, name in ipairs(all_scalar_names) do
+  for N = 1, MAX_N do
+    local arglist = terralib.newlist()
+    local expected_result = 0
+    for i = 1, N do
+      arglist:insert(i)
+      expected_result = expected_result + i
+    end
+    assert(expected_result < 255, "value is too large to fit in uint8, not safe to test")
+    local cfunc = c["c" .. name .. N]
+    local tfunc = t["t" .. name .. N]
+    local terra check()
+      teq(cfunc(arglist), expected_result)
+      teq(tfunc(arglist), expected_result)
+      return 0
+    end
+    local ok = check()
+    if ok ~= 0 then
+      print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
+      error("scalar test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
     end
   end
+end
 
-  escape
-    for _, name in ipairs(all_names) do
-      for N = 1, MAX_N do
-        local aggtyp = c[name .. N]
-        local cfunc = c["c2" .. name .. N]
-        local tfunc = t["t2" .. name .. N]
-        assert(11 * N < 255, "value is too large to fit in uint8, not safe to test")
-        emit quote
-          var x : aggtyp
-          init_fields(x, 10, N)
-          var y : aggtyp
-          init_fields(y, 1, N)
-          var cx = cfunc(x, y)
-          check_fields(x, 10, N)
-          check_fields(cx, 11, N)
-          var tx = tfunc(x, y)
-          check_fields(x, 10, N)
-          check_fields(tx, 11, N)
-        end
-      end
+-- Check functions of one aggregate argument.
+for _, name in ipairs(all_names) do
+  for N = 1, MAX_N do
+    local aggtyp = c[name .. N]
+    local cfunc = c["c" .. name .. N]
+    local tfunc = t["t" .. name .. N]
+    assert(11 * N < 255, "value is too large to fit in uint8, not safe to test")
+    local terra check()
+      var x : aggtyp
+      init_fields(x, 10, N)
+      var cx = cfunc(x)
+      check_fields(x, 10, N)
+      check_fields(cx, 11, N)
+      var tx = tfunc(x)
+      check_fields(x, 10, N)
+      check_fields(tx, 11, N)
+      return 0
+    end
+    local ok = check()
+    if ok ~= 0 then
+      print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
+      error("one-arg aggregate test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
     end
   end
-
-  return 0
-end
--- part2:printpretty(false)
-
-terra main()
-  var err = part1()
-  if err ~= 0 then
-    return err
-  end
-
-  err = part2()
-  if err ~= 0 then
-    return err
-  end
-  return 0
 end
 
--- Useful for debugging:
--- print(terralib.saveobj(nil, "llvmir", {main=main}, nil, nil, false))
-test.eq(main(), 0)
+-- Check functions of two aggregate arguments.
+for _, name in ipairs(all_names) do
+  for N = 1, MAX_N do
+    local aggtyp = c[name .. N]
+    local cfunc = c["c2" .. name .. N]
+    local tfunc = t["t2" .. name .. N]
+    assert(11 * N < 255, "value is too large to fit in uint8, not safe to test")
+    local terra check()
+      var x : aggtyp
+      init_fields(x, 10, N)
+      var y : aggtyp
+      init_fields(y, 1, N)
+      var cx = cfunc(x, y)
+      check_fields(x, 10, N)
+      check_fields(cx, 11, N)
+      var tx = tfunc(x, y)
+      check_fields(x, 10, N)
+      check_fields(tx, 11, N)
+      return 0
+    end
+    local ok = check()
+    if ok ~= 0 then
+      print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
+      error("two-arg aggregate test failed at N=" .. tostring(N) .. ": error code " .. tostring(ok))
+    end
+  end
+end
