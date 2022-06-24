@@ -811,13 +811,13 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
-    bool pass_uniform_values_for_ppc64;
+    bool ppc64_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
         return_empty_struct_as_void = false;
         pass_struct_as_exploded_values = false;
-        pass_uniform_values_for_ppc64 = false;
+        ppc64_cconv = false;
 
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
@@ -827,7 +827,7 @@ struct CCallingConv {
             } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
-                pass_uniform_values_for_ppc64 = true;
+                ppc64_cconv = true;
             } break;
         }
 
@@ -968,7 +968,7 @@ struct CCallingConv {
     }
 #endif
 
-    Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint) {
+    Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint, bool isreturn) {
         TType *t = Ty->Get(type);
 
         if (!t->type->isAggregateType()) {
@@ -984,38 +984,56 @@ struct CCallingConv {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
-        // PPC64 has a special case for uniform structs (of all same-type
-        // values) via registers. The limit appears to be 8 registers; but
-        // some integer values can be packed into one register while float
-        // values cannot. So this allows e.g., 32 int64_t values (fit in 8
-        // int64_t registers) but only 8 float/double values (32-bit float
-        // values are not bitpacked into 64-bit registers).
-        if (pass_uniform_values_for_ppc64) {
+        if (ppc64_cconv) {
             StructType *st = dyn_cast<StructType>(t->type);
             if (st) {
                 bool all_float = true;
                 bool all_double = true;
-                bool all_integral = true;
-                unsigned integer_bitwidth = 0;
+                int alignment = 0;
                 for (auto elt : st->elements()) {
                     all_float = all_float && elt->isFloatTy();
                     all_double = all_double && elt->isDoubleTy();
-                    all_integral = all_integral && elt->isIntegerTy();
-                    if (integer_bitwidth == 0) {
-                      integer_bitwidth = elt->getScalarSizeInBits();
-                    } else if (integer_bitwidth != elt->getScalarSizeInBits()) {
-                      all_integral = false;
+                    alignment = std::max(alignment, (int)elt->getScalarSizeInBits());
+                }
+                // Special cases: all-float or all-double up to 8 values via registers
+                if (all_float && /* *usedint + */ st->getNumElements() <= 8) {
+                    *usedint += st->getNumElements();
+                    // FIXME: needs to be: // ArrayType::get(Type::getFloatTy(*CU->TT->ctx), st->getNumElements())
+                    return Argument(C_AGGREGATE_REG, t,  t->type);
+                }
+                if (all_double && /* *usedint + */ st->getNumElements() <= 8) {
+                    *usedint += st->getNumElements();
+                    // FIXME: needs to be: ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), st->getNumElements())
+                    return Argument(C_AGGREGATE_REG, t, t->type);
+                }
+
+                // Integer or mixed-integer-float case:
+
+                // Can pack up to 8 registers, or 2 if this is a return. (A register is 64 bits.)
+                int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
+                int limit = isreturn ? 2 : 8;
+                if (*usedint + sz <= limit) {
+                    *usedint += sz;
+
+                    // Pack arguments
+                    std::vector<Type *> elements;
+                    int bits = 0;
+                    for (auto elt : st->elements()) {
+                        unsigned b = elt->getScalarSizeInBits();
+                        bits += b;
+                        bits = (bits + b - 1) & (-(int)b); // Align to this type.
+                        if (bits >= 64) {
+                            elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
+                            bits -= 64;
+                        }
                     }
+                    if (bits > 0) {
+                        // Align to the biggest type we've seen.
+                        elements.push_back(Type::getIntNTy(*CU->TT->ctx, (bits + alignment - 1) & (-alignment)));
+                    }
+                    return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
                 }
-                if (all_float && st->getNumElements() <= 8) {
-                    return Argument(C_AGGREGATE_REG, t, t->type);
-                }
-                if (all_double && st->getNumElements() <= 8) {
-                    return Argument(C_AGGREGATE_REG, t, t->type);
-                }
-                if (all_integral && st->getNumElements() * integer_bitwidth <= 8 * 64) {
-                    return Argument(C_AGGREGATE_REG, t, t->type);
-                }
+                return Argument(C_AGGREGATE_MEM, t);
             }
         }
 
@@ -1051,7 +1069,7 @@ struct CCallingConv {
         Obj returntype;
         ftype->obj("returntype", &returntype);
         int zero = 0;
-        info->returntype = ClassifyArgument(&returntype, &zero, &zero);
+        info->returntype = ClassifyArgument(&returntype, &zero, &zero, true);
 
         if (return_empty_struct_as_void) {
             // windows classifies empty structs as pass by pointer, but we need a return
@@ -1073,7 +1091,7 @@ struct CCallingConv {
         for (int i = 0; i < N; i++) {
             Obj elem;
             params->objAt(i, &elem);
-            info->paramtypes.push_back(ClassifyArgument(&elem, &nfloat, &nint));
+            info->paramtypes.push_back(ClassifyArgument(&elem, &nfloat, &nint, false));
         }
         info->fntype = CreateFunctionType(info, ftype->boolean("isvararg"));
     }
