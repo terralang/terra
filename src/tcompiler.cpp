@@ -998,18 +998,22 @@ struct CCallingConv {
                 // Special cases: all-float or all-double up to 8 values via registers
                 if (all_float && /* *usedint + */ st->getNumElements() <= 8) {
                     *usedint += st->getNumElements();
-                    // FIXME: needs to be: // ArrayType::get(Type::getFloatTy(*CU->TT->ctx), st->getNumElements())
-                    return Argument(C_AGGREGATE_REG, t,  t->type);
+                    // FIXME: needs to be: //
+                    // ArrayType::get(Type::getFloatTy(*CU->TT->ctx),
+                    // st->getNumElements())
+                    return Argument(C_AGGREGATE_REG, t, t->type);
                 }
                 if (all_double && /* *usedint + */ st->getNumElements() <= 8) {
                     *usedint += st->getNumElements();
-                    // FIXME: needs to be: ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), st->getNumElements())
+                    // FIXME: needs to be: ArrayType::get(Type::getDoubleTy(*CU->TT->ctx),
+                    // st->getNumElements())
                     return Argument(C_AGGREGATE_REG, t, t->type);
                 }
 
                 // Integer or mixed-integer-float case:
 
-                // Can pack up to 8 registers, or 2 if this is a return. (A register is 64 bits.)
+                // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
+                // bits.)
                 int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
                 int limit = isreturn ? 2 : 8;
                 if (*usedint + sz <= limit) {
@@ -1021,7 +1025,7 @@ struct CCallingConv {
                     for (auto elt : st->elements()) {
                         unsigned b = elt->getScalarSizeInBits();
                         bits += b;
-                        bits = (bits + b - 1) & (-(int)b); // Align to this type.
+                        bits = (bits + b - 1) & (-(int)b);  // Align to this type.
                         if (bits >= 64) {
                             elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
                             bits -= 64;
@@ -1029,9 +1033,11 @@ struct CCallingConv {
                     }
                     if (bits > 0) {
                         // Align to the biggest type we've seen.
-                        elements.push_back(Type::getIntNTy(*CU->TT->ctx, (bits + alignment - 1) & (-alignment)));
+                        elements.push_back(Type::getIntNTy(
+                                *CU->TT->ctx, (bits + alignment - 1) & (-alignment)));
                     }
-                    return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
+                    return Argument(C_AGGREGATE_REG, t,
+                                    StructType::get(*CU->TT->ctx, elements));
                 }
                 return Argument(C_AGGREGATE_MEM, t);
             }
