@@ -969,6 +969,38 @@ struct CCallingConv {
     }
 #endif
 
+    void CountArgumentsPPC64(StructType *st, bool &all_float, bool &all_double,
+                             int &num_elts, int &alignment) {
+        for (auto elt : st->elements()) {
+            StructType *elt_st = dyn_cast<StructType>(elt);
+            if (elt_st) {
+                CountPPC64Arguments(elt_st, all_float, all_double, num_elts, alignment);
+            } else {
+                all_float = all_float && elt->isFloatTy();
+                all_double = all_double && elt->isDoubleTy();
+                num_elts++;
+                alignment = std::max(alignment, (int)elt->getScalarSizeInBits());
+            }
+        }
+    }
+
+    void PackArgumentsPPC64(StructType *st, std::vector<Type *> &elements, int &bits) {
+        for (auto elt : st->elements()) {
+            StructType *elt_st = dyn_cast<StructType>(elt);
+            if (elt_st) {
+                PackArgumentsPPC64(elt_st, elements, bits);
+            } else {
+                unsigned b = elt->getScalarSizeInBits();
+                bits += b;
+                bits = (bits + b - 1) & (-(int)b);  // Align to this type.
+                if (bits >= 64) {
+                    elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
+                    bits -= 64;
+                }
+            }
+        }
+    }
+
     Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint, bool isreturn) {
         TType *t = Ty->Get(type);
 
@@ -990,30 +1022,27 @@ struct CCallingConv {
             if (st) {
                 bool all_float = true;
                 bool all_double = true;
+                int num_elts = 0;
                 int alignment = 0;
-                for (auto elt : st->elements()) {
-                    all_float = all_float && elt->isFloatTy();
-                    all_double = all_double && elt->isDoubleTy();
-                    alignment = std::max(alignment, (int)elt->getScalarSizeInBits());
-                }
+                CountPPC64Arguments(st, all_float, all_double, num_elts, alignment);
                 // Special cases: all-float or all-double up to 8 values via registers
-                if (all_float && /* *usedint + */ st->getNumElements() <= 8) {
-                    *usedint += st->getNumElements();
-                    if (st->getNumElements() == 1) {
+                if (all_float && num_elts <= 8) {
+                    *usedint += num_elts;
+                    if (num_elts == 1) {
                         return Argument(C_AGGREGATE_REG, t, t->type);
                     } else {
-                        auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx),
-                                                 st->getNumElements());
+                        auto at =
+                                ArrayType::get(Type::getFloatTy(*CU->TT->ctx), num_elts);
                         return Argument(C_ARRAY_REG, t, at);
                     }
                 }
-                if (all_double && /* *usedint + */ st->getNumElements() <= 8) {
-                    *usedint += st->getNumElements();
-                    if (st->getNumElements() == 1) {
+                if (all_double && num_elts <= 8) {
+                    *usedint += num_elts;
+                    if (num_elts == 1) {
                         return Argument(C_AGGREGATE_REG, t, t->type);
                     } else {
-                        auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx),
-                                                 st->getNumElements());
+                        auto at =
+                                ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), num_elts);
                         return Argument(C_ARRAY_REG, t, at);
                     }
                 }
@@ -1030,15 +1059,7 @@ struct CCallingConv {
                     // Pack arguments
                     std::vector<Type *> elements;
                     int bits = 0;
-                    for (auto elt : st->elements()) {
-                        unsigned b = elt->getScalarSizeInBits();
-                        bits += b;
-                        bits = (bits + b - 1) & (-(int)b);  // Align to this type.
-                        if (bits >= 64) {
-                            elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
-                            bits -= 64;
-                        }
-                    }
+                    PackArgumentsPPC64(st, elements, bits);
                     if (bits > 0) {
                         // Align to the biggest type we've seen.
                         elements.push_back(Type::getIntNTy(
