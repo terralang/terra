@@ -1002,7 +1002,8 @@ struct CCallingConv {
                     if (st->getNumElements() == 1) {
                         return Argument(C_AGGREGATE_REG, t, t->type);
                     } else {
-                        auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), st->getNumElements());
+                        auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx),
+                                                 st->getNumElements());
                         return Argument(C_ARRAY_REG, t, at);
                     }
                 }
@@ -1011,7 +1012,8 @@ struct CCallingConv {
                     if (st->getNumElements() == 1) {
                         return Argument(C_AGGREGATE_REG, t, t->type);
                     } else {
-                        auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), st->getNumElements());
+                        auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx),
+                                                 st->getNumElements());
                         return Argument(C_ARRAY_REG, t, at);
                     }
                 }
@@ -1307,9 +1309,9 @@ struct CCallingConv {
                     emitStoreAgg(B, p->type->type,
                                  B->CreateLoad(
 #if LLVM_VERSION >= 80
-                                               p->type->type,
+                                         p->type->type,
 #endif
-                                               casted),
+                                         casted),
                                  v);
                     ++ai;
                 } break;
