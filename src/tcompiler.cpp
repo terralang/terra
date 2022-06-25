@@ -974,7 +974,7 @@ struct CCallingConv {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             for (auto elt : st->elements()) {
-                CountArgumentsPPC64(st, all_float, all_double, num_elts, alignment);
+                CountArgumentsPPC64(elt, all_float, all_double, num_elts, alignment);
             }
             return;
         }
