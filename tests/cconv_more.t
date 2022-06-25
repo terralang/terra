@@ -7,18 +7,18 @@
 --
 --  * Pass/return an empty struct.
 --
---  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass 1..N scalar arguments of this type, and return the same type.
+--  * For T in {uint8, int16, int32, int64, float, double,
+--              uint8[2], int16[2], int32[2], int64[2], float[2], double[2]}:
+--     1. Pass 1..N arguments of type T, and return T.
+--     2. Pass (and return) a single struct argument with 1..N fields of type T.
+--     3. Pass two struct arguments, as above, and return same struct.
 --
---  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass (and return) a single struct argument with 1..N fields
---        of the type above.
+--  * As above, but with arguments/fields picked from a rotating set of types.
 --
---  * For each type in {int8, int16, int32, int64, float, double}:
---      * Pass two struct arguments, as above, and return same struct.
---
---  * As each of the three cases above, but with arguments/fields
---    picked from a rotating set of types.
+--  * Note: arrays (uint8[2], etc.) passed as individual arguments (not struct
+--    fields) are wrapped in a single-field struct because otherwise C arrays
+--    are passed by reference. While Terra is capable of passing such types by
+--    value, C is not, so there is no way to do a comparison.
 --
 -- A couple notable features (especially compared to cconv.t):
 --
@@ -33,8 +33,8 @@
 --    Terra's output. A command to generate the LLVM IR is shown (commented)
 --    at the bottom of the file.
 
+local MAX_N = 9 -- Needs to be <= 23 to avoid overflowing uint8.
 local MAX_ARRAY_N = 4
-local MAX_N = 9 -- Needs to be <= 22 to avoid overflowing uint8.
 
 local ctypes = {
   [uint8] = "uint8_t",
