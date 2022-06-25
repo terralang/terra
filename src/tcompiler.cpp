@@ -1338,7 +1338,7 @@ struct CCallingConv {
             unsigned as = dest->getType()->getPointerAddressSpace();
             emitStoreAgg(B, info->returntype.type->type, result, dest);
             ArrayType *result_type = cast<ArrayType>(info->returntype.cctype);
-            Value *result = B->CreateBitCast(dest, Ptr(type, as));
+            Value *result = B->CreateBitCast(dest, Ptr(result_type, as));
             B->CreateRet(B->CreateLoad(
 #if LLVM_VERSION >= 80
                     result_type,
