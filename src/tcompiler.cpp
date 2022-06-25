@@ -1292,7 +1292,12 @@ struct CCallingConv {
                     EmitEntryAggReg(B, dest, p->cctype, ai);
                 } break;
                 case C_ARRAY_REG: {
-                  assert(false && "unimplemented");
+                    Value *scratch = CreateAlloca(B, p->cctype);
+                    unsigned as = scratch->getType()->getPointerAddressSpace();
+                    emitStoreAgg(B, p->cctype, &*ai, scratch);
+                    Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
+                    emitStoreAgg(B, p->type->type, casted, v);
+                    ++ai;
                 } break;
             }
         }
