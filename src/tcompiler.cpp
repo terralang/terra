@@ -969,12 +969,12 @@ struct CCallingConv {
     }
 #endif
 
-    void CountArgumentsPPC64(Type *t, bool &all_float, bool &all_double, int &n_elts,
-                             int64_t &align) {
+    void CountValuesPPC64(Type *t, bool &all_float, bool &all_double, int &n_elts,
+                          int64_t &align) {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             for (auto elt : st->elements()) {
-                CountArgumentsPPC64(elt, all_float, all_double, n_elts, align);
+                CountValuesPPC64(elt, all_float, all_double, n_elts, align);
             }
             return;
         }
@@ -984,7 +984,7 @@ struct CCallingConv {
             Type *elt = at->getElementType();
             uint64_t sz = at->getNumElements();
             for (uint64_t i = 0; i < sz; ++i) {
-                CountArgumentsPPC64(elt, all_float, all_double, n_elts, align);
+                CountValuesPPC64(elt, all_float, all_double, n_elts, align);
             }
             return;
         }
@@ -996,11 +996,11 @@ struct CCallingConv {
                          (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
     }
 
-    void PackArgumentsPPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
+    void MergeValuePPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             for (auto elt : st->elements()) {
-                PackArgumentsPPC64(elt, elements, bits);
+                MergeValuePPC64(elt, elements, bits);
             }
             return;
         }
@@ -1010,7 +1010,7 @@ struct CCallingConv {
             Type *elt = at->getElementType();
             uint64_t sz = at->getNumElements();
             for (uint64_t i = 0; i < sz; ++i) {
-                PackArgumentsPPC64(elt, elements, bits);
+                MergeValuePPC64(elt, elements, bits);
             }
             return;
         }
@@ -1025,19 +1025,18 @@ struct CCallingConv {
         }
     }
 
-    Argument PackArgumentAggPPC64(TType *t, StructType *st, int *usedfloat, int *usedint,
-                                  bool isreturn) {
+    Argument PackAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
         int n_elts = 0;
         int64_t align = 0;
-        CountArgumentsPPC64(st, all_float, all_double, n_elts, align);
+        CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
 
         // Special cases: all-float or all-double up to 8 values via registers:
         if (all_float && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t, st);
+                return Argument(C_AGGREGATE_REG, t, t->type);
             } else {
                 auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), n_elts);
                 return Argument(C_ARRAY_REG, t, at);
@@ -1046,7 +1045,7 @@ struct CCallingConv {
         if (all_double && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t, st);
+                return Argument(C_AGGREGATE_REG, t, t->type);
             } else {
                 auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), n_elts);
                 return Argument(C_ARRAY_REG, t, at);
@@ -1057,7 +1056,7 @@ struct CCallingConv {
 
         // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
         // bits or 8 bytes.)
-        int sz = (CU->getDataLayout().getTypeAllocSize(st) + 7) / 8;
+        int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
         int limit = isreturn ? 2 : 8;
         if (*usedint + sz <= limit) {
             *usedint += sz;
@@ -1065,7 +1064,7 @@ struct CCallingConv {
             // Pack arguments
             std::vector<Type *> elements;
             int64_t bits = 0;
-            PackArgumentsPPC64(st, elements, bits);
+            MergeValuePPC64(t->type, elements, bits);
             if (bits > 0) {
                 // Align to the biggest type we've seen.
                 elements.push_back(
@@ -1093,10 +1092,7 @@ struct CCallingConv {
         }
 
         if (ppc64_cconv) {
-            StructType *st = dyn_cast<StructType>(t->type);
-            if (st) {
-                return PackArgumentAggPPC64(t, st, usedfloat, usedint, isreturn);
-            }
+            return PackAggPPC64(t, usedfloat, usedint, isreturn);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
