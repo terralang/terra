@@ -1386,7 +1386,11 @@ struct CCallingConv {
                     EmitCallAggReg(B, casted, a->cctype, arguments);
                 } break;
                 case C_ARRAY_REG: {
-                    assert(false && "unimplemented");
+                    Value *scratch = CreateAlloca(B, a->type->type);
+                    unsigned as = scratch->getType()->getPointerAddressSpace();
+                    emitStoreAgg(B, a->type->type, actual, scratch);
+                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
+                    EmitCallAggReg(B, casted, a->cctype, arguments);
                 } break;
                 default: {
                     assert(!"unhandled argument kind");
