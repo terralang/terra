@@ -1014,7 +1014,7 @@ struct CCallingConv {
             return;
         }
 
-        unsigned b = CU->getDataLayout().getTypeAllocSizeInBits(elt);
+        unsigned b = CU->getDataLayout().getTypeAllocSizeInBits(t);
         bits += b;
         bits = (bits + b - 1) & (-(int)b);  // Align to this type.
         if (bits >= 64) {
