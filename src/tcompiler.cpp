@@ -1025,7 +1025,7 @@ struct CCallingConv {
         }
     }
 
-    Argument PackAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
+    Argument ClassifyAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
         int n_elts = 0;
@@ -1092,7 +1092,7 @@ struct CCallingConv {
         }
 
         if (ppc64_cconv) {
-            return PackAggPPC64(t, usedfloat, usedint, isreturn);
+            return ClassifyAggPPC64(t, usedfloat, usedint, isreturn);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
