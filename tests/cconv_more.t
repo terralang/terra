@@ -553,29 +553,47 @@ local function generate_scalar_args(typ, i, arglist)
   return i
 end
 
+local function safe_limit(typ)
+  if typ:isarray() then
+    return safe_limit(typ.type)
+  end
+  -- Overapproximate range of float/double. This is ok because we'll
+  -- never get close to this limit.
+  return 2ULL ^ (sizeof(typ)*8) - 1
+end
+
+local function min(a, b, c, d)
+  if a < b then return a, c end
+  return b, d
+end
+
 -- Check functions of scalar arguments.
 for i, typ in ipairs(types) do
   local name = uniform_scalar_names[i]
   for N = 1, MAX_N do
     local cfunc = c["c" .. name .. N]
     local tfunc = t["t" .. name .. N]
-    local test_name = "N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype())
-    print("running scalar test for " .. test_name)
     local arglist = terralib.newlist()
     local expected_result = 0
     for i = 1, N do
       expected_result = expected_result + generate_scalar_args(typ, i, arglist)
     end
-    assert(expected_result < 255, "value is too large to fit in uint8, not safe to test")
-    local terra check()
-      teq(cfunc(arglist), expected_result)
-      teq(tfunc(arglist), expected_result)
-      return 0
-    end
-    local ok = check()
-    if ok ~= 0 then
-      print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
-      error("scalar test failed for " .. test_name .. ": error code " .. tostring(ok))
+    local limit = safe_limit(typ)
+    local test_name = "N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype())
+    if expected_result < limit then
+      print("running scalar test for " .. test_name)
+      local terra check()
+        teq(cfunc(arglist), expected_result)
+        teq(tfunc(arglist), expected_result)
+        return 0
+      end
+      local ok = check()
+      if ok ~= 0 then
+        print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
+        error("scalar test failed for " .. test_name .. ": error code " .. tostring(ok))
+      end
+    else
+      print("skipping scalar test for " .. test_name .. ": " .. expected_result .. " is too large for " .. tostring(typ) .. " " .. tostring(limit))
     end
   end
 end
@@ -584,24 +602,29 @@ for i, type_rotation in ipairs(type_rotations) do
   for N = 1, MAX_N do
     local cfunc = c["c" .. name .. N]
     local tfunc = t["t" .. name .. N]
-    local test_name = "N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype())
-    print("running scalar test for " .. test_name)
     local arglist = terralib.newlist()
     local expected_result = 0
+    local limit, limit_type = math.huge
     for i = 1, N do
       local typ = get_type_in_rotation(type_rotation, i)
       expected_result = expected_result + generate_scalar_args(typ, i, arglist)
+      limit, limit_type = min(limit, safe_limit(typ), limit_type, typ)
     end
-    assert(expected_result < 255, "value is too large to fit in uint8, not safe to test")
-    local terra check()
-      teq(cfunc(arglist), expected_result)
-      teq(tfunc(arglist), expected_result)
-      return 0
-    end
-    local ok = check()
-    if ok ~= 0 then
-      print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
-      error("scalar test failed for " .. test_name .. ": error code " .. tostring(ok))
+    local test_name = "N=" .. tostring(N) .. ", " .. tostring(tfunc:gettype())
+    if expected_result < limit then
+      print("running scalar test for " .. test_name)
+      local terra check()
+        teq(cfunc(arglist), expected_result)
+        teq(tfunc(arglist), expected_result)
+        return 0
+      end
+      local ok = check()
+      if ok ~= 0 then
+        print(terralib.saveobj(nil, "llvmir", {check=check}, nil, nil, false))
+        error("scalar test failed for " .. test_name .. ": error code " .. tostring(ok))
+      end
+    else
+      print("skipping scalar test for " .. test_name .. ": " .. expected_result .. " is too large for " .. tostring(limit_type) .. " " .. tostring(limit))
     end
   end
 end
