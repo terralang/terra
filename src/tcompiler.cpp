@@ -969,34 +969,34 @@ struct CCallingConv {
     }
 #endif
 
-    void CountArgumentsPPC64(Type *t, bool &all_float, bool &all_double, int &num_elts,
-                             int &alignment) {
+    void CountArgumentsPPC64(Type *t, bool &all_float, bool &all_double, int &n_elts,
+                             int64_t &align) {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             for (auto elt : st->elements()) {
-                CountArgumentsPPC64(elt, all_float, all_double, num_elts, alignment);
+                CountArgumentsPPC64(elt, all_float, all_double, n_elts, align);
             }
             return;
         }
 
         ArrayType *at = dyn_cast<ArrayType>(t);
         if (at) {
+            Type *elt = at->getElementType();
             uint64_t sz = at->getNumElements();
             for (uint64_t i = 0; i < sz; ++i) {
-                CountArgumentsPPC64(at->getElementType(), all_float, all_double, num_elts,
-                                    alignment);
+                CountArgumentsPPC64(elt, all_float, all_double, n_elts, align);
             }
             return;
         }
 
         all_float = all_float && t->isFloatTy();
         all_double = all_double && t->isDoubleTy();
-        num_elts++;
-        alignment =
-                std::max(alignment, (int)CU->getDataLayout().getTypeAllocSizeInBits(t));
+        n_elts++;
+        align = std::max(align,
+                         (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
     }
 
-    void PackArgumentsPPC64(Type *t, std::vector<Type *> &elements, int &bits) {
+    void PackArgumentsPPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             for (auto elt : st->elements()) {
@@ -1007,20 +1007,73 @@ struct CCallingConv {
 
         ArrayType *at = dyn_cast<ArrayType>(t);
         if (at) {
+            Type *elt = at->getElementType();
             uint64_t sz = at->getNumElements();
             for (uint64_t i = 0; i < sz; ++i) {
-                PackArgumentsPPC64(at->getElementType(), elements, bits);
+                PackArgumentsPPC64(elt, elements, bits);
             }
             return;
         }
 
         unsigned b = CU->getDataLayout().getTypeAllocSizeInBits(t);
+        int64_t align = CU->getDataLayout().getABITypeAlignment(t) * 8;
         bits += b;
-        bits = (bits + b - 1) & (-(int)b);  // Align to this type.
+        bits = (bits + align - 1) & (-align);  // Align to this type.
         if (bits >= 64) {
             elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
             bits -= 64;
         }
+    }
+
+    Argument PackArgumentAggPPC64(TType *t, StructType *st, int *usedfloat, int *usedint,
+                                  bool isreturn) {
+        bool all_float = true;
+        bool all_double = true;
+        int n_elts = 0;
+        int64_t align = 0;
+        CountArgumentsPPC64(st, all_float, all_double, n_elts, align);
+
+        // Special cases: all-float or all-double up to 8 values via registers:
+        if (all_float && n_elts <= 8) {
+            *usedint += n_elts;
+            if (n_elts == 1) {
+                return Argument(C_AGGREGATE_REG, t, st);
+            } else {
+                auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), n_elts);
+                return Argument(C_ARRAY_REG, t, at);
+            }
+        }
+        if (all_double && n_elts <= 8) {
+            *usedint += n_elts;
+            if (n_elts == 1) {
+                return Argument(C_AGGREGATE_REG, t, st);
+            } else {
+                auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), n_elts);
+                return Argument(C_ARRAY_REG, t, at);
+            }
+        }
+
+        // Integer or mixed case:
+
+        // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
+        // bits or 8 bytes.)
+        int sz = (CU->getDataLayout().getTypeAllocSize(st) + 7) / 8;
+        int limit = isreturn ? 2 : 8;
+        if (*usedint + sz <= limit) {
+            *usedint += sz;
+
+            // Pack arguments
+            std::vector<Type *> elements;
+            int64_t bits = 0;
+            PackArgumentsPPC64(st, elements, bits);
+            if (bits > 0) {
+                // Align to the biggest type we've seen.
+                elements.push_back(
+                        Type::getIntNTy(*CU->TT->ctx, (bits + align - 1) & (-align)));
+            }
+            return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
+        }
+        return Argument(C_AGGREGATE_MEM, t);
     }
 
     Argument ClassifyArgument(Obj *type, int *usedfloat, int *usedint, bool isreturn) {
@@ -1042,55 +1095,7 @@ struct CCallingConv {
         if (ppc64_cconv) {
             StructType *st = dyn_cast<StructType>(t->type);
             if (st) {
-                bool all_float = true;
-                bool all_double = true;
-                int num_elts = 0;
-                int alignment = 0;
-                CountArgumentsPPC64(st, all_float, all_double, num_elts, alignment);
-                // Special cases: all-float or all-double up to 8 values via registers
-                if (all_float && num_elts <= 8) {
-                    *usedint += num_elts;
-                    if (num_elts == 1) {
-                        return Argument(C_AGGREGATE_REG, t, t->type);
-                    } else {
-                        auto at =
-                                ArrayType::get(Type::getFloatTy(*CU->TT->ctx), num_elts);
-                        return Argument(C_ARRAY_REG, t, at);
-                    }
-                }
-                if (all_double && num_elts <= 8) {
-                    *usedint += num_elts;
-                    if (num_elts == 1) {
-                        return Argument(C_AGGREGATE_REG, t, t->type);
-                    } else {
-                        auto at =
-                                ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), num_elts);
-                        return Argument(C_ARRAY_REG, t, at);
-                    }
-                }
-
-                // Integer or mixed-integer-float case:
-
-                // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
-                // bits.)
-                int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
-                int limit = isreturn ? 2 : 8;
-                if (*usedint + sz <= limit) {
-                    *usedint += sz;
-
-                    // Pack arguments
-                    std::vector<Type *> elements;
-                    int bits = 0;
-                    PackArgumentsPPC64(st, elements, bits);
-                    if (bits > 0) {
-                        // Align to the biggest type we've seen.
-                        elements.push_back(Type::getIntNTy(
-                                *CU->TT->ctx, (bits + alignment - 1) & (-alignment)));
-                    }
-                    return Argument(C_AGGREGATE_REG, t,
-                                    StructType::get(*CU->TT->ctx, elements));
-                }
-                return Argument(C_AGGREGATE_MEM, t);
+                return PackArgumentAggPPC64(t, st, usedfloat, usedint, isreturn);
             }
         }
 
