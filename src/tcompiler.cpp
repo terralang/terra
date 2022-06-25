@@ -1497,7 +1497,7 @@ struct CCallingConv {
                     GatherArgumentsAggReg(a->cctype, arguments);
                 } break;
                 case C_ARRAY_REG: {
-                    assert(false && "unimplemented");
+                    arguments.push_back(a->cctype);
                 } break;
                 default: {
                     assert(!"unhandled argument kind");
