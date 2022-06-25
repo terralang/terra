@@ -1304,7 +1304,13 @@ struct CCallingConv {
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     emitStoreAgg(B, p->cctype, &*ai, scratch);
                     Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
-                    emitStoreAgg(B, p->type->type, casted, v);
+                    emitStoreAgg(B, p->type->type,
+                                 B->CreateLoad(
+#if LLVM_VERSION >= 80
+                                               p->type->type,
+#endif
+                                               casted),
+                                 v);
                     ++ai;
                 } break;
             }
