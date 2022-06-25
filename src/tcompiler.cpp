@@ -850,6 +850,7 @@ struct CCallingConv {
         C_PRIMITIVE,      // passed without modifcation (i.e. any non-aggregate type)
         C_AGGREGATE_REG,  // aggregate passed through registers
         C_AGGREGATE_MEM,  // aggregate passed through memory
+        C_ARRAY_REG,      // array passed through registers
     };
 
     struct Argument {
@@ -877,7 +878,7 @@ struct CCallingConv {
             return 1;
         }
         int GetNumberOfTypesInParamList() {
-            if (C_AGGREGATE_REG == this->kind)
+            if (this->kind == C_AGGREGATE_REG)
                 return GetNumberOfTypesInParamList(this->cctype);
             return 1;
         }
@@ -1290,6 +1291,9 @@ struct CCallingConv {
                     Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
                     EmitEntryAggReg(B, dest, p->cctype, ai);
                 } break;
+                case C_ARRAY_REG: {
+                  assert(false && "unimplemented");
+                } break;
             }
         }
     }
@@ -1324,6 +1328,8 @@ struct CCallingConv {
                     result_type,
 #endif
                     result));
+        } else if (C_ARRAY_REG == kind) {
+          assert(false && "unimplemented");
         } else {
             assert(!"unhandled return value");
         }
@@ -1379,6 +1385,12 @@ struct CCallingConv {
                     Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
                     EmitCallAggReg(B, casted, a->cctype, arguments);
                 } break;
+                case C_ARRAY_REG: {
+                    assert(false && "unimplemented");
+                } break;
+                default: {
+                    assert(!"unhandled argument kind");
+                } break;
             }
         }
 
@@ -1398,7 +1410,7 @@ struct CCallingConv {
             Value *aggregate;
             if (C_AGGREGATE_MEM == info.returntype.kind) {
                 aggregate = arguments[0];
-            } else {  // C_AGGREGATE_REG
+            } else if (C_AGGREGATE_REG == info.returntype.kind) {
                 aggregate = CreateAlloca(B, info.returntype.type->type);
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
                 StructType *type = cast<StructType>(info.returntype.cctype);
@@ -1410,6 +1422,10 @@ struct CCallingConv {
                 }
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
+            } else if (C_ARRAY_REG == info.returntype.kind) {
+                assert(false && "unimplemented");
+            } else {
+                assert(!"unhandled argument kind");
             }
             return B->CreateLoad(
 #if LLVM_VERSION >= 80
@@ -1453,8 +1469,14 @@ struct CCallingConv {
                 rt = Type::getVoidTy(*CU->TT->ctx);
                 arguments.push_back(Ptr(info->returntype.type->type));
             } break;
+            case C_ARRAY_REG: {
+                assert(false && "unimplemented");
+            } break;
             case C_PRIMITIVE: {
                 rt = info->returntype.cctype;
+            } break;
+            default: {
+                assert(!"unhandled argument kind");
             } break;
         }
 
@@ -1469,6 +1491,12 @@ struct CCallingConv {
                     break;
                 case C_AGGREGATE_REG: {
                     GatherArgumentsAggReg(a->cctype, arguments);
+                } break;
+                case C_ARRAY_REG: {
+                    assert(false && "unimplemented");
+                } break;
+                default: {
+                    assert(!"unhandled argument kind");
                 } break;
             }
         }
