@@ -974,7 +974,7 @@ struct CCallingConv {
         for (auto elt : st->elements()) {
             StructType *elt_st = dyn_cast<StructType>(elt);
             if (elt_st) {
-                CountPPC64Arguments(elt_st, all_float, all_double, num_elts, alignment);
+                CountArgumentsPPC64(elt_st, all_float, all_double, num_elts, alignment);
             } else {
                 all_float = all_float && elt->isFloatTy();
                 all_double = all_double && elt->isDoubleTy();
@@ -1024,7 +1024,7 @@ struct CCallingConv {
                 bool all_double = true;
                 int num_elts = 0;
                 int alignment = 0;
-                CountPPC64Arguments(st, all_float, all_double, num_elts, alignment);
+                CountArgumentsPPC64(st, all_float, all_double, num_elts, alignment);
                 // Special cases: all-float or all-double up to 8 values via registers
                 if (all_float && num_elts <= 8) {
                     *usedint += num_elts;
