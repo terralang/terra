@@ -1334,7 +1334,16 @@ struct CCallingConv {
 #endif
                     result));
         } else if (C_ARRAY_REG == kind) {
-          assert(false && "unimplemented");
+            Value *dest = CreateAlloca(B, info->returntype.type->type);
+            unsigned as = dest->getType()->getPointerAddressSpace();
+            emitStoreAgg(B, info->returntype.type->type, result, dest);
+            ArrayType *result_type = cast<ArrayType>(info->returntype.cctype);
+            Value *result = B->CreateBitCast(dest, Ptr(type, as));
+            B->CreateRet(B->CreateLoad(
+#if LLVM_VERSION >= 80
+                    result_type,
+#endif
+                    result));
         } else {
             assert(!"unhandled return value");
         }
