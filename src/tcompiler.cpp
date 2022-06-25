@@ -969,35 +969,57 @@ struct CCallingConv {
     }
 #endif
 
-    void CountArgumentsPPC64(StructType *st, bool &all_float, bool &all_double,
-                             int &num_elts, int &alignment) {
-        for (auto elt : st->elements()) {
-            StructType *elt_st = dyn_cast<StructType>(elt);
-            if (elt_st) {
-                CountArgumentsPPC64(elt_st, all_float, all_double, num_elts, alignment);
-            } else {
-                all_float = all_float && elt->isFloatTy();
-                all_double = all_double && elt->isDoubleTy();
-                num_elts++;
-                alignment = std::max(alignment, (int)elt->getScalarSizeInBits());
+    void CountArgumentsPPC64(Type *t, bool &all_float, bool &all_double, int &num_elts,
+                             int &alignment) {
+        StructType *st = dyn_cast<StructType>(t);
+        if (st) {
+            for (auto elt : st->elements()) {
+                CountArgumentsPPC64(st, all_float, all_double, num_elts, alignment);
             }
+            return;
         }
+
+        ArrayType *at = dyn_cast<ArrayType>(t);
+        if (at) {
+            uint64_t sz = at->getNumElements();
+            for (uint64_t i = 0; i < sz; ++i) {
+                CountArgumentsPPC64(at->getElementType(), all_float, all_double, num_elts,
+                                    alignment);
+            }
+            return;
+        }
+
+        all_float = all_float && t->isFloatTy();
+        all_double = all_double && t->isDoubleTy();
+        num_elts++;
+        alignment =
+                std::max(alignment, (int)CU->getDataLayout().getTypeAllocSizeInBits(t));
     }
 
-    void PackArgumentsPPC64(StructType *st, std::vector<Type *> &elements, int &bits) {
-        for (auto elt : st->elements()) {
-            StructType *elt_st = dyn_cast<StructType>(elt);
-            if (elt_st) {
-                PackArgumentsPPC64(elt_st, elements, bits);
-            } else {
-                unsigned b = elt->getScalarSizeInBits();
-                bits += b;
-                bits = (bits + b - 1) & (-(int)b);  // Align to this type.
-                if (bits >= 64) {
-                    elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
-                    bits -= 64;
-                }
+    void PackArgumentsPPC64(Type *t, std::vector<Type *> &elements, int &bits) {
+        StructType *st = dyn_cast<StructType>(t);
+        if (st) {
+            for (auto elt : st->elements()) {
+                PackArgumentsPPC64(elt, elements, bits);
             }
+            return;
+        }
+
+        ArrayType *at = dyn_cast<ArrayType>(t);
+        if (at) {
+            uint64_t sz = at->getNumElements();
+            for (uint64_t i = 0; i < sz; ++i) {
+                PackArgumentsPPC64(at->getElementType(), elements, bits);
+            }
+            return;
+        }
+
+        unsigned b = CU->getDataLayout().getTypeAllocSizeInBits(elt);
+        bits += b;
+        bits = (bits + b - 1) & (-(int)b);  // Align to this type.
+        if (bits >= 64) {
+            elements.push_back(Type::getIntNTy(*CU->TT->ctx, 64));
+            bits -= 64;
         }
     }
 
