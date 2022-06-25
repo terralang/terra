@@ -199,12 +199,12 @@ end
 
 local base_types = {uint8, int16, int32, int64, float, double}
 
-local uniform_names = terralib.newlist({"q", "r", "s", "t", "u", "v",
-                                        "qq", "rr", "ss", "tt", "uu", "vv"})
+local uniform_names = terralib.newlist({"p", "q", "r", "s", "t", "u",
+                                        "pp", "qq", "rr", "ss", "tt", "uu"})
 local types = {uint8, int16, int32, int64, float, double,
                uint8[2], int16[2], int32[2], int64[2], float[2], double[2]}
 
-local nonuniform_names = terralib.newlist({"w", "x", "y", "z", "zz"})
+local nonuniform_names = terralib.newlist({"v", "w", "x", "y", "z"})
 local type_rotations = {
   {uint8, int16, int32, int64, double},
   {float, float, uint8, uint8, int16, int32, int64},
