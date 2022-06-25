@@ -850,7 +850,7 @@ struct CCallingConv {
         C_PRIMITIVE,      // passed without modifcation (i.e. any non-aggregate type)
         C_AGGREGATE_REG,  // aggregate passed through registers
         C_AGGREGATE_MEM,  // aggregate passed through memory
-        C_ARRAY_REG,      // array passed through registers
+        C_ARRAY_REG,      // aggregate passed through registers as an array
     };
 
     struct Argument {
@@ -1470,7 +1470,7 @@ struct CCallingConv {
                 arguments.push_back(Ptr(info->returntype.type->type));
             } break;
             case C_ARRAY_REG: {
-                assert(false && "unimplemented");
+                rt = info->returntype.cctype;
             } break;
             case C_PRIMITIVE: {
                 rt = info->returntype.cctype;
