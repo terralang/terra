@@ -999,13 +999,21 @@ struct CCallingConv {
                 // Special cases: all-float or all-double up to 8 values via registers
                 if (all_float && /* *usedint + */ st->getNumElements() <= 8) {
                     *usedint += st->getNumElements();
-                    auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), st->getNumElements());
-                    return Argument(C_ARRAY_REG, t, at);
+                    if (st->getNumElements() == 1) {
+                        return Argument(C_AGGREGATE_REG, t, t->type);
+                    } else {
+                        auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), st->getNumElements());
+                        return Argument(C_ARRAY_REG, t, at);
+                    }
                 }
                 if (all_double && /* *usedint + */ st->getNumElements() <= 8) {
                     *usedint += st->getNumElements();
-                    auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), st->getNumElements());
-                    return Argument(C_ARRAY_REG, t, at);
+                    if (st->getNumElements() == 1) {
+                        return Argument(C_AGGREGATE_REG, t, t->type);
+                    } else {
+                        auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), st->getNumElements());
+                        return Argument(C_ARRAY_REG, t, at);
+                    }
                 }
 
                 // Integer or mixed-integer-float case:
