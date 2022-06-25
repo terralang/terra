@@ -1423,7 +1423,11 @@ struct CCallingConv {
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
                     B->CreateStore(call, casted);
             } else if (C_ARRAY_REG == info.returntype.kind) {
-                assert(false && "unimplemented");
+                aggregate = CreateAlloca(B, info.returntype.type->type);
+                unsigned as = aggregate->getType()->getPointerAddressSpace();
+                ArrayType *type = cast<ArrayType>(info.returntype.cctype);
+                Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
+                B->CreateStore(call, casted);
             } else {
                 assert(!"unhandled argument kind");
             }
