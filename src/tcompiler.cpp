@@ -1431,7 +1431,7 @@ struct CCallingConv {
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
                 ArrayType *type = cast<ArrayType>(info.returntype.cctype);
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
-                B->CreateStore(call, casted);
+                emitStoreAgg(B, type, call, casted);
             } else {
                 assert(!"unhandled argument kind");
             }
