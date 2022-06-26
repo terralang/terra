@@ -1,3 +1,29 @@
+# Release 1.0.2 (2022-06-25)
+
+This release includes improvements to make Terra better match Unix-like system
+conventions, as well as substantial improvements to C calling convention
+conformance on PPC64le.
+
+## Changed behaviors
+
+  * Terra historically installed its shared library as `terra.so` or
+    `terra.dylib` on Unix-like systems. This is for compatibility with Lua,
+    which allows a module be loaded as `require("terra")` if `terra.so` (or
+    `terra.dylib`, depending on the system) is present. However, this
+    conflicts with the Unix standard of having libraries prefixed with
+    `lib`. In this release, Terra installs its shared library as `libterra.so`
+    or `libterra.dylib`, and installs a symlink for `terra.so` or
+    `terra.dylib` for backwards compatibility. (Behavior on Windows and with
+    static libraries is unchanged.)
+
+## Improvements
+
+  * Substantially improved C calling convention conformance on PPC64le, along
+    with a new conformance test that matches behavior against C for all
+    primitive types (`uint8`, `int16`, `int32`, ...) and structs/arrays of
+    those types, up to a bound. Successfully tested on POWER9 hardware up to
+    `N` = 23. Current test suite pass rate on this hardware is 98.5%.
+
 # Release 1.0.1 (2022-06-13)
 
 This release includes no major Terra changes, but upgrades the LuaJIT
@@ -6,11 +32,17 @@ PPC64le.
 
 ## Changed behaviors
 
-  * The default Lua has been set back to LuaJIT for all platforms other than PPC64le (where it is still set to Moonjit). As before, this can be configured explicitly with the CMake flag `-DTERRA_LUA` with either `luajit` or `moonjit`
+  * The default Lua has been set back to LuaJIT for all platforms other than
+    PPC64le (where it is still set to Moonjit). As before, this can be
+    configured explicitly with the CMake flag `-DTERRA_LUA` with either
+    `luajit` or `moonjit`
 
 ## Experimental features added
 
-  * Binary builds for ARM64 and PPC64le. These platforms were already possible to build from source, but this makes them easier to try out. Note the test suite pass rate is about 96% for ARM64 and 98% for PPC64le. You mileage may vary depending on what features of Terra you use
+  * Binary builds for ARM64 and PPC64le. These platforms were already possible
+    to build from source, but this makes them easier to try out. Note the test
+    suite pass rate is about 96% for ARM64 and 98% for PPC64le. You mileage
+    may vary depending on what features of Terra you use
 
 # Release 1.0.0 (2022-06-08)
 
