@@ -31,7 +31,17 @@ local function run_test_case(typ, N)
       end
     end
     var z = callee(y)
-    return y, z
+    return [(
+      function()
+        local result = terralib.newlist()
+        for i = 1, N do
+          result:insert(`y[i-1])
+        end
+        for i = 1, N do
+          result:insert(`z[i-1])
+        end
+        return result
+      end)()]
   end
 
   local values = terralib.newlist()
@@ -39,11 +49,13 @@ local function run_test_case(typ, N)
     values:insert(i * 10)
   end
 
-  local before, after = unpacktuple(caller(unpack(values)))
+  local values = terralib.newlist({unpacktuple(caller(unpack(values)))})
 
   for i = 1, N do
-    test.eq(before[i-1], i*10)
-    test.eq(after[i-1], i*11)
+    test.eq(values[i], i*10)
+  end
+  for i = N+1, 2*N do
+    test.eq(values[i], (i-N)*11)
   end
 end
 
