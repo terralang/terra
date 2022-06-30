@@ -5,6 +5,7 @@
 local test = require("test")
 
 local function run_test_case(typ, N)
+  print("running test for " .. tostring(typ[N]))
   local terra callee(x : typ[N])
     escape
       for i = 1, N do
