@@ -1036,7 +1036,8 @@ struct CCallingConv {
         if (all_float && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t, t->type);
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(Type::getFloatTy(*CU->TT->ctx)));
             } else {
                 auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), n_elts);
                 return Argument(C_ARRAY_REG, t, at);
@@ -1045,7 +1046,8 @@ struct CCallingConv {
         if (all_double && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t, t->type);
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(Type::getDoubleTy(*CU->TT->ctx)));
             } else {
                 auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), n_elts);
                 return Argument(C_ARRAY_REG, t, at);
