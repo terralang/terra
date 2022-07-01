@@ -1,3 +1,13 @@
+# Release 1.0.3 (2022-07-01)
+
+This release contains no feature changes, but includes bug fixes for
+the Terra calling convention on PPC64le for passing arrays by value.
+
+## Improvements
+
+  * Fixes for the Terra calling convention on PPC64le for passing
+    arrays by value.
+
 # Release 1.0.2 (2022-06-25)
 
 This release includes improvements to make Terra better match Unix-like system
