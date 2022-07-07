@@ -4897,4 +4897,8 @@ function terra.initdebugfns(traceback,backtrace,lookupsymbol,lookupline,disas)
     terra.disas = terra.cast(FP({po,terra.types.uint64,terra.types.uint64},{}),disas)
 end
 
+-- initialize type table for a few basic types
+terra.cast(uint64, 1ULL)
+terra.cast(int64, 1LL)
+
 _G["terralib"] = terra --terra code can't use "terra" because it is a keyword
