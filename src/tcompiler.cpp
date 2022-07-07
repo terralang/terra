@@ -1033,7 +1033,7 @@ struct CCallingConv {
         CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
 
         // Special cases: all-float or all-double up to 8 values via registers:
-        if (all_float && n_elts <= 8) {
+        if (all_float && n_elts > 0 && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
@@ -1043,7 +1043,7 @@ struct CCallingConv {
                 return Argument(C_ARRAY_REG, t, at);
             }
         }
-        if (all_double && n_elts <= 8) {
+        if (all_double && n_elts > 0 && n_elts <= 8) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
