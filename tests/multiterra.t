@@ -1,5 +1,11 @@
 local ffi = require("ffi")
 
+-- FIXME: https://github.com/terralang/terra/issues/583
+if ffi.arch == "ppc64le" then
+  print("this test is not compatible with PPC64le")
+  return
+end
+
 C = terralib.includecstring [[
 #ifndef _WIN32
 #include <pthread.h>
