@@ -1,3 +1,17 @@
+# Release 1.0.4 (2022-07-08)
+
+This release stabilizes support for PPC64le. On POWER9 hardware, Terra
+now passes 100% of the test suite. This comes with one large caveat:
+Terra relies on Moonjit, a fork of LuaJIT, for support for PPC64le. At
+the time of this release, Moonjit is currently unsupported. Therefore,
+while Terra provides comprehensive support for PPC64le, we are not in
+a position to fix issues in the Moonjit implementation.
+
+## Improvements
+
+  * Fixes for multiple issues on PPC64le, allowing Terra to pass 100%
+    of the test suite.
+
 # Release 1.0.3 (2022-07-01)
 
 This release contains no feature changes, but includes bug fixes for
