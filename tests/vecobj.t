@@ -1,3 +1,5 @@
+local ffi = require("ffi")
+
 local Vec = terralib.memoize(function(typ,N)
     N = assert(tonumber(N),"expected a number")
     local ops = { "__sub","__add","__mul","__div" }
@@ -40,7 +42,20 @@ local Vec = terralib.memoize(function(typ,N)
     return VecType
 end)
 
-printfloat = terralib.cast({float}->{},print)
+-- FIXME: https://github.com/terralang/terra/issues/581
+-- There are two limitations of Moonjit on PPC64le that require workarounds:
+--  1. the printfloat callback results in a segfault
+--  2. passing arrays to Terra from Lua results in garbage
+
+if ffi.arch ~= "ppc64le" then
+    printfloat = terralib.cast({float}->{},print)
+else
+    local c = terralib.includec("stdio.h")
+    terra printfloat(x : float)
+        c.printf("%f\n", x)
+    end
+end
+
 terra foo(v : Vec(float,4), w : Vec(float,4))
     var z : Vec(float,4) = 1
     var x = (v*4)+w+1
@@ -53,4 +68,21 @@ end
 foo:printpretty(true,false)
 foo:disas()
 
-assert(20 == foo({{1,2,3,4}},{{5,6,7,8}}))
+if ffi.arch ~= "ppc64le" then
+    assert(20 == foo({{1,2,3,4}},{{5,6,7,8}}))
+else
+    terra call_foo(v0 : float, v1 : float, v2 : float, v3 : float, w0 : float, w1 : float, w2 : float, w3 : float)
+        var v : Vec(float,4)
+        v(0) = v0
+        v(1) = v1
+        v(2) = v2
+        v(3) = v3
+        var w : Vec(float,4)
+        w(0) = w0
+        w(1) = w1
+        w(2) = w2
+        w(3) = w3
+        return foo(v, w)
+    end
+    assert(20 == call_foo(1, 2, 3, 4, 5, 6, 7, 8))
+end
