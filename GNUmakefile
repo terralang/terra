@@ -287,7 +287,7 @@ $(DYNLIBRARY):	$(LIBRARY)
 	$(CXX) $(DYNFLAGS) $(TERRA_STATIC_LIBRARY) $(SUPPORT_LIBRARY_FLAGS) -o $@  
 
 $(DYNLIBRARY_LINK):	$(DYNLIBRARY)
-	ln -s $(basename $(DYNLIBRARY)) $(DYNLIBRARY_LINK)
+	ln -s $(notdir $(DYNLIBRARY)) $(DYNLIBRARY_LINK)
 
 $(EXECUTABLE):	$(addprefix build/, $(EXEOBJS)) $(LIBRARY)
 	mkdir -p release/bin release/lib
