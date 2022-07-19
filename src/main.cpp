@@ -103,6 +103,7 @@ int main(int argc, char **argv) {
     if (terra_initwithoptions(L, &options)) doerror(L);
 
     setupcrashsignal(L);
+    int registered = atexit(terra_llvmshutdown);
 
     if (options.cmd_line_chunk != NULL) {
         if (terra_dostring(L, options.cmd_line_chunk)) doerror(L);
@@ -125,7 +126,7 @@ int main(int argc, char **argv) {
     }
 
     lua_close(L);
-    terra_llvmshutdown();
+    if (registered != 0) terra_llvmshutdown();
 
     return 0;
 }
