@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-18.04', 'macos-10.15', 'windows-2022']
+        os: ['ubuntu-18.04', 'macos-11', 'windows-2022']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -30,37 +30,37 @@ jobs:
             llvm: '14'
 
           # macOS: exclude LLVM 5.0, 8-14 make, cuda/no-static/no-slib
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '5.0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '8'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '9'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '10'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '11'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '12'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '13'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '14'
             cmake: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             cuda: '1'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             static: '0'
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             slib: '0'
           # LLVM 10 binaries are broken on recent macOS
-          - os: 'macos-10.15'
+          - os: 'macos-11'
             llvm: '10'
 
           # Windows: exclude LLVM 5.0-10,12-14, make
@@ -212,7 +212,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '6.0', '12', '14.0.0']
+        llvm: ['3.8', '6.0', '12', '14.0.6']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
@@ -229,11 +229,11 @@ jobs:
           - distro: 'ubuntu-20.04'
             llvm: '12'
           - distro: 'ubuntu-16.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
           - distro: 'ubuntu-18.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
           - distro: 'ubuntu-20.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -266,7 +266,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.0 prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.1 prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-13
