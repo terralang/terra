@@ -27,6 +27,10 @@ Installing Terra
 
 Terra currently runs Linux, macOS, FreeBSD, and 64-bit Windows. Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
+Note that as of macOS 10.15 Catalina, in order to include C headers in Terra you will need to define the following evironment variable:
+
+    export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+
 
 Running Terra
 =============
@@ -201,6 +205,13 @@ make install -j4 # tune this for how many cores you have
 ```
 
 This will install Terra into the `terra/install` directory.
+
+Please note that on macOS, the following is required to enable the
+C/C++ compiler (and Terra) to find the system headers:
+
+```
+export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+```
 
 CMake will attempt to auto-detect the location of LLVM on the
 system. If it is unable to do so (e.g., because LLVM is installed in a
