@@ -212,7 +212,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '6.0', '12', '14.0.0']
+        llvm: ['3.8', '6.0', '12', '14.0.6']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
@@ -229,11 +229,11 @@ jobs:
           - distro: 'ubuntu-20.04'
             llvm: '12'
           - distro: 'ubuntu-16.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
           - distro: 'ubuntu-18.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
           - distro: 'ubuntu-20.04'
-            llvm: '14.0.0'
+            llvm: '14.0.6'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -266,7 +266,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.0 prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.1 prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-13
