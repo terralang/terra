@@ -86,10 +86,7 @@ This program can then be compiled by linking against the Terra library
 
     # OSX
     c++ simple.cpp -o simple -I<path-to-terra-folder>/terra/include \
-    -L<path-to-terra-folder>/lib -lterra_s \
-    -pagezero_size 10000 -image_base 100000000
-
-Note the extra `pagezero_size` and `image_base` arguments on OSX. These are necessary for LuaJIT to run on OSX.
+    -L<path-to-terra-folder>/lib -lterra_s
 
 In addition to these modes, Terra code can be compiled to `.o` files which can be linked into an executable, or even compiled to an executable directly.
 
