@@ -173,11 +173,6 @@ SUPPORT_LIBRARY_FLAGS += $(LIBFFI_LIBS) $(LIBXML20_LIBS) $(LIBEDIT_LIBS)
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
-#makes luajit happy on osx 10.6 (otherwise luaL_newstate returns NULL)
-ifeq ($(UNAME), Darwin)
-LFLAGS += -pagezero_size 10000 -image_base 100000000 
-endif
-
 CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
 
 ifeq ($(ENABLE_CUDA),1)

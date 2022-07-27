@@ -327,13 +327,6 @@ target_compile_definitions(TerraExecutable
 )
 
 if(APPLE)
-  set_target_properties(TerraExecutable
-    PROPERTIES
-      # Makes LuaJIT happy (otherwise luaL_newstate returns NULL). Has to be
-      # set as a property otherwise target_link_libraries thinks the arguments
-      # are libraries.
-      LINK_FLAGS "-pagezero_size 10000 -image_base 100000000"
-  )
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
