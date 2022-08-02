@@ -811,12 +811,14 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
+    bool aarch64_cconv;
     bool ppc64_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
         return_empty_struct_as_void = false;
         pass_struct_as_exploded_values = false;
+        aarch64_cconv = false;
         ppc64_cconv = false;
 
         auto Triple = CU->TT->tm->getTargetTriple();
@@ -824,6 +826,10 @@ struct CCallingConv {
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
                 pass_struct_as_exploded_values = true;
+            } break;
+            case Triple::ArchType::aarch64:
+            case Triple::ArchType::aarch64_be: {
+                aarch64_cconv = true;
             } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
@@ -1025,6 +1031,57 @@ struct CCallingConv {
         }
     }
 
+    Argument ClassifyAggAArch64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
+        bool all_float = true;
+        bool all_double = true;
+        int n_elts = 0;
+        int64_t align = 0;
+        CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
+
+        // Special cases: all-float or all-double up to 4 values via registers:
+        if (all_float && n_elts > 0 && n_elts <= 4) {
+            *usedint += n_elts;
+            if (n_elts == 1) {
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(Type::getFloatTy(*CU->TT->ctx)));
+            } else {
+                auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), n_elts);
+                return Argument(C_ARRAY_REG, t, at);
+            }
+        }
+        if (all_double && n_elts > 0 && n_elts <= 4) {
+            *usedint += n_elts;
+            if (n_elts == 1) {
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(Type::getDoubleTy(*CU->TT->ctx)));
+            } else {
+                auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), n_elts);
+                return Argument(C_ARRAY_REG, t, at);
+            }
+        }
+
+        // Integer or mixed case:
+
+        // Can pack up to 2 registers. (A register is 64 bits or 8 bytes.)
+        int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
+        int limit = 2;
+        if (*usedint + sz <= limit) {
+            *usedint += sz;
+
+            // Pack arguments
+            std::vector<Type *> elements;
+            int64_t bits = 0;
+            MergeValuePPC64(t->type, elements, bits);
+            if (bits > 0) {
+                // Align to the biggest type we've seen.
+                elements.push_back(
+                        Type::getIntNTy(*CU->TT->ctx, (bits + align - 1) & (-align)));
+            }
+            return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
+        }
+        return Argument(C_AGGREGATE_MEM, t);
+    }
+
     Argument ClassifyAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
@@ -1091,6 +1148,10 @@ struct CCallingConv {
 
         if (pass_struct_as_exploded_values) {
             return Argument(C_AGGREGATE_REG, t, t->type);
+        }
+
+        if (aarch64_cconv) {
+            return ClassifyAggAArch64(t, usedfloat, usedint, isreturn);
         }
 
         if (ppc64_cconv) {
