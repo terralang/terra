@@ -815,7 +815,7 @@ struct CCallingConv {
     bool ppc64_cconv;
     int ppc64_float_limit = 0;
     int ppc64_int_limit = 0;
-    bool ppc64_count_used = 0;
+    bool ppc64_count_used = false;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
