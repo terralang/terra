@@ -1258,12 +1258,14 @@ struct CCallingConv {
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
         if (return_value) {
+            if (!aarch64_cconv) {
 #if LLVM_VERSION < 140
-            assert(idx == 0);
-            r->addAttribute(0, t->issigned ? Attribute::SExt : Attribute::ZExt);
+                assert(idx == 0);
+                r->addAttribute(0, t->issigned ? Attribute::SExt : Attribute::ZExt);
 #else
-            r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
+                r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
 #endif
+            }
         } else {
 #if LLVM_VERSION < 50
             r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
