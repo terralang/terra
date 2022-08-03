@@ -1031,7 +1031,7 @@ struct CCallingConv {
         }
     }
 
-    Argument ClassifyAggAArch64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
+    Argument ClassifyAggAArch64(TType *t, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
         int n_elts = 0;
@@ -1040,7 +1040,6 @@ struct CCallingConv {
 
         // Special cases: all-float or all-double up to 4 values via registers:
         if (all_float && n_elts > 0 && n_elts <= 4) {
-            *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
                                 StructType::get(Type::getFloatTy(*CU->TT->ctx)));
@@ -1050,7 +1049,6 @@ struct CCallingConv {
             }
         }
         if (all_double && n_elts > 0 && n_elts <= 4) {
-            *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
                                 StructType::get(Type::getDoubleTy(*CU->TT->ctx)));
@@ -1065,9 +1063,7 @@ struct CCallingConv {
         // Can pack up to 2 registers. (A register is 64 bits or 8 bytes.)
         int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
         int limit = 2;
-        if (*usedint + sz <= limit) {
-            *usedint += sz;
-
+        if (sz <= limit) {
             // Pack arguments
             std::vector<Type *> elements;
             int64_t bits = 0;
@@ -1151,7 +1147,7 @@ struct CCallingConv {
         }
 
         if (aarch64_cconv) {
-            return ClassifyAggAArch64(t, usedfloat, usedint, isreturn);
+            return ClassifyAggAArch64(t, isreturn);
         }
 
         if (ppc64_cconv) {
