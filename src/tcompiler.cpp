@@ -813,6 +813,9 @@ struct CCallingConv {
     bool return_empty_struct_as_void;
     bool aarch64_cconv;
     bool ppc64_cconv;
+    int ppc64_float_limit = 0;
+    int ppc64_int_limit = 0;
+    bool ppc64_count_used = 0;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
@@ -830,10 +833,17 @@ struct CCallingConv {
             case Triple::ArchType::aarch64:
             case Triple::ArchType::aarch64_be: {
                 aarch64_cconv = true;
+                // Hack: we share code with the PPC64 cconv, so configure here.
+                ppc64_float_limit = 4;
+                ppc64_int_limit = 2;
+                ppc64_count_used = false;
             } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
                 ppc64_cconv = true;
+                ppc64_float_limit = 8;
+                ppc64_int_limit = 8;
+                ppc64_count_used = true;
             } break;
         }
 
@@ -1031,62 +1041,15 @@ struct CCallingConv {
         }
     }
 
-    Argument ClassifyAggAArch64(TType *t, bool isreturn) {
+    Argument ClassifyAggPPC64(TType *t, int *usedint, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
         int n_elts = 0;
         int64_t align = 0;
         CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
 
-        // Special cases: all-float or all-double up to 4 values via registers:
-        if (all_float && n_elts > 0 && n_elts <= 4) {
-            if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t,
-                                StructType::get(Type::getFloatTy(*CU->TT->ctx)));
-            } else {
-                auto at = ArrayType::get(Type::getFloatTy(*CU->TT->ctx), n_elts);
-                return Argument(C_ARRAY_REG, t, at);
-            }
-        }
-        if (all_double && n_elts > 0 && n_elts <= 4) {
-            if (n_elts == 1) {
-                return Argument(C_AGGREGATE_REG, t,
-                                StructType::get(Type::getDoubleTy(*CU->TT->ctx)));
-            } else {
-                auto at = ArrayType::get(Type::getDoubleTy(*CU->TT->ctx), n_elts);
-                return Argument(C_ARRAY_REG, t, at);
-            }
-        }
-
-        // Integer or mixed case:
-
-        // Can pack up to 2 registers. (A register is 64 bits or 8 bytes.)
-        int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
-        int limit = 2;
-        if (sz <= limit) {
-            // Pack arguments
-            std::vector<Type *> elements;
-            int64_t bits = 0;
-            MergeValuePPC64(t->type, elements, bits);
-            if (bits > 0) {
-                // Align to the biggest type we've seen.
-                elements.push_back(
-                        Type::getIntNTy(*CU->TT->ctx, (bits + align - 1) & (-align)));
-            }
-            return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
-        }
-        return Argument(C_AGGREGATE_MEM, t);
-    }
-
-    Argument ClassifyAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
-        bool all_float = true;
-        bool all_double = true;
-        int n_elts = 0;
-        int64_t align = 0;
-        CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
-
-        // Special cases: all-float or all-double up to 8 values via registers:
-        if (all_float && n_elts > 0 && n_elts <= 8) {
+        // Special cases: all-float or all-double up to N values via registers:
+        if (all_float && n_elts > 0 && n_elts <= ppc64_float_limit) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
@@ -1096,7 +1059,7 @@ struct CCallingConv {
                 return Argument(C_ARRAY_REG, t, at);
             }
         }
-        if (all_double && n_elts > 0 && n_elts <= 8) {
+        if (all_double && n_elts > 0 && n_elts <= ppc64_float_limit) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
@@ -1109,11 +1072,11 @@ struct CCallingConv {
 
         // Integer or mixed case:
 
-        // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
+        // Can pack up to N registers, or 2 if this is a return. (A register is 64
         // bits or 8 bytes.)
         int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
-        int limit = isreturn ? 2 : 8;
-        if (*usedint + sz <= limit) {
+        int limit = isreturn ? 2 : ppc64_int_limit;
+        if ((ppc64_count_used ? *usedint : 0) + sz <= limit) {
             *usedint += sz;
 
             // Pack arguments
@@ -1146,12 +1109,8 @@ struct CCallingConv {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
-        if (aarch64_cconv) {
-            return ClassifyAggAArch64(t, isreturn);
-        }
-
-        if (ppc64_cconv) {
-            return ClassifyAggPPC64(t, usedfloat, usedint, isreturn);
+        if (aarch64_cconv || ppc64_cconv) {
+            return ClassifyAggPPC64(t, usedint, isreturn);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
