@@ -818,15 +818,18 @@ struct CCallingConv {
     bool ppc64_count_used;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
-            : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
-        return_empty_struct_as_void = false;
-        pass_struct_as_exploded_values = false;
-        aarch64_cconv = false;
-        ppc64_cconv = false;
-        ppc64_float_limit = 0;
-        ppc64_int_limit = 0;
-        ppc64_count_used = false;
-
+            : CU(CU_),
+              T(CU_->T),
+              L(CU_->T->L),
+              C(CU_->T->C),
+              Ty(Ty_),
+              pass_struct_as_exploded_values(false),
+              return_empty_struct_as_void(false),
+              aarch64_cconv(false),
+              ppc64_cconv(false),
+              ppc64_float_limit(0),
+              ppc64_int_limit(0),
+              ppc64_count_used(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
             case Triple::ArchType::amdgcn: {
