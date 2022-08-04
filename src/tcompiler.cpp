@@ -1217,9 +1217,7 @@ struct CCallingConv {
     }
     template <typename FnOrCall>
     void addNoUndefAttr(FnOrCall *r, int idx) {
-#if LLVM_VERSION < 50
-        r->addAttribute(idx, Attribute::NoUndef);
-#else
+#if LLVM_VERSION >= 110
         r->addParamAttr(idx - 1, Attribute::NoUndef);
 #endif
     }
