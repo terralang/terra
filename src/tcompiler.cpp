@@ -1256,7 +1256,7 @@ struct CCallingConv {
             Argument *v = &info->paramtypes[i];
             if (v->kind == C_AGGREGATE_MEM) {
 #ifndef _WIN32
-                if(!aarch64_cconv) {
+                if (!aarch64_cconv) {
                     addByValAttr(r, argidx, v->cctype);
                 } else {
                     addNoUndefAttr(r, argidx);
