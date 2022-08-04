@@ -1216,6 +1216,14 @@ struct CCallingConv {
 #endif
     }
     template <typename FnOrCall>
+    void addNoUndefAttr(FnOrCall *r, int idx) {
+#if LLVM_VERSION < 50
+        r->addAttribute(idx, Attribute::NoUndef);
+#else
+        r->addParamAttr(idx - 1, Attribute::NoUndef);
+#endif
+    }
+    template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
         if (return_value) {
@@ -1248,7 +1256,11 @@ struct CCallingConv {
             Argument *v = &info->paramtypes[i];
             if (v->kind == C_AGGREGATE_MEM) {
 #ifndef _WIN32
-                addByValAttr(r, argidx, v->cctype);
+                if(!aarch64_cconv) {
+                    addByValAttr(r, argidx, v->cctype);
+                } else {
+                    addNoUndefAttr(r, argidx);
+                }
 #endif
             }
             addExtAttrIfNeeded(v->type, r, argidx);
