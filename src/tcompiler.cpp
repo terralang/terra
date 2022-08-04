@@ -811,23 +811,45 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
+    bool aarch64_cconv;
     bool ppc64_cconv;
+    int ppc64_float_limit;
+    int ppc64_int_limit;
+    bool ppc64_count_used;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
-            : CU(CU_), T(CU_->T), L(CU_->T->L), C(CU_->T->C), Ty(Ty_) {
-        return_empty_struct_as_void = false;
-        pass_struct_as_exploded_values = false;
-        ppc64_cconv = false;
-
+            : CU(CU_),
+              T(CU_->T),
+              L(CU_->T->L),
+              C(CU_->T->C),
+              Ty(Ty_),
+              pass_struct_as_exploded_values(false),
+              return_empty_struct_as_void(false),
+              aarch64_cconv(false),
+              ppc64_cconv(false),
+              ppc64_float_limit(0),
+              ppc64_int_limit(0),
+              ppc64_count_used(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
                 pass_struct_as_exploded_values = true;
             } break;
+            case Triple::ArchType::aarch64:
+            case Triple::ArchType::aarch64_be: {
+                aarch64_cconv = true;
+                // Hack: we share code with the PPC64 cconv, so configure here.
+                ppc64_float_limit = 4;
+                ppc64_int_limit = 2;
+                ppc64_count_used = false;
+            } break;
             case Triple::ArchType::ppc64:
             case Triple::ArchType::ppc64le: {
                 ppc64_cconv = true;
+                ppc64_float_limit = 8;
+                ppc64_int_limit = 8;
+                ppc64_count_used = true;
             } break;
         }
 
@@ -1025,15 +1047,15 @@ struct CCallingConv {
         }
     }
 
-    Argument ClassifyAggPPC64(TType *t, int *usedfloat, int *usedint, bool isreturn) {
+    Argument ClassifyAggPPC64(TType *t, int *usedint, bool isreturn) {
         bool all_float = true;
         bool all_double = true;
         int n_elts = 0;
         int64_t align = 0;
         CountValuesPPC64(t->type, all_float, all_double, n_elts, align);
 
-        // Special cases: all-float or all-double up to 8 values via registers:
-        if (all_float && n_elts > 0 && n_elts <= 8) {
+        // Special cases: all-float or all-double up to N values via registers:
+        if (all_float && n_elts > 0 && n_elts <= ppc64_float_limit) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
@@ -1043,7 +1065,7 @@ struct CCallingConv {
                 return Argument(C_ARRAY_REG, t, at);
             }
         }
-        if (all_double && n_elts > 0 && n_elts <= 8) {
+        if (all_double && n_elts > 0 && n_elts <= ppc64_float_limit) {
             *usedint += n_elts;
             if (n_elts == 1) {
                 return Argument(C_AGGREGATE_REG, t,
@@ -1056,11 +1078,11 @@ struct CCallingConv {
 
         // Integer or mixed case:
 
-        // Can pack up to 8 registers, or 2 if this is a return. (A register is 64
+        // Can pack up to N registers, or 2 if this is a return. (A register is 64
         // bits or 8 bytes.)
         int sz = (CU->getDataLayout().getTypeAllocSize(t->type) + 7) / 8;
-        int limit = isreturn ? 2 : 8;
-        if (*usedint + sz <= limit) {
+        int limit = isreturn ? 2 : ppc64_int_limit;
+        if ((ppc64_count_used ? *usedint : 0) + sz <= limit) {
             *usedint += sz;
 
             // Pack arguments
@@ -1093,8 +1115,8 @@ struct CCallingConv {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
-        if (ppc64_cconv) {
-            return ClassifyAggPPC64(t, usedfloat, usedint, isreturn);
+        if (aarch64_cconv || ppc64_cconv) {
+            return ClassifyAggPPC64(t, usedint, isreturn);
         }
 
         int sz = CU->getDataLayout().getTypeAllocSize(t->type);
@@ -1197,12 +1219,14 @@ struct CCallingConv {
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
         if (!t->type->isIntegerTy() || t->type->getPrimitiveSizeInBits() >= 32) return;
         if (return_value) {
+            if (!aarch64_cconv) {
 #if LLVM_VERSION < 140
-            assert(idx == 0);
-            r->addAttribute(0, t->issigned ? Attribute::SExt : Attribute::ZExt);
+                assert(idx == 0);
+                r->addAttribute(0, t->issigned ? Attribute::SExt : Attribute::ZExt);
 #else
-            r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
+                r->addRetAttr(t->issigned ? Attribute::SExt : Attribute::ZExt);
 #endif
+            }
         } else {
 #if LLVM_VERSION < 50
             r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
