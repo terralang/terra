@@ -16,6 +16,7 @@ local function run_test_case(typ, N)
     end
     return x
   end
+  callee:setinlined(false)
 
   local args = terralib.newlist()
   for i = 1, N do
