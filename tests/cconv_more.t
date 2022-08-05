@@ -103,8 +103,10 @@ local function generate_nonuniform_struct(name, types, N)
   return parts:concat(" ")
 end
 
+local noinline = "__attribute__ ((noinline)) "
+
 local function generate_void_function(name)
-  return "void " .. name .. "() {}"
+  return noinline .. "void " .. name .. "() {}"
 end
 
 local function generate_scalar_exprs(argname, typ, exprlist)
@@ -126,7 +128,7 @@ local function generate_uniform_scalar_function(name, typ, N)
   for i = 1, N do
     generate_scalar_exprs("x" .. i, typ, exprlist)
   end
-  return lookup_scalar_base(typ) .. " " .. name .. N .. "(" .. arglist:concat(", ") .. ") { return " .. exprlist:concat(" + ") .. "; }"
+  return noinline .. lookup_scalar_base(typ) .. " " .. name .. N .. "(" .. arglist:concat(", ") .. ") { return " .. exprlist:concat(" + ") .. "; }"
 end
 
 local function generate_nonuniform_scalar_function(name, types, N)
@@ -140,7 +142,7 @@ local function generate_nonuniform_scalar_function(name, types, N)
     local typ = get_type_in_rotation(types, i)
     generate_scalar_exprs("x" .. i, typ, exprlist)
   end
-  return "double " .. name .. N .. "(" .. arglist:concat(", ") .. ") { return " .. exprlist:concat(" + ") .. "; }"
+  return noinline .. "double " .. name .. N .. "(" .. arglist:concat(", ") .. ") { return " .. exprlist:concat(" + ") .. "; }"
 end
 
 local function generate_aggregate_one_field_stat(field, inc, typ, statlist)
@@ -158,7 +160,7 @@ local function generate_uniform_aggregate_one_arg_function(name, aggname, typ, N
   for i = 1, N do
     generate_aggregate_one_field_stat("x.f" .. i, i, typ, statlist)
   end
-  return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x) { " .. statlist:concat(" ") .. " return x; }"
+  return noinline .. aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x) { " .. statlist:concat(" ") .. " return x; }"
 end
 
 local function generate_nonuniform_aggregate_one_arg_function(name, aggname, types, N)
@@ -167,7 +169,7 @@ local function generate_nonuniform_aggregate_one_arg_function(name, aggname, typ
     local typ = get_type_in_rotation(types, i)
     generate_aggregate_one_field_stat("x.f" .. i, i, typ, statlist)
   end
-  return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x) { " .. statlist:concat(" ") .. " return x; }"
+  return noinline .. aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x) { " .. statlist:concat(" ") .. " return x; }"
 end
 
 local function generate_aggregate_two_field_stat(field1, field2, typ, statlist)
@@ -185,7 +187,7 @@ local function generate_uniform_aggregate_two_arg_function(name, aggname, typ, N
   for i = 1, N do
     generate_aggregate_two_field_stat("x.f" .. i, "y.f" .. i, typ, statlist)
   end
-  return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x, " .. aggname .. N .. " y) { " .. statlist:concat(" ") .. " return x; }"
+  return noinline .. aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x, " .. aggname .. N .. " y) { " .. statlist:concat(" ") .. " return x; }"
 end
 
 local function generate_nonuniform_aggregate_two_arg_function(name, aggname, types, N)
@@ -194,7 +196,7 @@ local function generate_nonuniform_aggregate_two_arg_function(name, aggname, typ
     local typ = get_type_in_rotation(types, i)
     generate_aggregate_two_field_stat("x.f" .. i, "y.f" .. i, typ, statlist)
   end
-  return aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x, " .. aggname .. N .. " y) { " .. statlist:concat(" ") .. " return x; }"
+  return noinline .. aggname .. N .. " " .. name .. N .. "(" .. aggname .. N .. " x, " .. aggname .. N .. " y) { " .. statlist:concat(" ") .. " return x; }"
 end
 
 local base_types = {uint8, int16, int32, int64, float, double}
