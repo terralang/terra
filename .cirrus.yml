@@ -1,4 +1,4 @@
-task:
+freebsd_task:
   name: FreeBSD
   freebsd_instance:
     matrix:
@@ -20,3 +20,14 @@ task:
     export MAKE=gmake
     export CC=cc
     bash travis.sh
+
+arm_task:
+  name: Linux AArch64
+  arm_container:
+    image: ubuntu:18.04
+  env:
+    llvm: 13.0.0
+    arch: aarch64
+    threads: 2
+  script: |
+    ./docker/install_script_multiarch.sh
