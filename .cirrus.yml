@@ -26,7 +26,7 @@ arm_task:
   arm_container:
     image: ubuntu:18.04
   env:
-    llvm: 13.0.0
+    llvm: 11.1.0
     arch: aarch64
     threads: 2
   script: |
