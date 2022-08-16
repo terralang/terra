@@ -23,7 +23,7 @@ struct C(Class(B)) {
 terra C:combine(a : int) : int
     return self.c + self.a + self.b + a
 end
-terra C:times2() : double
+terra C:times2() : int
     return self.a * 4
 end
 
