@@ -247,7 +247,12 @@ jobs:
       matrix:
         distro: ['ubuntu-18.04']
         arch: ['arm64', 'ppc64le']
-        llvm: ['13.0.0']
+        llvm: ['13.0.0', '11.1.0']
+        exclude:
+          - arch: 'arm64'
+            llvm: '13.0.0'
+          - arch: 'ppc64le'
+            llvm: '11.1.0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh

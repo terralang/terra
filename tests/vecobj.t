@@ -46,6 +46,7 @@ end)
 -- There are two limitations of Moonjit on PPC64le that require workarounds:
 --  1. the printfloat callback results in a segfault
 --  2. passing arrays to Terra from Lua results in garbage
+-- Note: the second of these applies to AArch64 (ARM) as well
 
 if ffi.arch ~= "ppc64le" then
     printfloat = terralib.cast({float}->{},print)
@@ -68,7 +69,7 @@ end
 foo:printpretty(true,false)
 foo:disas()
 
-if ffi.arch ~= "ppc64le" then
+if ffi.arch ~= "ppc64le" and ffi.arch ~= "arm64" then
     assert(20 == foo({{1,2,3,4}},{{5,6,7,8}}))
 else
     terra call_foo(v0 : float, v1 : float, v2 : float, v3 : float, w0 : float, w1 : float, w2 : float, w3 : float)

@@ -1,3 +1,20 @@
+# Release 1.0.5 (2022-08-16)
+
+This release stabilizes support for ARM (AArch64). On a variety of
+hardware (Graviton, NVIDIA Jetson), Terra now passes 100% of the test
+suite.
+
+## Improvements
+
+  * Fixes for multiple issues on AArch64, allowing Terra to pass 100%
+    of the test suite.
+  * Updated LuaJIT to obtain fixes for AArch64.
+
+## Known Issues
+
+  * On AArch64, Terra requires LLVM 11 or older. Newer LLVM versions
+    result in segfaults on some tests.
+
 # Release 1.0.4 (2022-07-08)
 
 This release stabilizes support for PPC64le. On POWER9 hardware, Terra
