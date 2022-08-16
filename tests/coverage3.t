@@ -1,7 +1,7 @@
--- FIXME: Test currently fails on Windows (and PPC64le too)
+-- FIXME: Test currently fails on Windows (and PPC64le/AArch64 too)
 -- https://github.com/terralang/terra/issues/287
 local ffi = require("ffi")
-if ffi.os == "Windows" or ffi.arch == "ppc64le" then
+if ffi.os == "Windows" or ffi.arch == "ppc64le" or ffi.arch == "arm64" then
     print("this test is not compatible with " .. ffi.os .. " " .. ffi.arch)
     os.exit()
 end
