@@ -41,10 +41,10 @@ if [[ $(uname) = Linux ]]; then
   distro_name="$(lsb_release -cs)"
   sudo apt-get update -qq
   if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
-    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libedit-dev
+    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libmlir-14-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-14:/usr/share/llvm-14
   elif [[ $LLVM_CONFIG = llvm-config-13 ]]; then
-    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev
+    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libmlir-13-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
   elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
     sudo apt-get install -y llvm-12-dev clang-12 libclang-12-dev libedit-dev
