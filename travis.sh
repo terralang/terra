@@ -59,16 +59,15 @@ if [[ $(uname) = Linux ]]; then
         export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-12/lib"
     fi
   elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
-    # wget https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
-    # tar xf clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
-    # ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/llvm-config llvm-config-12
-    # ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/clang clang-12
-    # export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.1.0-x86_64-linux-gnu
-    # if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-    #     export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$PWD/clang+llvm-11.1.0-x86_64-linux-gnu/lib"
-    # fi
-    sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
+    # Hack: Ubuntu 20.04 packaging is broken, fails no-static/no-slib builds.
+    wget https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
+    tar xf clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
+    ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/llvm-config llvm-config-12
+    ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/clang clang-12
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.1.0-x86_64-linux-gnu
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$PWD/clang+llvm-11.1.0-x86_64-linux-gnu/lib"
+    fi
   elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
     sudo apt-get install -y llvm-10-dev clang-10 libclang-10-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-10:/usr/share/llvm-10
