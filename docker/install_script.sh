@@ -28,11 +28,6 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
             libpfm4-dev
         )
     fi
-    if [[ $variant = "upstream" && $llvm -ge 12 ]]; then
-        packages+=(
-            libxml2-dev
-        )
-    fi
 elif [[ $variant = "prebuilt" ]]; then
     packages+=(
         wget
@@ -40,6 +35,11 @@ elif [[ $variant = "prebuilt" ]]; then
 else
     echo "Don't know this variant: $variant"
     exit 1
+fi
+if [[ $cuda -eq 1 ]]; then
+    packages+=(
+        wget
+    )
 fi
 
 set -x
