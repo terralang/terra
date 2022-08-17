@@ -73,10 +73,6 @@ jobs:
           - llvm: '7'
             cmake: '0'
 
-          # FIXME: no-static breaks with LuaJIT
-          - static: '0'
-            lua: 'luajit'
-
           # Moonjit requires CMake
           - cmake: '0'
             lua: 'moonjit'
@@ -125,10 +121,10 @@ jobs:
           CLANG: clang-${{ matrix.llvm }}
           USE_CMAKE: ${{ matrix.cmake }}
           USE_CUDA: ${{ matrix.cuda }}
-          STATIC_LLVM: ${{ matrix.static }}
-          STATIC_LUAJIT: ${{ matrix.static }}
-          SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
-          SLIB_INCLUDE_LUAJIT: ${{ matrix.slib }}
+          STATIC_LLVM: 1
+          STATIC_LUAJIT: 1
+          SLIB_INCLUDE_LLVM: 1
+          SLIB_INCLUDE_LUAJIT: 1
           TERRA_LUA: ${{ matrix.lua }}
       - uses: actions/upload-artifact@v2
         with:
