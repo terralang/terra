@@ -141,24 +141,6 @@ jobs:
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14', '14.0.6']
         test: ['1']
         include:
-          # Assign variants to the basic configurations:
-          - variant: package
-          - llvm: 11
-            variant: upstream
-          - llvm: 12
-            variant: upstream
-          - llvm: 13
-            variant: upstream
-          - llvm: 14
-            variant: upstream
-          - llvm: 14.0.6
-            variant: prebuilt
-
-          # CUDA with LLVM 9 only:
-          - cuda: 0
-          - llvm: 9
-            cuda: 1
-
           # Some additional configurations:
 
           # LLVM 3.8
@@ -177,6 +159,26 @@ jobs:
           # LLVM 12
           - llvm: 12
             distro: ubuntu-22.04
+
+          # Settings common to all configurations:
+
+          # Variants:
+          - variant: package
+          - llvm: 11
+            variant: upstream
+          - llvm: 12
+            variant: upstream
+          - llvm: 13
+            variant: upstream
+          - llvm: 14
+            variant: upstream
+          - llvm: 14.0.6
+            variant: prebuilt
+
+          # CUDA with LLVM 9 only:
+          - cuda: 0
+          - llvm: 9
+            cuda: 1
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
