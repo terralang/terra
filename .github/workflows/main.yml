@@ -210,6 +210,7 @@ jobs:
       matrix:
         distro: ['ubuntu-18.04']
         arch: ['arm64', 'ppc64le']
+        llvm: ['11.1.0', '13.0.0']
         variant: ['prebuilt']
         cuda: ['0']
         test: ['0']
