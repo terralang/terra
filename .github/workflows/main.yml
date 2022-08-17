@@ -138,7 +138,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14', '14.0.6']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14.0.6']
         test: ['1']
         include:
           # Assign variants to the basic configurations:
@@ -148,8 +148,6 @@ jobs:
           - llvm: 12
             variant: upstream
           - llvm: 13
-            variant: upstream
-          - llvm: 14
             variant: upstream
           - llvm: 14.0.6
             variant: prebuilt
@@ -171,11 +169,6 @@ jobs:
           # LLVM 6.0
           - llvm: '6.0'
             distro: ubuntu-16.04
-            cuda: 0
-            variant: package
-            test: 1
-          - llvm: '6.0'
-            distro: ubuntu-18.04
             cuda: 0
             variant: package
             test: 1
