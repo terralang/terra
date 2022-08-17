@@ -63,6 +63,7 @@ if [[ $(uname) = Linux ]]; then
     wget https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
     tar xf clang+llvm-11.1.0-x86_64-linux-gnu.tar.xz
     if [[ $USE_CMAKE -eq 0 ]]; then
+      sudo apt-get install -y libedit-dev
       ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/llvm-config llvm-config-11
       ln -s clang+llvm-11.1.0-x86_64-linux-gnu/bin/clang clang-11
       export PATH=$PWD:$PATH
