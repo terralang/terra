@@ -141,28 +141,7 @@ jobs:
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14', '14.0.6']
         test: ['1']
         include:
-          # Some additional configurations:
-
-          # LLVM 3.8
-          - llvm: 3.8
-            variant: upstream
-            distro: ubuntu-16.04
-
-          # LLVM 6.0
-          - llvm: 6.0
-            distro: ubuntu-16.04
-          - llvm: 6.0
-            distro: ubuntu-18.04
-          - llvm: 6.0
-            distro: ubuntu-20.04
-
-          # LLVM 12
-          - llvm: 12
-            distro: ubuntu-22.04
-
-          # Settings common to all configurations:
-
-          # Variants:
+          # Assign variants to the basic configurations:
           - variant: package
           - llvm: 11
             variant: upstream
@@ -179,6 +158,39 @@ jobs:
           - cuda: 0
           - llvm: 9
             cuda: 1
+
+          # Some additional configurations:
+
+          # LLVM 3.8
+          - llvm: 3.8
+            distro: ubuntu-16.04
+            cuda: 0
+            variant: upstream
+            test: 1
+
+          # LLVM 6.0
+          - llvm: '6.0'
+            distro: ubuntu-16.04
+            cuda: 0
+            variant: package
+            test: 1
+          - llvm: '6.0'
+            distro: ubuntu-18.04
+            cuda: 0
+            variant: package
+            test: 1
+          - llvm: '6.0'
+            distro: ubuntu-20.04
+            cuda: 0
+            variant: package
+            test: 1
+
+          # LLVM 12
+          - llvm: 12
+            distro: ubuntu-22.04
+            cuda: 0
+            variant: package
+            test: 1
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
