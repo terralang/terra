@@ -159,14 +159,14 @@ jobs:
 
           # Some additional configurations:
 
-          # LLVM 3.8
+          # LLVM 3.8 on Ubuntu 16.04
           - llvm: '3.8'
             distro: 'ubuntu-16.04'
             cuda: '0'
             variant: 'upstream'
             test: '1'
 
-          # LLVM 6.0
+          # LLVM 6.0 on Ubuntu 16.04, 20.04
           - llvm: '6.0'
             distro: 'ubuntu-16.04'
             cuda: '0'
@@ -178,8 +178,18 @@ jobs:
             variant: 'package'
             test: '1'
 
-          # LLVM 12
+          # LLVM 12, 13, 14 on Ubuntu 22.04
           - llvm: '12'
+            distro: 'ubuntu-22.04'
+            cuda: '0'
+            variant: 'package'
+            test: '1'
+          - llvm: '13'
+            distro: 'ubuntu-22.04'
+            cuda: '0'
+            variant: 'package'
+            test: '1'
+          - llvm: '14'
             distro: 'ubuntu-22.04'
             cuda: '0'
             variant: 'package'
@@ -199,6 +209,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
+        arch: ['arm64', 'ppc64le']
         variant: ['prebuilt']
         cuda: ['0']
         test: ['0']
