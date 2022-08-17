@@ -23,6 +23,10 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # Linux: exclude LLVM 14
+          - os: 'ubuntu-20.04'
+            llvm: '14'
+
           # macOS: exclude LLVM 8-14 make, cuda/no-static/no-slib
           - os: 'macos-11'
             llvm: '8'
