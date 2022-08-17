@@ -142,48 +142,48 @@ jobs:
         test: ['1']
         include:
           # Assign variants to the basic configurations:
-          - variant: package
-          - llvm: 11
-            variant: upstream
-          - llvm: 12.0.1
-            variant: prebuilt
-          - llvm: 13.0.1
-            variant: prebuilt
-          - llvm: 14.0.6
-            variant: prebuilt
+          - variant: 'package'
+          - llvm: '11'
+            variant: 'upstream'
+          - llvm: '12.0.1'
+            variant: 'prebuilt'
+          - llvm: '13.0.1'
+            variant: 'prebuilt'
+          - llvm: '14.0.6'
+            variant: 'prebuilt'
 
           # CUDA with LLVM 9 only:
-          - cuda: 0
-          - llvm: 9
-            cuda: 1
+          - cuda: '0'
+          - llvm: '9'
+            cuda: '1'
 
           # Some additional configurations:
 
           # LLVM 3.8
-          - llvm: 3.8
-            distro: ubuntu-16.04
-            cuda: 0
-            variant: upstream
-            test: 1
+          - llvm: '3.8'
+            distro: 'ubuntu-16.04'
+            cuda: '0'
+            variant: 'upstream'
+            test: '1'
 
           # LLVM 6.0
           - llvm: '6.0'
-            distro: ubuntu-16.04
-            cuda: 0
-            variant: package
-            test: 1
+            distro: 'ubuntu-16.04'
+            cuda: '0'
+            variant: 'package'
+            test: '1'
           - llvm: '6.0'
-            distro: ubuntu-20.04
-            cuda: 0
-            variant: package
-            test: 1
+            distro: 'ubuntu-20.04'
+            cuda: '0'
+            variant: 'package'
+            test: '1'
 
           # LLVM 12
-          - llvm: 12
-            distro: ubuntu-22.04
-            cuda: 0
-            variant: package
-            test: 1
+          - llvm: '12'
+            distro: 'ubuntu-22.04'
+            cuda: '0'
+            variant: 'package'
+            test: '1'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -202,11 +202,11 @@ jobs:
         variant: ['prebuilt']
         cuda: ['0']
         test: ['0']
-        include:
-          - arch: arm64
-            llvm: 11.1.0
-          - arch: ppc64le
-            llvm: 13.0.0
+        exclude:
+          - arch: 'arm64'
+            llvm: '13.0.0'
+          - arch: 'ppc64le'
+            llvm: '11.1.0'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
