@@ -23,10 +23,6 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 14
-          - os: 'ubuntu-20.04'
-            llvm: '14'
-
           # macOS: exclude LLVM 8-14 make, cuda/no-static/no-slib
           - os: 'macos-11'
             llvm: '8'
@@ -117,7 +113,7 @@ jobs:
           - llvm: '14'
             cuda: '1'
 
-          # no-static: only LLVM 11
+          # no-static: only LLVM 14
           - llvm: '6.0'
             static: '0'
           - llvm: '7'
@@ -128,14 +124,14 @@ jobs:
             static: '0'
           - llvm: '10'
             static: '0'
+          - llvm: '11'
+            static: '0'
           - llvm: '12'
             static: '0'
           - llvm: '13'
-            static: '0'
-          - llvm: '14'
             static: '0'
 
-          # no-slib: only LLVM 11
+          # no-slib: only LLVM 14
           - llvm: '6.0'
             slib: '0'
           - llvm: '7'
@@ -146,14 +142,14 @@ jobs:
             slib: '0'
           - llvm: '10'
             slib: '0'
+          - llvm: '11'
+            slib: '0'
           - llvm: '12'
             slib: '0'
           - llvm: '13'
-            slib: '0'
-          - llvm: '14'
             slib: '0'
 
-          # Moonjit: only LLVM 11
+          # Moonjit: only LLVM 14
           - llvm: '6.0'
             lua: 'moonjit'
           - llvm: '7'
@@ -164,11 +160,11 @@ jobs:
             lua: 'moonjit'
           - llvm: '10'
             lua: 'moonjit'
+          - llvm: '11'
+            lua: 'moonjit'
           - llvm: '12'
             lua: 'moonjit'
           - llvm: '13'
-            lua: 'moonjit'
-          - llvm: '14'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
