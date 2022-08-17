@@ -133,7 +133,7 @@ jobs:
             terra-*.tar.xz
             terra-*.7z
   docker:
-    name: Docker
+    name: Docker (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, variant=${{ matrix.variant }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -187,7 +187,7 @@ jobs:
           DOCKER_VARIANT: ${{ matrix.variant }}
           DOCKER_TEST: ${{ matrix.test }}
   multiarch:
-    name: Multiarch
+    name: Multiarch (${{ matrix.distro }}, ${{ matrix.arch }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, variant=${{ matrix.variant }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
