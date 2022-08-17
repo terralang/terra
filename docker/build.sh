@@ -5,8 +5,10 @@ set -e
 IFS=- read distro release <<< "$1"
 arch="$2"
 llvm="$3"
-variant="$4"
-threads="$5"
+cuda="$4"
+variant="$5"
+test="$6"
+threads="$7"
 
 if [[ -n $arch ]]; then
     export DOCKER_BUILDKIT=1
@@ -14,7 +16,7 @@ fi
 
 arch_long=$(echo $arch | sed -e s/arm64/aarch64/ | sed -e s/ppc64le/powerpc64le/)
 
-docker build ${arch:+--platform=}$arch --build-arg release=$release ${arch:+--build-arg arch=}$arch_long --build-arg llvm=$llvm --build-arg threads=${threads:-4} -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro${variant:+-}$variant .
+docker build ${arch:+--platform=}$arch --build-arg release=$release --build-arg llvm=$llvm --build-arg cuda=$cuda --build-arg variant=$variant --build-arg test=$test --build-arg threads=${threads:-4} -t terralang/terra:$distro-$release -f docker/Dockerfile.$distro .
 
 # Copy files out of container and make release.
 tmp=$(docker create terralang/terra:$distro-$release)

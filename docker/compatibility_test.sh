@@ -7,10 +7,12 @@ build_version="$2"
 test_versions="$3"
 arch="$4"
 llvm="$5"
+cuda=1
 variant="$6"
+test=1
 threads="$7"
 
-./docker/build.sh "${distro}-${build_version}" "$arch" "$llvm" "$variant" "$threads"
+./docker/build.sh "${distro}-${build_version}" "$arch" "$llvm" "$cuda" "$variant" "$test" "$threads"
 
 cd terra_install
 

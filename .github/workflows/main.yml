@@ -15,23 +15,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-18.04', 'macos-11', 'windows-2022']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14']
+        os: ['macos-11', 'windows-2022']
+        llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14']
         cmake: ['0', '1']
         cuda: ['0', '1']
-        static: ['0', '1']
-        slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 13-14
-          - os: 'ubuntu-18.04'
-            llvm: '13'
-          - os: 'ubuntu-18.04'
-            llvm: '14'
-
-          # macOS: exclude LLVM 5.0, 8-14 make, cuda/no-static/no-slib
-          - os: 'macos-11'
-            llvm: '5.0'
+          # macOS: exclude LLVM 8-14 make, cuda
           - os: 'macos-11'
             llvm: '8'
             cmake: '0'
@@ -55,17 +45,11 @@ jobs:
             cmake: '0'
           - os: 'macos-11'
             cuda: '1'
-          - os: 'macos-11'
-            static: '0'
-          - os: 'macos-11'
-            slib: '0'
           # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-11'
             llvm: '10'
 
-          # Windows: exclude LLVM 5.0-10,12-14, make
-          - os: 'windows-2022'
-            llvm: '5.0'
+          # Windows: exclude LLVM 6.0-10,12-14, make
           - os: 'windows-2022'
             llvm: '6.0'
           - os: 'windows-2022'
@@ -86,18 +70,8 @@ jobs:
             cmake: '0'
 
           # CMake
-          - llvm: '5.0'
-            cmake: '0'
           - llvm: '7'
             cmake: '0'
-
-          # no-static/no-slib require CMake, slib requires static
-          - cmake: '0'
-            static: '0'
-          - cmake: '0'
-            slib: '0'
-          - static: '0'
-            slib: '1'
 
           # FIXME: no-static breaks with LuaJIT
           - static: '0'
@@ -108,8 +82,6 @@ jobs:
             lua: 'moonjit'
 
           # CUDA: only LLVM 11
-          - llvm: '5.0'
-            cuda: '1'
           - llvm: '6.0'
             cuda: '1'
           - llvm: '7'
@@ -127,49 +99,7 @@ jobs:
           - llvm: '14'
             cuda: '1'
 
-          # no-static: only LLVM 9
-          - llvm: '5.0'
-            static: '0'
-          - llvm: '6.0'
-            static: '0'
-          - llvm: '7'
-            static: '0'
-          - llvm: '8'
-            static: '0'
-          - llvm: '10'
-            static: '0'
-          - llvm: '11'
-            static: '0'
-          - llvm: '12'
-            static: '0'
-          - llvm: '13'
-            static: '0'
-          - llvm: '14'
-            static: '0'
-
-          # no-slib: only LLVM 9
-          - llvm: '5.0'
-            slib: '0'
-          - llvm: '6.0'
-            slib: '0'
-          - llvm: '7'
-            slib: '0'
-          - llvm: '8'
-            slib: '0'
-          - llvm: '10'
-            slib: '0'
-          - llvm: '11'
-            slib: '0'
-          - llvm: '12'
-            slib: '0'
-          - llvm: '13'
-            slib: '0'
-          - llvm: '14'
-            slib: '0'
-
           # Moonjit: only LLVM 9
-          - llvm: '5.0'
-            lua: 'moonjit'
           - llvm: '6.0'
             lua: 'moonjit'
           - llvm: '7'
@@ -211,55 +141,79 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '6.0', '12', '14.0.6']
-        exclude:
-          - distro: 'ubuntu-18.04'
-            llvm: '3.8'
-          - distro: 'ubuntu-20.04'
-            llvm: '3.8'
-          - distro: 'ubuntu-22.04'
-            llvm: '3.8'
-          - distro: 'ubuntu-22.04'
-            llvm: '6.0'
-          - distro: 'ubuntu-16.04'
-            llvm: '12'
-          - distro: 'ubuntu-18.04'
-            llvm: '12'
-          - distro: 'ubuntu-20.04'
-            llvm: '12'
-          - distro: 'ubuntu-16.04'
-            llvm: '14.0.6'
-          - distro: 'ubuntu-18.04'
-            llvm: '14.0.6'
-          - distro: 'ubuntu-20.04'
-            llvm: '14.0.6'
+        distro: ['ubuntu-18.04']
+        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12', '13', '14', '14.0.6']
+        test: ['1']
+        include:
+          # Assign variants to the basic configurations:
+          - variant: package
+          - llvm: 11
+            variant: upstream
+          - llvm: 12
+            variant: upstream
+          - llvm: 13
+            variant: upstream
+          - llvm: 14
+            variant: upstream
+          - llvm: 14.0.6
+            variant: prebuilt
+
+          # CUDA with LLVM 9 only:
+          - cuda: 0
+          - llvm: 9
+            cuda: 1
+
+          # Some additional configurations:
+
+          # LLVM 3.8
+          - llvm: 3.8
+            variant: upstream
+            distro: ubuntu-16.04
+
+          # LLVM 6.0
+          - llvm: 6.0
+            distro: ubuntu-16.04
+          - llvm: 6.0
+            distro: ubuntu-18.04
+          - llvm: 6.0
+            distro: ubuntu-20.04
+
+          # LLVM 12
+          - llvm: 12
+            distro: ubuntu-22.04
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
-          DOCKER_BUILD: ${{ matrix.distro }}
+          DOCKER_DISTRO: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+          DOCKER_CUDA: ${{ matrix.cuda }}
+          DOCKER_VARIANT: ${{ matrix.variant }}
+          DOCKER_TEST: ${{ matrix.test }}
   multiarch:
     name: Multiarch
     runs-on: ubuntu-latest
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        arch: ['arm64', 'ppc64le']
-        llvm: ['13.0.0', '11.1.0']
-        exclude:
-          - arch: 'arm64'
-            llvm: '13.0.0'
-          - arch: 'ppc64le'
-            llvm: '11.1.0'
+        variant: ['prebuilt']
+        cuda: ['0']
+        test: ['0']
+        include:
+          - arch: arm64
+            llvm: 11.1.0
+          - arch: ppc64le
+            llvm: 13.0.0
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
         env:
-          DOCKER_BUILD: ${{ matrix.distro }}
+          DOCKER_DISTRO: ${{ matrix.distro }}
           DOCKER_ARCH: ${{ matrix.arch }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+          DOCKER_CUDA: ${{ matrix.cuda }}
+          DOCKER_VARIANT: ${{ matrix.variant }}
+          DOCKER_TEST: ${{ matrix.test }}
       - uses: actions/upload-artifact@v2
         with:
           name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
