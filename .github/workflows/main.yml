@@ -15,7 +15,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-20.04', 'macos-11', 'windows-2022']
+        os: ['ubuntu-22.04', 'macos-11', 'windows-2022']
         llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14']
         cmake: ['0', '1']
         cuda: ['0', '1']
@@ -23,6 +23,18 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # Linux: exclude 6.0-10 (they run on Docker)
+          - os: 'ubuntu-22.04'
+            llvm: '6.0'
+          - os: 'ubuntu-22.04'
+            llvm: '7'
+          - os: 'ubuntu-22.04'
+            llvm: '8'
+          - os: 'ubuntu-22.04'
+            llvm: '9'
+          - os: 'ubuntu-22.04'
+            llvm: '10'
+
           # macOS: exclude LLVM 8-14 make, cuda/no-static/no-slib
           - os: 'macos-11'
             llvm: '8'
@@ -192,7 +204,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-16.04', 'ubuntu-18.04', 'ubuntu-20.04', 'ubuntu-22.04']
-        llvm: ['3.8', '5.0', '6.0', '12', '14.0.6']
+        llvm: ['3.8', '5.0', '6.0', '7', '8', '9', '10', '12', '14.0.6']
         exclude:
           - distro: 'ubuntu-18.04'
             llvm: '3.8'
@@ -208,6 +220,30 @@ jobs:
             llvm: '5.0'
           - distro: 'ubuntu-22.04'
             llvm: '6.0'
+          - distro: 'ubuntu-16.04'
+            llvm: '7'
+          - distro: 'ubuntu-20.04'
+            llvm: '7'
+          - distro: 'ubuntu-22.04'
+            llvm: '7'
+          - distro: 'ubuntu-16.04'
+            llvm: '8'
+          - distro: 'ubuntu-20.04'
+            llvm: '8'
+          - distro: 'ubuntu-22.04'
+            llvm: '8'
+          - distro: 'ubuntu-16.04'
+            llvm: '9'
+          - distro: 'ubuntu-20.04'
+            llvm: '9'
+          - distro: 'ubuntu-22.04'
+            llvm: '9'
+          - distro: 'ubuntu-16.04'
+            llvm: '10'
+          - distro: 'ubuntu-20.04'
+            llvm: '10'
+          - distro: 'ubuntu-22.04'
+            llvm: '10'
           - distro: 'ubuntu-16.04'
             llvm: '12'
           - distro: 'ubuntu-18.04'

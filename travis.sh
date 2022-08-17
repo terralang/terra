@@ -41,55 +41,17 @@ if [[ $(uname) = Linux ]]; then
   distro_name="$(lsb_release -cs)"
   sudo apt-get update -qq
   if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
-    # Hack: Ubuntu 20.04 packaging is broken, fails no-static/no-slib builds.
-    wget -nv https://github.com/terralang/llvm-build/releases/download/llvm-14.0.6/clang+llvm-14.0.6-x86_64-linux-gnu.tar.xz
-    tar xf clang+llvm-14.0.6-x86_64-linux-gnu.tar.xz
-    if [[ $USE_CMAKE -eq 0 ]]; then
-      sudo apt-get install -y libedit-dev
-      ln -s clang+llvm-14.0.6-x86_64-linux-gnu/bin/llvm-config llvm-config-14
-      ln -s clang+llvm-14.0.6-x86_64-linux-gnu/bin/clang clang-14
-      export PATH=$PWD:$PATH
-    fi
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.6-x86_64-linux-gnu
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$PWD/clang+llvm-14.0.6-x86_64-linux-gnu/lib"
-    fi
+    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libedit-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-14:/usr/share/llvm-14
   elif [[ $LLVM_CONFIG = llvm-config-13 ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-13 main"
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libmlir-13-dev libedit-dev libpfm4-dev
+    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-13/lib"
-    fi
   elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
     sudo apt-get install -y llvm-12-dev clang-12 libclang-12-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-12:/usr/share/llvm-12
   elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-11 main"
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
     sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-11/lib"
-    fi
-  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
-    sudo apt-get install -y llvm-10-dev clang-10 libclang-10-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-10:/usr/share/llvm-10
-  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
-    sudo apt-get install -y llvm-9-dev clang-9 libclang-9-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-9:/usr/share/llvm-9
-  elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
-    sudo apt-get install -y llvm-8-dev clang-8 libclang-8-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-8:/usr/share/llvm-8
-  elif [[ $LLVM_CONFIG = llvm-config-7 ]]; then
-    sudo apt-get install -y llvm-7-dev clang-7 libclang-7-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-7:/usr/share/llvm-7
-  elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
-    sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
   else
     echo "Don't know this LLVM version: $LLVM_CONFIG"
     exit 1
