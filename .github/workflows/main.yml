@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   check_format:
     name: Check Format
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -23,12 +23,6 @@ jobs:
         slib: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 13-14
-          - os: 'ubuntu-18.04'
-            llvm: '13'
-          - os: 'ubuntu-18.04'
-            llvm: '14'
-
           # macOS: exclude LLVM 8-14 make, cuda/no-static/no-slib
           - os: 'macos-11'
             llvm: '8'

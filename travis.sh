@@ -40,11 +40,20 @@ fi
 if [[ $(uname) = Linux ]]; then
   distro_name="$(lsb_release -cs)"
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-14 main"
+    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
+    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libmlir-14-dev libedit-dev libpfm4-dev
+    export CMAKE_PREFIX_PATH=/usr/lib/llvm-14:/usr/share/llvm-14
+    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-14/lib"
+    fi
+  elif [[ $LLVM_CONFIG = llvm-config-13 ]]; then
     wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
     sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-13 main"
     for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev libpfm4-dev
+    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libmlir-13-dev libedit-dev libpfm4-dev
     export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
     if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
         export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-13/lib"
