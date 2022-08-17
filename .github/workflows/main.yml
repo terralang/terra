@@ -117,16 +117,16 @@ jobs:
           - llvm: '14'
             cuda: '1'
 
-          # no-static: only LLVM 9
+          # no-static: only LLVM 11
           - llvm: '6.0'
             static: '0'
           - llvm: '7'
             static: '0'
           - llvm: '8'
             static: '0'
-          - llvm: '10'
+          - llvm: '9'
             static: '0'
-          - llvm: '11'
+          - llvm: '10'
             static: '0'
           - llvm: '12'
             static: '0'
@@ -135,16 +135,16 @@ jobs:
           - llvm: '14'
             static: '0'
 
-          # no-slib: only LLVM 9
+          # no-slib: only LLVM 11
           - llvm: '6.0'
             slib: '0'
           - llvm: '7'
             slib: '0'
           - llvm: '8'
             slib: '0'
-          - llvm: '10'
+          - llvm: '9'
             slib: '0'
-          - llvm: '11'
+          - llvm: '10'
             slib: '0'
           - llvm: '12'
             slib: '0'
@@ -153,16 +153,16 @@ jobs:
           - llvm: '14'
             slib: '0'
 
-          # Moonjit: only LLVM 9
+          # Moonjit: only LLVM 11
           - llvm: '6.0'
             lua: 'moonjit'
           - llvm: '7'
             lua: 'moonjit'
           - llvm: '8'
             lua: 'moonjit'
-          - llvm: '10'
+          - llvm: '9'
             lua: 'moonjit'
-          - llvm: '11'
+          - llvm: '10'
             lua: 'moonjit'
           - llvm: '12'
             lua: 'moonjit'
