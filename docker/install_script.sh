@@ -13,7 +13,7 @@ echo "###   * Test: $test"
 echo "###   * Threads: $threads"
 echo "######################################################################"
 
-arch=$(uname -m)
+arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
 
 packages=(
     build-essential cmake git
@@ -26,6 +26,11 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
     if [[ $llvm -ge 13 ]]; then
         packages+=(
             libpfm4-dev
+        )
+    fi
+    if [[ $variant = "upstream" && $llvm -ge 12 ]]; then
+        packages+=(
+            libxml2-dev
         )
     fi
 elif [[ $variant = "prebuilt" ]]; then
