@@ -13,6 +13,13 @@ echo "###   * Test: $test"
 echo "###   * Threads: $threads"
 echo "######################################################################"
 
+# Check all the variables are set.
+[[ -n $llvm ]]
+[[ -n $cuda ]]
+[[ -n $variant ]]
+[[ -n $test ]]
+[[ -n $threads ]]
+
 arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
 
 packages=(

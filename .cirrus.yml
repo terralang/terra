@@ -27,7 +27,9 @@ arm_task:
     image: ubuntu:18.04
   env:
     llvm: 11.1.0
-    arch: aarch64
+    cuda: 0
+    variant: prebuilt
+    test: 1
     threads: 2
   script: |
-    ./docker/install_script_multiarch.sh
+    ./docker/install_script.sh
