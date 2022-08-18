@@ -160,14 +160,7 @@ jobs:
       matrix:
         distro: ['ubuntu-18.04']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
-        lua: ['luajit', 'moonjit']
-        cuda: ['0', '1']
         test: ['1']
-        exclude:
-          # This is a hacky way to make a default setting. We'll add it back
-          # via includes below.
-          - cuda: '1'
-          - lua: 'moonjit'
         include:
           # Assign variants to the basic configurations:
           - variant: 'package'
@@ -181,10 +174,12 @@ jobs:
             variant: 'prebuilt'
 
           # CUDA with LLVM 9 only:
+          - cuda: '0'
           - llvm: '9'
             cuda: '1'
 
           # Moonjit with LLVM 10 only:
+          - lua: 'luajit'
           - llvm: '10'
             lua: 'moonjit'
 
@@ -194,6 +189,7 @@ jobs:
           - distro: 'ubuntu-16.04'
             llvm: '3.8'
             lua: 'luajit'
+            cuda: '0'
             variant: 'upstream'
             test: '1'
 
