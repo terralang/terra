@@ -7,7 +7,9 @@ root_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 echo "######################################################################"
 echo "### Docker Build Configuration:"
 echo "###   * LLVM: $llvm"
-echo "###   * Lua: ${lua:-(default)}"
+echo "###   * Lua: ${lua:-(auto)}"
+echo "###   * Static: ${static:-(auto)}"
+echo "###   * Slib: ${slib:-(auto)}"
 echo "###   * CUDA: $cuda"
 echo "###   * Variant: $variant"
 echo "###   * Test: $test"
@@ -17,6 +19,8 @@ echo "######################################################################"
 # Check all the variables are set.
 [[ -n $llvm ]]
 # $lua is optional
+# $static is optional
+# $slib is optional
 [[ -n $cuda ]]
 [[ -n $variant ]]
 [[ -n $test ]]
@@ -86,6 +90,18 @@ cmake_flags=()
 if [[ -n $lua ]]; then
     cmake_flags+=(
         -DTERRA_LUA="$lua"
+    )
+fi
+if [[ $static -eq 0 ]]; then
+    cmake_flags+=(
+      -DTERRA_STATIC_LINK_LLVM=OFF
+      -DTERRA_STATIC_LINK_LUAJIT=OFF
+    )
+fi
+if [[ $slib -eq 0 ]]; then
+    cmake_flags+=(
+      -DTERRA_SLIB_INCLUDE_LLVM=OFF
+      -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
     )
 fi
 if [[ $cuda -eq 1 ]]; then

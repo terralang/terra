@@ -154,14 +154,16 @@ jobs:
             terra-*.tar.xz
             terra-*.7z
   docker:
-    name: Docker (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
+    name: Docker (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
-        cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
+        static: ['0', '1']
+        slib: ['0', '1']
+        cuda: ['0', '1']
         test: ['1']
         exclude:
           # CUDA with LLVM 9 only:
@@ -203,6 +205,50 @@ jobs:
             lua: 'moonjit'
           - llvm: '14.0.6'
             lua: 'moonjit'
+
+          # no-static with LLVM 10 only:
+          - llvm: '5.0'
+            static: '0'
+          - llvm: '6.0'
+            static: '0'
+          - llvm: '7'
+            static: '0'
+          - llvm: '8'
+            static: '0'
+          - llvm: '9'
+            static: '0'
+          - llvm: '11'
+            static: '0'
+          - llvm: '12.0.1'
+            static: '0'
+          - llvm: '13.0.1'
+            static: '0'
+          - llvm: '14.0.6'
+            static: '0'
+
+          # no-slib with LLVM 10 only:
+          - llvm: '5.0'
+            slib: '0'
+          - llvm: '6.0'
+            slib: '0'
+          - llvm: '7'
+            slib: '0'
+          - llvm: '8'
+            slib: '0'
+          - llvm: '9'
+            slib: '0'
+          - llvm: '11'
+            slib: '0'
+          - llvm: '12.0.1'
+            slib: '0'
+          - llvm: '13.0.1'
+            slib: '0'
+          - llvm: '14.0.6'
+            slib: '0'
+
+          # slib requires static
+          - static: '0'
+            slib: '1'
 
         include:
           # Assign variants to the basic configurations:
