@@ -160,7 +160,50 @@ jobs:
       matrix:
         distro: ['ubuntu-18.04']
         llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
+        cuda: ['0', '1']
+        lua: ['luajit', 'moonjit']
         test: ['1']
+        exclude:
+          # CUDA with LLVM 9 only:
+          - llvm: '5.0'
+            cuda: '1'
+          - llvm: '6.0'
+            cuda: '1'
+          - llvm: '7'
+            cuda: '1'
+          - llvm: '8'
+            cuda: '1'
+          - llvm: '10'
+            cuda: '1'
+          - llvm: '11'
+            cuda: '1'
+          - llvm: '12.0.1'
+            cuda: '1'
+          - llvm: '13.0.1'
+            cuda: '1'
+          - llvm: '14.0.6'
+            cuda: '1'
+
+          # Moonjit with LLVM 10 only:
+          - llvm: '5.0'
+            lua: 'moonjit'
+          - llvm: '6.0'
+            lua: 'moonjit'
+          - llvm: '7'
+            lua: 'moonjit'
+          - llvm: '8'
+            lua: 'moonjit'
+          - llvm: '9'
+            lua: 'moonjit'
+          - llvm: '11'
+            lua: 'moonjit'
+          - llvm: '12.0.1'
+            lua: 'moonjit'
+          - llvm: '13.0.1'
+            lua: 'moonjit'
+          - llvm: '14.0.6'
+            lua: 'moonjit'
+
         include:
           # Assign variants to the basic configurations:
           - variant: 'package'
@@ -172,16 +215,6 @@ jobs:
             variant: 'prebuilt'
           - llvm: '14.0.6'
             variant: 'prebuilt'
-
-          # CUDA with LLVM 9 only:
-          - cuda: '0'
-          - llvm: '9'
-            cuda: '1'
-
-          # Moonjit with LLVM 10 only:
-          - lua: 'luajit'
-          - llvm: '10'
-            lua: 'moonjit'
 
           # Some additional configurations:
 
