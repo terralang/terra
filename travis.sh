@@ -5,8 +5,8 @@ set -x
 
 if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
     if [[ $(uname) = Linux ]]; then
-        sudo apt-get install -y clang-format-9
-        export PATH="/usr/lib/llvm-9/bin:$PATH"
+        sudo apt-get install -y clang-format-14
+        export PATH="/usr/lib/llvm-14/bin:$PATH"
     else
         exit 1
     fi
@@ -19,83 +19,27 @@ if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
     exit 0
 fi
 
-if [[ -n $DOCKER_BUILD ]]; then
+if [[ -n $DOCKER_DISTRO ]]; then
     if [[ -n $DOCKER_ARCH ]]; then
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
     fi
 
-    variant=
-    if [[ $DOCKER_LLVM = "3.8" ]]; then
-        variant=upstream
-    elif [[ $DOCKER_LLVM = *"."*"."* ]]; then
-        variant=prebuilt
-    fi
-    if [[ -n $DOCKER_ARCH ]]; then
-        variant=${variant}${variant:+-}multiarch
-    fi
-    ./docker/build.sh $DOCKER_BUILD "$DOCKER_ARCH" $DOCKER_LLVM $variant
+    ./docker/build.sh "$DOCKER_DISTRO" "$DOCKER_ARCH" "$DOCKER_LLVM" "$DOCKER_LUA" "$DOCKER_STATIC" "$DOCKER_SLIB" "$DOCKER_CUDA" "$DOCKER_VARIANT" "$DOCKER_TEST"
     exit 0
 fi
 
 if [[ $(uname) = Linux ]]; then
   distro_name="$(lsb_release -cs)"
   sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-13 ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-13 main"
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-13-dev clang-13 libclang-13-dev libedit-dev libpfm4-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-13:/usr/share/llvm-13
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-13/lib"
-    fi
-  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-12 main"
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-12-dev clang-12 libclang-12-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-12:/usr/share/llvm-12
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-12/lib"
-    fi
-  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-    sudo add-apt-repository -y "deb http://apt.llvm.org/${distro_name}/ llvm-toolchain-${distro_name}-11 main"
-    for i in {1..5}; do sudo apt-get update -qq && break || sleep 15; done
-    sudo apt-get install -y llvm-11-dev clang-11 libclang-11-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-11:/usr/share/llvm-11
-    if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-        export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/llvm-11/lib"
-    fi
-  elif [[ $LLVM_CONFIG = llvm-config-10 ]]; then
-    sudo apt-get install -y llvm-10-dev clang-10 libclang-10-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-10:/usr/share/llvm-10
-  elif [[ $LLVM_CONFIG = llvm-config-9 ]]; then
-    sudo apt-get install -y llvm-9-dev clang-9 libclang-9-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-9:/usr/share/llvm-9
-  elif [[ $LLVM_CONFIG = llvm-config-8 ]]; then
-    sudo apt-get install -y llvm-8-dev clang-8 libclang-8-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-8:/usr/share/llvm-8
-  elif [[ $LLVM_CONFIG = llvm-config-7 ]]; then
-    sudo apt-get install -y llvm-7-dev clang-7 libclang-7-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-7:/usr/share/llvm-7
-  elif [[ $LLVM_CONFIG = llvm-config-6.0 ]]; then
-    sudo apt-get install -qq llvm-6.0-dev clang-6.0 libclang-6.0-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-6.0:/usr/share/llvm-6.0
-  elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
-    sudo apt-get install -qq llvm-5.0-dev clang-5.0 libclang-5.0-dev libedit-dev
-    export CMAKE_PREFIX_PATH=/usr/lib/llvm-5.0:/usr/share/llvm-5.0
+  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libedit-dev libpfm4-dev
   else
     echo "Don't know this LLVM version: $LLVM_CONFIG"
+    echo "(If you're looking for more configurations, see Docker tests.)"
     exit 1
   fi
 
-  if [[ $USE_CUDA -eq 1 ]]; then
-    ./docker/install_cuda.sh sudo
-  fi
-fi
-
-if [[ $(uname) = Darwin ]]; then
+elif [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.6/clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
@@ -173,9 +117,8 @@ if [[ $(uname) = Darwin ]]; then
   fi
 
   export PATH=$PWD:$PATH
-fi
 
-if [[ $(uname) = MINGW* ]]; then
+elif [[ $(uname) = MINGW* ]]; then
   if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-14.0.0-x86_64-windows-msvc17.7z
@@ -195,6 +138,14 @@ if [[ $(uname) = MINGW* ]]; then
   export CMAKE_GENERATOR="Visual Studio 17 2022"
   export CMAKE_GENERATOR_PLATFORM=x64
   export CMAKE_GENERATOR_TOOLSET="host=x64"
+
+elif [[ $(uname) = FreeBSD ]]; then
+  # Nothing to do, everything has already been installed
+  echo
+
+else
+  echo "Don't know how to run tests on this OS: $(uname)"
+  exit 1
 fi
 
 if [[ $USE_CMAKE -eq 1 ]]; then
