@@ -139,6 +139,9 @@ elif [[ $(uname) = MINGW* ]]; then
   export CMAKE_GENERATOR_PLATFORM=x64
   export CMAKE_GENERATOR_TOOLSET="host=x64"
 
+elif [[ $(uname) = FreeBSD ]]; then
+  # Nothing to do, everything has already been installed
+
 else
   echo "Don't know how to run tests on this OS: $(uname)"
   exit 1
