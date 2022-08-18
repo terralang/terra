@@ -3,6 +3,7 @@ ARG release=18.04
 FROM ubuntu:$release
 
 ARG llvm=6.0
+ARG lua=luajit
 ARG cuda=0
 ARG variant=package
 ARG test=1

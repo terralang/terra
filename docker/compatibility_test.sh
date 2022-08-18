@@ -7,10 +7,11 @@ build_version="$2"
 test_versions="$3"
 arch="$4"
 llvm="$5"
+lua="$6"
 cuda=1
-variant="$6"
+variant="$7"
 test=1
-threads="$7"
+threads="$8"
 
 ./docker/build.sh "${distro}-${build_version}" "$arch" "$llvm" "$cuda" "$variant" "$test" "$threads"
 

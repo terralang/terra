@@ -24,7 +24,7 @@ if [[ -n $DOCKER_DISTRO ]]; then
         docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
     fi
 
-    ./docker/build.sh "$DOCKER_DISTRO" "$DOCKER_ARCH" "$DOCKER_LLVM" "$DOCKER_CUDA" "$DOCKER_VARIANT" "$DOCKER_TEST"
+    ./docker/build.sh "$DOCKER_DISTRO" "$DOCKER_ARCH" "$DOCKER_LLVM" "$DOCKER_LUA" "$DOCKER_CUDA" "$DOCKER_VARIANT" "$DOCKER_TEST"
     exit 0
 fi
 

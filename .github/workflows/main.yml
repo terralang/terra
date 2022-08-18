@@ -178,40 +178,51 @@ jobs:
           - llvm: '9'
             cuda: '1'
 
+          # Moonjit with LLVM 10 only:
+          - lua: 'luajit'
+          - llvm: '10'
+            lua: 'moonjit'
+
           # Some additional configurations:
 
           # LLVM 3.8 on Ubuntu 16.04
-          - llvm: '3.8'
-            distro: 'ubuntu-16.04'
+          - distro: 'ubuntu-16.04'
+            llvm: '3.8'
+            lua: 'luajit'
             cuda: '0'
             variant: 'upstream'
             test: '1'
 
           # LLVM 6.0 on Ubuntu 16.04, 20.04
-          - llvm: '6.0'
-            distro: 'ubuntu-16.04'
+          - distro: 'ubuntu-16.04'
+            llvm: '6.0'
+            lua: 'luajit'
             cuda: '0'
             variant: 'package'
             test: '1'
-          - llvm: '6.0'
-            distro: 'ubuntu-20.04'
+          - distro: 'ubuntu-20.04'
+            llvm: '6.0'
+            lua: 'luajit'
             cuda: '0'
             variant: 'package'
             test: '1'
 
           # LLVM 12, 13, 14 on Ubuntu 22.04
-          - llvm: '12'
-            distro: 'ubuntu-22.04'
+          - distro: 'ubuntu-22.04'
+            llvm: '12'
+            lua: 'luajit'
             cuda: '0'
             variant: 'package'
             test: '1'
-          - llvm: '13'
-            distro: 'ubuntu-22.04'
+          - distro: 'ubuntu-22.04'
+            llvm: '13'
+            lua: 'luajit'
             cuda: '0'
             variant: 'package'
             test: '1'
-          - llvm: '14'
-            distro: 'ubuntu-22.04'
+          - distro: 'ubuntu-22.04'
+            llvm: '14'
+            lua: 'luajit'
             cuda: '0'
             variant: 'package'
             test: '1'
@@ -221,6 +232,7 @@ jobs:
         env:
           DOCKER_DISTRO: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
+          DOCKER_LUA: ${{ matrix.lua }}
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
           DOCKER_TEST: ${{ matrix.test }}
@@ -261,7 +273,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.1 prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.1 luajit prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-13

@@ -7,6 +7,7 @@ root_dir="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
 echo "######################################################################"
 echo "### Docker Build Configuration:"
 echo "###   * LLVM: $llvm"
+echo "###   * Lua: ${lua:-(default)}"
 echo "###   * CUDA: $cuda"
 echo "###   * Variant: $variant"
 echo "###   * Test: $test"
@@ -15,6 +16,7 @@ echo "######################################################################"
 
 # Check all the variables are set.
 [[ -n $llvm ]]
+# $lua is optional
 [[ -n $cuda ]]
 [[ -n $variant ]]
 [[ -n $test ]]
@@ -80,8 +82,21 @@ else
     echo "disabled: $root_dir/install_cuda.sh"
 fi
 
+cmake_flags=()
+if [[ -n $lua ]]; then
+    cmake_flags+=(
+        -DTERRA_LUA="$lua"
+    )
+fi
+if [[ -n $cuda ]]; then
+    # Terra should autodetect, but force an error if it doesn't work.
+    cmake_flags+=(
+        -DTERRA_ENABLE_CUDA=ON
+    )
+fi
+
 cd build
-cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install ..
+cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install "${cmake_flags[@]}" ..
 make install -j$threads
 
 if [[ $test -eq 1 ]]; then
