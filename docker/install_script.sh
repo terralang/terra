@@ -88,7 +88,7 @@ if [[ -n $lua ]]; then
         -DTERRA_LUA="$lua"
     )
 fi
-if [[ -n $cuda ]]; then
+if [[ $cuda -eq 1 ]]; then
     # Terra should autodetect, but force an error if it doesn't work.
     cmake_flags+=(
         -DTERRA_ENABLE_CUDA=ON
