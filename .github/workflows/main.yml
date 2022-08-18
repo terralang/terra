@@ -154,7 +154,7 @@ jobs:
             terra-*.tar.xz
             terra-*.7z
   docker:
-    name: Docker (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, variant=${{ matrix.variant }})
+    name: Docker (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, cuda=${{ matrix.cuda }}, variant=${{ matrix.variant }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
