@@ -141,6 +141,7 @@ elif [[ $(uname) = MINGW* ]]; then
 
 elif [[ $(uname) = FreeBSD ]]; then
   # Nothing to do, everything has already been installed
+  echo
 
 else
   echo "Don't know how to run tests on this OS: $(uname)"
