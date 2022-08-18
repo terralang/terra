@@ -91,7 +91,7 @@ in stdenv.mkDerivation rec {
   meta = with lib; {
     description = "A low-level counterpart to Lua";
     homepage = "http://terralang.org/";
-    platforms = platforms.x86_64;
+    platforms = platforms.x86_64 ++ platforms.aarch64;
     maintainers = with maintainers; [ jb55 thoughtpolice ];
     license = licenses.mit;
   };
