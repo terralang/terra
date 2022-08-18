@@ -4,7 +4,7 @@ on: [push, pull_request]
 jobs:
   check_format:
     name: Check Format
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -15,12 +15,33 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['macos-11', 'windows-2022']
+        os: ['ubuntu-22.04', 'macos-11', 'windows-2022']
         llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14']
         cmake: ['0', '1']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
+          # Linux: exclude LLVM 6.0-13, cmake
+          # Note: CMake configurations are tested in Docker
+          - os: 'ubuntu-22.04'
+            llvm: '6.0'
+          - os: 'ubuntu-22.04'
+            llvm: '7'
+          - os: 'ubuntu-22.04'
+            llvm: '8'
+          - os: 'ubuntu-22.04'
+            llvm: '9'
+          - os: 'ubuntu-22.04'
+            llvm: '10'
+          - os: 'ubuntu-22.04'
+            llvm: '11'
+          - os: 'ubuntu-22.04'
+            llvm: '12'
+          - os: 'ubuntu-22.04'
+            llvm: '13'
+          - os: 'ubuntu-22.04'
+            cmake: '1'
+
           # macOS: exclude LLVM 8-14 make, cuda
           - os: 'macos-11'
             llvm: '8'

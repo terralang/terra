@@ -5,8 +5,8 @@ set -x
 
 if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
     if [[ $(uname) = Linux ]]; then
-        sudo apt-get install -y clang-format-9
-        export PATH="/usr/lib/llvm-9/bin:$PATH"
+        sudo apt-get install -y clang-format-14
+        export PATH="/usr/lib/llvm-14/bin:$PATH"
     else
         exit 1
     fi
@@ -28,7 +28,18 @@ if [[ -n $DOCKER_DISTRO ]]; then
     exit 0
 fi
 
-if [[ $(uname) = Darwin ]]; then
+if [[ $(uname) = Linux ]]; then
+  distro_name="$(lsb_release -cs)"
+  sudo apt-get update -qq
+  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libedit-dev libpfm4-dev
+  else
+    echo "Don't know this LLVM version: $LLVM_CONFIG"
+    echo "(If you're looking for more configurations, see Docker tests.)"
+    exit 1
+  fi
+
+elif [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.6/clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
@@ -130,7 +141,6 @@ elif [[ $(uname) = MINGW* ]]; then
 
 else
   echo "Don't know how to run tests on this OS: $(uname)"
-  echo "(If you're looking for Linux, use Docker.)"
   exit 1
 fi
 
