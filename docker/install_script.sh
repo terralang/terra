@@ -92,13 +92,13 @@ if [[ -n $lua ]]; then
         -DTERRA_LUA="$lua"
     )
 fi
-if [[ $static -eq 0 ]]; then
+if [[ -n $static && $static -eq 0 ]]; then
     cmake_flags+=(
       -DTERRA_STATIC_LINK_LLVM=OFF
       -DTERRA_STATIC_LINK_LUAJIT=OFF
     )
 fi
-if [[ $slib -eq 0 ]]; then
+if [[ -n $slib && $slib -eq 0 ]]; then
     cmake_flags+=(
       -DTERRA_SLIB_INCLUDE_LLVM=OFF
       -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
