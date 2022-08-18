@@ -312,6 +312,8 @@ jobs:
           DOCKER_DISTRO: ${{ matrix.distro }}
           DOCKER_LLVM: ${{ matrix.llvm }}
           DOCKER_LUA: ${{ matrix.lua }}
+          DOCKER_STATIC: ${{ matrix.static }}
+          DOCKER_SLIB: ${{ matrix.slib }}
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
           DOCKER_TEST: ${{ matrix.test }}
