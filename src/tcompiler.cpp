@@ -1176,7 +1176,8 @@ struct CCallingConv {
             params->objAt(i, &elem);
             info->paramtypes.push_back(ClassifyArgument(&elem, &nfloat, &nint, false));
         }
-        info->fntype = CreateFunctionType(info, fparams.size(), ftype->boolean("isvararg"));
+        info->fntype =
+                CreateFunctionType(info, fparams.size(), ftype->boolean("isvararg"));
     }
 
     Classification *ClassifyFunction(Obj *fntyp) {
@@ -1563,7 +1564,8 @@ struct CCallingConv {
             arguments.push_back(type);
         }
     }
-    FunctionType *CreateFunctionType(Classification *info, int formal_params, bool isvararg) {
+    FunctionType *CreateFunctionType(Classification *info, int formal_params,
+                                     bool isvararg) {
         std::vector<Type *> arguments;
 
         Type *rt = NULL;
