@@ -1148,7 +1148,8 @@ struct CCallingConv {
         return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
     }
     void Classify(Obj *ftype, Obj *params, Classification *info) {
-        Obj returntype;
+        Obj fparams, returntype;
+        ftype->obj("parameters", &fparams);
         ftype->obj("returntype", &returntype);
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero, true);
@@ -1175,7 +1176,8 @@ struct CCallingConv {
             params->objAt(i, &elem);
             info->paramtypes.push_back(ClassifyArgument(&elem, &nfloat, &nint, false));
         }
-        info->fntype = CreateFunctionType(info, ftype->boolean("isvararg"));
+        info->fntype =
+                CreateFunctionType(info, fparams.size(), ftype->boolean("isvararg"));
     }
 
     Classification *ClassifyFunction(Obj *fntyp) {
@@ -1562,7 +1564,8 @@ struct CCallingConv {
             arguments.push_back(type);
         }
     }
-    FunctionType *CreateFunctionType(Classification *info, bool isvararg) {
+    FunctionType *CreateFunctionType(Classification *info, int formal_params,
+                                     bool isvararg) {
         std::vector<Type *> arguments;
 
         Type *rt = NULL;
@@ -1597,8 +1600,12 @@ struct CCallingConv {
                 assert(!"unhandled argument kind");
             } break;
         }
-
-        for (size_t i = 0; i < info->paramtypes.size(); i++) {
+        if (isvararg) {
+            assert(formal_params <= info->paramtypes.size());
+        } else {
+            assert(formal_params == info->paramtypes.size());
+        }
+        for (size_t i = 0; i < formal_params; i++) {
             Argument *a = &info->paramtypes[i];
             switch (a->kind) {
                 case C_PRIMITIVE: {
