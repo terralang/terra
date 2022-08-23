@@ -112,8 +112,8 @@ end
 terra atomic_xchg_pointer(x : &&int, y : &int)
   return terralib.atomicrmw("xchg", x, y, {ordering = "acq_rel"})
 end
-atomic_add_and_return:printpretty(false)
-atomic_add_and_return:disas()
+atomic_xchg_pointer:printpretty(false)
+atomic_xchg_pointer:disas()
 
 terra xchg_pointer()
   var i : int = 1
