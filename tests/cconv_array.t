@@ -60,7 +60,13 @@ local function run_test_case(typ, N)
   end
 end
 
-for N = 0, 11 do
+local int8_max_args = 11
+local ffi = require('ffi')
+if ffi.os == 'OSX' and ffi.arch == 'arm64' then
+  int8_max_args = 8 -- https://github.com/terralang/terra/issues/604
+end
+
+for N = 0, int8_max_args do
   run_test_case(int8, N)
 end
 for _, typ in ipairs({int16, int32, int64, float, double}) do
