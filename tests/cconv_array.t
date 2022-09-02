@@ -62,7 +62,7 @@ end
 
 local int8_max_args = 11
 local ffi = require('ffi')
-if ffi.os == 'OSX' and ffi.arch = 'arm64' then
+if ffi.os == 'OSX' and ffi.arch == 'arm64' then
   int8_max_args = 8 -- https://github.com/terralang/terra/issues/604
 end
 
