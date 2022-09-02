@@ -851,7 +851,8 @@ public:
 };
 #endif
 
-void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HSO, std::vector<std::string> &ExtraArgs) {
+void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HSO,
+                           std::vector<std::string> &ExtraArgs) {
     using namespace llvm::sys;
 
     IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
@@ -860,7 +861,13 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     std::unique_ptr<DiagnosticsEngine> Diags(
             new DiagnosticsEngine(DiagID, &*DiagOpts, DiagsBuffer));
 
-    auto argslist = {"dummy", "-x", "c", "-", "-target", TripleStr.c_str(), "-resource-dir",
+    auto argslist = {"dummy",
+                     "-x",
+                     "c",
+                     "-",
+                     "-target",
+                     TripleStr.c_str(),
+                     "-resource-dir",
                      HSO.ResourceDir.c_str()};
     SmallVector<const char *, 5> Args(argslist.begin(), argslist.end());
 
@@ -873,7 +880,7 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
         auto &args = j.getArguments();
         if (strcmp(args[0], "-cc1") == 0) {
             for (auto arg = args.begin(), arg_end = args.end(); arg != arg_end; ++arg) {
-                if (strcmp(*arg, "-target-abi") == 0 && arg+1 != arg_end) {
+                if (strcmp(*arg, "-target-abi") == 0 && arg + 1 != arg_end) {
                     ExtraArgs.emplace_back(*arg);
                     ExtraArgs.emplace_back(*++arg);
                 }
@@ -1040,7 +1047,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     std::vector<std::string> extra_args;
     InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts(), extra_args);
 
-    std::vector<const char *>clang_args;
+    std::vector<const char *> clang_args;
     for (auto &arg : extra_args) {
         clang_args.push_back(arg.c_str());
     }
