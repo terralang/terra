@@ -1,3 +1,6 @@
+# This CI configuration is intended to be run on Ascent. See:
+# https://code.ornl.gov/ecpcitest/csc335/terra
+
 build:
   tags:
     - nobatch
