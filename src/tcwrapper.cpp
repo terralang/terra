@@ -851,7 +851,37 @@ public:
 };
 #endif
 
-void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HSO) {
+// Clang's initialization happens in two phases:
+//
+//  1. Driver::BuildCompilation builds a set of jobs that represent
+//     different actions the compiler would need to
+//     perform. Historically, these would have literally been
+//     different processes. (Remember cc1?) Now they're all in the
+//     same process but Clang still has to be reinitialized for each
+//     phase of the computation.
+//
+//  2. CompilerInvocation::CreateFromArgs initializes a specific
+//     invocation of Clang. This is what you'd normally think of as
+//     the compiler frontend and does all the heavily lifting to
+//     actually compile code.
+//
+// For <reasons>, some of Clang's defaults are set in (1) and not
+// (2). This makes it literally impossible to correctly initialize
+// Clang in some scenarios with (2) alone. Of course, because we're
+// using Clang as a JIT, we cannot simply execute the jobs created
+// when we call (1). Instead, we have to call (1), extract what we
+// need, and pass that ourselves to (2).
+//
+// This function does the first part of this process. While (1) sets a
+// lot of flags, it seems to be sufficient to extract two main sets:
+//
+//  * Header search options. Needed to get any sort of sane header
+//    search behavior on Windows.
+//
+//  * Target ABI. Needed on macOS M1 or else Clang will miscompile
+//    varargs code.
+void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOptions &HSO,
+                                  std::vector<std::string> &ExtraArgs) {
     using namespace llvm::sys;
 
     IntrusiveRefCntPtr<DiagnosticIDs> DiagID(new DiagnosticIDs());
@@ -860,7 +890,13 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     std::unique_ptr<DiagnosticsEngine> Diags(
             new DiagnosticsEngine(DiagID, &*DiagOpts, DiagsBuffer));
 
-    auto argslist = {"dummy.c", "-target", TripleStr.c_str(), "-resource-dir",
+    auto argslist = {"dummy",
+                     "-x",
+                     "c",
+                     "-",
+                     "-target",
+                     TripleStr.c_str(),
+                     "-resource-dir",
                      HSO.ResourceDir.c_str()};
     SmallVector<const char *, 5> Args(argslist.begin(), argslist.end());
 
@@ -868,6 +904,19 @@ void InitHeaderSearchFlags(std::string const &TripleStr, HeaderSearchOptions &HS
     // Indeed, the BuildToolchain function of clang::driver::Driver is private :/
     clang::driver::Driver D("dummy", TripleStr, *Diags);
     std::unique_ptr<driver::Compilation> C(D.BuildCompilation(Args));
+
+    // Extract the target ABI from the CC1 job.
+    for (auto &j : C->getJobs()) {
+        auto &args = j.getArguments();
+        if (strcmp(args[0], "-cc1") == 0) {
+            for (auto arg = args.begin(), arg_end = args.end(); arg != arg_end; ++arg) {
+                if (strcmp(*arg, "-target-abi") == 0 && arg + 1 != arg_end) {
+                    ExtraArgs.emplace_back(*arg);
+                    ExtraArgs.emplace_back(*++arg);
+                }
+            }
+        }
+    }
 
     clang::driver::ToolChain const &TC = C->getDefaultToolChain();
     std::string path = TC.GetLinkerPath();
@@ -1025,8 +1074,18 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     llvm::MemoryBuffer *membuffer =
             llvm::MemoryBuffer::getMemBuffer(code, "<buffer>").release();
     TheCompInst.getHeaderSearchOpts().ResourceDir = "$CLANG_RESOURCE$";
-    InitHeaderSearchFlags(TT->Triple, TheCompInst.getHeaderSearchOpts());
-    initializeclang(T, membuffer, args, &TheCompInst);
+    std::vector<std::string> extra_args;
+    InitHeaderSearchFlagsAndArgs(TT->Triple, TheCompInst.getHeaderSearchOpts(),
+                                 extra_args);
+
+    // Fold in the extra args first, so that they can be overwritten
+    // by the user.
+    std::vector<const char *> clang_args;
+    for (auto &arg : extra_args) {
+        clang_args.push_back(arg.c_str());
+    }
+    clang_args.insert(clang_args.end(), args.begin(), args.end());
+    initializeclang(T, membuffer, clang_args, &TheCompInst);
 
     CodeGenerator *codegen = CreateLLVMCodeGen(
             TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getHeaderSearchOpts(),
