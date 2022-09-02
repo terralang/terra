@@ -10,6 +10,6 @@ build:
     - tar xf clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
     - export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$PWD/clang+llvm-14.0.0-powerpc64le-linux-gnu
     - cd build
-    - cmake .. -DTERRA_USE_CUDA=1
+    - cmake .. -DTERRA_ENABLE_CUDA=1
     - make -j8
     - ctest -j8
