@@ -1,0 +1,9 @@
+build:
+  tags:
+    - nobatch
+  script:
+    - module load gcc cuda
+    - cd build
+    - cmake .. -DTERRA_USE_CUDA=1
+    - make -j8
+    - ctest -j8
