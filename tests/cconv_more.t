@@ -33,8 +33,13 @@
 --    Terra's output. A command to generate the LLVM IR is shown (commented)
 --    at the bottom of the file.
 
-local MAX_N = 9 -- Needs to be <= 23 to avoid overflowing uint8.
+local MAX_N = 12 -- Needs to be <= 23 to avoid overflowing uint8.
 local MAX_ARRAY_N = 4
+
+local ffi = require("ffi")
+if ffi.arch == "x64" then
+  MAX_N = 9 -- https://github.com/terralang/terra/issues/576
+end
 
 local ctypes = {
   [uint8] = "uint8_t",

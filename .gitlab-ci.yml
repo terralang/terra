@@ -1,0 +1,18 @@
+# This CI configuration is intended to be run on Ascent. See:
+# https://code.ornl.gov/ecpcitest/csc335/terra
+
+variables:
+  GIT_STRATEGY: clone # workaround for filesystem issues
+
+build:
+  tags:
+    - nobatch
+  script:
+    - module load gcc cuda cmake
+    - wget -nv https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
+    - tar xf clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
+    - export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$PWD/clang+llvm-14.0.0-powerpc64le-linux-gnu
+    - cd build
+    - cmake .. -DTERRA_ENABLE_CUDA=1
+    - make -j8
+    - ctest -j8
