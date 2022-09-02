@@ -3057,8 +3057,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return e:aserror()
                 end
                 if e.operator == "xchg" then
-                  if not (addr.type.type:isintegral() or addr.type.type:isfloat() or addr.type.type:ispointer()) then
-                    diag:reporterror(e,"for operator " .. e.operator .. " address must be a pointer to an integral, floating point, or pointer type, but found ", addr.type.type)
+                  if not (addr.type.type:isintegral() or addr.type.type:isfloat()) then
+                    diag:reporterror(e,"for operator " .. e.operator .. " address must be a pointer to an integral or floating point type, but found ", addr.type.type)
                     return e:aserror()
                   end
                 elseif e.operator == "fadd" or e.operator == "fsub" then

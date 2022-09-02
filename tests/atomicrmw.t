@@ -109,8 +109,21 @@ end
 
 -- Pointers
 
+-- Note: when using pointers, you must cast to an integer type (e.g.,
+-- int64). LLVM (contrary to its documentation) does not support xchg
+-- on pointers.
+
+local intptr
+if terralib.sizeof(&int) == 8 then
+  intptr = int64
+elseif terralib.sizeof(&int) == 4 then
+  intptr = int32
+else
+  assert(false, "not sure what size a pointer is on this machine")
+end
+
 terra atomic_xchg_pointer(x : &&int, y : &int)
-  return terralib.atomicrmw("xchg", x, y, {ordering = "acq_rel"})
+  return [&int](terralib.atomicrmw("xchg", [&intptr](x), [intptr](y), {ordering = "acq_rel"}))
 end
 atomic_xchg_pointer:printpretty(false)
 atomic_xchg_pointer:disas()
