@@ -6,7 +6,7 @@ build:
     - nobatch
   script:
     - module load gcc cuda cmake
-    - wget https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
+    - wget -nv https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
     - tar xf clang+llvm-14.0.0-powerpc64le-linux-gnu.tar.xz
     - export CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:clang+llvm-14.0.0-powerpc64le-linux-gnu
     - cd build
