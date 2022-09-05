@@ -60,16 +60,23 @@ local function run_test_case(typ, N)
   end
 end
 
-local int8_max_args = 11
+local MAX_N_INT8 = 11
+local MAX_N_SMALL = 32
 local ffi = require('ffi')
 if ffi.os == 'OSX' and ffi.arch == 'arm64' then
-  int8_max_args = 8 -- https://github.com/terralang/terra/issues/604
+  MAX_N_INT8 = 8 -- https://github.com/terralang/terra/issues/604
+  MAX_N_SMALL = 8 -- https://github.com/terralang/terra/issues/604
 end
 
-for N = 0, int8_max_args do
+for N = 0, MAX_N_INT8 do
   run_test_case(int8, N)
 end
-for _, typ in ipairs({int16, int32, int64, float, double}) do
+for _, typ in ipairs({int16, int32, float}) do
+  for N = 0, MAX_N_SMALL do
+    run_test_case(typ, N)
+  end
+end
+for _, typ in ipairs({int64, double}) do
   for N = 0, 32 do
     run_test_case(typ, N)
   end
