@@ -1,3 +1,21 @@
+# Release 1.0.6 (2022-09-06)
+
+This release stabilizes support for macOS M1 (AArch64). Terra now
+passes 100% of the test suite on this hardware.
+
+## Changed behaviors
+
+  * Terra previously allowed `terralib.atomicrmw("xchg", ...)` to be
+    used with pointers. This was a mistake; LLVM does not allow this
+    and LLVM IR with this instruction is invalid. Terra now correctly
+    issues a type error in this situation.
+
+## Improvements
+
+  * Fixes for macOS on M1 hardware, allowing Terra to pass 100% of the
+    test suite.
+  * Automated testing is now performed regularly on PPC64le hardware.
+
 # Release 1.0.5 (2022-08-16)
 
 This release stabilizes support for ARM (AArch64). On a variety of
