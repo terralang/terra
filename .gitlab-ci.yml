@@ -1,8 +1,9 @@
 # This CI configuration is intended to be run on Ascent. See:
-# https://code.ornl.gov/ecpcitest/csc335/terra
+# https://code.ornl.gov/ecpcitest/csc335/terra/-/pipelines
 
 variables:
-  GIT_STRATEGY: clone # workaround for filesystem issues
+  # workaround for filesystem issues
+  CUSTOM_CI_BUILDS_DIR: "/gpfs/wolf/proj-shared/csc335/ci/${CI_JOB_ID}"
 
 build:
   tags:
