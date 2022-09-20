@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push
+  pull_request
+  schedule:
+    - cron: '5 4 * * 2' # once a week on Tuesday
 
 jobs:
   check_format:
