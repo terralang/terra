@@ -64,17 +64,9 @@ void ManualInliner::run(std::vector<Function *>::iterator fbegin,
         nodes.push_back(n);
     }
     // create a fake SCC node and manually run the inliner pass on it.
-#if LLVM_VERSION < 39
-    CallGraphSCC SCC(NULL);
-#else
     CallGraphSCC SCC(*CG, NULL);
-#endif
 
-#if LLVM_VERSION >= 50
     SCC.initialize(ArrayRef<CallGraphNode *>(nodes));
-#else
-    SCC.initialize(&nodes[0], &nodes[0] + nodes.size());
-#endif
     SI->runOnSCC(SCC);
     // We optimize the function now, which will invalidate the call graph,
     // removing called functions makes sure that further inlining passes don't attempt to

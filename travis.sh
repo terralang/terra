@@ -94,18 +94,6 @@ elif [[ $(uname) = Darwin ]]; then
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/llvm-config llvm-config-6.0
     ln -s clang+llvm-6.0.0-x86_64-apple-darwin/bin/clang clang-6.0
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-6.0.0-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-5.0 ]]; then
-    curl -L -O http://releases.llvm.org/5.0.1/clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
-    tar xf clang+llvm-5.0.1-x86_64-apple-darwin.tar.xz
-    ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/llvm-config llvm-config-5.0
-    ln -s clang+llvm-5.0.1-final-x86_64-apple-darwin/bin/clang clang-5.0
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-5.0.1-final-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-3.8 ]]; then
-    curl -L -O http://releases.llvm.org/3.8.0/clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
-    tar xf clang+llvm-3.8.0-x86_64-apple-darwin.tar.xz
-    ln -s clang+llvm-3.8.0-x86_64-apple-darwin/bin/llvm-config llvm-config-3.8
-    ln -s clang+llvm-3.8.0-x86_64-apple-darwin/bin/clang clang-3.8
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-3.8.0-x86_64-apple-darwin
   else
     echo "Don't know this LLVM version: $LLVM_CONFIG"
     exit 1

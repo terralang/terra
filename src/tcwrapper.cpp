@@ -463,7 +463,7 @@ public:
         // Avoid mangle on LLVM 6 and macOS
         AsmLabelAttr *asmlabel = f->getAttr<AsmLabelAttr>();
         if (asmlabel) {
-#if !((LLVM_VERSION > 50) && __APPLE__)
+#if !defined(__APPLE__)
             InternalName = asmlabel->getLabel().str();
 #if !defined(__linux__) && !defined(__FreeBSD__)
             // In OSX and Windows LLVM mangles assembler labels by adding a '\01' prefix
@@ -516,13 +516,8 @@ public:
                                                  /*TInfo=*/0, SC_None, 0));
         }
         F->setParams(params);
-#if LLVM_VERSION >= 60
         CompoundStmt *stmts = CompoundStmt::Create(*Context, outputstmts,
                                                    SourceLocation(), SourceLocation());
-#else
-        CompoundStmt *stmts = new (*Context)
-                CompoundStmt(*Context, outputstmts, SourceLocation(), SourceLocation());
-#endif
         F->setBody(stmts);
         return F;
     }
@@ -668,13 +663,9 @@ public:
 };
 #endif
 
-#if LLVM_VERSION < 50
-static llvm::sys::TimeValue ZeroTime() { return llvm::sys::TimeValue::ZeroTime(); }
-#else
 static llvm::sys::TimePoint<> ZeroTime() {
     return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
 }
-#endif
 
 #if LLVM_VERSION >= 80
 class LuaOverlayFileSystem : public llvm::vfs::FileSystem {
@@ -1125,20 +1116,10 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
         terra_reporterror(T, "compilation of included c code failed\n");
     }
     optimizemodule(TT, M);
-#if LLVM_VERSION < 39
-    char *err;
-    if (LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource,
-                        &err)) {
-        terra_pusherror(T, "linker reported error: %s", err);
-        LLVMDisposeMessage(err);
-        lua_error(T->L);
-    }
-#else
     if (LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
         terra_pusherror(T, "linker reported error");
         lua_error(T->L);
     }
-#endif
     return 0;
 }
 

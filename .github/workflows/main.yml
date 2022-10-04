@@ -163,7 +163,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['5.0', '6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
+        llvm: ['6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
         lua: ['luajit', 'moonjit']
         static: ['0', '1']
         slib: ['0', '1']
@@ -171,8 +171,6 @@ jobs:
         test: ['1']
         exclude:
           # CUDA with LLVM 9 only:
-          - llvm: '5.0'
-            cuda: '1'
           - llvm: '6.0'
             cuda: '1'
           - llvm: '7'
@@ -191,8 +189,6 @@ jobs:
             cuda: '1'
 
           # Moonjit with LLVM 10 only:
-          - llvm: '5.0'
-            lua: 'moonjit'
           - llvm: '6.0'
             lua: 'moonjit'
           - llvm: '7'
@@ -211,8 +207,6 @@ jobs:
             lua: 'moonjit'
 
           # no-static with LLVM 10 only:
-          - llvm: '5.0'
-            static: '0'
           - llvm: '6.0'
             static: '0'
           - llvm: '7'
@@ -231,8 +225,6 @@ jobs:
             static: '0'
 
           # no-slib with LLVM 10 only:
-          - llvm: '5.0'
-            slib: '0'
           - llvm: '6.0'
             slib: '0'
           - llvm: '7'
@@ -267,14 +259,6 @@ jobs:
             variant: 'prebuilt'
 
           # Some additional configurations:
-
-          # LLVM 3.8 on Ubuntu 16.04
-          - distro: 'ubuntu-16.04'
-            llvm: '3.8'
-            lua: 'luajit'
-            cuda: '0'
-            variant: 'upstream'
-            test: '1'
 
           # LLVM 6.0 on Ubuntu 16.04, 20.04
           - distro: 'ubuntu-16.04'
