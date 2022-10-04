@@ -1,3 +1,13 @@
+# Unreleased Changes to be Version 1.1.0
+
+## Deprecated features
+
+  * Deprecated support for LLVM <= 10
+
+## Removed features
+
+  * Removed support for LLVM <= 5
+
 # Release 1.0.6 (2022-09-06)
 
 This release stabilizes support for macOS M1 (AArch64). Terra now
