@@ -21,10 +21,6 @@ environment:
       LLVM_VERSION: 6.0.1
       LLVM_VERSION_SHORT: 60
       VS_MAJOR_VERSION: 14
-    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2015
-      LLVM_VERSION: 5.0.2
-      LLVM_VERSION_SHORT: 50
-      VS_MAJOR_VERSION: 14
 
 install:
   - set LLVM_BASE_NAME=llvm-%LLVM_VERSION%-windows-amd64-msvc%VS_MAJOR_VERSION%-msvcrt
