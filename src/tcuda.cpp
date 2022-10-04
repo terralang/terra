@@ -84,23 +84,8 @@ static const char *cudadatalayout =
         "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-"
         "v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64";
 
-#if LLVM_VERSION <= 38
-class RemoveAttr : public llvm::InstVisitor<RemoveAttr> {
-public:
-    void visitCallInst(llvm::CallInst &I) { I.setAttributes(llvm::AttributeSet()); }
-};
-#endif
-
 void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::string *buf,
                  const char *libdevice) {
-#if LLVM_VERSION <= 38
-    for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
-        it->setAttributes(
-                llvm::AttributeSet());  // remove annotations because syntax doesn't match
-        RemoveAttr A;
-        A.visit(&*it);  // remove annotations on CallInsts as well.
-    }
-#endif
     int nmajor, nminor;
     CUDA_DO(T->cuda->nvvmVersion(&nmajor, &nminor));
     int nversion = nmajor * 10 + nminor;
@@ -110,57 +95,6 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
         M->setTargetTriple("");  // clear these because nvvm doesn't like them
     M->setDataLayout("");        // nvvm doesn't like data layout either
 
-    std::stringstream device;
-    device << "-arch=compute_" << major << minor;
-    std::string deviceopt = device.str();
-
-#if LLVM_VERSION < 50
-    std::string llvmir;
-    {
-        llvm::raw_string_ostream output(llvmir);
-#if LLVM_VERSION >= 38
-        M->setDataLayout(cudadatalayout);
-        llvm::WriteBitcodeToFile(M, output);
-#else
-        llvm::formatted_raw_ostream foutput(output);
-        foutput << "target datalayout = \"" << cudadatalayout << "\";\n";
-        foutput << *M;
-#endif
-    }
-
-    nvvmProgram prog;
-    CUDA_DO(T->cuda->nvvmCreateProgram(&prog));
-
-    // Add libdevice module first
-    if (libdevice != NULL) {
-        std::ifstream libdeviceFile(libdevice);
-        std::stringstream sstr;
-        sstr << libdeviceFile.rdbuf();
-        std::string libdeviceStr = sstr.str();
-        size_t libdeviceModSize = libdeviceStr.size();
-        const char *libdeviceMod = libdeviceStr.data();
-        CUDA_DO(T->cuda->nvvmAddModuleToProgram(prog, libdeviceMod, libdeviceModSize,
-                                                "libdevice"));
-    }
-
-    CUDA_DO(T->cuda->nvvmAddModuleToProgram(prog, llvmir.data(), llvmir.size(),
-                                            M->getModuleIdentifier().c_str()));
-    int numOptions = 1;
-    const char *options[] = {deviceopt.c_str()};
-
-    size_t size;
-    int err = T->cuda->nvvmCompileProgram(prog, numOptions, options);
-    if (err != CUDA_SUCCESS) {
-        CUDA_DO(T->cuda->nvvmGetProgramLogSize(prog, &size));
-        buf->resize(size);
-        CUDA_DO(T->cuda->nvvmGetProgramLog(prog, &(*buf)[0]));
-        terra_reporterror(T, "%s:%d: nvvm error reported (%d)\n %s\n", __FILE__, __LINE__,
-                          err, buf->c_str());
-    }
-    CUDA_DO(T->cuda->nvvmGetCompiledResultSize(prog, &size));
-    buf->resize(size);
-    CUDA_DO(T->cuda->nvvmGetCompiledResult(prog, &(*buf)[0]));
-#else
     std::stringstream cpu;
     cpu << "sm_" << major << minor;
     std::string cpuopt = cpu.str();
@@ -244,7 +178,6 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     // }
 
     (*buf) = dest.str().str();
-#endif
 }
 
 // cuda doesn't like llvm generic names, so we replace non-identifier symbols here

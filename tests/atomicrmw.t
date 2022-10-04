@@ -1,8 +1,7 @@
-local has_syncscope = terralib.llvm_version >= 50
 local has_align = terralib.llvm_version >= 110
 local has_fadd = terralib.llvm_version >= 90
 
-print("atomicrmw test settings: synscope " .. tostring(has_syncscope) .. ", align " .. tostring(has_align) .. ", fadd " .. tostring(has_fadd))
+print("atomicrmw test settings: align " .. tostring(has_align) .. ", fadd " .. tostring(has_fadd))
 
 
 
@@ -13,17 +12,13 @@ terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
   terralib.fence({ordering = "release"})
   escape
-    if has_syncscope and has_align then
+    if has_align then
       emit quote
         terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread", align = 16})
       end
-    elseif has_syncscope then
-      emit quote
-        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread"})
-      end
     else
       emit quote
-        terralib.atomicrmw("add", x, w, {ordering = "monotonic"})
+        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread"})
       end
     end
   end

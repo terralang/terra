@@ -72,13 +72,7 @@ struct TerraCompilationUnit {
     Obj *symbols;
     int functioncount;  // for assigning unique indexes to functions;
     std::vector<TerraFunctionState *> *tooptimize;
-    const llvm::DataLayout &getDataLayout() {
-#if LLVM_VERSION <= 35
-        return *M->getDataLayout();
-#else
-        return M->getDataLayout();
-#endif
-    }
+    const llvm::DataLayout &getDataLayout() { return M->getDataLayout(); }
 };
 
 struct terra_CompilerState {

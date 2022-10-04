@@ -84,7 +84,6 @@ CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
-LLVMVERGT4 := $(shell expr $(LLVM_VERSION) \>= 40)
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
@@ -123,13 +122,8 @@ endif
 # Get full path to clang libaries
 CLANG_LIBFILES := $(patsubst %, $(CLANG_PREFIX)/lib/%, $(CLANG_LIBS))
 
-ifeq "$(LLVMVERGT4)" "1"
-    LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
-	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
-else
-	LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs)
-	LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles)
-endif
+LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
+LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
 
 LLVM_POLLY = "100 110 111 120 130 140"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))

@@ -148,14 +148,11 @@ The current recommended version of LLVM is **13**. The following versions are al
 
 | Version | Linux | macOS | FreeBSD | Windows | CUDA | AMD GPU \* | Notes |
 | ------- | ----- | ----- | ------- | ------- | ---- | ---------- | ----- |
-| 3.8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 3.9 | :heavy_check_mark: | :heavy_check_mark: | | | | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 5 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/471) |
-| 6 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | |
-| 7 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | requires CMake |
-| 8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
-| 9 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
-| 10 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | |
+| 6 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
+| 7 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | requires CMake, [deprecated](https://github.com/terralang/terra/issues/543) |
+| 8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
+| 9 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
+| 10 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
 | 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
 | 12 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
 | 13 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
@@ -168,6 +165,9 @@ The following versions were previously supported by Terra:
 | 3.5 | 1.0.0-beta3 |
 | 3.6 | 1.0.0-beta3 |
 | 3.7 | 1.0.0-beta3 |
+| 3.8 | 1.0.6 |
+| 3.9 | 1.0.6 |
+| 5 | 1.0.6 |
 
 \* Please note that AMD GPU support is currently experimental.
 
@@ -175,7 +175,7 @@ The following versions were previously supported by Terra:
 
 If you need to build LLVM from source, the following recipe has been
 known to work with Terra. The same basic procedure should work for all
-LLVM versions >= 3.8.
+LLVM versions >= 6.
 
 ```
 wget https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.0/llvm-13.0.0.src.tar.xz

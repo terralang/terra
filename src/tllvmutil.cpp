@@ -6,20 +6,13 @@
 
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/MC/MCAsmInfo.h"
-#if LLVM_VERSION < 39
-#include "llvm/MC/MCDisassembler.h"
-#else
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
-#endif
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstPrinter.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCContext.h"
-#if LLVM_VERSION < 50
-#include "llvm/Support/MemoryObject.h"
-#endif
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -56,17 +49,6 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerWrapper W(fpm);
     PMB.populateModulePassManager(W);
 }
-
-#if LLVM_VERSION < 50
-struct SimpleMemoryObject : public MemoryObject {
-    uint64_t getBase() const { return 0; }
-    uint64_t getExtent() const { return ~0ULL; }
-    int readByte(uint64_t Addr, uint8_t *Byte) const {
-        *Byte = *(uint8_t *)Addr;
-        return 0;
-    }
-};
-#endif
 
 void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
@@ -202,23 +184,14 @@ struct CopyConnectedComponent : public ValueMaterializer {
               DI(NULL) {}
     bool needsFreshlyNamedConstant(GlobalVariable *GV, GlobalVariable *newGV) {
         if (GV->isConstant() && GV->hasPrivateLinkage() &&
-#if LLVM_VERSION < 39
-            GV->hasUnnamedAddr()
-#else
-            GV->hasAtLeastLocalUnnamedAddr()
-#endif
-        ) {  // this is a candidate constant
+            GV->hasAtLeastLocalUnnamedAddr()) {  // this is a candidate constant
             return !newGV->isConstant() ||
                    newGV->getInitializer() !=
                            GV->getInitializer();  // it is not equal to its target
         }
         return false;
     }
-#if LLVM_VERSION == 38
-    virtual Value *materializeDeclFor(Value *V) override {
-#else
     virtual Value *materialize(Value *V) override {
-#endif
         if (Function *fn = dyn_cast<Function>(V)) {
             assert(fn->getParent() == src);
             Function *newfn = dest->getFunction(fn->getName());
@@ -251,7 +224,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
 
                 if (SP) {
                     F->setSubprogram(DI->createFunction(
-#if LLVM_VERSION >= 40 && LLVM_VERSION < 90
+#if LLVM_VERSION < 90
                             SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
 #else
                             SP->getScope(), SP->getName(), SP->getLinkageName(),
@@ -265,11 +238,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
                             SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
                             SP->isOptimized(), SP->getTemplateParams(),
 #endif
-#if LLVM_VERSION >= 40
                             SP->getDeclaration(), SP->getThrownTypes()));
-#else
-                            SP->getDeclaration()));
-#endif
                 }
             } else {
                 newfn->setLinkage(GlobalValue::ExternalLinkage);
@@ -309,7 +278,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
             }
         }
 
-#if LLVM_VERSION >= 40
         NCU = NULL;
         // for (DICompileUnit *CU : src->debug_compile_units()) {
         if (src->debug_compile_units_begin() != src->debug_compile_units_end()) {
@@ -326,23 +294,11 @@ struct CopyConnectedComponent : public ValueMaterializer {
 #if LLVM_VERSION >= 80
                         CU->getDebugInfoForProfiling(), CU->getNameTableKind(),
                         CU->getRangesBaseAddress());
-#elif LLVM_VERSION >= 60
-                        CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
 #else
-                        CU->getDebugInfoForProfiling());
+                        CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
 #endif
             }
         }
-#else
-        if (NamedMDNode *CUN = src->getNamedMetadata("llvm.dbg.cu")) {
-            DI = new DIBuilder(*dest);
-            DICompileUnit *CU = cast<DICompileUnit>(CUN->getOperand(0));
-            NCU = DI->createCompileUnit(CU->getSourceLanguage(), CU->getFilename(),
-                                        CU->getDirectory(), CU->getProducer(),
-                                        CU->isOptimized(), CU->getFlags(),
-                                        CU->getRuntimeVersion());
-        }
-#endif
     }
 
     Value *materializeValueForMetadata(Value *V) {
@@ -352,10 +308,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
             DISubprogram *SP = getDISubprogram(MD);
             if (MD != NULL && DI != NULL && SP != NULL) {
                 {
-#if LLVM_VERSION >= 40
-                    // DISubprogram *NSP = SP;
                     DISubprogram *NSP = DI->createFunction(
-#if LLVM_VERSION >= 40 && LLVM_VERSION < 90
+#if LLVM_VERSION < 90
                             SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
 #else
                             SP->getScope(), SP->getName(), SP->getLinkageName(),
@@ -370,15 +324,6 @@ struct CopyConnectedComponent : public ValueMaterializer {
                             SP->isOptimized(), SP->getTemplateParams(),
 #endif
                             SP->getDeclaration(), SP->getThrownTypes());
-#else
-                    DISubprogram *NSP = DI->createFunction(
-                            SP->getScope(), SP->getName(), SP->getLinkageName(),
-                            DI->createFile(SP->getFilename(), SP->getDirectory()),
-                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
-                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
-                            SP->isOptimized(), SP->getTemplateParams(),
-                            SP->getDeclaration());
-#endif
 
                     Function *newfn = dest->getFunction(SP->getName());
                     if (!newfn) newfn = dest->getFunction(SP->getLinkageName());
@@ -434,11 +379,7 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
-#if LLVM_VERSION < 50
-    PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0);
-#else
     PMB.Inliner = createFunctionInliningPass(PMB.OptLevel, 0, false);
-#endif
 
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;

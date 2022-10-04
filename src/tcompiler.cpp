@@ -20,9 +20,7 @@ extern "C" {
 #include "tinline.h"
 #include "llvm/Support/ManagedStatic.h"
 
-#if LLVM_VERSION < 50
-#include "llvm/ExecutionEngine/MCJIT.h"
-#elif LLVM_VERSION < 120
+#if LLVM_VERSION < 120
 #include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
 #endif
 
@@ -73,15 +71,9 @@ TERRALIB_FUNCTIONS(DEF_LIBFUNCTION)
 static llvm_shutdown_obj llvmshutdownobj;
 #endif
 
-#if LLVM_VERSION == 38
-#define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), true)
-#define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
-#define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
-#else
 #define TERRA_DUMP_FUNCTION(t) (t)->print(llvm::errs(), nullptr)
 #define TERRA_DUMP_TYPE(t) (t)->print(llvm::errs(), true)
 #define TERRA_DUMP_MODULE(t) (t)->print(llvm::errs(), nullptr)
-#endif
 
 #define MEM_ARRAY_THRESHOLD 64
 
@@ -123,26 +115,17 @@ struct DisassembleFunctionListener : public JITEventListener {
         auto size_map = llvm::object::computeSymbolSizes(Obj);
         for (auto &S : size_map) {
             object::SymbolRef sym = S.first;
-#if LLVM_VERSION < 39
-            InitializeDebugData(sym.getName().get(), sym.getType(), S.second);
-#else
             auto name = sym.getName();
             auto type = sym.getType();
             if (name && type) InitializeDebugData(name.get(), type.get(), S.second);
-#endif
         }
     }
 };
 
-#if LLVM_VERSION > 40
 class TerraSectionMemoryManager : public SectionMemoryManager {
 public:
-#if LLVM_VERSION > 50
     TerraSectionMemoryManager(TerraCompilationUnit *CU_in, MemoryMapper *MM = nullptr)
             : SectionMemoryManager(MM) {
-#else
-    TerraSectionMemoryManager(TerraCompilationUnit *CU_in) : SectionMemoryManager() {
-#endif
         CU = CU_in;
     }
 
@@ -166,7 +149,6 @@ public:
 private:
     TerraCompilationUnit *CU;
 };
-#endif
 
 static double CurrentTimeInSeconds() {
 #ifdef _WIN32
@@ -280,20 +262,10 @@ int terra_inittarget(lua_State *L) {
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
     else {
-// LLVM 3.8 generates invalid AVX instructions on Skylake processors
-// detect that situation and force AVX off in that case
 #ifdef DISABLE_AVX
         TT->Features = "-avx";
 #else
-#if LLVM_VERSION == 38
-        std::string cpu_name = llvm::sys::getHostCPUName();
-        if (cpu_name == "skylake")
-            TT->Features = "-avx";
-        else
-            TT->Features = HostHasAVX() ? "+avx" : "";
-#else
         TT->Features = HostHasAVX() ? "+avx" : "";
-#endif
 #endif
     }
 
@@ -317,7 +289,7 @@ int terra_inittarget(lua_State *L) {
     }
     TT->tm = TheTarget->createTargetMachine(
             TT->Triple, TT->CPU, TT->Features, options,
-#if defined(__linux__) || defined(__unix__) || (LLVM_VERSION < 50)
+#if defined(__linux__) || defined(__unix__)
             Reloc::PIC_,
 #else
             Optional<Reloc::Model>(),
@@ -373,26 +345,18 @@ int terra_initcompilationunit(lua_State *L) {
                 fastmath.setNoSignedZeros();
             } else if (strcmp(flag, "arcp") == 0) {
                 fastmath.setAllowReciprocal();
-#if LLVM_VERSION >= 50
             } else if (strcmp(flag, "contract") == 0) {
 #if LLVM_VERSION < 70
                 fastmath.setAllowContract(true);
 #else
                 fastmath.setAllowContract();
 #endif
-#endif
-#if LLVM_VERSION >= 60
             } else if (strcmp(flag, "afn") == 0) {
                 fastmath.setApproxFunc();
             } else if (strcmp(flag, "reassoc") == 0) {
                 fastmath.setAllowReassoc();
-#endif
             } else if (strcmp(flag, "fast") == 0) {
-#if LLVM_VERSION < 60
-                fastmath.setUnsafeAlgebra();
-#else
                 fastmath.setFast();
-#endif
             } else {
                 assert(false && "unrecognized fast math flag");
             }
@@ -436,9 +400,6 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setMAttrs(mattrs)
             .setEngineKind(EngineKind::JIT)
             .setTargetOptions(CU->TT->tm->Options)
-#if LLVM_VERSION < 50
-            .setOptLevel(CodeGenOpt::Aggressive);
-#else
             .setOptLevel(CodeGenOpt::Aggressive)
 #if LLVM_VERSION <= 90
             .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
@@ -449,14 +410,10 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setUseOrcMCJITReplacement(true)
 #endif
             ;
-#endif
 
     CU->ee = eb.create();
     if (!CU->ee) terra_reporterror(CU->T, "llvm: %s\n", err.c_str());
     CU->jiteventlistener = new DisassembleFunctionListener(CU);
-#if LLVM_VERSION < 50
-    CU->ee->RegisterJITEventListener(CU->jiteventlistener);
-#endif
 }
 
 int terra_compilerinit(struct terra_State *T) {
@@ -1194,24 +1151,16 @@ struct CCallingConv {
 
     template <typename FnOrCall>
     void addSRetAttr(FnOrCall *r, int idx, Type *ty) {
-#if LLVM_VERSION < 50
-        r->addAttribute(idx, Attribute::StructRet);
-#elif LLVM_VERSION < 120
+#if LLVM_VERSION < 120
         r->addParamAttr(idx - 1, Attribute::StructRet);
 #else
         r->addParamAttr(idx - 1, Attribute::getWithStructRetType(*CU->TT->ctx, ty));
 #endif
-#if LLVM_VERSION < 50
-        r->addAttribute(idx, Attribute::NoAlias);
-#else
         r->addParamAttr(idx - 1, Attribute::NoAlias);
-#endif
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx, Type *ty) {
-#if LLVM_VERSION < 50
-        r->addAttribute(idx, Attribute::ByVal);
-#elif LLVM_VERSION < 120
+#if LLVM_VERSION < 120
         r->addParamAttr(idx - 1, Attribute::ByVal);
 #else
         r->addParamAttr(idx - 1, Attribute::getWithByValType(*CU->TT->ctx, ty));
@@ -1236,11 +1185,7 @@ struct CCallingConv {
 #endif
             }
         } else {
-#if LLVM_VERSION < 50
-            r->addAttribute(idx, t->issigned ? Attribute::SExt : Attribute::ZExt);
-#else
             r->addParamAttr(idx - 1, t->issigned ? Attribute::SExt : Attribute::ZExt);
-#endif
         }
     }
 
@@ -1702,9 +1647,7 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
         ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
         ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
-#if LLVM_VERSION >= 40
         ccmap["x86_regcallcc"] = CallingConv::X86_RegCall;
-#endif
         ccmap["x86_vectorcallcc"] = CallingConv::X86_VectorCall;
         ccmap["intel_ocl_bicc"] = CallingConv::Intel_OCL_BI;
         ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
@@ -1717,16 +1660,12 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
 #endif
         ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
-#if LLVM_VERSION >= 39
         ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
         ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
-#endif
         ccmap["ptx_kernel"] = CallingConv::PTX_Kernel;
         ccmap["ptx_device"] = CallingConv::PTX_Device;
         ccmap["x86_64_sysvcc"] = CallingConv::X86_64_SysV;
-#if LLVM_VERSION >= 50
         ccmap["win64cc"] = CallingConv::Win64;
-#endif
         ccmap["spir_func"] = CallingConv::SPIR_FUNC;
         ccmap["spir_kernel"] = CallingConv::SPIR_KERNEL;
         ccmap["swiftcc"] = CallingConv::Swift;
@@ -1736,22 +1675,14 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["x86_intrcc"] = CallingConv::X86_INTR;
         ccmap["hhvmcc"] = CallingConv::HHVM;
         ccmap["hhvm_ccc"] = CallingConv::HHVM_C;
-#if LLVM_VERSION >= 39
         ccmap["amdgpu_vs"] = CallingConv::AMDGPU_VS;
-#if LLVM_VERSION >= 60
         ccmap["amdgpu_ls"] = CallingConv::AMDGPU_LS;
-#endif
-#if LLVM_VERSION >= 50
         ccmap["amdgpu_hs"] = CallingConv::AMDGPU_HS;
-#endif
-#if LLVM_VERSION >= 60
         ccmap["amdgpu_es"] = CallingConv::AMDGPU_ES;
-#endif
         ccmap["amdgpu_gs"] = CallingConv::AMDGPU_GS;
         ccmap["amdgpu_ps"] = CallingConv::AMDGPU_PS;
         ccmap["amdgpu_cs"] = CallingConv::AMDGPU_CS;
         ccmap["amdgpu_kernel"] = CallingConv::AMDGPU_KERNEL;
-#endif
 #if LLVM_VERSION >= 120
         ccmap["amdgpu_gfx"] = CallingConv::AMDGPU_Gfx;
 #endif
@@ -1810,7 +1741,6 @@ static AtomicOrdering ParseAtomicOrdering(const char *ordering) {
     return entry->second;
 }
 
-#if LLVM_VERSION >= 50
 static SyncScope::ID ParseAtomicSyncScope(Module *M, const char *syncscope) {
     if (!syncscope) return SyncScope::System;
 
@@ -1834,7 +1764,6 @@ static SyncScope::ID ParseAtomicSyncScope(Module *M, const char *syncscope) {
     }
     return entry->second;
 }
-#endif
 
 const int COMPILATION_UNIT_POS = 1;
 static int terra_deletefunction(lua_State *L);
@@ -2981,26 +2910,15 @@ struct FunctionEmitter {
                 Obj attr;
                 exp->obj("attrs", &attr);
                 bool has_syncscope = attr.hasfield("syncscope");
-#if LLVM_VERSION >= 50
                 SyncScope::ID syncscope = ParseAtomicSyncScope(
                         M, has_syncscope ? attr.string("syncscope") : NULL);
-#else
-                assert(not has_syncscope &&
-                       "fence does not support syncscope in this version of LLVM, "
-                       "please upgrade to 5.0.0 or higher");
-#endif
                 AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
                 if (ordering == AtomicOrdering::Unordered ||
                     ordering == AtomicOrdering::Monotonic) {
                     assert(false &&
                            "fence does not support unordered or monotonic ordering");
                 }
-                FenceInst *a = B->CreateFence(ordering
-#if LLVM_VERSION >= 50
-                                              ,
-                                              syncscope
-#endif
-                );
+                FenceInst *a = B->CreateFence(ordering, syncscope);
                 return a;
             } break;
             case T_cmpxchg: {
@@ -3013,14 +2931,8 @@ struct FunctionEmitter {
                 Value *cmpexp = emitExp(&cmpvalue);
                 Value *newexp = emitExp(&newvalue);
                 bool has_syncscope = attr.hasfield("syncscope");
-#if LLVM_VERSION >= 50
                 SyncScope::ID syncscope = ParseAtomicSyncScope(
                         M, has_syncscope ? attr.string("syncscope") : NULL);
-#else
-                assert(not has_syncscope &&
-                       "cmpxchg does not support syncscope in this version of LLVM, "
-                       "please upgrade to 5.0.0 or higher");
-#endif
                 AtomicOrdering success_ordering =
                         ParseAtomicOrdering(attr.string("success_ordering"));
                 AtomicOrdering failure_ordering =
@@ -3032,17 +2944,12 @@ struct FunctionEmitter {
                     alignment = MaybeAlign(attr.number("alignment"));
                 }
 #endif
-                AtomicCmpXchgInst *a =
-                        B->CreateAtomicCmpXchg(addrexp, cmpexp, newexp,
+                AtomicCmpXchgInst *a = B->CreateAtomicCmpXchg(
+                        addrexp, cmpexp, newexp,
 #if LLVM_VERSION >= 130
-                                               alignment,
+                        alignment,
 #endif
-                                               success_ordering, failure_ordering
-#if LLVM_VERSION >= 50
-                                               ,
-                                               syncscope
-#endif
-                        );
+                        success_ordering, failure_ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 a->setWeak(attr.boolean("isweak"));
                 if (has_alignment) {
@@ -3076,14 +2983,8 @@ struct FunctionEmitter {
                 Value *addrexp = emitExp(&addr);
                 Value *valueexp = emitExp(&value);
                 bool has_syncscope = attr.hasfield("syncscope");
-#if LLVM_VERSION >= 50
                 SyncScope::ID syncscope = ParseAtomicSyncScope(
                         M, has_syncscope ? attr.string("syncscope") : NULL);
-#else
-                assert(not has_syncscope &&
-                       "atomicrmw does not support syncscope in this version of LLVM, "
-                       "please upgrade to 5.0.0 or higher");
-#endif
                 AtomicOrdering ordering = ParseAtomicOrdering(attr.string("ordering"));
                 bool has_alignment = attr.hasfield("alignment");
 #if LLVM_VERSION >= 130
@@ -3096,12 +2997,7 @@ struct FunctionEmitter {
 #if LLVM_VERSION >= 130
                                                       alignment,
 #endif
-                                                      ordering
-#if LLVM_VERSION >= 50
-                                                      ,
-                                                      syncscope
-#endif
-                );
+                                                      ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (has_alignment) {
 #if LLVM_VERSION >= 110
@@ -3212,14 +3108,9 @@ struct FunctionEmitter {
             DB = new DIBuilder(*M);
 
             DIFileP file = createDebugInfoForFile(filename);
-#if LLVM_VERSION >= 40
             DICompileUnit *CU = DB->createCompileUnit(
                     dwarf::DW_LANG_C89, DB->createFile("compilationunit", "."), "terra",
                     true, "", 0);
-#else
-            DICompileUnit *CU = DB->createCompileUnit(1, "compilationunit", ".", "terra",
-                                                      true, "", 0);
-#endif
 
             auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata *>());
 
@@ -3230,15 +3121,10 @@ struct FunctionEmitter {
                     llvm::DISubprogram::DISPFlags::SPFlagOptimized |
                             llvm::DISubprogram::DISPFlags::SPFlagDefinition);
             fstate->func->setSubprogram(SP);
-#elif LLVM_VERSION >= 40
-            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
-                                    file, lineno, DB->createSubroutineType(TA), false,
-                                    true, 0, llvm::DINode::FlagZero, true);
-            fstate->func->setSubprogram(SP);
 #else
             SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
                                     file, lineno, DB->createSubroutineType(TA), false,
-                                    true, 0, 0, true);
+                                    true, 0, llvm::DINode::FlagZero, true);
             fstate->func->setSubprogram(SP);
 #endif
 
@@ -3390,42 +3276,26 @@ struct FunctionEmitter {
     }
     BasicBlock *copyBlock(BasicBlock *BB) {
         ValueToValueMapTy VMap;
-#if LLVM_VERSION < 50
-        BasicBlock *NewBB = CloneBasicBlock(BB, VMap, "defer", fstate->func);
-#else
         DebugInfoFinder DIFinder;
         BasicBlock *NewBB =
                 CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr, &DIFinder);
-#endif
         VMap[BB] = NewBB;
 
-#if LLVM_VERSION >= 40
         BasicBlock::iterator oldII = BB->begin();
-#endif
 
         for (BasicBlock::iterator II = NewBB->begin(), IE = NewBB->end(); II != IE;
              ++II) {
-#if LLVM_VERSION >= 40
             // HACK: LLVM is not happy about terra copying single isolated BasicBlocks,
             // and will blow up when copying metadata. This removes the metadata before
             // remapping, then copies it afterwards, which isn't fully correct, but works.
             llvm::SmallVector<std::pair<unsigned int, llvm::MDNode *>, 4> MDs;
             II->getAllMetadata(MDs);
             for (auto md : MDs) II->setMetadata(md.first, nullptr);
-#endif
 
-            RemapInstruction(&*II, VMap,
-#if LLVM_VERSION < 39
-                             RF_IgnoreMissingEntries
-#else
-                             RF_IgnoreMissingLocals
-#endif
-            );
+            RemapInstruction(&*II, VMap, RF_IgnoreMissingLocals);
 
-#if LLVM_VERSION >= 40
             II->copyMetadata(*oldII);
             ++oldII;
-#endif
         }
         return NewBB;
     }
@@ -4099,51 +3969,25 @@ static int terra_linkllvmimpl(lua_State *L) {
             terra_reporterror(T, "linkllvm(%s): %s\n", filename,
                               mb.getError().message().c_str());
     }
-#if LLVM_VERSION >= 50
     Expected<std::unique_ptr<Module> > mm =
             parseBitcodeFile(mb.get()->getMemBufferRef(), *TT->ctx);
-#else
-    ErrorOr<std::unique_ptr<Module> > mm =
-            parseBitcodeFile(mb.get()->getMemBufferRef(), *TT->ctx);
-#endif
     if (!mm) {
         if (fromstring) {
-#if LLVM_VERSION >= 50
             std::string Msg;
             raw_string_ostream S((Msg));
             logAllUnhandledErrors(mm.takeError(), S, "");
             S.flush();
             terra_reporterror(T, "linkllvm: %s\n", S.str().c_str());
-#else
-            terra_reporterror(T, "linkllvm: %s\n", mm.getError().message().c_str());
-#endif
         } else {
-#if LLVM_VERSION >= 50
             std::string Msg;
             raw_string_ostream S((Msg));
             logAllUnhandledErrors(mm.takeError(), S, "");
             S.flush();
             terra_reporterror(T, "linkllvm(%s): %s\n", filename, S.str().c_str());
-#else
-            terra_reporterror(T, "linkllvm(%s): %s\n", filename,
-                              mm.getError().message().c_str());
-#endif
         }
     }
     Module *M = mm.get().release();
     M->setTargetTriple(TT->Triple);
-#if LLVM_VERSION < 39
-    char *err;
-    if (LLVMLinkModules(llvm::wrap(TT->external), llvm::wrap(M), LLVMLinkerDestroySource,
-                        &err)) {
-        if (fromstring)
-            terra_pusherror(T, "linker reported error: %s", err);
-        else
-            terra_pusherror(T, "linker(%s) reported error: %s", filename, err);
-        LLVMDisposeMessage(err);
-        lua_error(T->L);
-    }
-#else
     if (LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
         if (fromstring)
             terra_pusherror(T, "linker reported error");
@@ -4151,7 +3995,6 @@ static int terra_linkllvmimpl(lua_State *L) {
             terra_pusherror(T, "linker reported error on %s", filename);
         lua_error(T->L);
     }
-#endif
     return 0;
 }
 
