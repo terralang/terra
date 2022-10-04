@@ -62,11 +62,13 @@
 #include "llvmheaders_130.h"
 #elif LLVM_VERSION < 150
 #include "llvmheaders_140.h"
+#elif LLVM_VERSION < 160
+#include "llvmheaders_150.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 130
-#include "llvmheaders_130.h"
+#define LLVM_VERSION 150
+#include "llvmheaders_150.h"
 #endif
 
 #define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))

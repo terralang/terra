@@ -2486,7 +2486,14 @@ struct FunctionEmitter {
                                        isVolatile);
 #else
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
-                                       MaybeAlign(l->getAlignment()), size_v, isVolatile);
+                                       MaybeAlign(
+#if LLVM_VERSION < 150
+                                               l->getAlignment()
+#else
+                                               l->getAlign()
+#endif
+                                                       ),
+                                       size_v, isVolatile);
 #endif
             return m;
         } else {
