@@ -2918,10 +2918,7 @@ struct FunctionEmitter {
                     assert(false &&
                            "fence does not support unordered or monotonic ordering");
                 }
-                FenceInst *a = B->CreateFence(ordering
-                                              ,
-                                              syncscope
-                );
+                FenceInst *a = B->CreateFence(ordering, syncscope);
                 return a;
             } break;
             case T_cmpxchg: {
@@ -2947,15 +2944,12 @@ struct FunctionEmitter {
                     alignment = MaybeAlign(attr.number("alignment"));
                 }
 #endif
-                AtomicCmpXchgInst *a =
-                        B->CreateAtomicCmpXchg(addrexp, cmpexp, newexp,
+                AtomicCmpXchgInst *a = B->CreateAtomicCmpXchg(
+                        addrexp, cmpexp, newexp,
 #if LLVM_VERSION >= 130
-                                               alignment,
+                        alignment,
 #endif
-                                               success_ordering, failure_ordering
-                                               ,
-                                               syncscope
-                        );
+                        success_ordering, failure_ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 a->setWeak(attr.boolean("isweak"));
                 if (has_alignment) {
@@ -3003,10 +2997,7 @@ struct FunctionEmitter {
 #if LLVM_VERSION >= 130
                                                       alignment,
 #endif
-                                                      ordering
-                                                      ,
-                                                      syncscope
-                );
+                                                      ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (has_alignment) {
 #if LLVM_VERSION >= 110
@@ -3301,9 +3292,7 @@ struct FunctionEmitter {
             II->getAllMetadata(MDs);
             for (auto md : MDs) II->setMetadata(md.first, nullptr);
 
-            RemapInstruction(&*II, VMap,
-                             RF_IgnoreMissingLocals
-            );
+            RemapInstruction(&*II, VMap, RF_IgnoreMissingLocals);
 
             II->copyMetadata(*oldII);
             ++oldII;

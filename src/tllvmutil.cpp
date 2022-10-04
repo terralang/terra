@@ -184,8 +184,7 @@ struct CopyConnectedComponent : public ValueMaterializer {
               DI(NULL) {}
     bool needsFreshlyNamedConstant(GlobalVariable *GV, GlobalVariable *newGV) {
         if (GV->isConstant() && GV->hasPrivateLinkage() &&
-            GV->hasAtLeastLocalUnnamedAddr()
-        ) {  // this is a candidate constant
+            GV->hasAtLeastLocalUnnamedAddr()) {  // this is a candidate constant
             return !newGV->isConstant() ||
                    newGV->getInitializer() !=
                            GV->getInitializer();  // it is not equal to its target
