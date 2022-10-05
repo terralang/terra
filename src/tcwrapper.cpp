@@ -1088,13 +1088,13 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     clang_args.insert(clang_args.end(), args.begin(), args.end());
     initializeclang(T, membuffer, clang_args, &TheCompInst, FS);
 
-    CodeGenerator *codegen = CreateLLVMCodeGen(
-            TheCompInst.getDiagnostics(), "mymodule",
+    CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
 #if LLVM_VERSION >= 150
-            FS,
+                                               FS,
 #endif
-            TheCompInst.getHeaderSearchOpts(),
-            TheCompInst.getPreprocessorOpts(), TheCompInst.getCodeGenOpts(), *TT->ctx);
+                                               TheCompInst.getHeaderSearchOpts(),
+                                               TheCompInst.getPreprocessorOpts(),
+                                               TheCompInst.getCodeGenOpts(), *TT->ctx);
 
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";
