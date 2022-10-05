@@ -281,10 +281,12 @@ int terra_inittarget(lua_State *L) {
 
     TT->next_unused_id = 0;
     TT->ctx = new LLVMContext();
+#if LLVM_VERSION >= 150
     // Hack: This is a workaround to avoid the opaque pointer
     // transition, but we will need to deal with it eventually.
     // FIXME: https://github.com/terralang/terra/issues/553
     TT->ctx->setOpaquePointers(false);
+#endif
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
     if (!TheTarget) {
