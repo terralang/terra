@@ -517,6 +517,9 @@ public:
         }
         F->setParams(params);
         CompoundStmt *stmts = CompoundStmt::Create(*Context, outputstmts,
+#if LLVM_VERSION >= 150
+                                                   FPOptionsOverride(),
+#endif
                                                    SourceLocation(), SourceLocation());
         F->setBody(stmts);
         return F;
@@ -935,7 +938,13 @@ void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOpti
 
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const std::vector<const char *> &args,
-                            CompilerInstance *TheCompInst) {
+                            CompilerInstance *TheCompInst,
+#if LLVM_VERSION < 80
+                            llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS
+#else
+                            llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS
+#endif
+) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
@@ -955,11 +964,6 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
 
-#if LLVM_VERSION < 80
-    llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
-#else
-    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
-#endif
 #if LLVM_VERSION < 90
     TheCompInst->setVirtualFileSystem(FS);
     TheCompInst->createFileManager();
@@ -1062,6 +1066,12 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
 
+#if LLVM_VERSION < 80
+    llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#else
+    llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
+#endif
+
     llvm::MemoryBuffer *membuffer =
             llvm::MemoryBuffer::getMemBuffer(code, "<buffer>").release();
     TheCompInst.getHeaderSearchOpts().ResourceDir = "$CLANG_RESOURCE$";
@@ -1076,10 +1086,14 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
         clang_args.push_back(arg.c_str());
     }
     clang_args.insert(clang_args.end(), args.begin(), args.end());
-    initializeclang(T, membuffer, clang_args, &TheCompInst);
+    initializeclang(T, membuffer, clang_args, &TheCompInst, FS);
 
     CodeGenerator *codegen = CreateLLVMCodeGen(
-            TheCompInst.getDiagnostics(), "mymodule", TheCompInst.getHeaderSearchOpts(),
+            TheCompInst.getDiagnostics(), "mymodule",
+#if LLVM_VERSION >= 150
+            FS,
+#endif
+            TheCompInst.getHeaderSearchOpts(),
             TheCompInst.getPreprocessorOpts(), TheCompInst.getCodeGenOpts(), *TT->ctx);
 
     std::stringstream ss;
