@@ -1720,6 +1720,10 @@ static AtomicRMWInst::BinOp ParseAtomicBinOp(const char *op) {
         opmap["fadd"] = AtomicRMWInst::BinOp::FAdd;
         opmap["fsub"] = AtomicRMWInst::BinOp::FSub;
 #endif
+#if LLVM_VERSION >= 150
+        opmap["fmax"] = AtomicRMWInst::BinOp::FMax;
+        opmap["fmin"] = AtomicRMWInst::BinOp::FMin;
+#endif
     }
     auto entry = opmap.find(op);
     if (entry == opmap.end()) {

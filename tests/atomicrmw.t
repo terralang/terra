@@ -1,5 +1,6 @@
 local has_align = terralib.llvm_version >= 110
 local has_fadd = terralib.llvm_version >= 90
+local has_fmin = terralib.llvm_version >= 150
 
 print("atomicrmw test settings: align " .. tostring(has_align) .. ", fadd " .. tostring(has_fadd))
 
@@ -99,6 +100,27 @@ if has_fadd then
 
   print(fadd())
   assert(fadd() == 21.0)
+end
+
+if has_fmin then
+  terra atomic_fmin(x : &double, y : double)
+    terralib.atomicrmw("fmin", x, y, {ordering = "monotonic"})
+  end
+  atomic_fmin:printpretty(false)
+  atomic_fmin:disas()
+
+  terra fmin(x : double, y : double)
+    var f : double = x
+
+    atomic_fmin(&f, y)
+
+    return f
+  end
+
+  print(fmin(1.0, 20.0))
+  assert(fmin(1.0, 20.0) == 1.0)
+  print(fmin(5.0, 3.0))
+  assert(fmin(5.0, 3.0) == 3.0)
 end
 
 

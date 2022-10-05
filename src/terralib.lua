@@ -3061,7 +3061,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     diag:reporterror(e,"for operator " .. e.operator .. " address must be a pointer to an integral or floating point type, but found ", addr.type.type)
                     return e:aserror()
                   end
-                elseif e.operator == "fadd" or e.operator == "fsub" then
+                elseif e.operator == "fadd" or e.operator == "fsub" or e.operator == "fmax" or e.operator == "fmin" then
                   if not addr.type.type:isfloat() then
                     diag:reporterror(e,"for operator " .. e.operator .. " address must be a pointer to a floating point type, but found ", addr.type.type)
                     return e:aserror()
