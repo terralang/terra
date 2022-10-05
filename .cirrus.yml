@@ -10,6 +10,7 @@ freebsd_task:
       LLVM_VERSION: 12
       LLVM_VERSION: 13
       LLVM_VERSION: 14
+      LLVM_VERSION: 15
     matrix:
       # USE_CMAKE: 0
       USE_CMAKE: 1

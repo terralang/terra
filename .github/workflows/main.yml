@@ -20,12 +20,12 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-22.04', 'macos-11', 'windows-2022']
-        llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14']
+        llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14', '15']
         cmake: ['0', '1']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 6.0-13, cmake
+          # Linux: exclude LLVM 6.0-13, 15, cmake
           # Note: CMake configurations are tested in Docker
           - os: 'ubuntu-22.04'
             llvm: '6.0'
@@ -44,9 +44,11 @@ jobs:
           - os: 'ubuntu-22.04'
             llvm: '13'
           - os: 'ubuntu-22.04'
+            llvm: '15'
+          - os: 'ubuntu-22.04'
             cmake: '1'
 
-          # macOS: exclude LLVM 8-14 make, cuda
+          # macOS: exclude LLVM 8-15 make, cuda
           - os: 'macos-11'
             llvm: '8'
             cmake: '0'
@@ -69,12 +71,15 @@ jobs:
             llvm: '14'
             cmake: '0'
           - os: 'macos-11'
+            llvm: '15'
+            cmake: '0'
+          - os: 'macos-11'
             cuda: '1'
           # LLVM 10 binaries are broken on recent macOS
           - os: 'macos-11'
             llvm: '10'
 
-          # Windows: exclude LLVM 6.0-10,12-14, make
+          # Windows: exclude LLVM 6.0-10,12-15, make
           - os: 'windows-2022'
             llvm: '6.0'
           - os: 'windows-2022'
@@ -91,6 +96,8 @@ jobs:
             llvm: '13'
           - os: 'windows-2022'
             llvm: '14'
+          - os: 'windows-2022'
+            llvm: '15'
           - os: 'windows-2022'
             cmake: '0'
 
@@ -119,6 +126,8 @@ jobs:
             cuda: '1'
           - llvm: '14'
             cuda: '1'
+          - llvm: '15'
+            cuda: '1'
 
           # Moonjit: only LLVM 9
           - llvm: '6.0'
@@ -136,6 +145,8 @@ jobs:
           - llvm: '13'
             lua: 'moonjit'
           - llvm: '14'
+            lua: 'moonjit'
+          - llvm: '15'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
@@ -163,7 +174,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6']
+        llvm: ['6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6', '15.0.2']
         lua: ['luajit', 'moonjit']
         static: ['0', '1']
         slib: ['0', '1']
@@ -187,6 +198,8 @@ jobs:
             cuda: '1'
           - llvm: '14.0.6'
             cuda: '1'
+          - llvm: '15.0.2'
+            cuda: '1'
 
           # Moonjit with LLVM 10 only:
           - llvm: '6.0'
@@ -204,6 +217,8 @@ jobs:
           - llvm: '13.0.1'
             lua: 'moonjit'
           - llvm: '14.0.6'
+            lua: 'moonjit'
+          - llvm: '15.0.2'
             lua: 'moonjit'
 
           # no-static with LLVM 10 only:
@@ -223,6 +238,8 @@ jobs:
             static: '0'
           - llvm: '14.0.6'
             static: '0'
+          - llvm: '15.0.2'
+            static: '0'
 
           # no-slib with LLVM 10 only:
           - llvm: '6.0'
@@ -241,6 +258,8 @@ jobs:
             slib: '0'
           - llvm: '14.0.6'
             slib: '0'
+          - llvm: '15.0.2'
+            slib: '0'
 
           # slib requires static
           - static: '0'
@@ -256,6 +275,8 @@ jobs:
           - llvm: '13.0.1'
             variant: 'prebuilt'
           - llvm: '14.0.6'
+            variant: 'prebuilt'
+          - llvm: '15.0.2'
             variant: 'prebuilt'
 
           # Some additional configurations:

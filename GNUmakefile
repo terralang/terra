@@ -87,7 +87,7 @@ LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100 110 111 120 130 140"
+LLVM_NEEDS_CXX14="100 110 111 120 130 140 150"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
 CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
 else
@@ -114,9 +114,14 @@ CLANG_LIBS += libclangFrontend.a \
 	libclangLex.a \
 	libclangBasic.a
 
-CLANG_AST_MATCHERS = "80 90 100 110 111 120 130 140"
+CLANG_AST_MATCHERS = "80 90 100 110 111 120 130 140 150"
 ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
 CLANG_LIBS += libclangASTMatchers.a
+endif
+
+CLANG_SUPPORT = "150"
+ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_SUPPORT)))
+CLANG_LIBS += libclangSupport.a
 endif
 
 # Get full path to clang libaries
@@ -125,7 +130,7 @@ CLANG_LIBFILES := $(patsubst %, $(CLANG_PREFIX)/lib/%, $(CLANG_LIBS))
 LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
 LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
 
-LLVM_POLLY = "100 110 111 120 130 140"
+LLVM_POLLY = "100 110 111 120 130 140 150"
 ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))
 	LLVM_LIBFILES += $(shell $(LLVM_CONFIG) --libdir)/libPolly*.a
 endif

@@ -1,5 +1,9 @@
 # Unreleased Changes to be Version 1.1.0
 
+## Added features
+
+  * Support for LLVM 15
+
 ## Deprecated features
 
   * Deprecated support for LLVM <= 10

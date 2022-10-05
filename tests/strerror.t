@@ -5,7 +5,10 @@ else
   string = terralib.includecstring [[
 #include <string.h>
 
-#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+// Clang 15 seems to define _GNU_SOURCE now, so this check is not
+// reliable. Not sure what the "proper" way is to do it is at this
+// point. Work around it with checks for specific OSes.
+#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE || defined(__APPLE__) || defined(__FreeBSD__)
 int strerror_r_(int errnum, char *buf, size_t buflen) {
 #else
 char *strerror_r_(int errnum, char *buf, size_t buflen) {

@@ -281,6 +281,12 @@ int terra_inittarget(lua_State *L) {
 
     TT->next_unused_id = 0;
     TT->ctx = new LLVMContext();
+#if LLVM_VERSION >= 150
+    // Hack: This is a workaround to avoid the opaque pointer
+    // transition, but we will need to deal with it eventually.
+    // FIXME: https://github.com/terralang/terra/issues/553
+    TT->ctx->setOpaquePointers(false);
+#endif
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
     if (!TheTarget) {
@@ -1714,6 +1720,10 @@ static AtomicRMWInst::BinOp ParseAtomicBinOp(const char *op) {
         opmap["fadd"] = AtomicRMWInst::BinOp::FAdd;
         opmap["fsub"] = AtomicRMWInst::BinOp::FSub;
 #endif
+#if LLVM_VERSION >= 150
+        opmap["fmax"] = AtomicRMWInst::BinOp::FMax;
+        opmap["fmin"] = AtomicRMWInst::BinOp::FMin;
+#endif
     }
     auto entry = opmap.find(op);
     if (entry == opmap.end()) {
@@ -2486,7 +2496,14 @@ struct FunctionEmitter {
                                        isVolatile);
 #else
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
-                                       MaybeAlign(l->getAlignment()), size_v, isVolatile);
+                                       MaybeAlign(
+#if LLVM_VERSION < 150
+                                               l->getAlignment()
+#else
+                                               l->getAlign()
+#endif
+                                                       ),
+                                       size_v, isVolatile);
 #endif
             return m;
         } else {
