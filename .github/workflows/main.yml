@@ -126,6 +126,8 @@ jobs:
             cuda: '1'
           - llvm: '14'
             cuda: '1'
+          - llvm: '15'
+            cuda: '1'
 
           # Moonjit: only LLVM 9
           - llvm: '6.0'
@@ -143,6 +145,8 @@ jobs:
           - llvm: '13'
             lua: 'moonjit'
           - llvm: '14'
+            lua: 'moonjit'
+          - llvm: '15'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
