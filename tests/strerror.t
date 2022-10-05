@@ -5,7 +5,7 @@ else
   string = terralib.includecstring [[
 #include <string.h>
 
-#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE
+#if (_POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600) && ! _GNU_SOURCE || defined(__APPLE__)
 int strerror_r_(int errnum, char *buf, size_t buflen) {
 #else
 char *strerror_r_(int errnum, char *buf, size_t buflen) {
