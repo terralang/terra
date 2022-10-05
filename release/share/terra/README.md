@@ -159,6 +159,8 @@ The current recommended version of LLVM is **13**. The following versions are al
 | 14 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
 | 15 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
 
+\* Please note that AMD GPU support is currently experimental.
+
 The following versions were previously supported by Terra:
 
 | Version | Last Supported Release |
@@ -169,8 +171,6 @@ The following versions were previously supported by Terra:
 | 3.8 | 1.0.6 |
 | 3.9 | 1.0.6 |
 | 5 | 1.0.6 |
-
-\* Please note that AMD GPU support is currently experimental.
 
 ### Instructions for Building LLVM from Source
 
