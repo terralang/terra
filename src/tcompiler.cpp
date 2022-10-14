@@ -994,7 +994,7 @@ struct CCallingConv {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
             return st->getNumElements() == 1 
-                && IsSingletonStruct(st->getTypeAtIndex(0));
+                && IsSingletonStruct(st->getElementType(0));
         }
 
         ArrayType *at = dyn_cast<ArrayType>(t);
@@ -1099,7 +1099,7 @@ struct CCallingConv {
         }
 
         // WASM passes all aggregates except singleton structures by reference
-        if (wasm_cconv && !IsSingletonStruct(t)) {
+        if (wasm_cconv && !IsSingletonStruct(t->type)) {
             return Argument(C_AGGREGATE_MEM, t);
         }
 
