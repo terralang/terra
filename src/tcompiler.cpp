@@ -774,6 +774,7 @@ struct CCallingConv {
     Types *Ty;
     bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
+    bool wasm_cconv;
     bool aarch64_cconv;
     bool ppc64_cconv;
     int ppc64_float_limit;
@@ -788,6 +789,7 @@ struct CCallingConv {
               Ty(Ty_),
               pass_struct_as_exploded_values(false),
               return_empty_struct_as_void(false),
+              wasm_cconv(false),
               aarch64_cconv(false),
               ppc64_cconv(false),
               ppc64_float_limit(0),
@@ -814,6 +816,12 @@ struct CCallingConv {
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
             } break;
+#if LLVM_VERSION >= 100
+            case Triple::ArchType::wasm32:
+            case Triple::ArchType::wasm64: {
+                wasm_cconv = true;
+            } break;
+#endif
         }
 
         switch (Triple.getOS()) {
@@ -981,6 +989,22 @@ struct CCallingConv {
                          (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
     }
 
+    bool IsSingletonStruct(Type *t) {
+        // a structure, however nested, that only has a single primitive
+        StructType *st = dyn_cast<StructType>(t);
+        if (st) {
+            return st->getNumElements() == 1 
+                && IsSingletonStruct(st->getTypeAtIndex(0));
+        }
+
+        ArrayType *at = dyn_cast<ArrayType>(t);
+        if (at) {
+            return false;
+        }
+
+        return t->isSingleValueType();        
+    }
+
     void MergeValuePPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
@@ -1072,6 +1096,11 @@ struct CCallingConv {
                 ++*usedint;
             bool usei1 = t->islogical && !t->type->isVectorTy();
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
+        }
+
+        // WASM passes all aggregates except singleton structures by reference
+        if (wasm_cconv && !IsSingletonStruct(t)) {
+            return Argument(C_AGGREGATE_MEM, t);
         }
 
         if (pass_struct_as_exploded_values) {
