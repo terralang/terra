@@ -13,6 +13,8 @@ extern "C" {
 
 #include <cmath>
 #include <sstream>
+#include <string>
+#include <iostream>
 #include "llvmheaders.h"
 
 #include "tcompilerstate.h"  //definition of terra_CompilerState which contains LLVM state
@@ -989,6 +991,11 @@ struct CCallingConv {
                          (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
     }
 
+    bool IsEmptyStruct(Type *t) {
+        StructType *st = dyn_cast<StructType>(t);
+        return st && st->getNumElements() == 0;
+    }
+
     bool IsSingletonStruct(Type *t) {
         // a structure, however nested, that only has a single primitive
         StructType *st = dyn_cast<StructType>(t);
@@ -1098,8 +1105,8 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
 
-        // WASM passes all aggregates except singleton structures by reference
-        if (wasm_cconv && !IsSingletonStruct(t->type)) {
+        // WASM passes all aggregates by ref except empty and singleton structs
+        if (wasm_cconv && !IsEmptyStruct(t->type) && !IsSingletonStruct(t->type)) {
             return Argument(C_AGGREGATE_MEM, t);
         }
 
