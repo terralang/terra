@@ -13,8 +13,6 @@ extern "C" {
 
 #include <cmath>
 #include <sstream>
-#include <string>
-#include <iostream>
 #include "llvmheaders.h"
 
 #include "tcompilerstate.h"  //definition of terra_CompilerState which contains LLVM state
@@ -991,25 +989,28 @@ struct CCallingConv {
                          (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
     }
 
-    bool IsEmptyStruct(Type *t) {
-        StructType *st = dyn_cast<StructType>(t);
-        return st && st->getNumElements() == 0;
-    }
+    int WasmPrimitiveCount(Type *t) {
+        if (t->isSingleValueType()) {
+            return 1;
+        }
 
-    bool IsSingletonStruct(Type *t) {
-        // a structure, however nested, that only has a single primitive
         StructType *st = dyn_cast<StructType>(t);
         if (st) {
-            return st->getNumElements() == 1 
-                && IsSingletonStruct(st->getElementType(0));
+            int primCount = 0;
+            for (auto elt : st->elements()) {
+                primCount += WasmPrimitiveCount(elt);
+            }
+            return primCount;
         }
 
-        ArrayType *at = dyn_cast<ArrayType>(t);
-        if (at) {
-            return false;
-        }
+        // For the purpose of WASM calling conventions,
+        // we say any array has 2 elements so it won't
+        // be passed in registers
+        return 2;
+    }
 
-        return t->isSingleValueType();        
+    bool WasmIsSingletonOrEmpty(Type *t) {
+        return WasmPrimitiveCount(t) <= 1;
     }
 
     void MergeValuePPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
@@ -1105,8 +1106,7 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
 
-        // WASM passes all aggregates by ref except empty and singleton structs
-        if (wasm_cconv && !IsEmptyStruct(t->type) && !IsSingletonStruct(t->type)) {
+        if (wasm_cconv && !WasmIsSingletonOrEmpty(t->type)) {
             return Argument(C_AGGREGATE_MEM, t);
         }
 
