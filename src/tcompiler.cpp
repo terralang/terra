@@ -1009,9 +1009,7 @@ struct CCallingConv {
         return 2;
     }
 
-    bool WasmIsSingletonOrEmpty(Type *t) {
-        return WasmPrimitiveCount(t) <= 1;
-    }
+    bool WasmIsSingletonOrEmpty(Type *t) { return WasmPrimitiveCount(t) <= 1; }
 
     void MergeValuePPC64(Type *t, std::vector<Type *> &elements, int64_t &bits) {
         StructType *st = dyn_cast<StructType>(t);
