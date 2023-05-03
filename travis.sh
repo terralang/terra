@@ -40,7 +40,13 @@ if [[ $(uname) = Linux ]]; then
   fi
 
 elif [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-15 ]]; then
+  if [[ $LLVM_CONFIG = llvm-config-16 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-16.0.3/clang+llvm-16.0.3-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-16.0.3-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-16.0.3-x86_64-apple-darwin/bin/llvm-config llvm-config-16
+    ln -s clang+llvm-16.0.3-x86_64-apple-darwin/bin/clang clang-16
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-16.0.3-x86_64-apple-darwin
+  elif [[ $LLVM_CONFIG = llvm-config-15 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-15.0.2/clang+llvm-15.0.2-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-15.0.2-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-15.0.2-x86_64-apple-darwin/bin/llvm-config llvm-config-15
