@@ -152,7 +152,9 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
 #endif
 
     llvm::legacy::PassManager PM;
+#if LLVM_VERSION < 160
     TargetMachine->adjustPassManager(PMB);
+#endif
 
     PMB.populateModulePassManager(PM);
 
