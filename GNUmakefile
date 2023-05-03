@@ -84,14 +84,18 @@ CPPFLAGS = -fno-rtti -Woverloaded-virtual -fvisibility-inlines-hidden
 
 LLVM_VERSION_NUM=$(shell $(LLVM_CONFIG) --version | sed -e s/svn//)
 LLVM_VERSION=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\.([0-9]+).*/\1\2/')
+LLVM_VERSION_MAJOR=$(shell echo $(LLVM_VERSION_NUM) | $(SED_E) 's/^([0-9]+)\..*/\1/')
 
 FLAGS += -DLLVM_VERSION=$(LLVM_VERSION)
 
-LLVM_NEEDS_CXX14="100 110 111 120 130 140 150"
-ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_NEEDS_CXX14)))
-CPPFLAGS += -std=c++1y # GCC 5 does not support -std=c++14 flag
+ifeq ($(shell expr $(LLVM_VERSION) \>= 160), 1)
+CPPFLAGS += -std=c++17
+else
+ifeq ($(shell expr $(LLVM_VERSION) \>= 100), 1)
+CPPFLAGS += -std=c++14
 else
 CPPFLAGS += -std=c++11
+endif
 endif
 
 ifneq ($(findstring $(UNAME), Linux FreeBSD),)
@@ -114,13 +118,11 @@ CLANG_LIBS += libclangFrontend.a \
 	libclangLex.a \
 	libclangBasic.a
 
-CLANG_AST_MATCHERS = "80 90 100 110 111 120 130 140 150"
-ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_AST_MATCHERS)))
+ifeq ($(shell expr $(LLVM_VERSION) \>= 80), 1)
 CLANG_LIBS += libclangASTMatchers.a
 endif
 
-CLANG_SUPPORT = "150"
-ifneq (,$(findstring $(LLVM_VERSION),$(CLANG_SUPPORT)))
+ifeq ($(shell expr $(LLVM_VERSION) \>= 150), 1)
 CLANG_LIBS += libclangSupport.a
 endif
 
@@ -130,8 +132,7 @@ CLANG_LIBFILES := $(patsubst %, $(CLANG_PREFIX)/lib/%, $(CLANG_LIBS))
 LLVM_LIBS += $(shell $(LLVM_CONFIG) --libs --link-static)
 LLVM_LIBFILES := $(shell $(LLVM_CONFIG) --libfiles --link-static)
 
-LLVM_POLLY = "100 110 111 120 130 140 150"
-ifneq (,$(findstring $(LLVM_VERSION),$(LLVM_POLLY)))
+ifeq ($(shell expr $(LLVM_VERSION) \>= 100), 1)
 	LLVM_LIBFILES += $(shell $(LLVM_CONFIG) --libdir)/libPolly*.a
 endif
 
@@ -172,7 +173,11 @@ SUPPORT_LIBRARY_FLAGS += $(LIBFFI_LIBS) $(LIBXML20_LIBS) $(LIBEDIT_LIBS)
 
 PACKAGE_DEPS += $(LUAJIT_LIB)
 
+ifeq ($(shell expr $(LLVM_VERSION) \>= 160), 1)
+CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_MAJOR)
+else
 CLANG_RESOURCE_DIRECTORY=$(CLANG_PREFIX)/lib/clang/$(LLVM_VERSION_NUM)
+endif
 
 ifeq ($(ENABLE_CUDA),1)
 CUDA_INCLUDES = -DTERRA_ENABLE_CUDA -I $(CUDA_HOME)/include -I $(CUDA_HOME)/nvvm/include
