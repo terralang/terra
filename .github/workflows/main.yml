@@ -297,6 +297,8 @@ jobs:
             variant: 'prebuilt'
           - llvm: '15.0.2'
             variant: 'prebuilt'
+          - llvm: '16.0.3'
+            variant: 'prebuilt'
 
           # Some additional configurations:
 
