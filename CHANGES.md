@@ -2,7 +2,7 @@
 
 ## Added features
 
-  * Support for LLVM 15
+  * Support for LLVM 15 and 16
 
 ## Deprecated features
 
