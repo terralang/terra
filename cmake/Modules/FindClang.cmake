@@ -46,7 +46,14 @@ find_program(CLANG_EXECUTABLE
   HINTS ${LLVM_TOOLS_BINARY_DIRS}
 )
 
-set(CLANG_RESOURCE_DIR "${LLVM_INSTALL_PREFIX}/lib/clang/${LLVM_PACKAGE_VERSION}" CACHE PATH "Allows overriding where the include directory is found")
+if(LLVM_VERSION_MAJOR GREATER 15)
+  set(CLANG_RESOURCE_VERSION "${LLVM_VERSION_MAJOR}")
+else()
+  set(CLANG_RESOURCE_VERSION "${LLVM_PACKAGE_VERSION}")
+endif()
+mark_as_advanced(CLANG_RESOURCE_VERSION)
+
+set(CLANG_RESOURCE_DIR "${LLVM_INSTALL_PREFIX}/lib/clang/${CLANG_RESOURCE_VERSION}" CACHE PATH "Allows overriding where the include directory is found")
 
 if(CLANG_LIBRARIES AND CLANG_INCLUDE_DIRS AND CLANG_EXECUTABLE)
   message(STATUS "Clang libraries: ${CLANG_LIBRARIES}")
