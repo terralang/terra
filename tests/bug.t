@@ -8,7 +8,7 @@ else
 
 
 local OC = require("lib/objc")
-local OCR = terralib.includec("objc/runtime.h")
+local OCR = terralib.includec("objc/runtime.h", {"-fblocks"})
 
 terra main()
 	var nsobject = OC.NSObject
