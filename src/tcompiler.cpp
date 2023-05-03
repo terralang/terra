@@ -275,7 +275,7 @@ int terra_inittarget(lua_State *L) {
     } else {
 #ifdef __arm__
         // force hard float since we currently onlly work on platforms that have it
-        options->FloatABIType = FloatABI::Hard;
+        options.FloatABIType = FloatABI::Hard;
 #endif
     }
 
