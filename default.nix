@@ -54,6 +54,7 @@ in stdenv.mkDerivation rec {
     "-DHAS_TERRA_VERSION=0"
     "-DTERRA_VERSION=${version}"
     "-DTERRA_LUA=luajit"
+    "-DTERRA_SKIP_LUA_DOWNLOAD=ON"
     "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/${clangVersion}"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
@@ -65,9 +66,6 @@ in stdenv.mkDerivation rec {
   patches = [ ./nix/cflags.patch ];
 
   postPatch = ''
-    sed -i '/file(DOWNLOAD "''${LUAJIT_URL}" "''${LUAJIT_TAR}")/d' \
-      cmake/Modules/GetLuaJIT.cmake
-
     substituteInPlace src/terralib.lua \
       --subst-var-by NIX_LIBC_INCLUDE ${lib.getDev stdenv.cc.libc}/include
   '';
