@@ -1,8 +1,19 @@
-# Unreleased Changes to be Version 1.1.0
+# Unreleased Changes
+
+# Release 1.1.0 (2023-05-05)
+
+This change fixes a small n
 
 ## Added features
 
   * Support for LLVM 15 and 16
+
+## Improvements
+
+  * Fixes for WASM calling convention
+  * Fixes for tests on macOS 13
+  * Fixes for 32-bit ARM on Linux (note this configuration is still experimental)
+  * Verify SHA-256 hashsums of all downloads in CMake build
 
 ## Deprecated features
 
