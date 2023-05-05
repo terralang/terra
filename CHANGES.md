@@ -2,7 +2,8 @@
 
 # Release 1.1.0 (2023-05-05)
 
-This change fixes a small n
+This release brings Terra up to date with LLVM releases and deprecates/removes
+some older LLVM versions. No breaking changes are expected.
 
 ## Added features
 
