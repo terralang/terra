@@ -39,6 +39,8 @@ local MAX_ARRAY_N = 4
 local ffi = require("ffi")
 if ffi.arch == "x64" then
   MAX_N = 9 -- https://github.com/terralang/terra/issues/576
+elseif ffi.arch == "arm64" and ffi.os == "OSX" then
+  MAX_N = 9 -- https://github.com/terralang/terra/issues/627
 end
 
 local ctypes = {
