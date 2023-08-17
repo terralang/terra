@@ -2596,6 +2596,9 @@ struct FunctionEmitter {
                 if (T_globalvariable == global.kind("kind")) {
                     GlobalVariable *gv =
                             EmitGlobalVariable(CU, &global, exp->string("name"));
+                    // Clang (as of LLVM 7) changes the types of certain globals
+                    // (like arrays). Change the type back to what we expect
+                    // here so we don't cause issues downstream in the compiler.
                     return B->CreateBitCast(
                             gv,
                             PointerType::get(typeOfValue(exp)->type,
