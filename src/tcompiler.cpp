@@ -2594,7 +2594,8 @@ struct FunctionEmitter {
                 Obj global;
                 exp->obj("value", &global);
                 if (T_globalvariable == global.kind("kind")) {
-                    return EmitGlobalVariable(CU, &global, exp->string("name"));
+                    GlobalVariable *gv = EmitGlobalVariable(CU, &global, exp->string("name"));
+                    return B->CreateBitCast(gv, typeOfValue(exp)->type);
                 } else {
                     // functions are represented with &int8 pointers to avoid
                     // calling convension issues, so cast the literal to this type now
