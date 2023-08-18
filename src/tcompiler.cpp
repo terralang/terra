@@ -2594,7 +2594,15 @@ struct FunctionEmitter {
                 Obj global;
                 exp->obj("value", &global);
                 if (T_globalvariable == global.kind("kind")) {
-                    return EmitGlobalVariable(CU, &global, exp->string("name"));
+                    GlobalVariable *gv =
+                            EmitGlobalVariable(CU, &global, exp->string("name"));
+                    // Clang (as of LLVM 7) changes the types of certain globals
+                    // (like arrays). Change the type back to what we expect
+                    // here so we don't cause issues downstream in the compiler.
+                    return B->CreateBitCast(
+                            gv,
+                            PointerType::get(typeOfValue(exp)->type,
+                                             gv->getType()->getPointerAddressSpace()));
                 } else {
                     // functions are represented with &int8 pointers to avoid
                     // calling convension issues, so cast the literal to this type now
