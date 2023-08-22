@@ -145,11 +145,7 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     PMB.SizeLevel = 0;
     PMB.Inliner = llvm::createFunctionInliningPass(PMB.OptLevel, 0, false);
     PMB.LoopVectorize = false;
-#if LLVM_VERSION <= 90
-    auto FileType = llvm::TargetMachine::CGFT_AssemblyFile;
-#else
     auto FileType = llvm::CGFT_AssemblyFile;
-#endif
 
     llvm::legacy::PassManager PM;
 #if LLVM_VERSION < 160
@@ -158,17 +154,10 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
 
     PMB.populateModulePassManager(PM);
 
-#if LLVM_VERSION >= 70
     if (TargetMachine->addPassesToEmitFile(PM, str_dest, nullptr, FileType)) {
         llvm::errs() << "TargetMachine can't emit a file of this type\n";
         return;
     }
-#else
-    if (TargetMachine->addPassesToEmitFile(PM, str_dest, FileType)) {
-        llvm::errs() << "TargetMachine can't emit a file of this type\n";
-        return;
-    }
-#endif
 
     PM.run(*M);
     buf->resize(dest.size());

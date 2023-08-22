@@ -44,17 +44,7 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm-c/Linker.h"
 
-#if LLVM_VERSION < 70
-#include "llvmheaders_60.h"
-#elif LLVM_VERSION < 80
-#include "llvmheaders_70.h"
-#elif LLVM_VERSION < 90
-#include "llvmheaders_80.h"
-#elif LLVM_VERSION < 100
-#include "llvmheaders_90.h"
-#elif LLVM_VERSION < 110
-#include "llvmheaders_100.h"
-#elif LLVM_VERSION < 120
+#if LLVM_VERSION < 120
 #include "llvmheaders_110.h"
 #elif LLVM_VERSION < 130
 #include "llvmheaders_120.h"
@@ -69,8 +59,8 @@
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 150
-#include "llvmheaders_150.h"
+#define LLVM_VERSION 160
+#include "llvmheaders_160.h"
 #endif
 
 #define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))

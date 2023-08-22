@@ -81,17 +81,6 @@ struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit *CU;
     terra_State *T;
     DisassembleFunctionListener(TerraCompilationUnit *CU_) : CU(CU_), T(CU_->T) {}
-#if LLVM_VERSION < 80
-    virtual void NotifyFunctionEmitted(const Function &f, void *data, size_t sz,
-                                       const EmittedFunctionDetails &EFD) {
-        TerraFunctionInfo &fi = T->C->functioninfo[data];
-        fi.ctx = CU->TT->ctx;
-        fi.name = f.getName();
-        fi.addr = data;
-        fi.size = sz;
-        DEBUG_ONLY(T) { fi.efd = EFD; }
-    }
-#endif
 
     void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
         if (type == object::SymbolRef::ST_Function) {
@@ -352,11 +341,7 @@ int terra_initcompilationunit(lua_State *L) {
             } else if (strcmp(flag, "arcp") == 0) {
                 fastmath.setAllowReciprocal();
             } else if (strcmp(flag, "contract") == 0) {
-#if LLVM_VERSION < 70
-                fastmath.setAllowContract(true);
-#else
                 fastmath.setAllowContract();
-#endif
             } else if (strcmp(flag, "afn") == 0) {
                 fastmath.setApproxFunc();
             } else if (strcmp(flag, "reassoc") == 0) {
@@ -407,11 +392,7 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setEngineKind(EngineKind::JIT)
             .setTargetOptions(CU->TT->tm->Options)
             .setOptLevel(CodeGenOpt::Aggressive)
-#if LLVM_VERSION <= 90
-            .setMCJITMemoryManager(make_unique<TerraSectionMemoryManager>(CU))
-#else
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
-#endif
 #if LLVM_VERSION < 120
             .setUseOrcMCJITReplacement(true)
 #endif
@@ -542,11 +523,7 @@ class Types {
                     Type *baseType = ttype->type;
                     t->issigned = ttype->issigned;
                     t->islogical = ttype->islogical;
-#if LLVM_VERSION < 90
-                    t->type = VectorType::get(baseType, N);
-#else
                     t->type = VectorType::get(baseType, N, false);
-#endif
                 } break;
                 case T_primitive: {
                     CreatePrimitiveType(typ, t);
@@ -816,12 +793,10 @@ struct CCallingConv {
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
             } break;
-#if LLVM_VERSION >= 100
             case Triple::ArchType::wasm32:
             case Triple::ArchType::wasm64: {
                 wasm_cconv = true;
             } break;
-#endif
         }
 
         switch (Triple.getOS()) {
@@ -934,12 +909,8 @@ struct CCallingConv {
                     case 8:
                         return (C_SSE_DOUBLE == clz)
                                        ? Type::getDoubleTy(*CU->TT->ctx)
-                                       : VectorType::get(Type::getFloatTy(*CU->TT->ctx), 2
-#if LLVM_VERSION >= 90
-                                                         ,
-                                                         false
-#endif
-                                         );
+                                       : VectorType::get(Type::getFloatTy(*CU->TT->ctx),
+                                                         2, false);
                     default:
                         assert(!"unexpected size for floating point class");
                 }
@@ -1208,9 +1179,7 @@ struct CCallingConv {
     }
     template <typename FnOrCall>
     void addNoUndefAttr(FnOrCall *r, int idx) {
-#if LLVM_VERSION >= 110
         r->addParamAttr(idx - 1, Attribute::NoUndef);
-#endif
     }
     template <typename FnOrCall>
     void addExtAttrIfNeeded(TType *t, FnOrCall *r, int idx, bool return_value = false) {
@@ -1266,11 +1235,7 @@ struct CCallingConv {
             Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
             Value *addr_source = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
-#if LLVM_VERSION < 100
-            unsigned a1 = 0;
-#else
             MaybeAlign a1(0);
-#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
@@ -1283,20 +1248,12 @@ struct CCallingConv {
                     StoreInst *st = B->CreateStore(src, addr_dst);
                     return st;
                 }
-#if LLVM_VERSION < 100
-                a1 = CU->getDataLayout().getABITypeAlignment(t1);
-#else
                 a1 = MaybeAlign(CU->getDataLayout().getABITypeAlignment(t1));
-#endif
             } else
                 assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
-#if LLVM_VERSION < 70
-            Value *m = B->CreateMemCpy(addr_dest, addr_source, size_v, a1);
-#else
             Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
-#endif
             return m;
         } else {
             StoreInst *st = B->CreateStore(src, addr_dst);
@@ -1354,13 +1311,7 @@ struct CCallingConv {
                 } break;
                 case C_AGGREGATE_MEM:
                     // TODO: check that LLVM optimizes this copy away
-                    emitStoreAgg(B, p->type->type,
-                                 B->CreateLoad(
-#if LLVM_VERSION >= 80
-                                         p->type->type,
-#endif
-                                         &*ai),
-                                 v);
+                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, &*ai), v);
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
@@ -1373,12 +1324,7 @@ struct CCallingConv {
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     emitStoreAgg(B, p->cctype, &*ai, scratch);
                     Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
-                    emitStoreAgg(B, p->type->type,
-                                 B->CreateLoad(
-#if LLVM_VERSION >= 80
-                                         p->type->type,
-#endif
-                                         casted),
+                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, casted),
                                  v);
                     ++ai;
                 } break;
@@ -1411,22 +1357,14 @@ struct CCallingConv {
                     result_type = type->getElementType(0);
                 } while ((type = dyn_cast<StructType>(result_type)));
             }
-            B->CreateRet(B->CreateLoad(
-#if LLVM_VERSION >= 80
-                    result_type,
-#endif
-                    result));
+            B->CreateRet(B->CreateLoad(result_type, result));
         } else if (C_ARRAY_REG == kind) {
             Value *dest = CreateAlloca(B, info->returntype.type->type);
             unsigned as = dest->getType()->getPointerAddressSpace();
             emitStoreAgg(B, info->returntype.type->type, result, dest);
             ArrayType *result_type = cast<ArrayType>(info->returntype.cctype);
             Value *result = B->CreateBitCast(dest, Ptr(result_type, as));
-            B->CreateRet(B->CreateLoad(
-#if LLVM_VERSION >= 80
-                    result_type,
-#endif
-                    result));
+            B->CreateRet(B->CreateLoad(result_type, result));
         } else {
             assert(!"unhandled return value");
         }
@@ -1443,11 +1381,8 @@ struct CCallingConv {
                                arguments);
             }
         } else {
-            arguments.push_back(B->CreateLoad(
-#if LLVM_VERSION >= 80
-                    value->getType()->getPointerElementType(),
-#endif
-                    value));
+            arguments.push_back(
+                    B->CreateLoad(value->getType()->getPointerElementType(), value));
         }
     }
 
@@ -1532,11 +1467,8 @@ struct CCallingConv {
             } else {
                 assert(!"unhandled argument kind");
             }
-            return B->CreateLoad(
-#if LLVM_VERSION >= 80
-                    aggregate->getType()->getPointerElementType(),
-#endif
-                    aggregate);
+            return B->CreateLoad(aggregate->getType()->getPointerElementType(),
+                                 aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -1680,10 +1612,8 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["preserve_allcc"] = CallingConv::PreserveAll;
         ccmap["cxx_fast_tlscc"] = CallingConv::CXX_FAST_TLS;
         ccmap["ghccc"] = CallingConv::GHC;
-#if LLVM_VERSION >= 100
         ccmap["tailcc"] = CallingConv::Tail;
         ccmap["cfguard_checkcc"] = CallingConv::CFGuard_Check;
-#endif
         ccmap["x86_stdcallcc"] = CallingConv::X86_StdCall;
         ccmap["x86_fastcallcc"] = CallingConv::X86_FastCall;
         ccmap["x86_thiscallcc"] = CallingConv::X86_ThisCall;
@@ -1693,12 +1623,8 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["arm_apcscc"] = CallingConv::ARM_APCS;
         ccmap["arm_aapcscc"] = CallingConv::ARM_AAPCS;
         ccmap["arm_aapcs_vfpcc"] = CallingConv::ARM_AAPCS_VFP;
-#if LLVM_VERSION >= 80
         ccmap["aarch64_vector_pcs"] = CallingConv::AArch64_VectorCall;
-#endif
-#if LLVM_VERSION >= 100
         ccmap["aarch64_sve_vector_pcs"] = CallingConv::AArch64_SVE_VectorCall;
-#endif
         ccmap["msp430_intrcc"] = CallingConv::MSP430_INTR;
         ccmap["avr_intrcc"] = CallingConv::AVR_INTR;
         ccmap["avr_signalcc"] = CallingConv::AVR_SIGNAL;
@@ -1750,10 +1676,8 @@ static AtomicRMWInst::BinOp ParseAtomicBinOp(const char *op) {
         opmap["min"] = AtomicRMWInst::BinOp::Min;
         opmap["umax"] = AtomicRMWInst::BinOp::UMax;
         opmap["umin"] = AtomicRMWInst::BinOp::UMin;
-#if LLVM_VERSION >= 90
         opmap["fadd"] = AtomicRMWInst::BinOp::FAdd;
         opmap["fsub"] = AtomicRMWInst::BinOp::FSub;
-#endif
 #if LLVM_VERSION >= 150
         opmap["fmax"] = AtomicRMWInst::BinOp::FMax;
         opmap["fmin"] = AtomicRMWInst::BinOp::FMin;
@@ -2236,18 +2160,12 @@ struct FunctionEmitter {
     Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(
-#if LLVM_VERSION >= 80
-                    pointer->getType()->getPointerElementType(),
-#endif
-                    pointer, number);
+            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
+                                number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(
-#if LLVM_VERSION >= 80
-                    pointer->getType()->getPointerElementType(),
-#endif
-                    pointer, numNeg);
+            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
+                                numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
@@ -2483,52 +2401,27 @@ struct FunctionEmitter {
             Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
             addr_src = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
-#if LLVM_VERSION <= 90
-            unsigned a1 = 0;
-#else
             MaybeAlign a1(0);
-#endif
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
                 const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
                 size = sl->getSizeInBytes();
-#if LLVM_VERSION <= 90
-                a1 = hasAlignment ? alignment : sl->getAlignment();
-#else
                 a1 = hasAlignment ? MaybeAlign(alignment) : sl->getAlignment();
-#endif
             } else if (t1->isArrayTy() && (CU->getDataLayout().getTypeAllocSize(t1) >=
                                            MEM_ARRAY_THRESHOLD)) {
                 size = CU->getDataLayout().getTypeAllocSize(t1);
-#if LLVM_VERSION <= 90
-                a1 = hasAlignment ? alignment
-                                  : CU->getDataLayout().getABITypeAlignment(t1);
-#else
                 a1 = MaybeAlign(hasAlignment
                                         ? alignment
                                         : CU->getDataLayout().getABITypeAlignment(t1));
-#endif
             } else {
                 StoreInst *st = B->CreateStore(value, addr);
                 if (isVolatile) st->setVolatile(true);
-#if LLVM_VERSION <= 90
-                if (hasAlignment) st->setAlignment(alignment);
-#elif LLVM_VERSION <= 100
-                if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
-#else
                 if (hasAlignment) st->setAlignment(Align(alignment));
-#endif
                 return st;
             }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
-#if LLVM_VERSION <= 60
-            Value *m = B->CreateMemCpy(addr_dst, addr_src, size_v, a1, isVolatile);
-#elif LLVM_VERSION <= 90
-            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, l->getAlignment(), size_v,
-                                       isVolatile);
-#else
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
                                        MaybeAlign(
 #if LLVM_VERSION < 150
@@ -2538,18 +2431,11 @@ struct FunctionEmitter {
 #endif
                                                        ),
                                        size_v, isVolatile);
-#endif
             return m;
         } else {
             StoreInst *st = B->CreateStore(value, addr);
             if (isVolatile) st->setVolatile(true);
-#if LLVM_VERSION <= 90
-            if (hasAlignment) st->setAlignment(alignment);
-#elif LLVM_VERSION <= 100
-            if (hasAlignment) st->setAlignment(MaybeAlign(alignment));
-#else
             if (hasAlignment) st->setAlignment(Align(alignment));
-#endif
             return st;
         }
     }
@@ -2568,11 +2454,7 @@ struct FunctionEmitter {
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
-            raw = B->CreateLoad(
-#if LLVM_VERSION >= 80
-                    raw->getType()->getPointerElementType(),
-#endif
-                    raw);
+            raw = B->CreateLoad(raw->getType()->getPointerElementType(), raw);
         }
         return raw;
     }
@@ -2689,17 +2571,12 @@ struct FunctionEmitter {
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
-                    Value *result = B->CreateGEP(
-#if LLVM_VERSION >= 80
-                            valueExp->getType()->getPointerElementType(),
-#endif
-                            valueExp, idxExp);
+                    Value *result =
+                            B->CreateGEP(valueExp->getType()->getPointerElementType(),
+                                         valueExp, idxExp);
                     if (!exp->boolean("lvalue"))
-                        result = B->CreateLoad(
-#if LLVM_VERSION >= 80
-                                result->getType()->getPointerElementType(),
-#endif
-                                result);
+                        result = B->CreateLoad(result->getType()->getPointerElementType(),
+                                               result);
                     return result;
                 }
             } break;
@@ -2811,11 +2688,7 @@ struct FunctionEmitter {
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(
-#if LLVM_VERSION >= 80
-                        output->getType()->getPointerElementType(),
-#endif
-                        output);
+                return B->CreateLoad(output->getType()->getPointerElementType(), output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2867,11 +2740,8 @@ struct FunctionEmitter {
                 Value *result = emitStructSelect(&typ, v, offset);
                 Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
-                    result = B->CreateLoad(
-#if LLVM_VERSION >= 80
-                            result->getType()->getPointerElementType(),
-#endif
-                            result);
+                    result = B->CreateLoad(result->getType()->getPointerElementType(),
+                                           result);
                 return result;
             } break;
             case T_constructor:
@@ -2921,20 +2791,10 @@ struct FunctionEmitter {
                 Ty->EnsureTypeIsComplete(&type);
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
-                LoadInst *l = B->CreateLoad(
-#if LLVM_VERSION >= 80
-                        v->getType()->getPointerElementType(),
-#endif
-                        v);
+                LoadInst *l = B->CreateLoad(v->getType()->getPointerElementType(), v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
-#if LLVM_VERSION <= 90
-                    l->setAlignment(alignment);
-#elif LLVM_VERSION <= 100
-                    l->setAlignment(MaybeAlign(alignment));
-#else
                     l->setAlignment(Align(alignment));
-#endif
                 }
                 if (attr.boolean("nontemporal")) {
                     auto list = ConstantAsMetadata::get(
@@ -3012,14 +2872,8 @@ struct FunctionEmitter {
                 a->setVolatile(attr.boolean("isvolatile"));
                 a->setWeak(attr.boolean("isweak"));
                 if (has_alignment) {
-#if LLVM_VERSION >= 110
 #if LLVM_VERSION < 130
                     a->setAlignment(Align(attr.number("alignment")));
-#endif
-#else
-                    assert(false &&
-                           "cmpxchg does not support alignment in this version of "
-                           "LLVM, please upgrade to 11.0.0 or higher");
 #endif
                 }
                 Value *a_result = B->CreateExtractValue(a, ArrayRef<unsigned>(0));
@@ -3059,14 +2913,8 @@ struct FunctionEmitter {
                                                       ordering, syncscope);
                 a->setVolatile(attr.boolean("isvolatile"));
                 if (has_alignment) {
-#if LLVM_VERSION >= 110
 #if LLVM_VERSION < 130
                     a->setAlignment(Align(attr.number("alignment")));
-#endif
-#else
-                    assert(false &&
-                           "atomicrmw does not support alignment in this version of "
-                           "LLVM, please upgrade to 11.0.0 or higher");
 #endif
                 }
                 return a;
@@ -3093,9 +2941,7 @@ struct FunctionEmitter {
         Type *resultType = Type::getInt1Ty(*CU->TT->ctx);
         if (cond->getType()->isVectorTy()) {
             VectorType *vt = cast<VectorType>(cond->getType());
-#if LLVM_VERSION < 90
-            resultType = VectorType::get(resultType, vt->getNumElements());
-#elif LLVM_VERSION < 130
+#if LLVM_VERSION < 130
             resultType = VectorType::get(resultType, vt->getNumElements(), false);
 #else
             resultType = VectorType::get(resultType,
@@ -3173,19 +3019,12 @@ struct FunctionEmitter {
 
             auto TA = DB->getOrCreateTypeArray(ArrayRef<Metadata *>());
 
-#if LLVM_VERSION >= 80
             SP = DB->createFunction(
                     CU, fstate->func->getName(), fstate->func->getName(), file, lineno,
                     DB->createSubroutineType(TA), 0, llvm::DINode::FlagZero,
                     llvm::DISubprogram::DISPFlags::SPFlagOptimized |
                             llvm::DISubprogram::DISPFlags::SPFlagDefinition);
             fstate->func->setSubprogram(SP);
-#else
-            SP = DB->createFunction(CU, fstate->func->getName(), fstate->func->getName(),
-                                    file, lineno, DB->createSubroutineType(TA), false,
-                                    true, 0, llvm::DINode::FlagZero, true);
-            fstate->func->setSubprogram(SP);
-#endif
 
             if (!M->getModuleFlagsMetadata()) {
                 M->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
@@ -3303,11 +3142,7 @@ struct FunctionEmitter {
             Value *addr = CreateConstGEP2_32(B, result, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(
-#if LLVM_VERSION >= 80
-                result->getType()->getPointerElementType(),
-#endif
-                result);
+        return B->CreateLoad(result->getType()->getPointerElementType(), result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3478,11 +3313,7 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(
-#if LLVM_VERSION >= 80
-                        vp->getType()->getPointerElementType(),
-#endif
-                        vp);
+                Value *v = B->CreateLoad(vp->getType()->getPointerElementType(), vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
@@ -3881,11 +3712,7 @@ static bool SaveObject(TerraCompilationUnit *CU, Module *M, const std::string &f
             return true;
         }
     } else if (filekind == "bitcode") {
-#if LLVM_VERSION < 70
-        llvm::WriteBitcodeToFile(M, dest);
-#else
         llvm::WriteBitcodeToFile(*M, dest);
-#endif
     } else if (filekind == "llvmir") {
         dest << *M;
     }

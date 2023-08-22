@@ -26,9 +26,7 @@ extern "C" {
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/Compilation.h"
 #include "clang/Driver/ToolChain.h"
-#if LLVM_VERSION >= 100
 #include "clang/Basic/Builtins.h"
-#endif
 #include "tcompilerstate.h"
 
 using namespace clang;
@@ -624,7 +622,6 @@ public:
     virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
 };
 
-#if LLVM_VERSION >= 80
 class LuaProvidedFile : public llvm::vfs::File {
 private:
     std::string Name;
@@ -644,33 +641,11 @@ public:
     }
     virtual std::error_code close() override { return std::error_code(); }
 };
-#else
-class LuaProvidedFile : public clang::vfs::File {
-private:
-    std::string Name;
-    clang::vfs::Status Status;
-    StringRef Buffer;
-
-public:
-    LuaProvidedFile(const std::string &Name_, const clang::vfs::Status &Status_,
-                    const StringRef &Buffer_)
-            : Name(Name_), Status(Status_), Buffer(Buffer_) {}
-    virtual ~LuaProvidedFile() override {}
-    virtual llvm::ErrorOr<clang::vfs::Status> status() override { return Status; }
-    virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> getBuffer(
-            const Twine &Name, int64_t FileSize, bool RequiresNullTerminator,
-            bool IsVolatile) override {
-        return llvm::MemoryBuffer::getMemBuffer(Buffer, "", RequiresNullTerminator);
-    }
-    virtual std::error_code close() override { return std::error_code(); }
-};
-#endif
 
 static llvm::sys::TimePoint<> ZeroTime() {
     return llvm::sys::TimePoint<>(std::chrono::nanoseconds::zero());
 }
 
-#if LLVM_VERSION >= 80
 class LuaOverlayFileSystem : public llvm::vfs::FileSystem {
 private:
     IntrusiveRefCntPtr<llvm::vfs::FileSystem> RFS;
@@ -758,92 +733,6 @@ public:
         return std::error_code();
     }
 };
-#else
-class LuaOverlayFileSystem : public clang::vfs::FileSystem {
-private:
-    IntrusiveRefCntPtr<vfs::FileSystem> RFS;
-    lua_State *L;
-
-public:
-    LuaOverlayFileSystem(lua_State *L_) : RFS(vfs::getRealFileSystem()), L(L_) {}
-
-    bool GetFile(const llvm::Twine &Path, clang::vfs::Status *status,
-                 StringRef *contents) {
-        lua_pushvalue(L, HEADERPROVIDER_POS);
-        lua_pushstring(L, Path.str().c_str());
-        lua_call(L, 1, 1);
-        if (!lua_istable(L, -1)) {
-            lua_pop(L, 1);
-            return false;
-        }
-        llvm::sys::fs::file_type filetype = llvm::sys::fs::file_type::directory_file;
-        int64_t size = 0;
-        lua_getfield(L, -1, "kind");
-        const char *kind = lua_tostring(L, -1);
-        if (strcmp(kind, "file") == 0) {
-            filetype = llvm::sys::fs::file_type::regular_file;
-            lua_getfield(L, -2, "contents");
-            const char *data = (const char *)lua_touserdata(L, -1);
-            if (!data) {
-                data = lua_tostring(L, -1);
-            }
-            if (!data) {
-                lua_pop(L, 3);  // pop table,kind,contents
-                return false;
-            }
-            lua_getfield(L, -3, "size");
-            size = (lua_isnumber(L, -1)) ? lua_tonumber(L, -1) : ::strlen(data);
-            *contents = StringRef(data, size);
-            lua_pop(L, 2);  // pop contents, size
-        }
-        *status = clang::vfs::Status(Path.str(), clang::vfs::getNextVirtualUniqueID(),
-                                     ZeroTime(), 0, 0, size, filetype,
-                                     llvm::sys::fs::all_all);
-        lua_pop(L, 2);  // pop table, kind
-        return true;
-    }
-    virtual ~LuaOverlayFileSystem() {}
-
-    virtual llvm::ErrorOr<clang::vfs::Status> status(const llvm::Twine &Path) override {
-        static const std::error_code noSuchFileErr =
-                std::make_error_code(std::errc::no_such_file_or_directory);
-        llvm::ErrorOr<clang::vfs::Status> RealStatus = RFS->status(Path);
-        if (RealStatus || RealStatus.getError() != noSuchFileErr) return RealStatus;
-        clang::vfs::Status Status;
-        StringRef Buffer;
-        if (GetFile(Path, &Status, &Buffer)) {
-            return Status;
-        }
-        return llvm::errc::no_such_file_or_directory;
-    }
-    virtual llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> openFileForRead(
-            const llvm::Twine &Path) override {
-        llvm::ErrorOr<std::unique_ptr<clang::vfs::File>> ec = RFS->openFileForRead(Path);
-        if (ec || ec.getError() != llvm::errc::no_such_file_or_directory) return ec;
-        clang::vfs::Status Status;
-        StringRef Buffer;
-        if (GetFile(Path, &Status, &Buffer)) {
-            return std::unique_ptr<clang::vfs::File>(
-                    new LuaProvidedFile(Path.str(), Status, Buffer));
-        }
-        return llvm::errc::no_such_file_or_directory;
-    }
-    virtual clang::vfs::directory_iterator dir_begin(const llvm::Twine &Dir,
-                                                     std::error_code &EC) override {
-        printf("BUGBUG: unexpected call to directory iterator in C header include. "
-               "report this a bug on github.com/terralang/terra");
-        // as far as I can tell this isn't used by the things we are using, so
-        // I am leaving it unfinished until this changes.
-        return RFS->dir_begin(Dir, EC);
-    }
-    llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {
-        return std::string("cwd");
-    }
-    std::error_code setCurrentWorkingDirectory(const Twine &Path) override {
-        return std::error_code();
-    }
-};
-#endif
 
 // Clang's initialization happens in two phases:
 //
@@ -939,23 +828,13 @@ void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOpti
 static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             const std::vector<const char *> &args,
                             CompilerInstance *TheCompInst,
-#if LLVM_VERSION < 80
-                            llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS
-#else
-                            llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS
-#endif
-) {
+                            llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
     TheCompInst->createDiagnostics();
 
-#if LLVM_VERSION <= 90
-    CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), &args[0],
-                                       &args[args.size()], TheCompInst->getDiagnostics());
-#else
     CompilerInvocation::CreateFromArgs(TheCompInst->getInvocation(), args,
                                        TheCompInst->getDiagnostics());
-#endif
     // need to recreate the diagnostics engine so that it actually listens to warning
     // flags like -Wno-deprecated this cannot go before CreateFromArgs
     TheCompInst->createDiagnostics();
@@ -964,12 +843,7 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     TargetInfo *TI = TargetInfo::CreateTargetInfo(TheCompInst->getDiagnostics(), to);
     TheCompInst->setTarget(TI);
 
-#if LLVM_VERSION < 90
-    TheCompInst->setVirtualFileSystem(FS);
-    TheCompInst->createFileManager();
-#else
     TheCompInst->createFileManager(FS);
-#endif
     FileManager &FileMgr = TheCompInst->getFileManager();
     TheCompInst->createSourceManager(FileMgr);
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
@@ -1006,13 +880,9 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     SmallString<64> IntegerBuffer;
     bool NumberInvalid = false;
     StringRef Spelling = PP.getSpelling(*Tok, IntegerBuffer, &NumberInvalid);
-#if LLVM_VERSION <= 100
-    NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP);
-#else
     NumericLiteralParser Literal(Spelling, Tok->getLocation(), PP.getSourceManager(),
                                  PP.getLangOpts(), PP.getTargetInfo(),
                                  PP.getDiagnostics());
-#endif
     if (Literal.hadError) return;
     double V;
     if (Literal.isFloatingLiteral()) {
@@ -1066,11 +936,7 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     // managing the various objects needed to run the compiler.
     CompilerInstance TheCompInst;
 
-#if LLVM_VERSION < 80
-    llvm::IntrusiveRefCntPtr<clang::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
-#else
     llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = new LuaOverlayFileSystem(T->L);
-#endif
 
     llvm::MemoryBuffer *membuffer =
             llvm::MemoryBuffer::getMemBuffer(code, "<buffer>").release();
