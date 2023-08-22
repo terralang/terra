@@ -337,7 +337,7 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::string *err) {
     bool executionFailed = false;
     llvm::sys::ProcessInfo Info =
-            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), std::nullopt,
+            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), llvm::None,
                                      {}, 0, err, &executionFailed);
     if (executionFailed) return -1;
 #ifndef _WIN32
