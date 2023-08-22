@@ -120,10 +120,10 @@ jobs:
         cuda: ['0', '1']
         test: ['1']
         exclude:
-          # CUDA with LLVM 11 only:
-          - llvm: '12.0.1'
+          # CUDA with LLVM 13 only:
+          - llvm: '11'
             cuda: '1'
-          - llvm: '13.0.1'
+          - llvm: '12.0.1'
             cuda: '1'
           - llvm: '14.0.6'
             cuda: '1'
@@ -144,8 +144,8 @@ jobs:
           - llvm: '16.0.3'
             lua: 'moonjit'
 
-          # no-static with LLVM 12 only:
-          - llvm: '11'
+          # no-static with LLVM 11 only:
+          - llvm: '12.0.1'
             static: '0'
           - llvm: '13.0.1'
             static: '0'
@@ -156,8 +156,8 @@ jobs:
           - llvm: '16.0.3'
             static: '0'
 
-          # no-slib with LLVM 12 only:
-          - llvm: '11'
+          # no-slib with LLVM 11 only:
+          - llvm: '12.0.1'
             slib: '0'
           - llvm: '13.0.1'
             slib: '0'
