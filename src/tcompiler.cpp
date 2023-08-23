@@ -736,10 +736,9 @@ static AllocaInst *CreateAlloca(IRBuilder<> *B, Type *Ty, Value *ArraySize = 0,
     return TmpB.CreateAlloca(Ty, ArraySize, Name);
 }
 
-static Value *CreateConstGEP2_32(IRBuilder<> *B, Value *Ptr, unsigned Idx0,
-                                 unsigned Idx1) {
-    return B->CreateConstGEP2_32(Ptr->getType()->getPointerElementType(), Ptr, Idx0,
-                                 Idx1);
+static Value *CreateConstGEP2_32(IRBuilder<> *B, Value *Ptr, Type *ValueType,
+                                 unsigned Idx0, unsigned Idx1) {
+    return B->CreateConstGEP2_32(ValueType, Ptr, Idx0, Idx1);
 }
 
 // functions that handle the details of the x86_64 ABI (this really should be handled by
@@ -1285,7 +1284,7 @@ struct CCallingConv {
             int N = st->getNumElements();
             for (int j = 0; j < N; j++) {
                 Type *elt_type = st->getElementType(j);
-                EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, 0, j), elt_type, ai);
+                EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, st, 0, j), elt_type, ai);
             }
         } else {
             B->CreateStore(&*ai, dest);
@@ -1354,7 +1353,7 @@ struct CCallingConv {
             Type *result_type = type;
             if (info->returntype.GetNumberOfTypesInParamList() == 1) {
                 do {
-                    result = CreateConstGEP2_32(B, result, 0, 0);
+                    result = CreateConstGEP2_32(B, result, type, 0, 0);
                     result_type = type->getElementType(0);
                 } while ((type = dyn_cast<StructType>(result_type)));
             }
@@ -1378,7 +1377,7 @@ struct CCallingConv {
             int N = st->getNumElements();
             for (int j = 0; j < N; j++) {
                 Type *elt_type = st->getElementType(j);
-                EmitCallAggReg(B, CreateConstGEP2_32(B, value, 0, j), elt_type,
+                EmitCallAggReg(B, CreateConstGEP2_32(B, value, st, 0, j), elt_type,
                                arguments);
             }
         } else {
@@ -1454,7 +1453,7 @@ struct CCallingConv {
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
                 if (info.returntype.GetNumberOfTypesInParamList() == 1) {
                     do {
-                        casted = CreateConstGEP2_32(B, casted, 0, 0);
+                        casted = CreateConstGEP2_32(B, casted, type, 0, 0);
                     } while ((type = dyn_cast<StructType>(type->getElementType(0))));
                 }
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
@@ -2283,8 +2282,9 @@ struct FunctionEmitter {
         return 0;
     }
     Value *emitArrayToPointer(Obj *exp) {
+        TType *t = typeOfValue(exp);
         Value *v = emitAddressOf(exp);
-        return CreateConstGEP2_32(B, v, 0, 0);
+        return CreateConstGEP2_32(B, v, t->type, 0, 0);
     }
     Type *getPrimitiveType(TType *t) {
         if (t->type->isVectorTy())
@@ -2364,7 +2364,9 @@ struct FunctionEmitter {
 
         int allocindex = entry.number("allocation");
 
-        Value *addr = CreateConstGEP2_32(B, structPtr, 0, allocindex);
+        Value *addr = CreateConstGEP2_32(B, structPtr,
+                                         structPtr->getType()->getPointerElementType(), 0,
+                                         allocindex);
         // in three cases the type of the value in the struct does not match the expected
         // type returned
         // 1. if it is a union then the llvm struct will have some buffer space to hold
@@ -3142,7 +3144,7 @@ struct FunctionEmitter {
         std::vector<Value *> values;
         emitExpressionList(expressions, true, &values);
         for (size_t i = 0; i < values.size(); i++) {
-            Value *addr = CreateConstGEP2_32(B, result, 0, i);
+            Value *addr = CreateConstGEP2_32(B, result, ttype, 0, i);
             B->CreateStore(values[i], addr);
         }
         return B->CreateLoad(result->getType()->getPointerElementType(), result);
