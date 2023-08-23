@@ -68,7 +68,7 @@ jobs:
       - run: ./travis.sh
         shell: bash
         env:
-          LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
+          LLVM_VERSION: ${{ matrix.llvm }}
           USE_CUDA: ${{ matrix.cuda }}
           STATIC_LLVM: 1
           STATIC_LUAJIT: 1

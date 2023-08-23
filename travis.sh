@@ -33,44 +33,44 @@ if [[ $(uname) = Linux ]]; then
   exit 1
 
 elif [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-16 ]]; then
+  if [[ $LLVM_VERSION = 16 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-16.0.3/clang+llvm-16.0.3-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-16.0.3-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-16.0.3-x86_64-apple-darwin/bin/llvm-config llvm-config-16
     ln -s clang+llvm-16.0.3-x86_64-apple-darwin/bin/clang clang-16
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-16.0.3-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-15 ]]; then
+  elif [[ $LLVM_VERSION = 15 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-15.0.2/clang+llvm-15.0.2-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-15.0.2-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-15.0.2-x86_64-apple-darwin/bin/llvm-config llvm-config-15
     ln -s clang+llvm-15.0.2-x86_64-apple-darwin/bin/clang clang-15
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-15.0.2-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+  elif [[ $LLVM_VERSION = 14 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.6/clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-14.0.6-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-14.0.6-x86_64-apple-darwin/bin/llvm-config llvm-config-14
     ln -s clang+llvm-14.0.6-x86_64-apple-darwin/bin/clang clang-14
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.6-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-13 ]]; then
+  elif [[ $LLVM_VERSION = 13 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.1/clang+llvm-13.0.1-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-13.0.1-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-13.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-13
     ln -s clang+llvm-13.0.1-x86_64-apple-darwin/bin/clang clang-13
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.1-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-12 ]]; then
+  elif [[ $LLVM_VERSION = 12 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-x86_64-apple-darwin-macos11.tar.xz
     tar xf clang+llvm-12.0.1-x86_64-apple-darwin-macos11.tar.xz
     ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/llvm-config llvm-config-12
     ln -s clang+llvm-12.0.1-x86_64-apple-darwin/bin/clang clang-12
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-12.0.1-x86_64-apple-darwin
-  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  elif [[ $LLVM_VERSION = 11 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-apple-darwin-macos11.tar.xz
     tar xf clang+llvm-11.1.0-x86_64-apple-darwin-macos11.tar.xz
     ln -s clang+llvm-11.1.0-x86_64-apple-darwin/bin/llvm-config llvm-config-11
     ln -s clang+llvm-11.1.0-x86_64-apple-darwin/bin/clang clang-11
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.1.0-x86_64-apple-darwin
   else
-    echo "Don't know this LLVM version: $LLVM_CONFIG"
+    echo "Don't know this LLVM version: $LLVM_VERSION"
     exit 1
   fi
 
@@ -82,11 +82,11 @@ elif [[ $(uname) = Darwin ]]; then
   export PATH=$PWD:$PATH
 
 elif [[ $(uname) = MINGW* ]]; then
-  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
+  if [[ $LLVM_VERSION = 14 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-14.0.0-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.0-x86_64-windows-msvc17
-  elif [[ $LLVM_CONFIG = llvm-config-11 ]]; then
+  elif [[ $LLVM_VERSION = 11 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-x86_64-windows-msvc17.7z
     7z x -y clang+llvm-11.1.0-x86_64-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-11.1.0-x86_64-windows-msvc17
@@ -166,7 +166,7 @@ if [[ $(uname) != Darwin ]]; then
 fi
 
 # Only deploy builds with LLVM 13 (macOS) and 11 (Windows).
-if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+if [[ (( $(uname) == Darwin && $LLVM_VERSION = 13 ) || ( $(uname) == MINGW* && $LLVM_VERSION = 11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
   RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
   mv install $RELEASE_NAME
   if [[ $(uname) = MINGW* ]]; then
