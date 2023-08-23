@@ -622,7 +622,7 @@ class Types {
         int N = layout.size();
         std::vector<Type *> entry_types;
 
-        unsigned unionAlign = 0;  // minimum union alignment
+        MaybeAlign unionAlign;    // minimum union alignment
         Type *unionType = NULL;   // type with the largest alignment constraint
         size_t unionAlignSz = 0;  // size of type with largest alignment contraint
         size_t unionSz = 0;       // allocation size of the largest member
@@ -636,9 +636,10 @@ class Types {
             Type *fieldtype = Get(&vt)->type;
             bool inunion = v.boolean("inunion");
             if (inunion) {
-                unsigned align = CU->getDataLayout().getABITypeAlignment(fieldtype);
-                if (align >= unionAlign) {  // orequal is to make sure we have a non-null
-                                            // type even if it is a 0-sized struct
+                Align align = CU->getDataLayout().getABITypeAlign(fieldtype);
+                // orequal is to make sure we have a non-null
+                // type even if it is a 0-sized struct
+                if (encode(MaybeAlign(align)) >= encode(unionAlign)) {
                     unionAlign = align;
                     unionType = fieldtype;
                     unionAlignSz = CU->getDataLayout().getTypeAllocSize(fieldtype);
@@ -664,7 +665,7 @@ class Types {
                                 ArrayType::get(Type::getInt8Ty(*CU->TT->ctx), diff));
                     }
                     entry_types.push_back(StructType::get(*CU->TT->ctx, union_types));
-                    unionAlign = 0;
+                    unionAlign = MaybeAlign();
                     unionType = NULL;
                     unionAlignSz = 0;
                     unionSz = 0;
@@ -957,7 +958,7 @@ struct CCallingConv {
         all_double = all_double && t->isDoubleTy();
         n_elts++;
         align = std::max(align,
-                         (int64_t)(CU->getDataLayout().getABITypeAlignment(t) * 8));
+                         (int64_t)(CU->getDataLayout().getABITypeAlign(t).value() * 8));
     }
 
     int WasmPrimitiveCount(Type *t) {
@@ -1002,7 +1003,7 @@ struct CCallingConv {
         }
 
         unsigned b = CU->getDataLayout().getTypeAllocSizeInBits(t);
-        int64_t align = CU->getDataLayout().getABITypeAlignment(t) * 8;
+        int64_t align = CU->getDataLayout().getABITypeAlign(t).value() * 8;
         bits += b;
         bits = (bits + align - 1) & (-align);  // Align to this type.
         if (bits >= 64) {
@@ -1235,7 +1236,7 @@ struct CCallingConv {
             Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
             Value *addr_source = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
-            MaybeAlign a1(0);
+            MaybeAlign a1;
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
@@ -1248,7 +1249,7 @@ struct CCallingConv {
                     StoreInst *st = B->CreateStore(src, addr_dst);
                     return st;
                 }
-                a1 = MaybeAlign(CU->getDataLayout().getABITypeAlignment(t1));
+                a1 = MaybeAlign(CU->getDataLayout().getABITypeAlign(t1));
             } else
                 assert(!"unhandled type in emitStoreAgg");
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
@@ -2385,8 +2386,7 @@ struct FunctionEmitter {
         return addr;
     }
 
-    Value *emitStore(Value *value, Value *addr, bool isVolatile, bool hasAlignment,
-                     int alignment) {
+    Value *emitStore(Value *value, Value *addr, bool isVolatile, MaybeAlign alignment) {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
@@ -2401,23 +2401,25 @@ struct FunctionEmitter {
             Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
             addr_src = B->CreateBitCast(addr_src, t_src);
             uint64_t size = 0;
-            MaybeAlign a1(0);
+            MaybeAlign a1;
             if (t1->isStructTy()) {
                 // size of bytes to copy
                 StructType *st = cast<StructType>(t1);
                 const StructLayout *sl = CU->getDataLayout().getStructLayout(st);
                 size = sl->getSizeInBytes();
-                a1 = hasAlignment ? MaybeAlign(alignment) : sl->getAlignment();
+                if (!alignment) {
+                    a1 = sl->getAlignment();
+                }
             } else if (t1->isArrayTy() && (CU->getDataLayout().getTypeAllocSize(t1) >=
                                            MEM_ARRAY_THRESHOLD)) {
                 size = CU->getDataLayout().getTypeAllocSize(t1);
-                a1 = MaybeAlign(hasAlignment
-                                        ? alignment
-                                        : CU->getDataLayout().getABITypeAlignment(t1));
+                if (!alignment) {
+                    a1 = MaybeAlign(CU->getDataLayout().getABITypeAlign(t1));
+                }
             } else {
                 StoreInst *st = B->CreateStore(value, addr);
                 if (isVolatile) st->setVolatile(true);
-                if (hasAlignment) st->setAlignment(Align(alignment));
+                if (alignment) st->setAlignment(*alignment);
                 return st;
             }
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
@@ -2435,7 +2437,7 @@ struct FunctionEmitter {
         } else {
             StoreInst *st = B->CreateStore(value, addr);
             if (isVolatile) st->setVolatile(true);
-            if (hasAlignment) st->setAlignment(Align(alignment));
+            if (alignment) st->setAlignment(*alignment);
             return st;
         }
     }
@@ -2813,10 +2815,11 @@ struct FunctionEmitter {
                 Value *valueexp = emitExp(&value);
                 bool isvolatile = attr.boolean("isvolatile");
                 bool hasalignment = attr.hasfield("alignment");
-                int alignment = 0;
-                if (hasalignment) alignment = attr.number("alignment");
-                Value *s =
-                        emitStore(valueexp, addrexp, isvolatile, hasalignment, alignment);
+                MaybeAlign alignment;
+                if (hasalignment)
+                    alignment =
+                            MaybeAlign(static_cast<uint64_t>(attr.number("alignment")));
+                Value *s = emitStore(valueexp, addrexp, isvolatile, alignment);
                 StoreInst *store = dyn_cast<StoreInst>(s);
                 if (store && attr.boolean("nontemporal")) {
                     auto list = ConstantAsMetadata::get(
@@ -3425,7 +3428,7 @@ struct FunctionEmitter {
                         emitExp(&setter);
                     } else {
                         emitStore(rhsexps[i], emitExp(&lhs, false),
-                                  /* isVolatile */ false, /*hasAlignment*/ false, 0);
+                                  /* isVolatile */ false, MaybeAlign());
                     }
                 }
             } break;
