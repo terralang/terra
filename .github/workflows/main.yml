@@ -115,8 +115,6 @@ jobs:
         distro: ['ubuntu-18.04']
         llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3']
         lua: ['luajit', 'moonjit']
-        static: ['0', '1']
-        slib: ['0', '1']
         cuda: ['0', '1']
         test: ['1']
         exclude:
@@ -132,47 +130,23 @@ jobs:
           - llvm: '16.0.3'
             cuda: '1'
 
-          # Moonjit with LLVM 12 only:
+          # Moonjit with LLVM 14 only:
           - llvm: '11'
             lua: 'moonjit'
-          - llvm: '13.0.1'
-            lua: 'moonjit'
-          - llvm: '14.0.6'
-            lua: 'moonjit'
-          - llvm: '15.0.2'
-            lua: 'moonjit'
-          - llvm: '16.0.3'
-            lua: 'moonjit'
-
-          # no-static with LLVM 11 only:
           - llvm: '12.0.1'
-            static: '0'
+            lua: 'moonjit'
           - llvm: '13.0.1'
-            static: '0'
-          - llvm: '14.0.6'
-            static: '0'
+            lua: 'moonjit'
           - llvm: '15.0.2'
-            static: '0'
+            lua: 'moonjit'
           - llvm: '16.0.3'
-            static: '0'
-
-          # no-slib with LLVM 11 only:
-          - llvm: '12.0.1'
-            slib: '0'
-          - llvm: '13.0.1'
-            slib: '0'
-          - llvm: '14.0.6'
-            slib: '0'
-          - llvm: '15.0.2'
-            slib: '0'
-          - llvm: '16.0.3'
-            slib: '0'
-
-          # slib requires static
-          - static: '0'
-            slib: '1'
+            lua: 'moonjit'
 
         include:
+          # Defaults:
+          - slib: '1'
+          - static: '1'
+
           # Assign variants to the basic configurations:
           - variant: 'prebuilt'
           - llvm: '11'
@@ -186,18 +160,42 @@ jobs:
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
             test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '13'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
             test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '14'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
+            test: '1'
+
+          # LLVM 15, no-slib/no-static, Ubuntu 22.04
+          - distro: 'ubuntu-22.04'
+            llvm: '15'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'package'
+            slib: '0'
+            static: '1'
+            test: '1'
+          - distro: 'ubuntu-22.04'
+            llvm: '15'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'package'
+            slib: '0'
+            static: '0'
             test: '1'
     steps:
       - uses: actions/checkout@v1
