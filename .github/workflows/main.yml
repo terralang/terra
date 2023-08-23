@@ -40,7 +40,7 @@ jobs:
           - os: 'ubuntu-22.04'
             cmake: '1'
 
-          # macOS: exclude LLVM make, cuda
+          # macOS: exclude make, cuda
           - os: 'macos-11'
             cmake: '0'
           - os: 'macos-11'
