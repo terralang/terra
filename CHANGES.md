@@ -1,5 +1,14 @@
 # Unreleased Changes
 
+# Release 1.1.1 (2023-08-22)
+
+This is a bug fix release that addresses a miscompilation related to
+globals imported from C.
+
+## Fixed Bugs
+
+  * Fixed miscompilation of nested arrays included via C headers.
+
 # Release 1.1.0 (2023-05-05)
 
 This release brings Terra up to date with LLVM releases and deprecates/removes
