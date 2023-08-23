@@ -180,9 +180,9 @@ jobs:
             static: '1'
             test: '1'
 
-          # LLVM 14, no-slib/no-static, Ubuntu 22.04
+          # LLVM 11, no-slib/no-static, Ubuntu 22.04
           - distro: 'ubuntu-22.04'
-            llvm: '14'
+            llvm: '11'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
@@ -190,7 +190,7 @@ jobs:
             static: '1'
             test: '1'
           - distro: 'ubuntu-22.04'
-            llvm: '14'
+            llvm: '11'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
