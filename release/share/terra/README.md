@@ -122,19 +122,19 @@ If the binary releases are not appropriate, then you can also build Terra from s
 On recent versions of Ubuntu, you can get these dependencies with:
 
 ```
-sudo apt-get install build-essential cmake git llvm-11-dev libclang-11-dev clang-11 libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
+sudo apt-get install build-essential cmake git llvm-13-dev libclang-13-dev clang-13 libmlir-13-dev libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
 ```
 
 On macOS with Homebrew, the following should be sufficient:
 
 ```
-brew install cmake llvm@11
+brew install cmake llvm@13
 ```
 
 On FreeBSD, use:
 
 ```
-pkg install -y cmake llvm11
+pkg install -y cmake llvm13
 ```
 
 Terra also supports an older build system based on GNU Make (for
@@ -148,11 +148,6 @@ The current recommended version of LLVM is **13**. The following versions are al
 
 | Version | Linux | macOS | FreeBSD | Windows | CUDA | AMD GPU \* | Notes |
 | ------- | ----- | ----- | ------- | ------- | ---- | ---------- | ----- |
-| 6 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
-| 7 | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | | requires CMake, [deprecated](https://github.com/terralang/terra/issues/543) |
-| 8 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
-| 9 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
-| 10 | :heavy_check_mark: | :heavy_check_mark: | | | :heavy_check_mark: | | [deprecated](https://github.com/terralang/terra/issues/543) |
 | 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
 | 12 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
 | 13 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
@@ -172,12 +167,17 @@ The following versions were previously supported by Terra:
 | 3.8 | 1.0.6 |
 | 3.9 | 1.0.6 |
 | 5 | 1.0.6 |
+| 6 | 1.1.1 |
+| 7 | 1.1.1 |
+| 8 | 1.1.1 |
+| 9 | 1.1.1 |
+| 10 | 1.1.1 |
 
 ### Instructions for Building LLVM from Source
 
 If you need to build LLVM from source, the following recipe has been
 known to work with Terra. The same basic procedure should work for all
-LLVM versions >= 6.
+LLVM versions >= 11.
 
 ```
 wget https://github.com/llvm/llvm-project/releases/download/llvmorg-13.0.0/llvm-13.0.0.src.tar.xz
