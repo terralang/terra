@@ -9,11 +9,7 @@ function symmat(typ,name,I,...)
 end
 
 
-if terralib.llvm_version < 100 then
-  llvmprefetch = terralib.intrinsic("llvm.prefetch",{&opaque,int,int,int} -> {})
-else
-  llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
-end
+llvmprefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
 
 
 

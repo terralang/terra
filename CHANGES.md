@@ -1,4 +1,8 @@
-# Unreleased Changes
+# Unreleased Changes (Intended to be Version 1.2.0)
+
+## Removed features
+
+  * Removed support for LLVM <= 10
 
 # Release 1.1.1 (2023-08-22)
 

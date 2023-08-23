@@ -1,8 +1,3 @@
-if terralib.llvm_version < 90 then
-  print("LLVM is too old, skipping AMD GPU test...")
-  return
-end
-
 -- This tests a bug that occurred when using C structs imported from a
 -- header file. The structs were associated with a certain target, and
 -- if used from a different target could cause issues.

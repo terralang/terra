@@ -20,23 +20,13 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-22.04', 'macos-11', 'windows-2022']
-        llvm: ['6.0', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16']
+        llvm: ['11', '12', '13', '14', '15', '16']
         cmake: ['0', '1']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 6.0-13, 15-16, cmake
+          # Linux: exclude LLVM 11-13, 15-16, cmake
           # Note: CMake configurations are tested in Docker
-          - os: 'ubuntu-22.04'
-            llvm: '6.0'
-          - os: 'ubuntu-22.04'
-            llvm: '7'
-          - os: 'ubuntu-22.04'
-            llvm: '8'
-          - os: 'ubuntu-22.04'
-            llvm: '9'
-          - os: 'ubuntu-22.04'
-            llvm: '10'
           - os: 'ubuntu-22.04'
             llvm: '11'
           - os: 'ubuntu-22.04'
@@ -50,51 +40,13 @@ jobs:
           - os: 'ubuntu-22.04'
             cmake: '1'
 
-          # macOS: exclude LLVM 8-16 make, cuda
+          # macOS: exclude make, cuda
           - os: 'macos-11'
-            llvm: '8'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '9'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '10'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '11'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '12'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '13'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '14'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '15'
-            cmake: '0'
-          - os: 'macos-11'
-            llvm: '16'
             cmake: '0'
           - os: 'macos-11'
             cuda: '1'
-          # LLVM 10 binaries are broken on recent macOS
-          - os: 'macos-11'
-            llvm: '10'
 
-          # Windows: exclude LLVM 6.0-10,12-16, make
-          - os: 'windows-2022'
-            llvm: '6.0'
-          - os: 'windows-2022'
-            llvm: '7'
-          - os: 'windows-2022'
-            llvm: '8'
-          - os: 'windows-2022'
-            llvm: '9'
-          - os: 'windows-2022'
-            llvm: '10'
+          # Windows: exclude LLVM 12-16, make
           - os: 'windows-2022'
             llvm: '12'
           - os: 'windows-2022'
@@ -106,10 +58,6 @@ jobs:
           - os: 'windows-2022'
             llvm: '16'
           - os: 'windows-2022'
-            cmake: '0'
-
-          # CMake
-          - llvm: '7'
             cmake: '0'
 
           # Moonjit requires CMake
@@ -117,16 +65,6 @@ jobs:
             lua: 'moonjit'
 
           # CUDA: only LLVM 11
-          - llvm: '6.0'
-            cuda: '1'
-          - llvm: '7'
-            cuda: '1'
-          - llvm: '8'
-            cuda: '1'
-          - llvm: '9'
-            cuda: '1'
-          - llvm: '10'
-            cuda: '1'
           - llvm: '12'
             cuda: '1'
           - llvm: '13'
@@ -138,18 +76,8 @@ jobs:
           - llvm: '16'
             cuda: '1'
 
-          # Moonjit: only LLVM 9
-          - llvm: '6.0'
-            lua: 'moonjit'
-          - llvm: '7'
-            lua: 'moonjit'
-          - llvm: '8'
-            lua: 'moonjit'
-          - llvm: '10'
-            lua: 'moonjit'
+          # Moonjit: only LLVM 12
           - llvm: '11'
-            lua: 'moonjit'
-          - llvm: '12'
             lua: 'moonjit'
           - llvm: '13'
             lua: 'moonjit'
@@ -185,27 +113,15 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['6.0', '7', '8', '9', '10', '11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3']
+        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3']
         lua: ['luajit', 'moonjit']
-        static: ['0', '1']
-        slib: ['0', '1']
         cuda: ['0', '1']
         test: ['1']
         exclude:
-          # CUDA with LLVM 9 only:
-          - llvm: '6.0'
-            cuda: '1'
-          - llvm: '7'
-            cuda: '1'
-          - llvm: '8'
-            cuda: '1'
-          - llvm: '10'
-            cuda: '1'
+          # CUDA with LLVM 13 only:
           - llvm: '11'
             cuda: '1'
           - llvm: '12.0.1'
-            cuda: '1'
-          - llvm: '13.0.1'
             cuda: '1'
           - llvm: '14.0.6'
             cuda: '1'
@@ -214,107 +130,29 @@ jobs:
           - llvm: '16.0.3'
             cuda: '1'
 
-          # Moonjit with LLVM 10 only:
-          - llvm: '6.0'
-            lua: 'moonjit'
-          - llvm: '7'
-            lua: 'moonjit'
-          - llvm: '8'
-            lua: 'moonjit'
-          - llvm: '9'
-            lua: 'moonjit'
+          # Moonjit with LLVM 14 only:
           - llvm: '11'
             lua: 'moonjit'
           - llvm: '12.0.1'
             lua: 'moonjit'
           - llvm: '13.0.1'
             lua: 'moonjit'
-          - llvm: '14.0.6'
-            lua: 'moonjit'
           - llvm: '15.0.2'
             lua: 'moonjit'
           - llvm: '16.0.3'
             lua: 'moonjit'
-
-          # no-static with LLVM 10 only:
-          - llvm: '6.0'
-            static: '0'
-          - llvm: '7'
-            static: '0'
-          - llvm: '8'
-            static: '0'
-          - llvm: '9'
-            static: '0'
-          - llvm: '11'
-            static: '0'
-          - llvm: '12.0.1'
-            static: '0'
-          - llvm: '13.0.1'
-            static: '0'
-          - llvm: '14.0.6'
-            static: '0'
-          - llvm: '15.0.2'
-            static: '0'
-          - llvm: '16.0.3'
-            static: '0'
-
-          # no-slib with LLVM 10 only:
-          - llvm: '6.0'
-            slib: '0'
-          - llvm: '7'
-            slib: '0'
-          - llvm: '8'
-            slib: '0'
-          - llvm: '9'
-            slib: '0'
-          - llvm: '11'
-            slib: '0'
-          - llvm: '12.0.1'
-            slib: '0'
-          - llvm: '13.0.1'
-            slib: '0'
-          - llvm: '14.0.6'
-            slib: '0'
-          - llvm: '15.0.2'
-            slib: '0'
-          - llvm: '16.0.3'
-            slib: '0'
-
-          # slib requires static
-          - static: '0'
-            slib: '1'
 
         include:
+          # Defaults:
+          - slib: '1'
+          - static: '1'
+
           # Assign variants to the basic configurations:
-          - variant: 'package'
+          - variant: 'prebuilt'
           - llvm: '11'
             variant: 'upstream'
-          - llvm: '12.0.1'
-            variant: 'prebuilt'
-          - llvm: '13.0.1'
-            variant: 'prebuilt'
-          - llvm: '14.0.6'
-            variant: 'prebuilt'
-          - llvm: '15.0.2'
-            variant: 'prebuilt'
-          - llvm: '16.0.3'
-            variant: 'prebuilt'
 
           # Some additional configurations:
-
-          # LLVM 6.0 on Ubuntu 16.04, 20.04
-          - distro: 'ubuntu-16.04'
-            llvm: '6.0'
-            lua: 'luajit'
-            cuda: '0'
-            variant: 'package'
-            test: '1'
-          - distro: 'ubuntu-20.04'
-            llvm: '6.0'
-            lua: 'luajit'
-            cuda: '0'
-            variant: 'package'
-            test: '1'
 
           # LLVM 12, 13, 14 on Ubuntu 22.04
           - distro: 'ubuntu-22.04'
@@ -322,19 +160,43 @@ jobs:
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
             test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '13'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
             test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '14'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
+            slib: '1'
+            static: '1'
             test: '1'
+
+          # LLVM 14, no-slib/no-static, Ubuntu 22.04
+          - distro: 'ubuntu-22.04'
+            llvm: '14'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'package'
+            slib: '0'
+            static: '1'
+            test: '1'
+          # - distro: 'ubuntu-22.04'
+          #   llvm: '14'
+          #   lua: 'luajit'
+          #   cuda: '0'
+          #   variant: 'package'
+          #   slib: '0'
+          #   static: '0'
+          #   test: '1'
     steps:
       - uses: actions/checkout@v1
       - run: ./travis.sh
@@ -396,7 +258,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nixpkgs: ['unstable', '22.05']
+        nixpkgs: ['unstable', '23.05']
         cuda: ['false', 'true']
     steps:
       - uses: actions/checkout@v2.3.4

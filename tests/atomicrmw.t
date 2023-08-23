@@ -1,8 +1,6 @@
-local has_align = terralib.llvm_version >= 110
-local has_fadd = terralib.llvm_version >= 90
 local has_fmin = terralib.llvm_version >= 150
 
-print("atomicrmw test settings: align " .. tostring(has_align) .. ", fadd " .. tostring(has_fadd))
+print("atomicrmw test settings: fmin " .. tostring(has_fmin))
 
 
 
@@ -12,17 +10,7 @@ terra atomic_add(x : &int, y : int, z : int, w : int, u : int)
   terralib.atomicrmw("add", x, y, {ordering = "seq_cst"})
   terralib.atomicrmw("add", x, z, {ordering = "acq_rel"})
   terralib.fence({ordering = "release"})
-  escape
-    if has_align then
-      emit quote
-        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread", align = 16})
-      end
-    else
-      emit quote
-        terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread"})
-      end
-    end
-  end
+  terralib.atomicrmw("add", x, w, {ordering = "monotonic", syncscope = "singlethread", align = 16})
   terralib.fence({ordering = "acquire"})
   terralib.atomicrmw("add", x, u, {ordering = "monotonic", isvolatile = true})
 end
@@ -83,24 +71,22 @@ assert(add_and_return() == 22)
 
 -- Floating point
 
-if has_fadd then
-  terra atomic_fadd(x : &double, y : double)
-    terralib.atomicrmw("fadd", x, y, {ordering = "monotonic"})
-  end
-  atomic_fadd:printpretty(false)
-  atomic_fadd:disas()
-
-  terra fadd()
-    var f : double = 1.0
-
-    atomic_fadd(&f, 20.0)
-
-    return f
-  end
-
-  print(fadd())
-  assert(fadd() == 21.0)
+terra atomic_fadd(x : &double, y : double)
+  terralib.atomicrmw("fadd", x, y, {ordering = "monotonic"})
 end
+atomic_fadd:printpretty(false)
+atomic_fadd:disas()
+
+terra fadd()
+  var f : double = 1.0
+
+  atomic_fadd(&f, 20.0)
+
+  return f
+end
+
+print(fadd())
+assert(fadd() == 21.0)
 
 if has_fmin then
   terra atomic_fmin(x : &double, y : double)

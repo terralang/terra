@@ -9,9 +9,6 @@ struct TerraFunctionInfo {
     std::string name;
     void *addr;
     size_t size;
-#if LLVM_VERSION < 80
-    llvm::JITEvent_EmittedFunctionDetails efd;
-#endif
 };
 class Types;
 struct CCallingConv;

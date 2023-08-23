@@ -40,9 +40,6 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
-#if LLVM_VERSION < 90
-    PMB.DisableUnitAtATime = true;
-#endif
     PMB.LoopVectorize = true;
     PMB.SLPVectorize = true;
 
@@ -58,13 +55,8 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 
     const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
     assert(TheTarget && "Unable to create target!");
-    const MCAsmInfo *MAI =
-            TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName), TripleName
-#if LLVM_VERSION >= 100
-                                       ,
-                                       MCTargetOptions()
-#endif
-            );
+    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
+            *TheTarget->createMCRegInfo(TripleName), TripleName, MCTargetOptions());
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
@@ -100,28 +92,12 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     raw_fd_ostream Out(fileno(stdout), false);
     for (size_t i = 0, b = 0; b < numBytes || i < numInst; i++, b += Size) {
         MCInst Inst;
-#if LLVM_VERSION <= 90
-        MCDisassembler::DecodeStatus S = DisAsm->getInstruction(
-                Inst, Size, Bytes.slice(b), addr + b, nulls(), Out);
-#else
         MCDisassembler::DecodeStatus S =
                 DisAsm->getInstruction(Inst, Size, Bytes.slice(b), addr + b, Out);
-#endif
         if (MCDisassembler::Fail == S || MCDisassembler::SoftFail == S) break;
         Out << (void *)((uintptr_t)data + b) << "(+" << b << ")"
             << ":\t";
-        IP->printInst(&Inst,
-#if LLVM_VERSION <= 90
-                      Out,
-#else
-                      addr + b,
-#endif
-                      "", *STI
-#if LLVM_VERSION >= 100
-                      ,
-                      Out
-#endif
-        );
+        IP->printInst(&Inst, addr + b, "", *STI, Out);
         Out << "\n";
     }
     Out.flush();
@@ -139,25 +115,13 @@ bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
     PassManagerT pass;
     llvmutil_addtargetspecificpasses(&pass, TM);
 
-#if LLVM_VERSION <= 90
-    TargetMachine::CodeGenFileType ft = outputobjectfile
-                                                ? TargetMachine::CGFT_ObjectFile
-                                                : TargetMachine::CGFT_AssemblyFile;
-#else
     CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
-#endif
 
     emitobjfile_t &destf = dest;
 
-#if LLVM_VERSION >= 70
     if (TM->addPassesToEmitFile(pass, destf, nullptr, ft)) {
         return true;
     }
-#else
-    if (TM->addPassesToEmitFile(pass, destf, ft)) {
-        return true;
-    }
-#endif
 
     pass.run(*Mod);
 
@@ -224,20 +188,10 @@ struct CopyConnectedComponent : public ValueMaterializer {
 
                 if (SP) {
                     F->setSubprogram(DI->createFunction(
-#if LLVM_VERSION < 90
-                            SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
-#else
                             SP->getScope(), SP->getName(), SP->getLinkageName(),
-#endif
                             DI->createFile(SP->getFilename(), SP->getDirectory()),
-#if LLVM_VERSION >= 80
                             SP->getLine(), SP->getType(), SP->getScopeLine(),
                             SP->getFlags(), SP->getSPFlags(), SP->getTemplateParams(),
-#else
-                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
-                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
-                            SP->isOptimized(), SP->getTemplateParams(),
-#endif
                             SP->getDeclaration(), SP->getThrownTypes()));
                 }
             } else {
@@ -291,12 +245,8 @@ struct CopyConnectedComponent : public ValueMaterializer {
                         CU->isOptimized(), CU->getFlags(), CU->getRuntimeVersion(),
                         CU->getSplitDebugFilename(), CU->getEmissionKind(),
                         CU->getDWOId(), CU->getSplitDebugInlining(),
-#if LLVM_VERSION >= 80
                         CU->getDebugInfoForProfiling(), CU->getNameTableKind(),
                         CU->getRangesBaseAddress());
-#else
-                        CU->getDebugInfoForProfiling(), CU->getGnuPubnames());
-#endif
             }
         }
     }
@@ -309,20 +259,10 @@ struct CopyConnectedComponent : public ValueMaterializer {
             if (MD != NULL && DI != NULL && SP != NULL) {
                 {
                     DISubprogram *NSP = DI->createFunction(
-#if LLVM_VERSION < 90
-                            SP->getScope().resolve(), SP->getName(), SP->getLinkageName(),
-#else
                             SP->getScope(), SP->getName(), SP->getLinkageName(),
-#endif
                             DI->createFile(SP->getFilename(), SP->getDirectory()),
-#if LLVM_VERSION >= 80
                             SP->getLine(), SP->getType(), SP->getScopeLine(),
                             SP->getFlags(), SP->getSPFlags(), SP->getTemplateParams(),
-#else
-                            SP->getLine(), SP->getType(), SP->isLocalToUnit(),
-                            SP->isDefinition(), SP->getScopeLine(), SP->getFlags(),
-                            SP->isOptimized(), SP->getTemplateParams(),
-#endif
                             SP->getDeclaration(), SP->getThrownTypes());
 
                     Function *newfn = dest->getFunction(SP->getName());
@@ -396,14 +336,9 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
 
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::string *err) {
     bool executionFailed = false;
-#if LLVM_VERSION >= 70
     llvm::sys::ProcessInfo Info =
             llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), llvm::None,
                                      {}, 0, err, &executionFailed);
-#else
-    llvm::sys::ProcessInfo Info = llvm::sys::ExecuteNoWait(program, args, nullptr, {}, 0,
-                                                           err, &executionFailed);
-#endif
     if (executionFailed) return -1;
 #ifndef _WIN32
     // WAR for llvm bug (http://llvm.org/bugs/show_bug.cgi?id=18869)
