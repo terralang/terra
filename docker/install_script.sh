@@ -42,11 +42,6 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
             libpfm4-dev
         )
     fi
-    if [[ $llvm -ge 15 ]]; then
-        packages+=(
-            libcurl4-openssl-dev
-        )
-    fi
 elif [[ $variant = "prebuilt" ]]; then
     packages+=(
         wget
