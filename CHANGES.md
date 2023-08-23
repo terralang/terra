@@ -3,6 +3,7 @@
 ## Removed features
 
   * Removed support for LLVM <= 10
+  * Removed the long-deprecated Makefile build
 
 # Release 1.1.1 (2023-08-22)
 
