@@ -1381,8 +1381,7 @@ struct CCallingConv {
                                arguments);
             }
         } else {
-            arguments.push_back(
-                    B->CreateLoad(value->getType()->getPointerElementType(), value));
+            arguments.push_back(B->CreateLoad(param_type, value));
         }
     }
 
@@ -1467,8 +1466,7 @@ struct CCallingConv {
             } else {
                 assert(!"unhandled argument kind");
             }
-            return B->CreateLoad(aggregate->getType()->getPointerElementType(),
-                                 aggregate);
+            return B->CreateLoad(info.returntype.type->type, aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -3147,7 +3145,7 @@ struct FunctionEmitter {
             Value *addr = CreateConstGEP2_32(B, result, ttype, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(result->getType()->getPointerElementType(), result);
+        return B->CreateLoad(ttype, result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3318,7 +3316,7 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(vp->getType()->getPointerElementType(), vp);
+                Value *v = B->CreateLoad(t->type, vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
