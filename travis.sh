@@ -29,15 +29,8 @@ if [[ -n $DOCKER_DISTRO ]]; then
 fi
 
 if [[ $(uname) = Linux ]]; then
-  distro_name="$(lsb_release -cs)"
-  sudo apt-get update -qq
-  if [[ $LLVM_CONFIG = llvm-config-14 ]]; then
-    sudo apt-get install -y llvm-14-dev clang-14 libclang-14-dev libedit-dev libpfm4-dev
-  else
-    echo "Don't know this LLVM version: $LLVM_CONFIG"
-    echo "(If you're looking for more configurations, see Docker tests.)"
-    exit 1
-  fi
+  echo "Use Docker for testing build on Linux"
+  exit 1
 
 elif [[ $(uname) = Darwin ]]; then
   if [[ $LLVM_CONFIG = llvm-config-16 ]]; then
@@ -118,72 +111,68 @@ else
   exit 1
 fi
 
-if [[ $USE_CMAKE -eq 1 ]]; then
-  CMAKE_FLAGS=()
-  if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
-    CMAKE_FLAGS+=(
-      -DTERRA_STATIC_LINK_LLVM=OFF
-    )
-  fi
-  if [[ -n $SLIB_INCLUDE_LLVM && $SLIB_INCLUDE_LLVM -eq 0 ]]; then
-    CMAKE_FLAGS+=(
-      -DTERRA_SLIB_INCLUDE_LLVM=OFF
-    )
-  fi
-  if [[ -n $STATIC_LUAJIT && $STATIC_LUAJIT -eq 0 ]]; then
-    CMAKE_FLAGS+=(
-      -DTERRA_STATIC_LINK_LUAJIT=OFF
-    )
-  fi
-  if [[ -n $SLIB_INCLUDE_LUAJIT && $SLIB_INCLUDE_LUAJIT -eq 0 ]]; then
-    CMAKE_FLAGS+=(
-      -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
-    )
-  fi
-  if [[ -n $TERRA_LUA ]]; then
-    CMAKE_FLAGS+=(
-      -DTERRA_LUA=$TERRA_LUA
-    )
-  fi
-  if [[ $USE_CUDA -eq 1 ]]; then
-    # Terra should autodetect, but force an error if it doesn't work.
-    CMAKE_FLAGS+=(
-      -DTERRA_ENABLE_CUDA=ON
-    )
-  fi
+CMAKE_FLAGS=()
+if [[ -n $STATIC_LLVM && $STATIC_LLVM -eq 0 ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_STATIC_LINK_LLVM=OFF
+  )
+fi
+if [[ -n $SLIB_INCLUDE_LLVM && $SLIB_INCLUDE_LLVM -eq 0 ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_SLIB_INCLUDE_LLVM=OFF
+  )
+fi
+if [[ -n $STATIC_LUAJIT && $STATIC_LUAJIT -eq 0 ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_STATIC_LINK_LUAJIT=OFF
+  )
+fi
+if [[ -n $SLIB_INCLUDE_LUAJIT && $SLIB_INCLUDE_LUAJIT -eq 0 ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_SLIB_INCLUDE_LUAJIT=OFF
+  )
+fi
+if [[ -n $TERRA_LUA ]]; then
+  CMAKE_FLAGS+=(
+    -DTERRA_LUA=$TERRA_LUA
+  )
+fi
+if [[ $USE_CUDA -eq 1 ]]; then
+  # Terra should autodetect, but force an error if it doesn't work.
+  CMAKE_FLAGS+=(
+    -DTERRA_ENABLE_CUDA=ON
+  )
+fi
 
-  pushd build
-  cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
-  if [[ $(uname) = MINGW* ]]; then
-    cmake --build . --target INSTALL --config Release
-  else
-    make install -j${THREADS:-2}
-  fi
-
-  # Skip ctest on Windows; this is currently broken.
-  if [[ $(uname) != MINGW* ]]; then
-    ctest --output-on-failure -j${THREADS:-2}
-  fi
-  popd
-
-  # Skip this on macOS because it spews too much on Mojave and newer.
-  if [[ $(uname) != Darwin ]]; then
-      pushd tests
-      ../install/bin/terra ./run
-      popd
-  fi
-
-  # Only deploy CMake builds, and only with LLVM 13 (macOS) and 11 (Windows).
-  if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
-    RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
-    mv install $RELEASE_NAME
-    if [[ $(uname) = MINGW* ]]; then
-      7z a -t7z $RELEASE_NAME.7z $RELEASE_NAME
-    else
-      tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
-    fi
-    mv $RELEASE_NAME install
-  fi
+pushd build
+cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
+if [[ $(uname) = MINGW* ]]; then
+  cmake --build . --target INSTALL --config Release
 else
-  ${MAKE:-make} LLVM_CONFIG=$(which $LLVM_CONFIG) CLANG=$(which $CLANG) test -j${THREADS:-2}
+  make install -j${THREADS:-2}
+fi
+
+# Skip ctest on Windows; this is currently broken.
+if [[ $(uname) != MINGW* ]]; then
+  ctest --output-on-failure -j${THREADS:-2}
+fi
+popd
+
+# Skip this on macOS because it spews too much on Mojave and newer.
+if [[ $(uname) != Darwin ]]; then
+    pushd tests
+    ../install/bin/terra ./run
+    popd
+fi
+
+# Only deploy builds with LLVM 13 (macOS) and 11 (Windows).
+if [[ (( $(uname) == Darwin && $LLVM_CONFIG = llvm-config-13 ) || ( $(uname) == MINGW* && $LLVM_CONFIG = llvm-config-11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+  RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
+  mv install $RELEASE_NAME
+  if [[ $(uname) = MINGW* ]]; then
+    7z a -t7z $RELEASE_NAME.7z $RELEASE_NAME
+  else
+    tar cfJv $RELEASE_NAME.tar.xz $RELEASE_NAME
+  fi
+  mv $RELEASE_NAME install
 fi

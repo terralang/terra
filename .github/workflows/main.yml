@@ -19,34 +19,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-22.04', 'macos-11', 'windows-2022']
+        os: ['macos-11', 'windows-2022']
         llvm: ['11', '12', '13', '14', '15', '16']
-        cmake: ['0', '1']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
-          # Linux: exclude LLVM 11-13, 15-16, cmake
-          # Note: CMake configurations are tested in Docker
-          - os: 'ubuntu-22.04'
-            llvm: '11'
-          - os: 'ubuntu-22.04'
-            llvm: '12'
-          - os: 'ubuntu-22.04'
-            llvm: '13'
-          - os: 'ubuntu-22.04'
-            llvm: '15'
-          - os: 'ubuntu-22.04'
-            llvm: '16'
-          - os: 'ubuntu-22.04'
-            cmake: '1'
-
-          # macOS: exclude make, cuda
-          - os: 'macos-11'
-            cmake: '0'
+          # macOS: exclude cuda
           - os: 'macos-11'
             cuda: '1'
 
-          # Windows: exclude LLVM 12-16, make
+          # Windows: exclude LLVM 12-16
           - os: 'windows-2022'
             llvm: '12'
           - os: 'windows-2022'
@@ -57,12 +39,6 @@ jobs:
             llvm: '15'
           - os: 'windows-2022'
             llvm: '16'
-          - os: 'windows-2022'
-            cmake: '0'
-
-          # Moonjit requires CMake
-          - cmake: '0'
-            lua: 'moonjit'
 
           # CUDA: only LLVM 11
           - llvm: '12'
@@ -93,8 +69,6 @@ jobs:
         shell: bash
         env:
           LLVM_CONFIG: llvm-config-${{ matrix.llvm }}
-          CLANG: clang-${{ matrix.llvm }}
-          USE_CMAKE: ${{ matrix.cmake }}
           USE_CUDA: ${{ matrix.cuda }}
           STATIC_LLVM: 1
           STATIC_LUAJIT: 1

@@ -137,11 +137,6 @@ On FreeBSD, use:
 pkg install -y cmake llvm13
 ```
 
-Terra also supports an older build system based on GNU Make (for
-Linux, macOS and FreeBSD only). This build system is deprecated, and
-in the vast majority of circumstances CMake is both preferred and
-substantially more flexible.
-
 ### Supported LLVM Versions ###
 
 The current recommended version of LLVM is **13**. The following versions are also supported:
@@ -246,45 +241,6 @@ further configure the Terra build via CMake:
   * `TERRA_SLIB_INCLUDE_LLVM` (default `ON`, except on Windows): Whether `libterra_s.a` should include LLVM or not.
   * `TERRA_STATIC_LINK_LUAJIT` (default `ON`): Whether to statically link against LuaJIT or not.
   * `TERRA_SLIB_INCLUDE_LUAJIT` (default `ON`, except on Windows): Whether `libterra_s.a` should include LuaJIT or not.
-
-### Building Terra with GNU Make (Linux, macOS, FreeBSD)
-
-Note: This build system is deprecated. Please use CMake instead (see
-above).
-
-The basic procedure for building with GNU Make is the following:
-
-```
-git clone https://github.com/terralang/terra.git
-cd terra
-make -j4 # tune this for how many cores you have
-```
-
-This will build Terra into the `terra/release` directory.
-
-Make will attempt to auto-detect the location of LLVM by searching for
-`llvm-config` on `PATH`. If it is unable to do so (e.g., because LLVM
-is installed in a non-standard location), this can be specified
-manually by setting the following environment variable:
-
-```
-export LLVM_CONFIG=path/to/llvm/bin/llvm-config
-```
-
-This can also be set by creating a file called `Makefile.inc` with the
-following contents:
-
-```
-LLVM_CONFIG=path/to/llvm/bin/llvm-config
-```
-
-Similarly, Make will attempt to discover the location of `clang`. If
-this fails, it can be corrected via the `CLANG` environment (or
-Makefile) variable.
-
-The Make build will automatically detect CUDA if it is installed at
-`/usr/local/cuda`. Otherwise, please set `CUDA_HOME` to the location
-where CUDA is installed.
 
 ### Building Terra with CMake (Windows)
 
