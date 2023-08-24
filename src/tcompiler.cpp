@@ -2362,7 +2362,8 @@ struct FunctionEmitter {
     bool isPointerToFunction(Type *t) {
         return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
     }
-    Value *emitStructSelect(Obj *structType, Value *structPtr, int index) {
+    Value *emitStructSelect(Obj *structType, Value *structPtr, int index,
+                            Obj *entryType) {
         assert(structPtr->getType()->isPointerTy());
         assert(structPtr->getType()->getPointerElementType()->isStructTy());
         Ty->EnsureTypeIsComplete(structType);
@@ -2386,9 +2387,8 @@ struct FunctionEmitter {
         // (Terra internal represents functions with i8* for simplicity)
         // 3. if the field was an anonymous C struct, so we don't know its name
         // in all cases we simply bitcast cast the resulting pointer to the expected type
-        Obj entryType;
-        entry.obj("type", &entryType);
-        TType *entryTType = getType(&entryType);
+        entry.obj("type", entryType);
+        TType *entryTType = getType(entryType);
         if (entry.boolean("inunion") || isPointerToFunction(entryTType->type)) {
             unsigned as = addr->getType()->getPointerAddressSpace();
             Type *resultType = PointerType::get(entryTType->type, as);
@@ -2698,7 +2698,8 @@ struct FunctionEmitter {
                     Obj value;
                     entry.obj("value", &value);
                     int idx = entry.number("index");
-                    Value *oe = emitStructSelect(&to, output, idx);
+                    Obj entryType;
+                    Value *oe = emitStructSelect(&to, output, idx, &entryType);
                     Value *in = emitExp(
                             &value);  // these expressions will select from the
                                       // structvariable and perform any casts necessary
@@ -2753,11 +2754,11 @@ struct FunctionEmitter {
                 int offset = exp->number("index");
 
                 Value *v = emitAddressOf(&obj);
-                Value *result = emitStructSelect(&typ, v, offset);
+                Obj entryType;
+                Value *result = emitStructSelect(&typ, v, offset, &entryType);
                 Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
-                    result = B->CreateLoad(result->getType()->getPointerElementType(),
-                                           result);
+                    result = B->CreateLoad(getType(&entryType)->type, result);
                 return result;
             } break;
             case T_constructor:
