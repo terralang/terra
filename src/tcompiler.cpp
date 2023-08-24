@@ -2362,8 +2362,7 @@ struct FunctionEmitter {
 
         int allocindex = entry.number("allocation");
 
-        Value *addr = CreateConstGEP2_32(B, structPtr,
-                                         getType(structType)->type, 0,
+        Value *addr = CreateConstGEP2_32(B, structPtr, getType(structType)->type, 0,
                                          allocindex);
         // in three cases the type of the value in the struct does not match the expected
         // type returned
