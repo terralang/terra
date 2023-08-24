@@ -201,10 +201,10 @@ struct CopyConnectedComponent : public ValueMaterializer {
         } else if (GlobalVariable *GV = dyn_cast<GlobalVariable>(V)) {
             GlobalVariable *newGV = dest->getGlobalVariable(GV->getName(), true);
             if (!newGV || needsFreshlyNamedConstant(GV, newGV)) {
-                newGV = new GlobalVariable(
-                        *dest, GV->getType()->getPointerElementType(), GV->isConstant(),
-                        GV->getLinkage(), NULL, GV->getName(), NULL,
-                        GlobalVariable::NotThreadLocal, GV->getType()->getAddressSpace());
+                newGV = new GlobalVariable(*dest, GV->getValueType(), GV->isConstant(),
+                                           GV->getLinkage(), NULL, GV->getName(), NULL,
+                                           GlobalVariable::NotThreadLocal,
+                                           GV->getType()->getAddressSpace());
                 newGV->copyAttributesFrom(GV);
                 // copyAttributesFrom does not copy comdats
                 newGV->setComdat(GV->getComdat());
