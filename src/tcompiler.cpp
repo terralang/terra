@@ -2792,7 +2792,7 @@ struct FunctionEmitter {
                 Ty->EnsureTypeIsComplete(&type);
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
-                LoadInst *l = B->CreateLoad(v->getType()->getPointerElementType(), v);
+                LoadInst *l = B->CreateLoad(ttype, v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
                     l->setAlignment(Align(alignment));
