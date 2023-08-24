@@ -2616,8 +2616,8 @@ struct FunctionEmitter {
                     }
 
                     Obj objType;
-                    type.obj("type", &objType);
-                    if (t->type->getPointerElementType()->isIntegerTy(8)) {
+                    Types::PointsToType(&type, &objType);
+                    if (getType(&objType)->type->isIntegerTy(8)) {
                         Obj stringvalue;
                         exp->obj("value", &stringvalue);
                         Value *str = lookupSymbol<Value>(CU->symbols, &stringvalue);
