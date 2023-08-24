@@ -2363,7 +2363,7 @@ struct FunctionEmitter {
         int allocindex = entry.number("allocation");
 
         Value *addr = CreateConstGEP2_32(B, structPtr,
-                                         structPtr->getType()->getPointerElementType(), 0,
+                                         getType(structType)->type, 0,
                                          allocindex);
         // in three cases the type of the value in the struct does not match the expected
         // type returned
@@ -2456,7 +2456,7 @@ struct FunctionEmitter {
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
-            raw = B->CreateLoad(raw->getType()->getPointerElementType(), raw);
+            raw = B->CreateLoad(ttype, raw);
         }
         return raw;
     }
