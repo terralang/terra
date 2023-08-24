@@ -2164,15 +2164,17 @@ struct FunctionEmitter {
         ttype.issigned = ftype->issigned;
         return emitPrimitiveCast(ftype, &ttype, number);
     }
-    Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
+    Value *emitPointerArith(T_Kind kind, Obj *ptrTy, Value *pointer, TType *numTy,
+                            Value *number) {
+        Obj objTy;
+        Types::PointsToType(ptrTy, &objTy);
+
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
-                                number);
+            return B->CreateGEP(getType(&objTy)->type, pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
-                                numNeg);
+            return B->CreateGEP(getType(&objTy)->type, pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
@@ -2220,7 +2222,7 @@ struct FunctionEmitter {
                 return emitPointerSub(t, a, b);
             } else {
                 assert(bt->type->isIntegerTy());
-                return emitPointerArith(kind, a, bt, b);
+                return emitPointerArith(kind, &aot, a, bt, b);
             }
         }
 
