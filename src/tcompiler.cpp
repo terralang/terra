@@ -2388,10 +2388,10 @@ struct FunctionEmitter {
         // in all cases we simply bitcast cast the resulting pointer to the expected type
         Obj entryType;
         entry.obj("type", &entryType);
-        if (entry.boolean("inunion") ||
-            isPointerToFunction(addr->getType()->getPointerElementType())) {
+        TType *entryTType = getType(&entryType);
+        if (entry.boolean("inunion") || isPointerToFunction(entryTType->type)) {
             unsigned as = addr->getType()->getPointerAddressSpace();
-            Type *resultType = PointerType::get(getType(&entryType)->type, as);
+            Type *resultType = PointerType::get(entryTType->type, as);
             addr = B->CreateBitCast(addr, resultType);
         }
 
