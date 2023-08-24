@@ -2689,7 +2689,7 @@ struct FunctionEmitter {
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(output->getType()->getPointerElementType(), output);
+                return B->CreateLoad(toT->type, output);
             } break;
             case T_cast: {
                 Obj a;
