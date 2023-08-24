@@ -2180,10 +2180,12 @@ struct FunctionEmitter {
             return NULL;
         }
     }
-    Value *emitPointerSub(TType *t, Value *a, Value *b) {
+    Value *emitPointerSub(Obj *ptrTy, Value *a, Value *b) {
+        Obj objTy;
+        Types::PointsToType(ptrTy, &objTy);
         return B->CreatePtrDiff(
 #if LLVM_VERSION >= 140
-                a->getType()->getPointerElementType(),
+                getType(&objTy)->type,
 #endif
                 a, b);
     }
@@ -2219,7 +2221,7 @@ struct FunctionEmitter {
             Ty->EnsurePointsToCompleteType(&aot);
             if (bt->type->isPointerTy()) {
                 assert(kind == T_sub);
-                return emitPointerSub(t, a, b);
+                return emitPointerSub(&aot, a, b);
             } else {
                 assert(bt->type->isIntegerTy());
                 return emitPointerArith(kind, &aot, a, bt, b);
