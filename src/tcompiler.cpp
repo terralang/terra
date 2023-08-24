@@ -723,6 +723,15 @@ public:
             EnsureTypeIsComplete(&objTy);
         }  // otherwise it is niltype and already complete
     }
+    static void PointsToType(Obj *ptrTy, Obj *result) {
+        if (ptrTy->kind("kind") == T_pointer) {
+            ptrTy->obj("type", result);
+        } else {
+            printf("unexpected kind = %d, %s\n", ptrTy->kind("kind"),
+                   tkindtostr(ptrTy->kind("kind")));
+            assert(false);
+        }
+    }
 };
 
 // helper function to alloca at the beginning of function
@@ -2568,13 +2577,16 @@ struct FunctionEmitter {
                     Value *result = B->CreateExtractElement(valueExp, idxExp);
                     return result;
                 } else {
+                    assert(aggType->type->isPointerTy());
+                    Obj objType;
+                    Types::PointsToType(&aggTypeO, &objType);
+
                     idxExp = emitIndex(typeOfValue(&idx), 64, idxExp);
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
                     Value *result =
-                            B->CreateGEP(valueExp->getType()->getPointerElementType(),
-                                         valueExp, idxExp);
+                            B->CreateGEP(getType(&objType)->type, valueExp, idxExp);
                     if (!exp->boolean("lvalue"))
                         result = B->CreateLoad(result->getType()->getPointerElementType(),
                                                result);
