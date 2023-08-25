@@ -2350,9 +2350,9 @@ struct FunctionEmitter {
     bool isPointerToFunction(Type *t) {
         return t->isPointerTy()
 #if LLVM_VERSION < 160
-          && t->getPointerElementType()->isFunctionTy()
+               && t->getPointerElementType()->isFunctionTy()
 #endif
-;
+                ;
     }
     Value *emitStructSelect(Obj *structType, Value *structPtr, int index,
                             Obj *entryType) {
