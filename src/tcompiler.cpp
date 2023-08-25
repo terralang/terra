@@ -270,7 +270,7 @@ int terra_inittarget(lua_State *L) {
 
     TT->next_unused_id = 0;
     TT->ctx = new LLVMContext();
-#if LLVM_VERSION >= 150
+#if LLVM_VERSION >= 150 && LLVM_VERSION < 160
     // Hack: This is a workaround to avoid the opaque pointer
     // transition, but we will need to deal with it eventually.
     // FIXME: https://github.com/terralang/terra/issues/553
@@ -2348,12 +2348,18 @@ struct FunctionEmitter {
         return result;
     }
     bool isPointerToFunction(Type *t) {
-        return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
+        return t->isPointerTy()
+#if LLVM_VERSION < 160
+          && t->getPointerElementType()->isFunctionTy()
+#endif
+;
     }
     Value *emitStructSelect(Obj *structType, Value *structPtr, int index,
                             Obj *entryType) {
         assert(structPtr->getType()->isPointerTy());
+#if LLVM_VERSION < 160
         assert(structPtr->getType()->getPointerElementType()->isStructTy());
+#endif
         Ty->EnsureTypeIsComplete(structType);
 
         Obj layout;
