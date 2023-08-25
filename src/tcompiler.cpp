@@ -723,6 +723,15 @@ public:
             EnsureTypeIsComplete(&objTy);
         }  // otherwise it is niltype and already complete
     }
+    static void PointsToType(Obj *ptrTy, Obj *result) {
+        if (ptrTy->kind("kind") == T_pointer) {
+            ptrTy->obj("type", result);
+        } else {
+            printf("unexpected kind = %d, %s\n", ptrTy->kind("kind"),
+                   tkindtostr(ptrTy->kind("kind")));
+            assert(false);
+        }
+    }
 };
 
 // helper function to alloca at the beginning of function
@@ -736,10 +745,9 @@ static AllocaInst *CreateAlloca(IRBuilder<> *B, Type *Ty, Value *ArraySize = 0,
     return TmpB.CreateAlloca(Ty, ArraySize, Name);
 }
 
-static Value *CreateConstGEP2_32(IRBuilder<> *B, Value *Ptr, unsigned Idx0,
-                                 unsigned Idx1) {
-    return B->CreateConstGEP2_32(Ptr->getType()->getPointerElementType(), Ptr, Idx0,
-                                 Idx1);
+static Value *CreateConstGEP2_32(IRBuilder<> *B, Value *Ptr, Type *ValueType,
+                                 unsigned Idx0, unsigned Idx1) {
+    return B->CreateConstGEP2_32(ValueType, Ptr, Idx0, Idx1);
 }
 
 // functions that handle the details of the x86_64 ABI (this really should be handled by
@@ -1285,7 +1293,7 @@ struct CCallingConv {
             int N = st->getNumElements();
             for (int j = 0; j < N; j++) {
                 Type *elt_type = st->getElementType(j);
-                EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, 0, j), elt_type, ai);
+                EmitEntryAggReg(B, CreateConstGEP2_32(B, dest, st, 0, j), elt_type, ai);
             }
         } else {
             B->CreateStore(&*ai, dest);
@@ -1354,7 +1362,7 @@ struct CCallingConv {
             Type *result_type = type;
             if (info->returntype.GetNumberOfTypesInParamList() == 1) {
                 do {
-                    result = CreateConstGEP2_32(B, result, 0, 0);
+                    result = CreateConstGEP2_32(B, result, type, 0, 0);
                     result_type = type->getElementType(0);
                 } while ((type = dyn_cast<StructType>(result_type)));
             }
@@ -1378,12 +1386,11 @@ struct CCallingConv {
             int N = st->getNumElements();
             for (int j = 0; j < N; j++) {
                 Type *elt_type = st->getElementType(j);
-                EmitCallAggReg(B, CreateConstGEP2_32(B, value, 0, j), elt_type,
+                EmitCallAggReg(B, CreateConstGEP2_32(B, value, st, 0, j), elt_type,
                                arguments);
             }
         } else {
-            arguments.push_back(
-                    B->CreateLoad(value->getType()->getPointerElementType(), value));
+            arguments.push_back(B->CreateLoad(param_type, value));
         }
     }
 
@@ -1454,7 +1461,7 @@ struct CCallingConv {
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
                 if (info.returntype.GetNumberOfTypesInParamList() == 1) {
                     do {
-                        casted = CreateConstGEP2_32(B, casted, 0, 0);
+                        casted = CreateConstGEP2_32(B, casted, type, 0, 0);
                     } while ((type = dyn_cast<StructType>(type->getElementType(0))));
                 }
                 if (info.returntype.GetNumberOfTypesInParamList() > 0)
@@ -1468,8 +1475,7 @@ struct CCallingConv {
             } else {
                 assert(!"unhandled argument kind");
             }
-            return B->CreateLoad(aggregate->getType()->getPointerElementType(),
-                                 aggregate);
+            return B->CreateLoad(info.returntype.type->type, aggregate);
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
@@ -2158,24 +2164,28 @@ struct FunctionEmitter {
         ttype.issigned = ftype->issigned;
         return emitPrimitiveCast(ftype, &ttype, number);
     }
-    Value *emitPointerArith(T_Kind kind, Value *pointer, TType *numTy, Value *number) {
+    Value *emitPointerArith(T_Kind kind, Obj *ptrTy, Value *pointer, TType *numTy,
+                            Value *number) {
+        Obj objTy;
+        Types::PointsToType(ptrTy, &objTy);
+
         number = emitIndex(numTy, 64, number);
         if (kind == T_add) {
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
-                                number);
+            return B->CreateGEP(getType(&objTy)->type, pointer, number);
         } else if (kind == T_sub) {
             Value *numNeg = B->CreateNeg(number);
-            return B->CreateGEP(pointer->getType()->getPointerElementType(), pointer,
-                                numNeg);
+            return B->CreateGEP(getType(&objTy)->type, pointer, numNeg);
         } else {
             assert(!"unexpected pointer arith");
             return NULL;
         }
     }
-    Value *emitPointerSub(TType *t, Value *a, Value *b) {
+    Value *emitPointerSub(Obj *ptrTy, Value *a, Value *b) {
+        Obj objTy;
+        Types::PointsToType(ptrTy, &objTy);
         return B->CreatePtrDiff(
 #if LLVM_VERSION >= 140
-                a->getType()->getPointerElementType(),
+                getType(&objTy)->type,
 #endif
                 a, b);
     }
@@ -2211,10 +2221,10 @@ struct FunctionEmitter {
             Ty->EnsurePointsToCompleteType(&aot);
             if (bt->type->isPointerTy()) {
                 assert(kind == T_sub);
-                return emitPointerSub(t, a, b);
+                return emitPointerSub(&aot, a, b);
             } else {
                 assert(bt->type->isIntegerTy());
-                return emitPointerArith(kind, a, bt, b);
+                return emitPointerArith(kind, &aot, a, bt, b);
             }
         }
 
@@ -2283,8 +2293,9 @@ struct FunctionEmitter {
         return 0;
     }
     Value *emitArrayToPointer(Obj *exp) {
+        TType *t = typeOfValue(exp);
         Value *v = emitAddressOf(exp);
-        return CreateConstGEP2_32(B, v, 0, 0);
+        return CreateConstGEP2_32(B, v, t->type, 0, 0);
     }
     Type *getPrimitiveType(TType *t) {
         if (t->type->isVectorTy())
@@ -2351,7 +2362,8 @@ struct FunctionEmitter {
     bool isPointerToFunction(Type *t) {
         return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
     }
-    Value *emitStructSelect(Obj *structType, Value *structPtr, int index) {
+    Value *emitStructSelect(Obj *structType, Value *structPtr, int index,
+                            Obj *entryType) {
         assert(structPtr->getType()->isPointerTy());
         assert(structPtr->getType()->getPointerElementType()->isStructTy());
         Ty->EnsureTypeIsComplete(structType);
@@ -2364,7 +2376,8 @@ struct FunctionEmitter {
 
         int allocindex = entry.number("allocation");
 
-        Value *addr = CreateConstGEP2_32(B, structPtr, 0, allocindex);
+        Value *addr = CreateConstGEP2_32(B, structPtr, getType(structType)->type, 0,
+                                         allocindex);
         // in three cases the type of the value in the struct does not match the expected
         // type returned
         // 1. if it is a union then the llvm struct will have some buffer space to hold
@@ -2374,12 +2387,11 @@ struct FunctionEmitter {
         // (Terra internal represents functions with i8* for simplicity)
         // 3. if the field was an anonymous C struct, so we don't know its name
         // in all cases we simply bitcast cast the resulting pointer to the expected type
-        Obj entryType;
-        entry.obj("type", &entryType);
-        if (entry.boolean("inunion") ||
-            isPointerToFunction(addr->getType()->getPointerElementType())) {
+        entry.obj("type", entryType);
+        TType *entryTType = getType(entryType);
+        if (entry.boolean("inunion") || isPointerToFunction(entryTType->type)) {
             unsigned as = addr->getType()->getPointerAddressSpace();
-            Type *resultType = PointerType::get(getType(&entryType)->type, as);
+            Type *resultType = PointerType::get(entryTType->type, as);
             addr = B->CreateBitCast(addr, resultType);
         }
 
@@ -2456,7 +2468,7 @@ struct FunctionEmitter {
             exp->obj("type", &type);
             Ty->EnsureTypeIsComplete(&type);
             Type *ttype = getType(&type)->type;
-            raw = B->CreateLoad(raw->getType()->getPointerElementType(), raw);
+            raw = B->CreateLoad(ttype, raw);
         }
         return raw;
     }
@@ -2569,16 +2581,18 @@ struct FunctionEmitter {
                     Value *result = B->CreateExtractElement(valueExp, idxExp);
                     return result;
                 } else {
+                    assert(aggType->type->isPointerTy());
+                    Obj objType;
+                    Types::PointsToType(&aggTypeO, &objType);
+                    TType *objTType = getType(&objType);
+
                     idxExp = emitIndex(typeOfValue(&idx), 64, idxExp);
                     // otherwise we have a pointer access which will use a GEP instruction
                     std::vector<Value *> idxs;
                     Ty->EnsurePointsToCompleteType(&aggTypeO);
-                    Value *result =
-                            B->CreateGEP(valueExp->getType()->getPointerElementType(),
-                                         valueExp, idxExp);
+                    Value *result = B->CreateGEP(objTType->type, valueExp, idxExp);
                     if (!exp->boolean("lvalue"))
-                        result = B->CreateLoad(result->getType()->getPointerElementType(),
-                                               result);
+                        result = B->CreateLoad(objTType->type, result);
                     return result;
                 }
             } break;
@@ -2602,8 +2616,8 @@ struct FunctionEmitter {
                     }
 
                     Obj objType;
-                    type.obj("type", &objType);
-                    if (t->type->getPointerElementType()->isIntegerTy(8)) {
+                    Types::PointsToType(&type, &objType);
+                    if (getType(&objType)->type->isIntegerTy(8)) {
                         Obj stringvalue;
                         exp->obj("value", &stringvalue);
                         Value *str = lookupSymbol<Value>(CU->symbols, &stringvalue);
@@ -2684,13 +2698,14 @@ struct FunctionEmitter {
                     Obj value;
                     entry.obj("value", &value);
                     int idx = entry.number("index");
-                    Value *oe = emitStructSelect(&to, output, idx);
+                    Obj entryType;
+                    Value *oe = emitStructSelect(&to, output, idx, &entryType);
                     Value *in = emitExp(
                             &value);  // these expressions will select from the
                                       // structvariable and perform any casts necessary
                     B->CreateStore(in, oe);
                 }
-                return B->CreateLoad(output->getType()->getPointerElementType(), output);
+                return B->CreateLoad(toT->type, output);
             } break;
             case T_cast: {
                 Obj a;
@@ -2739,11 +2754,11 @@ struct FunctionEmitter {
                 int offset = exp->number("index");
 
                 Value *v = emitAddressOf(&obj);
-                Value *result = emitStructSelect(&typ, v, offset);
+                Obj entryType;
+                Value *result = emitStructSelect(&typ, v, offset, &entryType);
                 Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
-                    result = B->CreateLoad(result->getType()->getPointerElementType(),
-                                           result);
+                    result = B->CreateLoad(getType(&entryType)->type, result);
                 return result;
             } break;
             case T_constructor:
@@ -2793,7 +2808,7 @@ struct FunctionEmitter {
                 Ty->EnsureTypeIsComplete(&type);
                 Type *ttype = getType(&type)->type;
                 Value *v = emitExp(&addr);
-                LoadInst *l = B->CreateLoad(v->getType()->getPointerElementType(), v);
+                LoadInst *l = B->CreateLoad(ttype, v);
                 if (attr.hasfield("alignment")) {
                     int alignment = attr.number("alignment");
                     l->setAlignment(Align(alignment));
@@ -3142,10 +3157,10 @@ struct FunctionEmitter {
         std::vector<Value *> values;
         emitExpressionList(expressions, true, &values);
         for (size_t i = 0; i < values.size(); i++) {
-            Value *addr = CreateConstGEP2_32(B, result, 0, i);
+            Value *addr = CreateConstGEP2_32(B, result, ttype, 0, i);
             B->CreateStore(values[i], addr);
         }
-        return B->CreateLoad(result->getType()->getPointerElementType(), result);
+        return B->CreateLoad(ttype, result);
     }
     void emitStmtList(Obj *stmts) {
         int NS = stmts->size();
@@ -3316,7 +3331,7 @@ struct FunctionEmitter {
                 BasicBlock *cond = createAndInsertBB("forcond");
                 B->CreateBr(cond);
                 setInsertBlock(cond);
-                Value *v = B->CreateLoad(vp->getType()->getPointerElementType(), vp);
+                Value *v = B->CreateLoad(t->type, vp);
                 Value *c = B->CreateOr(B->CreateAnd(emitCompare(T_lt, t, v, limitv),
                                                     emitCompare(T_gt, t, stepv, zero)),
                                        B->CreateAnd(emitCompare(T_gt, t, v, limitv),
