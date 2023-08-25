@@ -7,7 +7,11 @@ function symmat(typ,name,I,...)
   end
   return r
 end
-prefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
+if terralib.llvm_version < 160 then
+  prefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
+else
+  prefetch = terralib.intrinsic("llvm.prefetch.p0",{&opaque,int,int,int} -> {})
+end
 
 function genkernel(NB, RM, RN, V,alpha)
   local VT = vector(double,V)
