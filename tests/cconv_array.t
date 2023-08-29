@@ -62,11 +62,6 @@ end
 
 local MAX_N_INT8 = 11
 local MAX_N_SMALL = 32
-local ffi = require('ffi')
-if ffi.os == 'OSX' and ffi.arch == 'arm64' then
-  MAX_N_INT8 = 8 -- https://github.com/terralang/terra/issues/604
-  MAX_N_SMALL = 8 -- https://github.com/terralang/terra/issues/604
-end
 
 for N = 0, MAX_N_INT8 do
   run_test_case(int8, N)
