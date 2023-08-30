@@ -1,5 +1,9 @@
 # Unreleased Changes (Intended to be Version 1.2.0)
 
+## Fixed Bugs
+
+  * Updated LuaJIT to obtain fix for passing large arrays on macOS M1
+
 ## Removed features
 
   * Removed support for LLVM <= 10
