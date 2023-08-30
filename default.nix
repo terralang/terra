@@ -14,14 +14,14 @@ let
            cudaPackages.cuda_cudart
          ];
 
-  luajitRev = "50936d784474747b4569d988767f1b5bab8bb6d0";
+  luajitRev = "83954100dba9fc0cf5eeaf122f007df35ec9a604";
   luajitBase = "LuaJIT-${luajitRev}";
   luajitArchive = "${luajitBase}.tar.gz";
   luajitSrc = fetchFromGitHub {
     owner = "LuaJIT";
     repo = "LuaJIT";
     rev = luajitRev;
-    sha256 = "1g87pl014b5v6z2nnhiwn3wf405skawszfr5wdzyfbx00j3kgxd0";
+    sha256 = "1m0wpfchljbi0d3x4nzfi1rz8d1viacj6kyqlz034x7nrnazmm1g";
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
