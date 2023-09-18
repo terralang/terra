@@ -924,11 +924,15 @@ static void optimizemodule(TerraTarget *TT, llvm::Module *M) {
 
     M->setTargetTriple(
             TT->Triple);  // suppress warning that occur due to unmatched os versions
+#if LLVM_VERSION < 170
     PassManager opt;
     llvmutil_addtargetspecificpasses(&opt, TT->tm);
     opt.add(llvm::createFunctionInliningPass());
     llvmutil_addoptimizationpasses(&opt);
     opt.run(*M);
+#else
+    llvmutil_optimizemodule(M, TT->tm);
+#endif
 }
 static int dofile(terra_State *T, TerraTarget *TT, const char *code,
                   const std::vector<const char *> &args, Obj *result) {

@@ -33,7 +33,11 @@
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Vectorize.h"
+#if LLVM_VERSION < 170
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#else
+#include "llvm/Passes/PassBuilder.h"
+#endif
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -56,11 +60,13 @@
 #include "llvmheaders_150.h"
 #elif LLVM_VERSION < 170
 #include "llvmheaders_160.h"
+#elif LLVM_VERSION < 180
+#include "llvmheaders_170.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 160
-#include "llvmheaders_160.h"
+#define LLVM_VERSION 170
+#include "llvmheaders_170.h"
 #endif
 
 #define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))
@@ -69,13 +75,18 @@
 #define FD_ERRSTR(x) ((x).message().c_str())
 #define METADATA_ROOT_TYPE llvm::Metadata
 
+#if LLVM_VERSION < 170
 using llvm::legacy::FunctionPassManager;
 using llvm::legacy::PassManager;
+typedef llvm::legacy::PassManager PassManagerT;
+typedef llvm::legacy::FunctionPassManager FunctionPassManagerT;
+#else
+using llvm::FunctionPassManager;
+#endif
+
 typedef llvm::raw_pwrite_stream emitobjfile_t;
 typedef llvm::DIFile* DIFileP;
 
 inline void LLVMDisposeMessage(char* Message) { free(Message); }
-typedef llvm::legacy::PassManager PassManagerT;
-typedef llvm::legacy::FunctionPassManager FunctionPassManagerT;
 
 #endif

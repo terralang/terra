@@ -17,7 +17,10 @@ extern "C" {
 
 #include "tcompilerstate.h"  //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
+#if LLVM_VERSION < 170
+// FIXME (Elliott): need to restore the manual inliner in LLVM 17
 #include "tinline.h"
+#endif
 #include "llvm/Support/ManagedStatic.h"
 
 #if LLVM_VERSION < 120
@@ -281,7 +284,11 @@ int terra_inittarget(lua_State *L) {
 #if defined(__linux__) || defined(__unix__)
             Reloc::PIC_,
 #else
+#if LLVM_VERSION < 160
             Optional<Reloc::Model>(),
+#else
+            std::optional<Reloc::Model>(),
+#endif
 #endif
 #if defined(__powerpc64__)
             // On PPC the small model is limited to 16bit offsets
@@ -355,11 +362,17 @@ int terra_initcompilationunit(lua_State *L) {
     CU->M->setTargetTriple(TT->Triple);
     CU->M->setDataLayout(TT->tm->createDataLayout());
 
+#if LLVM_VERSION < 170
+    // FIXME (Elliott): need to restore the manual inliner in LLVM 17
     CU->mi = new ManualInliner(TT->tm, CU->M);
     CU->fpm = new FunctionPassManagerT(CU->M);
     llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
     llvmutil_addoptimizationpasses(CU->fpm);
     CU->fpm->doInitialization();
+#else
+    CU->fpm = new FunctionPassManager(llvmutil_createoptimizationpasses(
+            TT->tm, CU->lam, CU->fam, CU->cgam, CU->mam));
+#endif
     lua_pushlightuserdata(L, CU);
     return 1;
 }
@@ -432,7 +445,10 @@ int terra_freetarget(lua_State *L) {
 static void freecompilationunit(TerraCompilationUnit *CU) {
     assert(CU->nreferences > 0);
     if (0 == --CU->nreferences) {
+#if LLVM_VERSION < 170
+        // FIXME (Elliott): need to restore the manual inliner in LLVM 17
         delete CU->mi;
+#endif
         delete CU->fpm;
         if (CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
@@ -1670,8 +1686,10 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         ccmap["swifttailcc"] = CallingConv::SwiftTail;
 #endif
         ccmap["x86_intrcc"] = CallingConv::X86_INTR;
+#if LLVM_VERSION < 170
         ccmap["hhvmcc"] = CallingConv::HHVM;
         ccmap["hhvm_ccc"] = CallingConv::HHVM_C;
+#endif
         ccmap["amdgpu_vs"] = CallingConv::AMDGPU_VS;
         ccmap["amdgpu_ls"] = CallingConv::AMDGPU_LS;
         ccmap["amdgpu_hs"] = CallingConv::AMDGPU_HS;
@@ -1902,13 +1920,21 @@ struct FunctionEmitter {
                             printf("%s%s", s.c_str(), (fstate == f) ? "\n" : " ");
                         }
                     } while (fstate != f);
+#if LLVM_VERSION < 170
+                    // FIXME (Elliott): need to restore the manual inliner in LLVM 17
                     CU->mi->run(scc.begin(), scc.end());
+#endif
                     for (size_t i = 0; i < scc.size(); i++) {
                         VERBOSE_ONLY(T) {
                             std::string s = scc[i]->getName().str();
                             printf("optimizing %s\n", s.c_str());
                         }
-                        CU->fpm->run(*scc[i]);
+                        CU->fpm->run(*scc[i]
+#if LLVM_VERSION >= 170
+                                     ,
+                                     CU->fam
+#endif
+                        );
                         VERBOSE_ONLY(T) { TERRA_DUMP_FUNCTION(scc[i]); }
                     }
                 }
@@ -1944,7 +1970,12 @@ struct FunctionEmitter {
         B->SetInsertPoint(entry);
         B->CreateRet(emitExp(exp));
         endDebug();
-        CU->fpm->run(*fstate->func);
+        CU->fpm->run(*fstate->func
+#if LLVM_VERSION >= 170
+                     ,
+                     CU->fam
+#endif
+        );
         ReturnInst *term =
                 cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
         Constant *r = dyn_cast<Constant>(term->getReturnValue());

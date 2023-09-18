@@ -82,7 +82,6 @@ list(APPEND TERRA_LIB_SRC
   tcompilerstate.h
   tllvmutil.cpp    tllvmutil.h
   tcwrapper.cpp    tcwrapper.h
-  tinline.cpp      tinline.h
   terra.cpp
   lparser.cpp      lparser.h
   lstring.cpp      lstring.h
@@ -98,6 +97,12 @@ list(APPEND TERRA_LIB_SRC
 
   ${PROJECT_BINARY_DIR}/include/terra/terra.h
 )
+
+if(LLVM_VERSION_MAJOR LESS 17)
+  list(APPEND TERRA_LIB_SRC
+    tinline.cpp    tinline.h
+  )
+endif()
 
 list(APPEND TERRA_BIN_SRC
   main.cpp

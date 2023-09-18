@@ -19,6 +19,7 @@
 
 using namespace llvm;
 
+#if LLVM_VERSION < 170
 void llvmutil_addtargetspecificpasses(PassManagerBase *fpm, TargetMachine *TM) {
     assert(TM && fpm);
     TargetLibraryInfoImpl TLII(TM->getTargetTriple());
@@ -46,6 +47,26 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerWrapper W(fpm);
     PMB.populateModulePassManager(W);
 }
+#else
+FunctionPassManager llvmutil_createoptimizationpasses(TargetMachine *TM,
+                                                      LoopAnalysisManager &LAM,
+                                                      FunctionAnalysisManager &FAM,
+                                                      CGSCCAnalysisManager &CGAM,
+                                                      ModuleAnalysisManager &MAM) {
+    PassBuilder PB(TM);
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    // FIXME (Elliott): is this the right pipeline to build? Not obvious if
+    // it's equivalent to the old code path
+    return PB.buildFunctionSimplificationPipeline(OptimizationLevel::O3,
+                                                  ThinOrFullLTOPhase::None);
+}
+#endif
 
 void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
@@ -112,8 +133,12 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 // adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
                           emitobjfile_t &dest) {
-    PassManagerT pass;
+    legacy::PassManager pass;
+#if LLVM_VERSION < 170
     llvmutil_addtargetspecificpasses(&pass, TM);
+#else
+    Mod->setDataLayout(TM->createDataLayout());
+#endif
 
     CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
 
@@ -308,6 +333,7 @@ void llvmutil_copyfrommodule(llvm::Module *Dest, llvm::Module *Src,
 }
 
 void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
+#if LLVM_VERSION < 170
     PassManagerT MPM;
     llvmutil_addtargetspecificpasses(&MPM, TM);
 
@@ -327,6 +353,24 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PMB.populateModulePassManager(MPM);
 
     MPM.run(*M);
+#else
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    PassBuilder PB(TM);
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+
+    MPM.run(*M, MAM);
+#endif
 }
 
 error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
@@ -337,7 +381,12 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::string *err) {
     bool executionFailed = false;
     llvm::sys::ProcessInfo Info =
-            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), llvm::None,
+            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args),
+#if LLVM_VERSION < 160
+                                     llvm::None,
+#else
+                                     std::nullopt,
+#endif
                                      {}, 0, err, &executionFailed);
     if (executionFailed) return -1;
 #ifndef _WIN32
