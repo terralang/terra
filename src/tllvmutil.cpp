@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include <iostream>
+
 #include "tllvmutil.h"
 
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -13,6 +15,11 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCContext.h"
+
+#if LLVM_VERSION >= 170
+#include "llvm/Transforms/IPO/GlobalDCE.h"
+#endif
+
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -367,7 +374,22 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PB.registerLoopAnalyses(LAM);
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    ModulePassManager MPM;
+    MPM.addPass(VerifierPass());   // make sure we haven't messed stuff up yet
+    MPM.addPass(GlobalDCEPass());  // run this early since anything not in the table of
+                                   // exported functions is still in this module this
+                                   // will remove dead functions
+    MPM.addPass(PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3));
+
+    // Debugging code for printing the set of pipelines
+    /*
+    {
+      std::string buffer;
+      llvm::raw_string_ostream rso(buffer);
+      MPM.printPipeline(rso, [](auto a) { return a; });
+      std::cout << rso.str() << std::endl;
+    }
+    */
 
     MPM.run(*M, MAM);
 #endif
