@@ -273,6 +273,12 @@ int terra_inittarget(lua_State *L) {
 
     TT->next_unused_id = 0;
     TT->ctx = new LLVMContext();
+#if LLVM_VERSION >= 150 && LLVM_VERSION < 170
+    // Hack: This is a workaround to avoid the opaque pointer
+    // transition, but we will need to deal with it eventually.
+    // FIXME: https://github.com/terralang/terra/issues/553
+    TT->ctx->setOpaquePointers(false);
+#endif
     std::string err;
     const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
     if (!TheTarget) {
@@ -1234,7 +1240,7 @@ struct CCallingConv {
         LoadInst *l = dyn_cast<LoadInst>(src);
         if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
             Value *addr_src = l->getOperand(0);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
             // create bitcasts of src and dest address
             unsigned as_src = addr_src->getType()->getPointerAddressSpace();
             Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
@@ -1327,7 +1333,7 @@ struct CCallingConv {
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     unsigned as = v->getType()->getPointerAddressSpace();
                     Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
                     EmitEntryAggReg(B, dest, p->cctype, ai);
@@ -1338,7 +1344,7 @@ struct CCallingConv {
                 case C_ARRAY_REG: {
                     Value *scratch = CreateAlloca(B, p->cctype);
                     emitStoreAgg(B, p->cctype, &*ai, scratch);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
                     emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, casted),
@@ -1369,7 +1375,7 @@ struct CCallingConv {
             Value *dest = CreateAlloca(B, info->returntype.type->type);
             emitStoreAgg(B, info->returntype.type->type, result, dest);
             StructType *type = cast<StructType>(info->returntype.cctype);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
             unsigned as = dest->getType()->getPointerAddressSpace();
             Value *result = B->CreateBitCast(dest, Ptr(type, as));
 #else
@@ -1387,7 +1393,7 @@ struct CCallingConv {
             Value *dest = CreateAlloca(B, info->returntype.type->type);
             emitStoreAgg(B, info->returntype.type->type, result, dest);
             ArrayType *result_type = cast<ArrayType>(info->returntype.cctype);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
             unsigned as = dest->getType()->getPointerAddressSpace();
             Value *result = B->CreateBitCast(dest, Ptr(result_type, as));
 #else
@@ -1441,7 +1447,7 @@ struct CCallingConv {
                 case C_AGGREGATE_REG: {
                     Value *scratch = CreateAlloca(B, a->type->type);
                     emitStoreAgg(B, a->type->type, actual, scratch);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
                     EmitCallAggReg(B, casted, a->cctype, arguments);
@@ -1452,7 +1458,7 @@ struct CCallingConv {
                 case C_ARRAY_REG: {
                     Value *scratch = CreateAlloca(B, a->type->type);
                     emitStoreAgg(B, a->type->type, actual, scratch);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     unsigned as = scratch->getType()->getPointerAddressSpace();
                     Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
                     EmitCallAggReg(B, casted, a->cctype, arguments);
@@ -1467,7 +1473,7 @@ struct CCallingConv {
         }
 
         // emit call
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
         // function pointers are stored as &int8 to avoid calling convension issues
         // cast it back to the real pointer type right before calling it
         callee = B->CreateBitCast(callee, Ptr(info.fntype));
@@ -1489,7 +1495,7 @@ struct CCallingConv {
             } else if (C_AGGREGATE_REG == info.returntype.kind) {
                 aggregate = CreateAlloca(B, info.returntype.type->type);
                 StructType *type = cast<StructType>(info.returntype.cctype);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
 #else
@@ -1505,7 +1511,7 @@ struct CCallingConv {
             } else if (C_ARRAY_REG == info.returntype.kind) {
                 aggregate = CreateAlloca(B, info.returntype.type->type);
                 ArrayType *type = cast<ArrayType>(info.returntype.cctype);
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                 unsigned as = aggregate->getType()->getPointerAddressSpace();
                 Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
                 emitStoreAgg(B, type, call, casted);
@@ -2414,7 +2420,7 @@ struct FunctionEmitter {
             result = B->CreateInsertElement(result, v, ConstantInt::get(integerType, i));
         return result;
     }
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
     bool isPointerToFunction(Type *t) {
         return t->isPointerTy() && t->getPointerElementType()->isFunctionTy();
     }
@@ -2422,7 +2428,7 @@ struct FunctionEmitter {
     Value *emitStructSelect(Obj *structType, Value *structPtr, int index,
                             Obj *entryType) {
         assert(structPtr->getType()->isPointerTy());
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
         assert(structPtr->getType()->getPointerElementType()->isStructTy());
 #endif
         Ty->EnsureTypeIsComplete(structType);
@@ -2449,7 +2455,7 @@ struct FunctionEmitter {
         entry.obj("type", entryType);
         TType *entryTType = getType(entryType);
         if (entry.boolean("inunion")
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
             || isPointerToFunction(entryTType->type)
 #endif
         ) {
@@ -2465,7 +2471,7 @@ struct FunctionEmitter {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
             unsigned as_dst = addr->getType()->getPointerAddressSpace();
             // create bitcasts of src and dest address
             Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
@@ -2506,7 +2512,7 @@ struct FunctionEmitter {
             // perform the copy
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
                                        MaybeAlign(
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                                                l->getAlignment()
 #else
                                                l->getAlign()
@@ -2560,7 +2566,7 @@ struct FunctionEmitter {
                 if (T_globalvariable == global.kind("kind")) {
                     GlobalVariable *gv =
                             EmitGlobalVariable(CU, &global, exp->string("name"));
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     // Clang (as of LLVM 7) changes the types of certain globals
                     // (like arrays). Change the type back to what we expect
                     // here so we don't cause issues downstream in the compiler.
@@ -2572,7 +2578,7 @@ struct FunctionEmitter {
                     return gv;
 #endif
                 } else {
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                     // functions are represented with &int8 pointers to avoid
                     // calling convension issues, so cast the literal to this type now
                     return B->CreateBitCast(EmitFunction(CU, &global, fstate),
@@ -2707,7 +2713,7 @@ struct FunctionEmitter {
                             lua_pop(L, 1);
                             mapSymbol(CU->symbols, &stringvalue, str);
                         }
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                         return B->CreateBitCast(str, pt);
 #else
                         return str;
@@ -2801,7 +2807,7 @@ struct FunctionEmitter {
                 Value *v = emitExp(&a);
                 if (fromT->type->isPointerTy()) {
                     if (toT->type->isPointerTy()) {
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
                         return B->CreateBitCast(v, toT->type);
 #else
                         return v;
@@ -3710,7 +3716,7 @@ static int terra_deletefunction(lua_State *L) {
     VERBOSE_ONLY(CU->T) {
         printf("... uses not empty, removing body but keeping declaration.\n");
     }
-#if LLVM_VERSION < 150
+#if LLVM_VERSION < 170
     // FIXME: LLVM crashes if we attempt to delete with opaque pointers enabled
     func->deleteBody();
 #endif

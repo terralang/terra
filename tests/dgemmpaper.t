@@ -7,7 +7,7 @@ function symmat(typ,name,I,...)
   end
   return r
 end
-if terralib.llvm_version < 160 then
+if terralib.llvm_version < 170 then
   prefetch = terralib.intrinsic("llvm.prefetch.p0i8",{&opaque,int,int,int} -> {})
 else
   prefetch = terralib.intrinsic("llvm.prefetch.p0",{&opaque,int,int,int} -> {})
