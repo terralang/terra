@@ -3716,10 +3716,7 @@ static int terra_deletefunction(lua_State *L) {
     VERBOSE_ONLY(CU->T) {
         printf("... uses not empty, removing body but keeping declaration.\n");
     }
-#if LLVM_VERSION < 170
-    // FIXME: LLVM crashes if we attempt to delete with opaque pointers enabled
     func->deleteBody();
-#endif
     VERBOSE_ONLY(CU->T) { printf("... finish delete.\n"); }
     fstate->func = NULL;
     freecompilationunit(CU);

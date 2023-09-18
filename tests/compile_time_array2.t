@@ -1,3 +1,8 @@
+if terralib.llvm_version >= 170 then
+  print("FIXME: LLVM 17 has a compile time regression in compile_time_array.t, disabling test")
+  return
+end
+
 local c = terralib.includecstring([[
 #include <stdio.h>
 #include <stdlib.h>
