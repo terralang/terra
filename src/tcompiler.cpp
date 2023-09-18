@@ -2512,7 +2512,7 @@ struct FunctionEmitter {
             // perform the copy
             Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
                                        MaybeAlign(
-#if LLVM_VERSION < 170
+#if LLVM_VERSION < 150
                                                l->getAlignment()
 #else
                                                l->getAlign()
