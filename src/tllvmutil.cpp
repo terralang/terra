@@ -366,7 +366,10 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
 
-    PassBuilder PB(TM);
+    PipelineTuningOptions opt;
+    opt.LoopVectorization = true;
+    opt.SLPVectorization = true;
+    PassBuilder PB(TM, opt);
 
     PB.registerModuleAnalyses(MAM);
     PB.registerCGSCCAnalyses(CGAM);
