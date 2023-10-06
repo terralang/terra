@@ -125,7 +125,11 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     auto &LDEVICE = *E_LDEVICE;
 
     llvm::TargetOptions opt;
+#if LLVM_VERSION < 170
     auto RM = llvm::Optional<llvm::Reloc::Model>();
+#else
+    std::optional<llvm::Reloc::Model> RM = std::nullopt;
+#endif
     auto TargetMachine =
             Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
 
@@ -140,11 +144,13 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     llvm::SmallString<2048> dest;
     llvm::raw_svector_ostream str_dest(dest);
 
+#if LLVM_VERSION < 170
     llvm::PassManagerBuilder PMB;
     PMB.OptLevel = 3;
     PMB.SizeLevel = 0;
     PMB.Inliner = llvm::createFunctionInliningPass(PMB.OptLevel, 0, false);
     PMB.LoopVectorize = false;
+#endif
     auto FileType = llvm::CGFT_AssemblyFile;
 
     llvm::legacy::PassManager PM;
@@ -152,7 +158,11 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     TargetMachine->adjustPassManager(PMB);
 #endif
 
+#if LLVM_VERSION < 170
     PMB.populateModulePassManager(PM);
+#else
+    M->setDataLayout(TargetMachine->createDataLayout());
+#endif
 
     if (TargetMachine->addPassesToEmitFile(PM, str_dest, nullptr, FileType)) {
         llvm::errs() << "TargetMachine can't emit a file of this type\n";
