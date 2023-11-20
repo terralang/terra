@@ -762,14 +762,15 @@ struct CCallingConv {
     lua_State *L;
     terra_CompilerState *C;
     Types *Ty;
-    bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
-    bool wasm_cconv;
     bool aarch64_cconv;
+    bool amdgpu_cconv;
     bool ppc64_cconv;
     int ppc64_float_limit;
     int ppc64_int_limit;
     bool ppc64_count_used;
+    bool spirv_cconv;
+    bool wasm_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_),
@@ -777,19 +778,20 @@ struct CCallingConv {
               L(CU_->T->L),
               C(CU_->T->C),
               Ty(Ty_),
-              pass_struct_as_exploded_values(false),
               return_empty_struct_as_void(false),
-              wasm_cconv(false),
               aarch64_cconv(false),
+              amdgpu_cconv(false),
               ppc64_cconv(false),
               ppc64_float_limit(0),
               ppc64_int_limit(0),
-              ppc64_count_used(false) {
+              ppc64_count_used(false),
+              spirv_cconv(false),
+              wasm_cconv(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
-                pass_struct_as_exploded_values = true;
+                amdgpu_cconv = true;
             } break;
             case Triple::ArchType::aarch64:
             case Triple::ArchType::aarch64_be: {
@@ -805,6 +807,10 @@ struct CCallingConv {
                 ppc64_float_limit = 8;
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
+            } break;
+            case Triple::ArchType::spirv32:
+            case Triple::ArchType::spirv64: {
+                spirv_cconv = true;
             } break;
             case Triple::ArchType::wasm32:
             case Triple::ArchType::wasm64: {
@@ -1088,11 +1094,11 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
 
-        if (wasm_cconv && !WasmIsSingletonOrEmpty(t->type)) {
+        if ((wasm_cconv && !WasmIsSingletonOrEmpty(t->type)) || spirv_cconv) {
             return Argument(C_AGGREGATE_MEM, t);
         }
 
-        if (pass_struct_as_exploded_values) {
+        if (amdgpu_cconv) {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
