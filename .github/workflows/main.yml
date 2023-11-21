@@ -93,7 +93,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3', '17.0.1']
+        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3', '17.0.5']
         lua: ['luajit', 'moonjit']
         cuda: ['0', '1']
         test: ['1']
@@ -109,7 +109,7 @@ jobs:
             cuda: '1'
           - llvm: '16.0.3'
             cuda: '1'
-          - llvm: '17.0.1'
+          - llvm: '17.0.5'
             cuda: '1'
 
           # Moonjit with LLVM 14 only:
@@ -123,7 +123,7 @@ jobs:
             lua: 'moonjit'
           - llvm: '16.0.3'
             lua: 'moonjit'
-          - llvm: '17.0.1'
+          - llvm: '17.0.5'
             lua: 'moonjit'
 
         include:
