@@ -12,7 +12,7 @@ freebsd_task:
       # LLVM_VERSION: 14
       LLVM_VERSION: 15
       LLVM_VERSION: 16
-      # LLVM_VERSION: 17 # not available as of 2023-09-21
+      LLVM_VERSION: 17
   install_script: pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
   script: |
     export CC=cc
