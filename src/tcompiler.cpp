@@ -242,7 +242,7 @@ int terra_inittarget(lua_State *L) {
     else
         TT->CPU = llvm::sys::getHostCPUName().str();
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_WIN32)
     if (TT->CPU == "generic") {
         TT->CPU = "x86-64";
     }
