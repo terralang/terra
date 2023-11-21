@@ -3,9 +3,16 @@
 
 #include "llvmheaders.h"
 
+#if LLVM_VERSION < 170
 void llvmutil_addtargetspecificpasses(llvm::PassManagerBase *fpm,
                                       llvm::TargetMachine *tm);
 void llvmutil_addoptimizationpasses(llvm::PassManagerBase *fpm);
+#else
+llvm::FunctionPassManager llvmutil_createoptimizationpasses(
+        llvm::TargetMachine *TM, llvm::LoopAnalysisManager &LAM,
+        llvm::FunctionAnalysisManager &FAM, llvm::CGSCCAnalysisManager &CGAM,
+        llvm::ModuleAnalysisManager &MAM);
+#endif
 extern "C" void llvmutil_disassemblefunction(void *data, size_t sz, size_t inst);
 bool llvmutil_emitobjfile(llvm::Module *Mod, llvm::TargetMachine *TM,
                           bool outputobjectfile, emitobjfile_t &dest);

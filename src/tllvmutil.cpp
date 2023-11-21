@@ -2,6 +2,8 @@
 
 #include <stdio.h>
 
+#include <iostream>
+
 #include "tllvmutil.h"
 
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -13,12 +15,35 @@
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCContext.h"
+
+#if LLVM_VERSION >= 170
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/IPO/GlobalDCE.h"
+#include "llvm/Transforms/Scalar/AlignmentFromAssumptions.h"
+#include "llvm/Transforms/Scalar/BDCE.h"
+#include "llvm/Transforms/Scalar/CorrelatedValuePropagation.h"
+#include "llvm/Transforms/Scalar/EarlyCSE.h"
+#include "llvm/Transforms/Scalar/LICM.h"
+#include "llvm/Transforms/Scalar/LoopLoadElimination.h"
+#include "llvm/Transforms/Scalar/LoopUnrollAndJamPass.h"
+#include "llvm/Transforms/Scalar/LoopUnrollPass.h"
+#include "llvm/Transforms/Scalar/SCCP.h"
+#include "llvm/Transforms/Scalar/SimpleLoopUnswitch.h"
+#include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Scalar/SROA.h"
+#include "llvm/Transforms/Scalar/WarnMissedTransforms.h"
+#include "llvm/Transforms/Vectorize/LoopVectorize.h"
+#include "llvm/Transforms/Vectorize/SLPVectorizer.h"
+#include "llvm/Transforms/Vectorize/VectorCombine.h"
+#endif
+
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
 
 using namespace llvm;
 
+#if LLVM_VERSION < 170
 void llvmutil_addtargetspecificpasses(PassManagerBase *fpm, TargetMachine *TM) {
     assert(TM && fpm);
     TargetLibraryInfoImpl TLII(TM->getTargetTriple());
@@ -46,6 +71,192 @@ void llvmutil_addoptimizationpasses(PassManagerBase *fpm) {
     PassManagerWrapper W(fpm);
     PMB.populateModulePassManager(W);
 }
+#else
+// Adapted from PassBuilder::addVectorPasses. LLVM doesn't expose this, and
+// the function pipeline doesn't do vectorization by default, so we have to
+// help ourselves here.
+void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
+                     FunctionPassManager &FPM, bool IsFullLTO, bool EnableUnrollAndJam,
+                     bool ExtraVectorizerPasses) {
+    FPM.addPass(LoopVectorizePass(
+            LoopVectorizeOptions(!PTO.LoopInterleaving, !PTO.LoopVectorization)));
+
+    // if (EnableInferAlignmentPass)
+    //   FPM.addPass(InferAlignmentPass());
+    if (IsFullLTO) {
+        // The vectorizer may have significantly shortened a loop body; unroll
+        // again. Unroll small loops to hide loop backedge latency and saturate any
+        // parallel execution resources of an out-of-order processor. We also then
+        // need to clean up redundancies and loop invariant code.
+        // FIXME: It would be really good to use a loop-integrated instruction
+        // combiner for cleanup here so that the unrolling and LICM can be pipelined
+        // across the loop nests.
+        // We do UnrollAndJam in a separate LPM to ensure it happens before unroll
+        if (EnableUnrollAndJam && PTO.LoopUnrolling)
+            FPM.addPass(createFunctionToLoopPassAdaptor(
+                    LoopUnrollAndJamPass(Level.getSpeedupLevel())));
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(
+                Level.getSpeedupLevel(), /*OnlyWhenForced=*/!PTO.LoopUnrolling,
+                PTO.ForgetAllSCEVInLoopUnroll)));
+        FPM.addPass(WarnMissedTransformationsPass());
+        // Now that we are done with loop unrolling, be it either by LoopVectorizer,
+        // or LoopUnroll passes, some variable-offset GEP's into alloca's could have
+        // become constant-offset, thus enabling SROA and alloca promotion. Do so.
+        // NOTE: we are very late in the pipeline, and we don't have any LICM
+        // or SimplifyCFG passes scheduled after us, that would cleanup
+        // the CFG mess this may created if allowed to modify CFG, so forbid that.
+        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+    }
+
+    if (!IsFullLTO) {
+        // Eliminate loads by forwarding stores from the previous iteration to loads
+        // of the current iteration.
+        FPM.addPass(LoopLoadEliminationPass());
+    }
+    // Cleanup after the loop optimization passes.
+    FPM.addPass(InstCombinePass());
+
+    if (Level.getSpeedupLevel() > 1 && ExtraVectorizerPasses) {
+        ExtraVectorPassManager ExtraPasses;
+        // At higher optimization levels, try to clean up any runtime overlap and
+        // alignment checks inserted by the vectorizer. We want to track correlated
+        // runtime checks for two inner loops in the same outer loop, fold any
+        // common computations, hoist loop-invariant aspects out of any outer loop,
+        // and unswitch the runtime checks if possible. Once hoisted, we may have
+        // dead (or speculatable) control flows or more combining opportunities.
+        ExtraPasses.addPass(EarlyCSEPass());
+        ExtraPasses.addPass(CorrelatedValuePropagationPass());
+        ExtraPasses.addPass(InstCombinePass());
+        LoopPassManager LPM;
+        LPM.addPass(LICMPass(PTO.LicmMssaOptCap, PTO.LicmMssaNoAccForPromotionCap,
+                             /*AllowSpeculation=*/true));
+        LPM.addPass(
+                SimpleLoopUnswitchPass(/* NonTrivial */ Level == OptimizationLevel::O3));
+        ExtraPasses.addPass(
+                createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/true,
+                                                /*UseBlockFrequencyInfo=*/true));
+        ExtraPasses.addPass(
+                SimplifyCFGPass(SimplifyCFGOptions().convertSwitchRangeToICmp(true)));
+        ExtraPasses.addPass(InstCombinePass());
+        FPM.addPass(std::move(ExtraPasses));
+    }
+
+    // Now that we've formed fast to execute loop structures, we do further
+    // optimizations. These are run afterward as they might block doing complex
+    // analyses and transforms such as what are needed for loop vectorization.
+
+    // Cleanup after loop vectorization, etc. Simplification passes like CVP and
+    // GVN, loop transforms, and others have already run, so it's now better to
+    // convert to more optimized IR using more aggressive simplify CFG options.
+    // The extra sinking transform can create larger basic blocks, so do this
+    // before SLP vectorization.
+    FPM.addPass(SimplifyCFGPass(SimplifyCFGOptions()
+                                        .forwardSwitchCondToPhi(true)
+                                        .convertSwitchRangeToICmp(true)
+                                        .convertSwitchToLookupTable(true)
+                                        .needCanonicalLoops(false)
+                                        .hoistCommonInsts(true)
+                                        .sinkCommonInsts(true)));
+
+    if (IsFullLTO) {
+        FPM.addPass(SCCPPass());
+        FPM.addPass(InstCombinePass());
+        FPM.addPass(BDCEPass());
+    }
+
+    // Optimize parallel scalar instruction chains into SIMD instructions.
+    if (PTO.SLPVectorization) {
+        FPM.addPass(SLPVectorizerPass());
+        if (Level.getSpeedupLevel() > 1 && ExtraVectorizerPasses) {
+            FPM.addPass(EarlyCSEPass());
+        }
+    }
+    // Enhance/cleanup vector code.
+    FPM.addPass(VectorCombinePass());
+
+    if (!IsFullLTO) {
+        FPM.addPass(InstCombinePass());
+        // Unroll small loops to hide loop backedge latency and saturate any
+        // parallel execution resources of an out-of-order processor. We also then
+        // need to clean up redundancies and loop invariant code.
+        // FIXME: It would be really good to use a loop-integrated instruction
+        // combiner for cleanup here so that the unrolling and LICM can be pipelined
+        // across the loop nests.
+        // We do UnrollAndJam in a separate LPM to ensure it happens before unroll
+        if (EnableUnrollAndJam && PTO.LoopUnrolling) {
+            FPM.addPass(createFunctionToLoopPassAdaptor(
+                    LoopUnrollAndJamPass(Level.getSpeedupLevel())));
+        }
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(
+                Level.getSpeedupLevel(), /*OnlyWhenForced=*/!PTO.LoopUnrolling,
+                PTO.ForgetAllSCEVInLoopUnroll)));
+        FPM.addPass(WarnMissedTransformationsPass());
+        // Now that we are done with loop unrolling, be it either by LoopVectorizer,
+        // or LoopUnroll passes, some variable-offset GEP's into alloca's could have
+        // become constant-offset, thus enabling SROA and alloca promotion. Do so.
+        // NOTE: we are very late in the pipeline, and we don't have any LICM
+        // or SimplifyCFG passes scheduled after us, that would cleanup
+        // the CFG mess this may created if allowed to modify CFG, so forbid that.
+        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+    }
+
+    // if (EnableInferAlignmentPass)
+    //   FPM.addPass(InferAlignmentPass());
+    FPM.addPass(InstCombinePass());
+
+    // This is needed for two reasons:
+    //   1. It works around problems that instcombine introduces, such as sinking
+    //      expensive FP divides into loops containing multiplications using the
+    //      divide result.
+    //   2. It helps to clean up some loop-invariant code created by the loop
+    //      unroll pass when IsFullLTO=false.
+    FPM.addPass(createFunctionToLoopPassAdaptor(
+            LICMPass(PTO.LicmMssaOptCap, PTO.LicmMssaNoAccForPromotionCap,
+                     /*AllowSpeculation=*/true),
+            /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+
+    // Now that we've vectorized and unrolled loops, we may have more refined
+    // alignment information, try to re-derive it here.
+    FPM.addPass(AlignmentFromAssumptionsPass());
+}
+
+FunctionPassManager llvmutil_createoptimizationpasses(TargetMachine *TM,
+                                                      LoopAnalysisManager &LAM,
+                                                      FunctionAnalysisManager &FAM,
+                                                      CGSCCAnalysisManager &CGAM,
+                                                      ModuleAnalysisManager &MAM) {
+    PipelineTuningOptions PTO;
+    PTO.LoopVectorization = true;
+    PTO.SLPVectorization = true;
+    PassBuilder PB(TM, PTO);
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    // FIXME (Elliott): is this the right pipeline to build? Not obvious if
+    // it's equivalent to the old code path
+    FunctionPassManager FPM = PB.buildFunctionSimplificationPipeline(
+            OptimizationLevel::O3, ThinOrFullLTOPhase::None);
+
+    addVectorPasses(PTO, OptimizationLevel::O3, FPM, /*IsFullLTO*/ false,
+                    /*EnableUnrollAndJam*/ false, /*ExtraVectorizerPasses*/ true);
+
+    // Debugging code for printing the set of pipelines
+    /*
+    {
+        std::string buffer;
+        llvm::raw_string_ostream rso(buffer);
+        FPM.printPipeline(rso, [](auto a) { return a; });
+        std::cout << rso.str() << std::endl;
+    }
+    */
+
+    return FPM;
+}
+#endif
 
 void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
@@ -112,8 +323,12 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
 // adapted from LLVM's C interface "LLVMTargetMachineEmitToFile"
 bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
                           emitobjfile_t &dest) {
-    PassManagerT pass;
+    legacy::PassManager pass;
+#if LLVM_VERSION < 170
     llvmutil_addtargetspecificpasses(&pass, TM);
+#else
+    Mod->setDataLayout(TM->createDataLayout());
+#endif
 
     CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
 
@@ -308,6 +523,7 @@ void llvmutil_copyfrommodule(llvm::Module *Dest, llvm::Module *Src,
 }
 
 void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
+#if LLVM_VERSION < 170
     PassManagerT MPM;
     llvmutil_addtargetspecificpasses(&MPM, TM);
 
@@ -327,6 +543,42 @@ void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
     PMB.populateModulePassManager(MPM);
 
     MPM.run(*M);
+#else
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    PipelineTuningOptions PTO;
+    PTO.LoopVectorization = true;
+    PTO.SLPVectorization = true;
+    PassBuilder PB(TM, PTO);
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    ModulePassManager MPM;
+    MPM.addPass(VerifierPass());   // make sure we haven't messed stuff up yet
+    MPM.addPass(GlobalDCEPass());  // run this early since anything not in the table of
+                                   // exported functions is still in this module this
+                                   // will remove dead functions
+    MPM.addPass(PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3));
+
+    // Debugging code for printing the set of pipelines
+    /*
+    {
+        std::string buffer;
+        llvm::raw_string_ostream rso(buffer);
+        MPM.printPipeline(rso, [](auto a) { return a; });
+        std::cout << rso.str() << std::endl;
+    }
+    */
+
+    MPM.run(*M, MAM);
+#endif
 }
 
 error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
@@ -337,7 +589,12 @@ error_code llvmutil_createtemporaryfile(const Twine &Prefix, StringRef Suffix,
 int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::string *err) {
     bool executionFailed = false;
     llvm::sys::ProcessInfo Info =
-            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args), llvm::None,
+            llvm::sys::ExecuteNoWait(program, llvm::toStringRefArray(args),
+#if LLVM_VERSION < 160
+                                     llvm::None,
+#else
+                                     std::nullopt,
+#endif
                                      {}, 0, err, &executionFailed);
     if (executionFailed) return -1;
 #ifndef _WIN32

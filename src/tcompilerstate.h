@@ -2,7 +2,10 @@
 #define _tcompilerstate_h
 
 #include "llvmheaders.h"
+#if LLVM_VERSION < 170
+// FIXME (Elliott): need to restore the manual inliner in LLVM 17
 #include "tinline.h"
+#endif
 
 struct TerraFunctionInfo {
     llvm::LLVMContext *ctx;
@@ -41,14 +44,18 @@ struct TerraCompilationUnit {
               T(NULL),
               C(NULL),
               M(NULL),
+#if LLVM_VERSION < 170
+              // FIXME (Elliott): need to restore the manual inliner in LLVM 17
               mi(NULL),
+#endif
               fpm(NULL),
               ee(NULL),
               jiteventlistener(NULL),
               Ty(NULL),
               CC(NULL),
               symbols(NULL),
-              functioncount(0) {}
+              functioncount(0) {
+    }
     int nreferences;
     // configuration
     bool optimize;
@@ -59,7 +66,15 @@ struct TerraCompilationUnit {
     terra_CompilerState *C;
     TerraTarget *TT;
     llvm::Module *M;
+#if LLVM_VERSION < 170
+    // FIXME (Elliott): need to restore the manual inliner in LLVM 17
     ManualInliner *mi;
+#else
+    llvm::LoopAnalysisManager lam;
+    llvm::FunctionAnalysisManager fam;
+    llvm::CGSCCAnalysisManager cgam;
+    llvm::ModuleAnalysisManager mam;
+#endif
     FunctionPassManager *fpm;
     llvm::ExecutionEngine *ee;
     llvm::JITEventListener *jiteventlistener;  // for reporting debug info

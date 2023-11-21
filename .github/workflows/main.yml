@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         os: ['macos-11', 'windows-2022']
-        llvm: ['11', '12', '13', '14', '15', '16']
+        llvm: ['11', '12', '13', '14', '15', '16', '17']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
@@ -28,7 +28,7 @@ jobs:
           - os: 'macos-11'
             cuda: '1'
 
-          # Windows: exclude LLVM 12-16
+          # Windows: exclude LLVM 12-17
           - os: 'windows-2022'
             llvm: '12'
           - os: 'windows-2022'
@@ -39,6 +39,8 @@ jobs:
             llvm: '15'
           - os: 'windows-2022'
             llvm: '16'
+          - os: 'windows-2022'
+            llvm: '17'
 
           # CUDA: only LLVM 11
           - llvm: '12'
@@ -51,6 +53,8 @@ jobs:
             cuda: '1'
           - llvm: '16'
             cuda: '1'
+          - llvm: '17'
+            cuda: '1'
 
           # Moonjit: only LLVM 12
           - llvm: '11'
@@ -62,6 +66,8 @@ jobs:
           - llvm: '15'
             lua: 'moonjit'
           - llvm: '16'
+            lua: 'moonjit'
+          - llvm: '17'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v1
@@ -87,7 +93,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-18.04']
-        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3']
+        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3', '17.0.5']
         lua: ['luajit', 'moonjit']
         cuda: ['0', '1']
         test: ['1']
@@ -103,6 +109,8 @@ jobs:
             cuda: '1'
           - llvm: '16.0.3'
             cuda: '1'
+          - llvm: '17.0.5'
+            cuda: '1'
 
           # Moonjit with LLVM 14 only:
           - llvm: '11'
@@ -114,6 +122,8 @@ jobs:
           - llvm: '15.0.2'
             lua: 'moonjit'
           - llvm: '16.0.3'
+            lua: 'moonjit'
+          - llvm: '17.0.5'
             lua: 'moonjit'
 
         include:
