@@ -808,20 +808,26 @@ struct CCallingConv {
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
             } break;
+#if LLVM_VERSION >= 150
             case Triple::ArchType::spirv32:
             case Triple::ArchType::spirv64: {
                 spirv_cconv = true;
             } break;
+#endif
             case Triple::ArchType::wasm32:
             case Triple::ArchType::wasm64: {
                 wasm_cconv = true;
             } break;
+            default:
+                break;
         }
 
         switch (Triple.getOS()) {
             case Triple::OSType::Win32: {
                 return_empty_struct_as_void = true;
             } break;
+            default:
+                break;
         }
     }
 
