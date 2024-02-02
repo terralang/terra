@@ -1277,7 +1277,12 @@ do
                 if status then return r end
             end
             return self.name
-        elseif self:ispointer() then return "&"..tostring(self.type)
+        elseif self:ispointer() then
+            if not self.addressspace or self.addressspace == 0 then
+                return "&"..tostring(self.type)
+            else
+                return "pointer("..tostring(self.type)..","..tostring(self.addressspace)..")"
+            end
         elseif self:isvector() then return "vector("..tostring(self.type)..","..tostring(self.N)..")"
         elseif self:isfunction() then return mkstring(self.parameters,"{",",",self.isvararg and " ...}" or "}").." -> "..tostring(self.returntype)
         elseif self:isarray() then
