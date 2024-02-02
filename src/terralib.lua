@@ -2455,15 +2455,15 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         local function ascompletepointer(exp) --convert pointer like things into pointers to _complete_ types
             exp.type.type:tcomplete(exp)
-            return (insertcast(exp,terra.types.pointer(exp.type.type))) --parens are to truncate to 1 argument
+            return (insertcast(exp,terra.types.pointer(exp.type.type, exp.type.addressspace))) --parens are to truncate to 1 argument
         end
         -- subtracting 2 pointers
         if  pointerlike(l.type) and pointerlike(r.type) and l.type.type == r.type.type and e.operator == tokens["-"] then
             return e:copy { operands = List {ascompletepointer(l),ascompletepointer(r)} }:withtype(terra.types.ptrdiff)
         elseif pointerlike(l.type) and r.type:isintegral() then -- adding or subtracting a int to a pointer
-            return e:copy {operands = List {ascompletepointer(l),r} }:withtype(terra.types.pointer(l.type.type))
+            return e:copy {operands = List {ascompletepointer(l),r} }:withtype(terra.types.pointer(l.type.type, l.type.addressspace))
         elseif l.type:isintegral() and pointerlike(r.type) then
-            return e:copy {operands = List {ascompletepointer(r),l} }:withtype(terra.types.pointer(r.type.type))
+            return e:copy {operands = List {ascompletepointer(r),l} }:withtype(terra.types.pointer(r.type.type, r.type.addressspace))
         else
             return meetbinary(e,"isarithmeticorvector",l,r)
         end
