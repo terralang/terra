@@ -2828,7 +2828,12 @@ struct FunctionEmitter {
 #if LLVM_VERSION < 170
                         return B->CreateBitCast(v, toT->type);
 #else
-                        return v;
+                        if (fromT->type->getPointerAddressSpace() !=
+                            toT->type->getPointerAddressSpace()) {
+                            return B->CreateAddrSpaceCast(v, toT->type);
+                        } else {
+                            return v;
+                        }
 #endif
                     } else {
                         assert(toT->type->isIntegerTy());
