@@ -811,6 +811,7 @@ struct CCallingConv {
 #if LLVM_VERSION >= 150
             case Triple::ArchType::spirv32:
             case Triple::ArchType::spirv64: {
+                return_empty_struct_as_void = true;
                 spirv_cconv = true;
             } break;
 #endif
@@ -1147,7 +1148,7 @@ struct CCallingConv {
         int zero = 0;
         info->returntype = ClassifyArgument(&returntype, &zero, &zero, true);
 
-        if (return_empty_struct_as_void || cconv == CallingConv::SPIR_KERNEL) {
+        if (return_empty_struct_as_void) {
             // windows classifies empty structs as pass by pointer, but we need a return
             // value of unit (an empty tuple) to be translated to void. So if it is unit,
             // force the return value to be void by overriding the normal classification
