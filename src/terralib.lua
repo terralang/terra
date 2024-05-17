@@ -2762,6 +2762,29 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
+    --check if metamethods.__init is implemented
+    local function checkmetainit(anchor, reciever)
+        if reciever.type and reciever.type:isstruct() then
+            if reciever:is "allocvar" then
+                reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
+            end
+            if reciever.type.metamethods.__init then
+                return checkmethodwithreciever(anchor, true, "__init", reciever, terralib.newlist(), "statement")
+            end
+        end
+    end
+
+    local function checkmetainitializers(anchor, lhs)
+        local stmts = terralib.newlist()
+        for i,e in ipairs(lhs) do
+            local init = checkmetainit(anchor, e)
+            if init then
+                stmts:insert(init)
+            end
+        end
+        return stmts
+    end
+
     local function checkmethod(exp, location)
         local methodname = checklabel(exp.name,true).value
         assert(type(methodname) == "string" or terra.islabel(methodname))
@@ -3309,9 +3332,13 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "defvar" then
                 local rhs = s.hasinit and checkexpressions(s.initializers)
                 local lhs = checkformalparameterlist(s.variables, not s.hasinit)
-                local res = s.hasinit and createassignment(s,lhs,rhs) 
-                            or createstatementlist(s,lhs)
-                return res
+                if s.hasinit then
+                    return createassignment(s,lhs,rhs)
+                else
+                    local res = createstatementlist(s,lhs)
+                    res.statements:insertall(checkmetainitializers(s, lhs))
+                    return res
+                end
             elseif s:is "assignment" then
                 local rhs = checkexpressions(s.rhs)
                 local lhs = checkexpressions(s.lhs,"lexpression")
