@@ -3247,9 +3247,59 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(anchor,T.assignment,lhs,rhs)
     end
 
+    local function checkmetadtors(anchor, stats)
+        --extract the return statement from `stats`, if there is one
+        local function extractreturnstat()
+            local n = #stats
+            if n>0 then
+                local s = stats[n]
+                if s:is "returnstat" then
+                    return s
+                end
+            end
+        end
+        local rstat = extractreturnstat()
+        --extract the returned `var` symbols from a return statement
+        local function extractreturnedsymbols()
+            local ret = {}
+            --loop over expressions in a `letin` return statement
+            for i,v in ipairs(rstat.expression.expressions) do
+                if v:is "var" then
+                    ret[v.name] = v.symbol
+                end
+            end
+            return ret
+        end
+        --check if a __dtor metamethod is implemented for the type corresponding to `sym`
+        local function checkdtor(name,sym)
+            local mt = sym.type.metamethods
+            if mt and mt.__dtor then
+                local reciever = newobject(anchor, T.var, name, sym):setlvalue(true):withtype(sym.type)
+                return checkmethodwithreciever(anchor, true, "__dtor", reciever, terralib.newlist(), "statement")
+            end
+        end
+
+        --get symbols that are returned in case of a return statement
+        local rsyms = rstat and extractreturnedsymbols() or {}
+        --get position at which to add destructor statements
+        local pos = rstat and #stats or #stats+1
+        for name,sym in pairs(env:localenv()) do
+            --if not a return variable ckeck for an implementation of metamethods.__dtor
+            if not rsyms[name] then
+                local dtor = checkdtor(name,sym)
+                if dtor then
+                    --add deferred calls to the destructors
+                    table.insert(stats, pos, newobject(anchor, T.defer, dtor))
+                    pos = pos + 1
+                end
+            end
+        end
+        return stats
+    end
+
     function checkblock(s)
         env:enterblock()
-        local stats = checkstmts(s.statements)
+        local stats = checkmetadtors(s, checkstmts(s.statements))
         env:leaveblock()
         return s:copy {statements = stats}
     end
