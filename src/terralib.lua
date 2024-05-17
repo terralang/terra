@@ -2785,6 +2785,61 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return stmts
     end
 
+    --check if a __dtor metamethod is implemented for the type corresponding to `sym`
+    local function checkmetadtor(anchor, reciever)
+        if reciever.type and reciever.type:isstruct() then
+            if reciever.type.metamethods.__dtor then
+                if reciever:is "allocvar" then
+                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
+                end
+                return checkmethodwithreciever(anchor, true, "__dtor", reciever, terralib.newlist(), "statement")
+            end
+        end
+    end
+
+    local function checkmetadtors(anchor, stats)
+        --extract the return statement from `stats`, if there is one
+        local function extractreturnstat()
+            local n = #stats
+            if n>0 then
+                local s = stats[n]
+                if s:is "returnstat" then
+                    return s
+                end
+            end
+        end
+        local rstat = extractreturnstat()
+        --extract the returned `var` symbols from a return statement
+        local function extractreturnedsymbols()
+            local ret = {}
+            --loop over expressions in a `letin` return statement
+            for i,v in ipairs(rstat.expression.expressions) do
+                if v:is "var" then
+                    ret[v.name] = v.symbol
+                end
+            end
+            return ret
+        end
+
+        --get symbols that are returned in case of a return statement
+        local rsyms = rstat and extractreturnedsymbols() or {}
+        --get position at which to add destructor statements
+        local pos = rstat and #stats or #stats+1
+        for name,sym in pairs(env:localenv()) do
+            --if not a return variable ckeck for an implementation of metamethods.__dtor
+            if not rsyms[name] then
+                local reciever = newobject(anchor,T.var, name, sym):setlvalue(true):withtype(sym.type)
+                local dtor = checkmetadtor(anchor, reciever)
+                if dtor then
+                    --add deferred calls to the destructors
+                    table.insert(stats, pos, newobject(anchor, T.defer, dtor))
+                    pos = pos + 1
+                end
+            end
+        end
+        return stats
+    end
+
     local function hasmetacopyassignment(typ)
         if typ and typ:isstruct() and typ.metamethods.__copy then
             return true
@@ -3337,6 +3392,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 else
                     ensurelvalue(v)
+                    local dtor = checkmetadtor(anchor, v)
+                    if dtor then
+                        stmts:insert(dtor)
+                    end
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 end
             end
@@ -3352,56 +3411,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return createstatementlist(anchor, stmts)
             end
         end
-    end
-
-    local function checkmetadtors(anchor, stats)
-        --extract the return statement from `stats`, if there is one
-        local function extractreturnstat()
-            local n = #stats
-            if n>0 then
-                local s = stats[n]
-                if s:is "returnstat" then
-                    return s
-                end
-            end
-        end
-        local rstat = extractreturnstat()
-        --extract the returned `var` symbols from a return statement
-        local function extractreturnedsymbols()
-            local ret = {}
-            --loop over expressions in a `letin` return statement
-            for i,v in ipairs(rstat.expression.expressions) do
-                if v:is "var" then
-                    ret[v.name] = v.symbol
-                end
-            end
-            return ret
-        end
-        --check if a __dtor metamethod is implemented for the type corresponding to `sym`
-        local function checkdtor(name,sym)
-            local mt = sym.type.metamethods
-            if mt and mt.__dtor then
-                local reciever = newobject(anchor, T.var, name, sym):setlvalue(true):withtype(sym.type)
-                return checkmethodwithreciever(anchor, true, "__dtor", reciever, terralib.newlist(), "statement")
-            end
-        end
-
-        --get symbols that are returned in case of a return statement
-        local rsyms = rstat and extractreturnedsymbols() or {}
-        --get position at which to add destructor statements
-        local pos = rstat and #stats or #stats+1
-        for name,sym in pairs(env:localenv()) do
-            --if not a return variable ckeck for an implementation of metamethods.__dtor
-            if not rsyms[name] then
-                local dtor = checkdtor(name,sym)
-                if dtor then
-                    --add deferred calls to the destructors
-                    table.insert(stats, pos, newobject(anchor, T.defer, dtor))
-                    pos = pos + 1
-                end
-            end
-        end
-        return stats
     end
 
     function checkblock(s)
@@ -3692,11 +3701,11 @@ function terra.includecstring(code,cargs,target)
     	args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    --local sdkroot = os.getenv("SDKROOT")
-    --if sdkroot then
-    --  args:insert("-isysroot")
-    --  args:insert(sdkroot)
-    --end
+    local sdkroot = os.getenv("SDKROOT")
+    if sdkroot then
+      args:insert("-isysroot")
+      args:insert(sdkroot)
+    end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4.2.1")
