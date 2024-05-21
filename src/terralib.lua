@@ -2762,6 +2762,15 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
+    --check if metamethod is implemented
+    local function hasmetamethod(v, method)
+        local typ = v.type
+        if typ and typ:isstruct() and typ.metamethods[method] then
+            return true
+        end
+        return false
+    end
+
     --check if metamethods.__init is implemented
     local function checkmetainit(anchor, reciever)
         if reciever.type and reciever.type:isstruct() then
@@ -2840,16 +2849,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return stats
     end
 
-    local function hasmetacopyassignment(reciever)
-        if reciever.type and reciever.type:isstruct() and reciever.type.metamethods.__copy then
-            return true
-        end
-        return false
-    end
-
     local function checkmetacopyassignment(anchor, from, to)
         --if neither `from` or `to` are a struct then return
-        if not (hasmetacopyassignment(from) or hasmetacopyassignment(to)) then
+        if not (hasmetamethod(from, "__copy") or hasmetamethod(to, "__copy")) then
             return
         end
         --if `to` is an allocvar then set type and turn into corresponding `var`
@@ -2861,7 +2863,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         --list of overloaded __copy metamethods
         local overloads = terra.newlist()
         local function checkoverload(v)
-            if hasmetacopyassignment(v) then
+            if hasmetamethod(v, "__copy") then
                 overloads:insert(asterraexpression(anchor, v.type.metamethods.__copy, "luaobject"))
             end
         end
@@ -3304,7 +3306,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         for i=1,#lhs do
-            if rhs[i] and (rhs[i]:is "var" or rhs[i]:is "literal" or rhs[i]:is "constant") and (hasmetacopyassignment(lhs[i]) or hasmetacopyassignment(rhs[i])) then
+            if rhs[i] and (rhs[i]:is "var" or rhs[i]:is "literal" or rhs[i]:is "constant") and (hasmetamethod(lhs[i],"__copy") or hasmetamethod(rhs[i],"__copy")) then
                 --add assignment by __copy call
                 byfcall.lhs:insert(lhs[i])
                 byfcall.rhs:insert(rhs[i])
@@ -3357,6 +3359,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             return newobject(anchor,T.assignment,lhs,rhs)
         else
             --standard case #lhs == #rhs
+            local stmts = terralib.newlist()
             --first take care of regular assignments
             local regular, byfcall = assignmentkinds(lhs, rhs)
             local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
@@ -3370,10 +3373,17 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     v:settype(rhstype)
                 else
                     ensurelvalue(v)
+                    --if 'v' is a managed variable then first assign 'v' to a temporary variable 'var tmp = v'
+                    --then do the reassignment, 'v = ...', and then, call the destructor on 'tmp', freeing possible
+                    --heap resources
+                    if hasmetamethod(v, "__dtor") then
+                        local tmpv, tmp = allocvar(v, v.type,"<tmp>")
+                        stmts:insert(newobject(anchor,T.assignment, List{tmpv}, List{v}))
+                        stmts:insert(newobject(anchor,T.defer, checkmetadtor(v, tmp)))
+                    end
                 end
             end
             --take care of copy assignments using metamethods.__copy
-            local stmts = terralib.newlist()
             for i,v in ipairs(byfcall.lhs) do
                 local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
                 if v:is "setteru" then
@@ -3390,9 +3400,13 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 else
                     ensurelvalue(v)
-                    local dtor = checkmetadtor(anchor, v)
-                    if dtor then
-                        stmts:insert(dtor)
+                    --first assign 'v' to a temporary variable 'var tmp = v' (shallow copy)
+                    --then do the reassignment, 'v = ...', and then call the destructor
+                    --on 'tmp', freeing possible heap resources
+                    if hasmetamethod(v, "__dtor") then
+                        local tmpv, tmp = allocvar(v, v.type,"<tmp>")
+                        stmts:insert(newobject(anchor,T.assignment, List{tmpv}, List{v}))
+                        stmts:insert(newobject(anchor,T.defer, checkmetadtor(v, tmp)))
                     end
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 end
@@ -3699,11 +3713,11 @@ function terra.includecstring(code,cargs,target)
     	args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    local sdkroot = os.getenv("SDKROOT")
-    if sdkroot then
-      args:insert("-isysroot")
-      args:insert(sdkroot)
-    end
+    --local sdkroot = os.getenv("SDKROOT")
+    --if sdkroot then
+    --  args:insert("-isysroot")
+    --  args:insert(sdkroot)
+    --end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4.2.1")
