@@ -2840,8 +2840,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return stats
     end
 
-    local function hasmetacopyassignment(typ)
-        if typ and typ:isstruct() and typ.metamethods.__copy then
+    local function hasmetacopyassignment(reciever)
+        if reciever.type and reciever.type:isstruct() and reciever.type.metamethods.__copy then
             return true
         end
         return false
@@ -2849,7 +2849,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local function checkmetacopyassignment(anchor, from, to)
         --if neither `from` or `to` are a struct then return
-        if not (hasmetacopyassignment(from.type) or hasmetacopyassignment(to.type)) then
+        if not (hasmetacopyassignment(from) or hasmetacopyassignment(to)) then
             return
         end
         --if `to` is an allocvar then set type and turn into corresponding `var`
@@ -2861,7 +2861,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         --list of overloaded __copy metamethods
         local overloads = terra.newlist()
         local function checkoverload(v)
-            if hasmetacopyassignment(v.type) then
+            if hasmetacopyassignment(v) then
                 overloads:insert(asterraexpression(anchor, v.type.metamethods.__copy, "luaobject"))
             end
         end
@@ -3304,9 +3304,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         for i=1,#lhs do
-            local rhstype = rhs[i] and rhs[i].type
-            local lhstype = lhs[i].type
-            if rhstype and (hasmetacopyassignment(lhstype) or hasmetacopyassignment(rhstype)) then
+            if rhs[i] and (rhs[i]:is "var" or rhs[i]:is "literal" or rhs[i]:is "constant") and (hasmetacopyassignment(lhs[i]) or hasmetacopyassignment(rhs[i])) then
                 --add assignment by __copy call
                 byfcall.lhs:insert(lhs[i])
                 byfcall.rhs:insert(rhs[i])
