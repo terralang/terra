@@ -2856,8 +2856,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         --if `to` is an allocvar then set type and turn into corresponding `var`
         if to:is "allocvar" then
-            local typ = from.type or terra.types.error
-            to:settype(typ)
+            if not to.type then
+                to:settype(from.type or terra.types.error)
+            end
             to = newobject(anchor,T.var,to.name,to.symbol):setlvalue(true):withtype(to.type)
         end
         --list of overloaded __copy metamethods
@@ -3391,7 +3392,9 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], r))
                     stmts:insert(newobject(v,T.setter, rv, v.setter(r)))
                 elseif v:is "allocvar" then
-                    v:settype(rhstype)
+                    if not v.type then
+                        v:settype(rhstype)
+                    end
                     stmts:insert(v)
                     local init = checkmetainit(anchor, v)
                     if init then
