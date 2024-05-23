@@ -3307,7 +3307,21 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         for i=1,#lhs do
-            if rhs[i] and (rhs[i]:is "var" or rhs[i]:is "literal" or rhs[i]:is "constant") and (hasmetamethod(lhs[i],"__copy") or hasmetamethod(rhs[i],"__copy")) then
+            local cpassign = false
+            local r = rhs[i]
+            if r then
+                --alternatively, work on the r.type and check for
+                --r.type:isprimitive(), r.type:isstruct(), etc
+                if r:is "operator" and r.operator == "&" then
+                    r = r.operands[1]
+                end
+                if r:is "var" or r:is "literal" or r:is "constant" or r:is "select" then
+                    if hasmetamethod(lhs[i],"__copy") or hasmetamethod(r,"__copy") then
+                        cpassign = true
+                    end
+                end
+            end
+            if cpassign then
                 --add assignment by __copy call
                 byfcall.lhs:insert(lhs[i])
                 byfcall.rhs:insert(rhs[i])
