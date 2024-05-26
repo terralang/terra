@@ -65,14 +65,14 @@ local function SharedPtr(T)
     end
 
     --initialization of pointer
-    A.metamethods.__init = terra(self : &A)
+    A.methods.__init = terra(self : &A)
         std.io.printf("__init: initializing object. start.\n")
         self.data = nil       -- initialize data pointer to nil
         std.io.printf("__init: initializing object. return.\n")
     end
 
     --destructor
-    A.metamethods.__dtor = terra(self : &A)
+    A.methods.__dtor = terra(self : &A)
         std.io.printf("__dtor: calling destructor. start\n")
         defer std.io.printf("__dtor: calling destructor. return\n")
         --if uninitialized then do nothing
@@ -96,7 +96,7 @@ local function SharedPtr(T)
     --copy-assignment operation
     --chosen to operate only on self, which is flexible enough to implement the behavior of
     --a shared smart pointer type
-    A.metamethods.__copy = terra(from : &A, to : &A)
+    A.methods.__copy = terra(from : &A, to : &A)
         std.io.printf("__copy: calling copy-assignment operator. start\n")
         defer std.io.printf("__copy: calling copy-assignment operator. return\n")
         to.data = from.data

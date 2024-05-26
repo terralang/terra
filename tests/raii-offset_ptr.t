@@ -8,7 +8,7 @@ struct offset_ptr{
     init : bool
 }
 
-offset_ptr.metamethods.__copy = terra(from : &int64, to : &offset_ptr)
+offset_ptr.methods.__copy = terra(from : &int64, to : &offset_ptr)
     to.offset = [&int8](from) - [&int8](to)
     to.init = true
     std.io.printf("offset_ptr: __copy &int -> &offset_ptr\n")

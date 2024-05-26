@@ -14,14 +14,14 @@ struct A{
     heap : bool
 }
 
-A.metamethods.__init = terra(self : &A)
+A.methods.__init = terra(self : &A)
     std.io.printf("__init: initializing object. start.\n")
     self.data = nil         -- initialize data pointer to nil
     self.heap = false       --flag to denote heap resource
     std.io.printf("__init: initializing object. return.\n")
 end
 
-A.metamethods.__dtor = terra(self : &A)
+A.methods.__dtor = terra(self : &A)
     std.io.printf("__dtor: calling destructor. start\n")
     defer std.io.printf("__dtor: calling destructor. return\n")
     if self.heap then
@@ -32,8 +32,8 @@ A.metamethods.__dtor = terra(self : &A)
     end
 end
 
-A.metamethods.__copy = terralib.overloadedfunction("__copy")
-A.metamethods.__copy:adddefinition(
+A.methods.__copy = terralib.overloadedfunction("__copy")
+A.methods.__copy:adddefinition(
 terra(from : &A, to : &A)
     std.io.printf("__copy: moving resources {&A, &A} -> {}.\n")
     to.data = from.data
@@ -41,7 +41,7 @@ terra(from : &A, to : &A)
     from.data = nil
     from.heap = false
 end)
-A.metamethods.__copy:adddefinition(
+A.methods.__copy:adddefinition(
 terra(from : &int, to : &A)
     std.io.printf("__copy: assignment {&int, &A} -> {}.\n")
     to.data = from

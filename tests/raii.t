@@ -12,26 +12,26 @@ struct A{
     data : int
 }
 
-A.metamethods.__init = terra(self : &A)
+A.methods.__init = terra(self : &A)
     std.io.printf("__init: calling initializer.\n")
     self.data = 1
 end
 
-A.metamethods.__dtor = terra(self : &A)
+A.methods.__dtor = terra(self : &A)
     std.io.printf("__dtor: calling destructor.\n")
     self.data = -1
 end
 
-A.metamethods.__copy = terralib.overloadedfunction("__copy")
-A.metamethods.__copy:adddefinition(terra(from : &A, to : &A)
+A.methods.__copy = terralib.overloadedfunction("__copy")
+A.methods.__copy:adddefinition(terra(from : &A, to : &A)
     std.io.printf("__copy: calling copy assignment {&A, &A} -> {}.\n")
     to.data = from.data + 10
 end)
-A.metamethods.__copy:adddefinition(terra(from : int, to : &A)
+A.methods.__copy:adddefinition(terra(from : int, to : &A)
     std.io.printf("__copy: calling copy assignment {int, &A} -> {}.\n")
     to.data = from
 end)
-A.metamethods.__copy:adddefinition(terra(from : &A, to : &int)
+A.methods.__copy:adddefinition(terra(from : &A, to : &int)
     std.io.printf("__copy: calling copy assignment {&A, &int} -> {}.\n")
     @to = from.data
 end)

@@ -2765,20 +2765,20 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     --check if metamethod is implemented
     local function hasmetamethod(v, method)
         local typ = v.type
-        if typ and typ:isstruct() and typ.metamethods[method] then
+        if typ and typ:isstruct() and typ.methods[method] then
             return true
         end
         return false
     end
 
-    --check if metamethods.__init is implemented
+    --check if methods.__init is implemented
     local function checkmetainit(anchor, reciever)
         if reciever.type and reciever.type:isstruct() then
             if reciever:is "allocvar" then
                 reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
             end
-            if reciever.type.metamethods.__init then
-                return checkmethodwithreciever(anchor, true, "__init", reciever, terralib.newlist(), "statement")
+            if reciever.type.methods.__init then
+                return checkmethodwithreciever(anchor, false, "__init", reciever, terralib.newlist(), "statement")
             end
         end
     end
@@ -2797,11 +2797,11 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     --check if a __dtor metamethod is implemented for the type corresponding to `sym`
     local function checkmetadtor(anchor, reciever)
         if reciever.type and reciever.type:isstruct() then
-            if reciever.type.metamethods.__dtor then
+            if reciever.type.methods.__dtor then
                 if reciever:is "allocvar" then
                     reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
                 end
-                return checkmethodwithreciever(anchor, true, "__dtor", reciever, terralib.newlist(), "statement")
+                return checkmethodwithreciever(anchor, false, "__dtor", reciever, terralib.newlist(), "statement")
             end
         end
     end
@@ -2835,7 +2835,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         --get position at which to add destructor statements
         local pos = rstat and #stats or #stats+1
         for name,sym in pairs(env:localenv()) do
-            --if not a return variable ckeck for an implementation of metamethods.__dtor
+            --if not a return variable ckeck for an implementation of methods.__dtor
             if not rsyms[name] then
                 local reciever = newobject(anchor,T.var, name, sym):setlvalue(true):withtype(sym.type)
                 local dtor = checkmetadtor(anchor, reciever)
@@ -2865,7 +2865,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local overloads = terra.newlist()
         local function checkoverload(v)
             if hasmetamethod(v, "__copy") then
-                overloads:insert(asterraexpression(anchor, v.type.metamethods.__copy, "luaobject"))
+                overloads:insert(asterraexpression(anchor, v.type.methods.__copy, "luaobject"))
             end
         end
         --add overloaded methods based on left- and right-hand-side of the assignment
@@ -3398,7 +3398,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     end
                 end
             end
-            --take care of copy assignments using metamethods.__copy
+            --take care of copy assignments using methods.__copy
             for i,v in ipairs(byfcall.lhs) do
                 local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
                 if v:is "setteru" then
