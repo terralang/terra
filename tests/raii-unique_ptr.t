@@ -1,8 +1,9 @@
---load 'terralibext' to enable raii
-require "terralibext"
-local std = {}
-std.io = terralib.includec("stdio.h")
-std.lib = terralib.includec("stdlib.h")
+require "terralibext"  --load 'terralibext' to enable raii
+
+local std = {
+    io = terralib.includec("stdio.h"),
+    lib = terralib.includec("stdlib.h")
+}
 
 local function printtestheader(s)
     print()
@@ -67,12 +68,17 @@ terra A.methods.allocate(self : &A)
     self.heap = true
 end
 
+
+local test = require "test"
+
+printtestheader("raii-unique_ptr.t: test return ptr value from function before resource is deleted")
 terra testdereference()
     var ptr : A
     ptr:allocate()
     ptr:setvalue(3)
     return ptr:getvalue()
 end
+test.eq(testdereference(), 3)
 
 terra returnheapresource()
     var ptr : A
@@ -81,17 +87,11 @@ terra returnheapresource()
     return ptr
 end
 
+printtestheader("raii-unique_ptr.t: test return heap resource from function")
 terra testgetptr()
     var ptr = returnheapresource()
     return ptr:getvalue()
 end
-
-local test = require "test"
-
-printtestheader("raii-unique_ptr.t: test return ptr value from function before resource is deleted")
-test.eq(testdereference(), 3)
-
-printtestheader("raii-unique_ptr.t: test return heap resource from function")
 test.eq(testgetptr(), 3)
 
 

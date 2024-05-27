@@ -1,9 +1,9 @@
---load 'terralibext' to enable raii
-require "terralibext"
+require "terralibext"   --load 'terralibext' to enable raii
 local test = require("test")
 
-local std = {}
-std.io = terralib.includec("stdio.h")
+local std = {
+    io = terralib.includec("stdio.h")
+}
 
 struct offset_ptr{
     offset : int
