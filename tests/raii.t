@@ -1,3 +1,6 @@
+--load 'terralibext' to enable raii
+require "terralibext"
+
 local std = {}
 std.io = terralib.includec("stdio.h")
 
