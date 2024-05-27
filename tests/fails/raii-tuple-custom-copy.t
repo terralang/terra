@@ -1,14 +1,9 @@
+if not require("fail") then return end
 require "terralibext"   --load 'terralibext' to enable raii
 
 local std = {}
 std.io = terralib.includec("stdio.h")
 
-local function printtestheader(s)
-    print()
-    print("===========================")
-    print(s)
-    print("===========================")
-end
 
 struct A{
     data : int
@@ -29,7 +24,6 @@ A.methods.__copy = terra(from : &A, to : &A)
     to.data = from.data+1
 end
 
-printtestheader("raii.t - testing custom copy for tuples")
 terra test0()
     var a = A{1}
     var b = A{2}
