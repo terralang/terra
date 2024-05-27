@@ -3368,7 +3368,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             --assignment. So we prohibit assignments that may involve something
             --like a swap: u,v = v, u.
             --for now we prohibit this by limiting such assignments
-            erroratlocation(anchor, "a custom __copy assignment is not supported for tuples.")
+            diag:reporterror(anchor, "a custom __copy assignment is not supported for tuples.")
         end
         return regular, byfcall
     end
