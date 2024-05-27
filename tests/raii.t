@@ -1,8 +1,9 @@
---load 'terralibext' to enable raii
-require "terralibext"
+require "terralibext"           --load 'terralibext' to enable raii
+local test = require "test"
 
-local std = {}
-std.io = terralib.includec("stdio.h")
+local std = {
+    io = terralib.includec("stdio.h")
+}
 
 local function printtestheader(s)
     print()
@@ -40,11 +41,14 @@ A.methods.__copy:adddefinition(terra(from : &A, to : &int)
 end)
 
 
+printtestheader("raii.t - testing __init metamethod")
 terra testinit()
     var a : A
     return a.data
 end
+test.eq(testinit(), 1)
 
+printtestheader("raii.t - testing __dtor metamethod")
 terra testdtor()
     var x : &int
     do
@@ -53,13 +57,17 @@ terra testdtor()
     end
     return @x
 end
+test.eq(testdtor(), -1)
 
+printtestheader("raii.t - testing __copy metamethod in copy-construction")
 terra testcopyconstruction()
     var a : A
     var b = a
     return b.data
 end
+test.eq(testcopyconstruction(), 11)
 
+printtestheader("raii.t - testing __copy metamethod in copy-assignment")
 terra testcopyassignment()
     var a : A
     a.data = 2
@@ -67,13 +75,17 @@ terra testcopyassignment()
     b = a
     return b.data
 end
+test.eq(testcopyassignment(), 12)
 
+printtestheader("raii.t - testing __copy metamethod in copy-assignment from integer to struct.")
 terra testcopyassignment1()
     var a : A
     a = 3
     return a.data
 end
+test.eq(testcopyassignment1(), 3)
 
+printtestheader("raii.t - testing __copy metamethod in copy-assignment from struct to integer.")
 terra testcopyassignment2()
     var a : A
     var x : int
@@ -81,29 +93,4 @@ terra testcopyassignment2()
     x = a
     return x
 end
-
-local test = require "test"
-
---test if __init is called on object initialization to set 'a.data = 1'
-printtestheader("raii.t - testing __init metamethod")
-test.eq(testinit(), 1)
-
---test if __dtor is called at the end of the scope to set 'a.data = -1'
-printtestheader("raii.t - testing __dtor metamethod")
-test.eq(testdtor(), -1)
-
---test if __copy is called in construction 'var b = a'
-printtestheader("raii.t - testing __copy metamethod in copy-construction")
-test.eq(testcopyconstruction(), 11)
-
---test if __copy is called in an assignment 'b = a'
-printtestheader("raii.t - testing __copy metamethod in copy-assignment")
-test.eq(testcopyassignment(), 12)
-
---test if __copy is called in an assignment 'a = 3'
-printtestheader("raii.t - testing __copy metamethod in copy-assignment from integer to struct.")
-test.eq(testcopyassignment1(), 3)
-
---test if __copy is called in an assignment 'x = a' for integer x
-printtestheader("raii.t - testing __copy metamethod in copy-assignment from struct to integer.")
 test.eq(testcopyassignment2(), 5)
