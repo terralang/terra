@@ -1,3 +1,5 @@
+--load 'terralibext' to enable raii
+require "terralibext"
 local test = require("test")
 
 local std = {}

@@ -1,3 +1,5 @@
+--load 'terralibext' to enable raii
+require "terralibext"
 --[[
     We need that direct initialization
         var a : A = b
