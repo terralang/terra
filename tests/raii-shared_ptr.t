@@ -109,18 +109,34 @@ local shared_ptr_int = SharedPtr(int)
 printtestdescription("shared_ptr - copy construction.")
 local terra test0()
     var a : shared_ptr_int
+    std.io.printf("main: a.refcount: %p\n", a:refcounter())
     a = shared_ptr_int.new()
-    std.io.printf("main: a.data: %d\n", @a.data)
-    std.io.printf("main: a.refcount: %d\n", @a:refcounter())
     @a.data = 10
     std.io.printf("main: a.data: %d\n", @a.data)
     std.io.printf("main: a.refcount: %d\n", @a:refcounter())
     var b = a
     std.io.printf("main: b.data: %d\n", @b.data)
     std.io.printf("main: a.refcount: %d\n", @a:refcounter())
-    --if a:refcounter()==b:refcounter() then
-    --    return @b.data * @a:refcounter()  --10 * 2
-    --end
+    if a:refcounter()==b:refcounter() then
+        return @b.data * @a:refcounter()  --10 * 2
+    end
 end
-test0()
---test.eq(test0(), 20)
+test.eq(test0(), 20)
+
+printtestdescription("shared_ptr - copy assignment.")
+local terra test1()
+    var a : shared_ptr_int, b : shared_ptr_int
+    std.io.printf("main: a.refcount: %p\n", a:refcounter())
+    a = shared_ptr_int.new()
+    @a.data = 11
+    std.io.printf("main: a.data: %d\n", @a.data)
+    std.io.printf("main: a.refcount: %d\n", @a:refcounter())
+    b = a
+    std.io.printf("main: b.data: %d\n", @b.data)
+    std.io.printf("main: a.refcount: %d\n", @a:refcounter())
+    if a:refcounter()==b:refcounter() then
+        return @b.data * @a:refcounter()  --11 * 2
+    end
+end
+test.eq(test1(), 22)
+
