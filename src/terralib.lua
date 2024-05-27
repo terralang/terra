@@ -3363,7 +3363,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 regular.rhs:insert(rhs[i])
             end
         end
-        if #byfcall>0 and #byfcall+#regular>1 then
+        if #byfcall.lhs>0 and #byfcall.lhs+#regular.lhs>1 then
             --__copy can potentially mutate left and right-handsides in an
             --assignment. So we prohibit assignments that may involve something
             --like a swap: u,v = v, u.
