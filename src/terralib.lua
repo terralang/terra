@@ -3363,6 +3363,13 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 regular.rhs:insert(rhs[i])
             end
         end
+        if #byfcall>0 and #byfcall+#regular>1 then
+            --__copy can potentially mutate left and right-handsides in an
+            --assignment. So we prohibit assignments that may involve something
+            --like a swap: u,v = v, u.
+            --for now we prohibit this by limiting such assignments
+            erroratlocation(anchor, "a custom __copy assignment is not supported for tuples.")
+        end
         return regular, byfcall
     end
 
@@ -3407,6 +3414,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         else
             --standard case #lhs == #rhs
             local stmts = terralib.newlist()
+            local post = terralib.newlist()
             --first take care of regular assignments
             local regular, byfcall = assignmentkinds(anchor, lhs, rhs)
             local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
@@ -3420,13 +3428,19 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     v:settype(rhstype)
                 else
                     ensurelvalue(v)
-                    --if 'v' is a managed variable then first assign 'v' to a temporary variable 'var tmp = v'
-                    --then do the reassignment, 'v = ...', and then, call the destructor on 'tmp', freeing possible
-                    --heap resources
+                    --if 'v' is a managed variable then
+                    --(1) var tmp_v : v.type = rhs[i]   --evaluate the rhs and store in tmp_v
+                    --(2) v:__dtor()                    --delete old v
+                    --(3) v = tmp_v                     --copy new data to v
+                    --these steps are needed because rhs[i] may be a function of v, and the assignment in 'anchor'
+                    --could involve something like a swap: u, v = v, u
                     if hasmetamethod(v, "__dtor") then
-                        local tmpv, tmp = allocvar(v, v.type,"<tmp>")
-                        stmts:insert(newobject(anchor,T.assignment, List{tmpv}, List{v}))
-                        stmts:insert(newobject(anchor,T.defer, checkmetadtor(v, tmp)))
+                        local tmpa_v, tmp_v = allocvar(v, v.type,"<tmp_"..v.name..">")
+                        --define temporary variable as new left-hand-side
+                        regular.lhs[i] = tmpa_v
+                        --call v:__dtor() and set v = tmp_v
+                        post:insert(checkmetadtor(anchor, v))
+                        post:insert(newobject(anchor,T.assignment, List{v}, List{tmp_v}))
                     end
                 end
             end
@@ -3449,18 +3463,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 else
                     ensurelvalue(v)
-                    --first assign 'v' to a temporary variable 'var tmp = v' (shallow copy)
-                    --then do the reassignment, 'v = ...', and then call the destructor
-                    --on 'tmp', freeing possible heap resources
-                    if hasmetamethod(v, "__dtor") then
-                        local tmpv, tmp = allocvar(v, v.type,"<tmp>")
-                        stmts:insert(newobject(anchor,T.assignment, List{tmpv}, List{v}))
-                        stmts:insert(newobject(anchor,T.defer, checkmetadtor(v, tmp)))
-                    end
+                    --apply copy assignment - memory resource management is in the
+                    --hands of the programmer
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 end
             end
-            if #stmts==0 then
+            if #stmts==0 and #post==0 then
                 --standard case, no meta-copy-assignments
                 return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
             else
@@ -3469,6 +3477,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 if #regular.lhs>0 then
                     stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
                 end
+                stmts:insertall(post)
                 return createstatementlist(anchor, stmts)
             end
         end
