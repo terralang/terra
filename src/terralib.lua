@@ -2764,6 +2764,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --check if metamethod is implemented
     local function hasmetamethod(v, method)
+        if not terralib.ext then return false end
         local typ = v.type
         if typ and typ:isstruct() and typ.methods[method] then
             return true
@@ -2773,17 +2774,24 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --check if methods.__init is implemented
     local function checkmetainit(anchor, reciever)
-        if reciever.type and reciever.type:isstruct() then
-            if reciever:is "allocvar" then
-                reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
+        if not terralib.ext then return end
+        local typ = reciever.type
+        if typ and typ:isstruct() then
+            --try to add missing __init method
+            if not typ.methods.__init then
+                terralib.ext.addmissing.__init(typ)
             end
-            if reciever.type.methods.__init then
+            if typ.methods.__init then
+                if reciever:is "allocvar" then
+                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(typ)
+                end
                 return checkmethodwithreciever(anchor, false, "__init", reciever, terralib.newlist(), "statement")
             end
         end
     end
 
     local function checkmetainitializers(anchor, lhs)
+        if not terralib.ext then return end
         local stmts = terralib.newlist()
         for i,e in ipairs(lhs) do
             local init = checkmetainit(anchor, e)
@@ -2796,10 +2804,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     --check if a __dtor metamethod is implemented for the type corresponding to `sym`
     local function checkmetadtor(anchor, reciever)
-        if reciever.type and reciever.type:isstruct() then
-            if reciever.type.methods.__dtor then
+        if not terralib.ext then return end
+        local typ = reciever.type
+        if typ and typ:isstruct() then
+            --try to add missing __dtor method
+            if not typ.methods.__dtor then
+                terralib.ext.addmissing.__dtor(typ)
+            end
+            if typ.methods.__dtor then
                 if reciever:is "allocvar" then
-                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
+                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(typ)
                 end
                 return checkmethodwithreciever(anchor, false, "__dtor", reciever, terralib.newlist(), "statement")
             end
@@ -2807,6 +2821,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     local function checkmetadtors(anchor, stats)
+        if not terralib.ext then return stats end
         --extract the return statement from `stats`, if there is one
         local function extractreturnstat()
             local n = #stats
@@ -2850,8 +2865,24 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     local function checkmetacopyassignment(anchor, from, to)
-        --if neither `from` or `to` are a struct then return
-        if not (hasmetamethod(from, "__copy") or hasmetamethod(to, "__copy")) then
+        if not terralib.ext then return end
+        local ftype, ttype = from.type, to.type
+        if (ftype and ftype:isstruct()) or (ttype and ttype:isstruct()) then
+            --case of equal struct types
+            if ftype == ttype then
+                if not ftype.methods.__copy then
+                    --try add missing __copy method
+                    terralib.ext.addmissing.__copy(ftype)
+                end
+                --if __copy was unsuccessful return to do regular copy
+                if not (ftype.methods.__copy) then return end
+            else
+                --otherwise
+                if not (hasmetamethod(from, "__copy") or hasmetamethod(to, "__copy")) then return end
+            end
+        else
+            --only struct types are managed
+            --resort to regular copy
             return
         end
         --if `to` is an allocvar then set type and turn into corresponding `var`
@@ -3303,11 +3334,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     --divide assignment into regular assignments and copy assignments
-    local function assignmentkinds(lhs, rhs)
+    local function assignmentkinds(anchor, lhs, rhs)
         local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         for i=1,#lhs do
             local cpassign = false
+            --ToDo: for now we call 'checkmetacopyassignment' twice. Refactor with 'createassignment'
             local r = rhs[i]
             if r then
                 --alternatively, work on the r.type and check for
@@ -3316,7 +3348,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     r = r.operands[1]
                 end
                 if r:is "var" or r:is "literal" or r:is "constant" or r:is "select" then
-                    if hasmetamethod(lhs[i],"__copy") or hasmetamethod(r,"__copy") then
+                    if checkmetacopyassignment(anchor, r, lhs[i]) then
                         cpassign = true
                     end
                 end
@@ -3376,7 +3408,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             --standard case #lhs == #rhs
             local stmts = terralib.newlist()
             --first take care of regular assignments
-            local regular, byfcall = assignmentkinds(lhs, rhs)
+            local regular, byfcall = assignmentkinds(anchor, lhs, rhs)
             local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
             regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
             for i,v in ipairs(regular.lhs) do
@@ -3531,7 +3563,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     return createassignment(s,lhs,rhs)
                 else
                     local res = createstatementlist(s,lhs)
-                    res.statements:insertall(checkmetainitializers(s, lhs))
+                    local ini = checkmetainitializers(s, lhs)
+                    if ini then
+                        res.statements:insertall(ini)
+                    end
                     return res
                 end
             elseif s:is "assignment" then
@@ -3730,11 +3765,11 @@ function terra.includecstring(code,cargs,target)
     	args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    local sdkroot = os.getenv("SDKROOT")
-    if sdkroot then
-      args:insert("-isysroot")
-      args:insert(sdkroot)
-    end
+    --local sdkroot = os.getenv("SDKROOT")
+    --if sdkroot then
+    --  args:insert("-isysroot")
+    --  args:insert(sdkroot)
+    --end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4.2.1")
