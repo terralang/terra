@@ -1,5 +1,4 @@
---load 'terralibext' to enable raii
-require "terralibext"
+require "terralibext"  --load 'terralibext' to enable raii
 --[[
     We need that direct initialization
         var a : A = b
@@ -7,15 +6,16 @@ require "terralibext"
         var a : A
         a = b
     If 'b' is a variable or a literal (something with a value) and the user has
-    implemented the right copy-assignment 'A.metamethods.__copy' then the copy
-    should be perform using this metamethod.
-    If the metamethod is not implemented for the exact types then a (user-defined)
+    implemented the right copy-assignment 'A.methods.__copy' then the copy
+    should be performed using this method.
+    If the method is not implemented for the exact types then a (user-defined)
     implicit cast should be attempted.
 --]]
 
 local test = require("test")
-local std = {}
-std.io = terralib.includec("stdio.h")
+local std = {
+    io = terralib.includec("stdio.h")
+}
 
 struct A{
     data : int
@@ -49,9 +49,9 @@ end
 
 --[[
     The integer '2' will first be cast to a temporary of type A using
-    the user defined A.metamethods.__cast method. Then the metamethod
-    A.metamethods.__init(self : &A) is called to initialize the variable
-    and then the copy-constructor A.metamethods.__copy(from : &A, to : &A)
+    the user defined A.metamethods.__cast method. Then the method
+    A.methods.__init(self : &A) is called to initialize the variable
+    and then the copy-constructor A.methods.__copy(from : &A, to : &A)
     will be called to finalize the copy-construction.
 --]]
 terra testwithcast()
@@ -75,16 +75,14 @@ A.methods.__copy:adddefinition(terra(from : int, to : &A)
     to.data = to.data + from + 11
 end)
 
-
 --[[
-    The metamethod A.metamethods.__init(self : &A) is called to initialize
-    the variable and then the copy-constructor A.metamethods.__copy(from : int, to : &A)
-    will be called to finalize the copy-construction.
+    The method A.methods.__init(self : &A) is called to initialize the variable 
+    and then the copy-constructor A.methods.__copy(from : int, to : &A) will be 
+    called to finalize the copy-construction.
 --]]
 terra testwithoutcast()
     var a : A = 2
     return a.data
 end
-
 -- to.data + from.data + 10 = 1 + 2 + 11 = 14
 test.eq(testwithoutcast(), 14)
