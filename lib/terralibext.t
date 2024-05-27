@@ -2,46 +2,39 @@ local std = {
     io  = terralib.includec("stdio.h")
 }
 
-local function ondemand(fn)
-    local method
-    return macro(function(self,...)
-        if not method then
-            method = fn()
-        end
-        local args = {...}
-        return `method(&self,[args])
-    end)
-end
-
 local function addmissinginit(T)
 
+    --flag that signals that a missing __init method needs to
+    --be generated
     local generate = false
 
     local runinit = macro(function(self)
-        local T = self:gettype()
+        local V = self:gettype()
         --avoid generating code for empty array initializers
-        local function hasinit(T)
-            if T:isstruct() then return T.methods.__init
-            elseif T:isarray() then return hasinit(T.type)
+        local function hasinit(U)
+            if U:isstruct() then return U.methods.__init
+            elseif U:isarray() then return hasinit(U.type)
             else return false end
         end
-        if T:isstruct() then
-            if not T.methods.__init then
-                addmissinginit(T)
+        if V:isstruct() then
+            if not V.methods.__init then
+                addmissinginit(V)
             end
-            if T.methods.__init then
+            local method = V.methods.__init
+            if method then
+                generate = true
                 return quote
                     self:__init()
                 end
             end
-        elseif T:isarray() and hasinit(T) then
+        elseif V:isarray() and hasinit(V) then
             return quote
                 var pa = &self
                 for i = 0,T.N do
                     runinit((@pa)[i])
                 end
             end
-        elseif T:ispointer() then
+        elseif V:ispointer() then
             return quote
                 self = nil
             end
@@ -56,12 +49,9 @@ local function addmissinginit(T)
         for i,e in ipairs(entries) do
             if e.field then
                 local expr = `runinit(self.[e.field])
-                if #expr.tree.statements > 0 then
-                    generate = true
+                if expr and #expr.tree.statements > 0 then
+                    stmts:insert(expr)
                 end
-                stmts:insert(
-                    expr
-                )
             end
         end
         return stmts
@@ -69,7 +59,7 @@ local function addmissinginit(T)
 
     if T:isstruct() and not T.methods.__init then
         local method = terra(self : &T)
-            std.io.printf("%s:__init - default\n", [tostring(T)])
+            std.io.printf("%s:__init - generated\n", [tostring(T)])
             generateinit(@self)
         end
         if generate then
@@ -81,26 +71,30 @@ end
 
 local function addmissingdtor(T)
 
+    --flag that signals that a missing __dtor method needs to
+    --be generated
     local generate = false
 
     local rundtor = macro(function(self)
-        local T = self:gettype()
-        --avoid generating code for empty array initializers
-        local function hasdtor(T)
-            if T:isstruct() then return T.methods.__dtor
-            elseif T:isarray() then return hasdtor(T.type)
+        local V = self:gettype()
+        --avoid generating code for empty array destructors
+        local function hasdtor(U)
+            if U:isstruct() then return U.methods.__dtor
+            elseif U:isarray() then return hasdtor(U.type)
             else return false end
         end
-        if T:isstruct() then
-            if not T.methods.__dtor then
-                addmissingdtor(T)
+        if V:isstruct() then
+            if not V.methods.__dtor then
+                addmissingdtor(V)
             end
-            if T.methods.__dtor then
+            local method = V.methods.__dtor
+            if method then
+                generate = true
                 return quote
                     self:__dtor()
                 end
             end
-        elseif T:isarray() and hasdtor(T) then
+        elseif V:isarray() and hasdtor(V) then
             return quote
                 var pa = &self
                 for i = 0,T.N do
@@ -118,8 +112,7 @@ local function addmissingdtor(T)
         for i,e in ipairs(entries) do
             if e.field then
                 local expr = `rundtor(self.[e.field])
-                if #expr.tree.statements > 0 then
-                    generate = true
+                if expr and #expr.tree.statements > 0 then
                     stmts:insert(expr)
                 end
             end
@@ -129,7 +122,7 @@ local function addmissingdtor(T)
 
     if T:isstruct() and not T.methods.__dtor then
         local method = terra(self : &T)
-            std.io.printf("%s:__dtor - default\n", [tostring(T)])
+            std.io.printf("%s:__dtor - generated\n", [tostring(T)])
             generatedtor(@self)
         end
         if generate then
@@ -140,17 +133,20 @@ end
 
 local function addmissingcopy(T)
 
+    --flag that signals that a missing __copy method needs to
+    --be generated
     local generate = false
 
     local runcopy = macro(function(from, to)
-        local V = from:gettype()
+        local U = from:gettype()
+        local V = to:gettype()
         --avoid generating code for empty array initializers
-        local function hascopy(U)
-            if U:isstruct() then return U.methods.__copy
-            elseif U:isarray() then return hascopy(U.type)
+        local function hascopy(W)
+            if W:isstruct() then return W.methods.__copy
+            elseif W:isarray() then return hascopy(W.type)
             else return false end
         end
-        if V:isstruct() then
+        if V:isstruct() and U==V then
             if not V.methods.__copy then
                 addmissingcopy(V)
             end
@@ -185,10 +181,11 @@ local function addmissingcopy(T)
         local entries = T:getentries()
         for i,e in ipairs(entries) do
             local field = e.field
-            local expr = `runcopy(from.[field], to.[field])
-            print(expr)
-            if expr and #expr.tree.statements > 0 then
-                stmts:insert(expr)
+            if field then
+                local expr = `runcopy(from.[field], to.[field])
+                if expr and #expr.tree.statements > 0 then
+                    stmts:insert(expr)
+                end
             end
         end
         return stmts
@@ -196,7 +193,7 @@ local function addmissingcopy(T)
 
     if T:isstruct() and not T.methods.__copy then
         local method = terra(from : &T, to : &T)
-            std.io.printf("%s:__copy - default\n", [tostring(T)])
+            std.io.printf("%s:__copy - generate\n", [tostring(T)])
             generatecopy(@from, @to)
         end
         if generate then
