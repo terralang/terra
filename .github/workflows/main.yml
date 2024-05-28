@@ -19,13 +19,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['macos-11', 'windows-2022']
+        os: ['macos-12', 'windows-2022']
         llvm: ['11', '12', '13', '14', '15', '16', '17']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
           # macOS: exclude cuda
-          - os: 'macos-11'
+          - os: 'macos-12'
             cuda: '1'
 
           # Windows: exclude LLVM 12-17
