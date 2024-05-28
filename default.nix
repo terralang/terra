@@ -1,7 +1,8 @@
 { pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
 , fetchFromGitHub ? pkgs.fetchFromGitHub, ncurses ? pkgs.ncurses
 , cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
-, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false }:
+, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false
+, libpfm ? pkgs.libpfm }:
 
 let
 
@@ -48,7 +49,9 @@ in stdenv.mkDerivation rec {
   src = ./.;
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ llvmMerged ncurses libxml2 ] ++ lib.optionals enableCUDA cuda;
+  buildInputs = [ llvmMerged ncurses libxml2 ]
+    ++ lib.optionals enableCUDA cuda
+    ++ lib.optional (!stdenv.isDarwin) libpfm;
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"
