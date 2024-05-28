@@ -1,11 +1,12 @@
 { pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
 , fetchFromGitHub ? pkgs.fetchFromGitHub, ncurses ? pkgs.ncurses
 , cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
-, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false }:
+, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false
+, libpfm ? pkgs.libpfm }:
 
 let
 
-  llvmPackages = pkgs.llvmPackages_11;
+  llvmPackages = pkgs.llvmPackages_13;
   stdenv = llvmPackages.stdenv;
   cuda = if cudaPackages ? cudatoolkit_11 then [
            cudaPackages.cudatoolkit_11
@@ -48,7 +49,9 @@ in stdenv.mkDerivation rec {
   src = ./.;
 
   nativeBuildInputs = [ cmake ];
-  buildInputs = [ llvmMerged ncurses libxml2 ] ++ lib.optionals enableCUDA cuda;
+  buildInputs = [ llvmMerged ncurses libxml2 ]
+    ++ lib.optionals enableCUDA cuda
+    ++ lib.optional (!stdenv.isDarwin) libpfm;
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"
@@ -89,7 +92,8 @@ in stdenv.mkDerivation rec {
   meta = with lib; {
     description = "A low-level counterpart to Lua";
     homepage = "http://terralang.org/";
-    platforms = platforms.x86_64 ++ platforms.aarch64;
+    # Note: Nix has removed LLVM 11, required for Linux AArch64
+    platforms = platforms.x86_64 ++ platforms.darwin; # ++ platforms.aarch64;
     maintainers = with maintainers; [ jb55 thoughtpolice ];
     license = licenses.mit;
   };
