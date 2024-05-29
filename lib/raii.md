@@ -131,7 +131,3 @@ If `bar` would return `b` then its associated heap resources would be released b
 The current implementation already works in a range of important applications, as can be seen in the tests and the examples above. To remove the noted limitations and to enable graceful compile-time errors my plan is:
 * support for *affine types* (similar to *rust*) by checking, at compile time, that a managed variable is used (passed by value) not more than once. This essentially means that the variable is moved from (not copied) on every use. This is not restrictive, since in general you would pass managed objects by reference, not by value.
 * borrow checking (similar to *rust*) by counting, at compile time, the number of references.
-
-
-## Examples
-The check for metamethods.__dtor is done once in checkblock(...) (which checks a scoped environment) and metamethods.(__init, __copy, __dtor) are checked in several parts of checkassignment(...). These checks are cheap, especially if none of the metamethods are implemented.
