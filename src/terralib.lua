@@ -3368,7 +3368,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             --assignment. So we prohibit assignments that may involve something
             --like a swap: u,v = v, u.
             --for now we prohibit this by limiting such assignments
-            diag:reporterror(anchor, "a custom __copy assignment is not supported for tuples.")
+            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
         end
         return regular, byfcall
     end
@@ -3429,18 +3429,22 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 else
                     ensurelvalue(v)
                     --if 'v' is a managed variable then
-                    --(1) var tmp_v : v.type = rhs[i]   --evaluate the rhs and store in tmp_v
-                    --(2) v:__dtor()                    --delete old v
-                    --(3) v = tmp_v                     --copy new data to v
-                    --these steps are needed because rhs[i] may be a function of v, and the assignment in 'anchor'
-                    --could involve something like a swap: u, v = v, u
+                    --(1) var tmp = v       --store v in tmp
+                    --(2) v = rhs[i]        --perform assignment
+                    --(3) tmp:__dtor()      --delete old v
+                    --the temporary is necessary because rhs[i] may involve a function of 'v'
                     if hasmetamethod(v, "__dtor") then
-                        local tmpa_v, tmp_v = allocvar(v, v.type,"<tmp_"..v.name..">")
-                        --define temporary variable as new left-hand-side
-                        regular.lhs[i] = tmpa_v
-                        --call v:__dtor() and set v = tmp_v
-                        post:insert(checkmetadtor(anchor, v))
-                        post:insert(newobject(anchor,T.assignment, List{v}, List{tmp_v}))
+                        --To avoid unwanted deletions we prohibit assignments that may involve something
+                        --like a swap: u,v = v, u.
+                        --for now we prohibit this by limiting assignments to a single one
+                        if #regular.lhs>1 then
+                            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+                        end
+                        local tmpa, tmp = allocvar(v, v.type,"<tmp_"..v.name..">")
+                        --store v in tmp
+                        stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
+                        --call tmp:__dtor()
+                        post:insert(checkmetadtor(anchor, tmp))
                     end
                 end
             end
@@ -3468,7 +3472,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
                 end
             end
-            if #stmts==0 and #post==0 then
+            if #stmts==0 then
                 --standard case, no meta-copy-assignments
                 return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
             else
@@ -3774,11 +3778,10 @@ function terra.includecstring(code,cargs,target)
     	args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    local sdkroot = os.getenv("SDKROOT")
-    if sdkroot then
-      args:insert("-isysroot")
-      args:insert(sdkroot)
-    end
+    --local sdkroot = os.getenv("SDKROOT")
+    --if sdkroot then
+    --  args:insert(sdkroot)
+    --end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4.2.1")
