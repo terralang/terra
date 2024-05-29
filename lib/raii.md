@@ -126,8 +126,10 @@ terra foo()
 end
 ```
 If `bar` would return `b` then its associated heap resources would be released before they can be used in the outer scope.
+* The implementation is not aware of when an actual heap allocation is made and therefore assumes that a managed variable always carries a heap resource. It is up to the programmer to properly initialize pointer variables to nil to avoid calling 'free' on uninitialized pointers.
 
 ## Roadmap
-The current implementation already works in a range of important applications, as can be seen in the tests and the examples above. To remove the noted limitations and to enable graceful compile-time errors my plan is:
-* support for *affine types* (similar to *rust*) by checking, at compile time, that a managed variable is used (passed by value) not more than once. This essentially means that the variable is moved from (not copied) on every use. This is not restrictive, since in general you would pass managed objects by reference, not by value.
-* borrow checking (similar to *rust*) by counting, at compile time, the number of references.
+The current implementation already works in a range of important applications, as can be seen in the tests and the examples above. To remove the noted limitations and to enable graceful compile-time errors my plan is to:
+* support *affine types* (similar to *rust*) by checking, at compile time, that a managed variable is used (passed by value) not more than once. This essentially means that the variable is moved from (not copied) on every use. This is not restrictive, since in general you would pass managed objects by reference, not by value.
+* support borrow checking (similar to *rust*) by counting, at compile time, the number of references.
+* introduce a `__new` method that does heap allocation for the programmer. This way the compiler is made aware of all heap allocations being made.
