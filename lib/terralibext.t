@@ -57,13 +57,17 @@ local function addmissinginit(T)
         return stmts
     end)
 
-    if T:isstruct() and not T.methods.__init then
+    if T:isstruct() and T.methods.__init == nil then
         local method = terra(self : &T)
             std.io.printf("%s:__init - generated\n", [tostring(T)])
             generateinit(@self)
         end
         if generate then
             T.methods.__init = method
+        else
+            --set T.methods.__init to false. This means that addmissinginit(T) will not
+            --attempt to generate 'T.methods.__init' twice
+            T.methods.__init = false
         end
     end
 end
@@ -120,13 +124,17 @@ local function addmissingdtor(T)
         return stmts
     end)
 
-    if T:isstruct() and not T.methods.__dtor then
+    if T:isstruct() and T.methods.__dtor==nil then
         local method = terra(self : &T)
             std.io.printf("%s:__dtor - generated\n", [tostring(T)])
             generatedtor(@self)
         end
         if generate then
             T.methods.__dtor = method
+        else
+            --set T.methods.__dtor to false. This means that addmissingdtor(T) will not
+            --attempt to generate 'T.methods.__dtor' twice
+            T.methods.__dtor = false
         end
     end
 end
@@ -191,13 +199,17 @@ local function addmissingcopy(T)
         return stmts
     end)
 
-    if T:isstruct() and not T.methods.__copy then
+    if T:isstruct() and T.methods.__copy==nil then
         local method = terra(from : &T, to : &T)
             std.io.printf("%s:__copy - generate\n", [tostring(T)])
             generatecopy(@from, @to)
         end
         if generate then
             T.methods.__copy = method
+        else
+            --set T.methods.__copy to false. This means that addmissingcopy(T) will not
+            --attempt to generate 'T.methods.__copy' twice
+            T.methods.__copy = false
         end
     end
 end

@@ -106,7 +106,7 @@ is replaced by
 If a struct has fields or subfields that are managed types, but do not implement `__init`, `__copy` or `__dtor`, then the compiler will generate default methods that inductively call existing `__init`, `__copy` or `__dtor` methods for its fields and subfields. This enables compositional API's like `vector(vector(int))` or  `vector(string)`. This is implemented as an extension to *terralib.lua* in *lib/terralibext.t*.
 
 ## Current limitations
-* Tuple (copy) assignement (regular or using `__copy`) are prohibited by the compiler in case of managed variables. This is done to prevent memory leaks or unwanted deletions in assignments such as
+* Tuple (copy) assignment (regular or using `__copy`) are prohibited by the compiler in case of managed variables. This is done to prevent memory leaks or unwanted deletions in assignments such as
 ```
     a, b = b, a
 ```
