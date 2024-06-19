@@ -36,7 +36,9 @@
 #include "llvm/Support/Program.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/IPO.h"
+#if LLVM_VERSION < 180
 #include "llvm/Transforms/Vectorize.h"
+#endif
 #if LLVM_VERSION < 170
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #else
