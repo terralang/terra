@@ -572,8 +572,9 @@ int terra_loadfile(lua_State *L, const char *file) {
         if (c == '\n') ungetc(c, ctx.fp); /* keep line count accurate */
     }
     if (file) {
-        char *name = (char *)malloc(strlen(file) + 2);
-        sprintf(name, "@%s", file);
+        size_t name_size = strlen(file) + 2;
+        char *name = (char *)malloc(name_size);
+        snprintf(name, name_size, "@%s", file);
         int r = terra_load(L, reader_file, &ctx, name);
         free(name);
         fclose(ctx.fp);

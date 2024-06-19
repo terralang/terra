@@ -99,7 +99,7 @@ public:
             std::string declstr;
             if (it->isAnonymousStructOrUnion()) {
                 char buf[32];
-                sprintf(buf, "_%d", anonname++);
+                snprintf(buf, sizeof(buf), "_%d", anonname++);
                 declstr = buf;
             } else {
                 declstr = declname.getAsString();
