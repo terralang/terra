@@ -19,7 +19,11 @@
 
 #include "llvm/IR/LegacyPassManager.h"
 
+#if LLVM_VERSION < 170
 #include "llvm/Support/Host.h"
+#else
+#include "llvm/TargetParser/Host.h"
+#endif
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
@@ -62,11 +66,13 @@
 #include "llvmheaders_160.h"
 #elif LLVM_VERSION < 180
 #include "llvmheaders_170.h"
+#elif LLVM_VERSION < 190
+#include "llvmheaders_180.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
-#define LLVM_VERSION 170
-#include "llvmheaders_170.h"
+#define LLVM_VERSION 180
+#include "llvmheaders_180.h"
 #endif
 
 #define UNIQUEIFY(T, x) (std::unique_ptr<T>(x))
