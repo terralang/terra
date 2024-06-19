@@ -330,7 +330,19 @@ bool llvmutil_emitobjfile(Module *Mod, TargetMachine *TM, bool outputobjectfile,
     Mod->setDataLayout(TM->createDataLayout());
 #endif
 
-    CodeGenFileType ft = outputobjectfile ? CGFT_ObjectFile : CGFT_AssemblyFile;
+    CodeGenFileType ft = outputobjectfile ?
+#if LLVM_VERSION < 180
+                                          CGFT_ObjectFile
+#else
+                                          CodeGenFileType::ObjectFile
+#endif
+                                          :
+#if LLVM_VERSION < 180
+                                          CGFT_AssemblyFile
+#else
+                                          CodeGenFileType::AssemblyFile
+#endif
+            ;
 
     emitobjfile_t &destf = dest;
 
