@@ -2326,8 +2326,8 @@ int luaY_parser(terra_State *T, ZIO *z, const char *name, int firstchar) {
                lexstate.output_buffer.data);
     }
     // loadbuffer doesn't like null terminators, so rewind to before them
-    while (lexstate.output_buffer.data[lexstate.output_buffer.N - 1] == '\0' &&
-           lexstate.output_buffer.N > 0) {
+    while (lexstate.output_buffer.N > 0 &&
+           lexstate.output_buffer.data[lexstate.output_buffer.N - 1] == '\0') {
         lexstate.output_buffer.N--;
     }
 
