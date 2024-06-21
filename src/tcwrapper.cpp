@@ -802,9 +802,6 @@ void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOpti
     }
 
     clang::driver::ToolChain const &TC = C->getDefaultToolChain();
-    std::string path = TC.GetLinkerPath();
-    const char *link = path.c_str();
-    for (auto &i : TC.getProgramPaths()) link = i.c_str();
 
     llvm::opt::ArgStringList IncludeArgs;
     TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);

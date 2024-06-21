@@ -1,6 +1,5 @@
-
-IO = terralib.includec("stdio.h")
 local Class = require("lib/javalikesimple")
+local IO = Class.C
 
 struct A(Class()) {
   a : int

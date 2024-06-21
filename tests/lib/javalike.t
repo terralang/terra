@@ -1,7 +1,11 @@
 local List = terralib.newlist
-local malloc = terralib.externfunction("malloc", uint64 -> &opaque)
-local free = terralib.externfunction("free", &opaque -> {})
-local printf = terralib.externfunction("printf", terralib.types.funcpointer({rawstring},int,true))
+local C = terralib.includecstring [[
+#include "stdio.h"
+#include "stdlib.h"
+]]
+local malloc = C.malloc
+local free = C.free
+local printf = C.printf
 local function createvtable(T)
     return 
 end
@@ -157,4 +161,4 @@ local function Interface(name,methodlist_)
     return iface
 end
 
-return setmetatable({ Interface = Interface }, { __call = Class })
+return setmetatable({ Interface = Interface, C = C }, { __call = Class })
