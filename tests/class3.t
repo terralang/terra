@@ -1,8 +1,5 @@
-
-C = terralib.includec("stdio.h")
-
 local Class = require("lib/javalike")
-
+local C = Class.C
 
 local Prints = Class.Interface("Prints",{ print = {} -> {} })
 

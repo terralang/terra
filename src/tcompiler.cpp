@@ -2870,7 +2870,6 @@ struct FunctionEmitter {
                 Value *v = emitAddressOf(&obj);
                 Obj entryType;
                 Value *result = emitStructSelect(&typ, v, offset, &entryType);
-                Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
                     result = B->CreateLoad(getType(&entryType)->type, result);
                 return result;
@@ -3011,7 +3010,6 @@ struct FunctionEmitter {
                 Value *a_result = B->CreateExtractValue(a, ArrayRef<unsigned>(0));
                 Value *a_success = B->CreateExtractValue(a, ArrayRef<unsigned>(1));
                 Value *a_success_i8 = B->CreateZExt(a_success, B->getInt8Ty());
-                Type *elt_types[2] = {a_result->getType(), B->getInt8Ty()};
                 Type *result_type = typeOfValue(exp)->type;
                 Value *result = UndefValue::get(result_type);
                 result = B->CreateInsertValue(result, a_result, ArrayRef<unsigned>(0));

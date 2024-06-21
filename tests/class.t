@@ -1,5 +1,5 @@
-IO = terralib.includec("stdio.h")
 local Class = require("lib/javalike")
+local IO = Class.C
 
 struct A(Class()) {
   a : int
@@ -104,7 +104,6 @@ end
 assert(12 == foobar2())
 
 
-local IO = terralib.includec("stdio.h")
 struct Animal(Class()) {
   data : int
 }
