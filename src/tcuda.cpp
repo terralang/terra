@@ -151,7 +151,13 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     PMB.Inliner = llvm::createFunctionInliningPass(PMB.OptLevel, 0, false);
     PMB.LoopVectorize = false;
 #endif
-    auto FileType = llvm::CGFT_AssemblyFile;
+    auto FileType =
+#if LLVM_VERSION < 180
+            llvm::CGFT_AssemblyFile
+#else
+            llvm::CodeGenFileType::AssemblyFile
+#endif
+            ;
 
     llvm::legacy::PassManager PM;
 #if LLVM_VERSION < 160
