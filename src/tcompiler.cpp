@@ -304,7 +304,12 @@ int terra_inittarget(lua_State *L) {
             // GV tables
             CodeModel::Small,
 #endif
-            CodeGenOpt::Aggressive);
+#if LLVM_VERSION < 180
+            CodeGenOpt::Aggressive
+#else
+            CodeGenOptLevel::Aggressive
+#endif
+    );
     TT->external = new Module("external", *TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -404,7 +409,13 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setMAttrs(mattrs)
             .setEngineKind(EngineKind::JIT)
             .setTargetOptions(CU->TT->tm->Options)
-            .setOptLevel(CodeGenOpt::Aggressive)
+            .setOptLevel(
+#if LLVM_VERSION < 180
+                    CodeGenOpt::Aggressive
+#else
+                    CodeGenOptLevel::Aggressive
+#endif
+                    )
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
 #if LLVM_VERSION < 120
             .setUseOrcMCJITReplacement(true)
@@ -545,7 +556,11 @@ class Types {
                     CreatePrimitiveType(typ, t);
                 } break;
                 case T_niltype: {
+#if LLVM_VERSION < 170
                     t->type = Type::getInt8PtrTy(*CU->TT->ctx);
+#else
+                    t->type = PointerType::get(*CU->TT->ctx, 0);
+#endif
                 } break;
                 case T_opaque: {
                     t->type = Type::getInt8Ty(*CU->TT->ctx);
@@ -586,7 +601,13 @@ class Types {
             } break;
         }
     }
-    Type *FunctionPointerType() { return Type::getInt8PtrTy(*CU->TT->ctx); }
+    Type *FunctionPointerType() {
+#if LLVM_VERSION < 170
+        return Type::getInt8PtrTy(*CU->TT->ctx);
+#else
+        return PointerType::get(*CU->TT->ctx, 0);
+#endif
+    }
     bool LookupTypeCache(Obj *typ, TType **t) {
         *t = (TType *)CU->symbols->getud(typ);  // try to look up the cached type
         if (*t == NULL) {
@@ -1673,7 +1694,9 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         init = true;
         ccmap["fastcc"] = CallingConv::Fast;
         ccmap["coldcc"] = CallingConv::Cold;
+#if LLVM_VERSION < 180
         ccmap["webkit_jscc"] = CallingConv::WebKit_JS;
+#endif
         ccmap["anyregcc"] = CallingConv::AnyReg;
         ccmap["preserve_mostcc"] = CallingConv::PreserveMost;
         ccmap["preserve_allcc"] = CallingConv::PreserveAll;
@@ -2005,6 +2028,9 @@ struct FunctionEmitter {
                 cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
         Constant *r = dyn_cast<Constant>(term->getReturnValue());
         assert(r || !"constant expression was not constant");
+#if LLVM_VERSION >= 170
+        CU->fam.clear(*fstate->func, fstate->func->getName());
+#endif
         fstate->func->eraseFromParent();
         return r;
     }

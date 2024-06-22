@@ -33,7 +33,13 @@ if [[ $(uname) = Linux ]]; then
   exit 1
 
 elif [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_VERSION = 17 ]]; then
+  if [[ $LLVM_VERSION = 18 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.7/clang+llvm-18.1.7-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-18.1.7-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-18.1.7-x86_64-apple-darwin/bin/llvm-config llvm-config-17
+    ln -s clang+llvm-18.1.7-x86_64-apple-darwin/bin/clang clang-17
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.7-x86_64-apple-darwin
+  elif [[ $LLVM_VERSION = 17 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-17.0.5/clang+llvm-17.0.5-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-17.0.5-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-17.0.5-x86_64-apple-darwin/bin/llvm-config llvm-config-17

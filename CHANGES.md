@@ -2,7 +2,8 @@
 
 ## Added features
 
-  * Support for LLVM 17
+  * Support for LLVM 17 and 18
+  * Experimental support for SPIR-V code generation (e.g., for Intel GPUs)
 
 ## Fixed Bugs
 
