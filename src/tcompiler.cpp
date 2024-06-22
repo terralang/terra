@@ -2028,6 +2028,9 @@ struct FunctionEmitter {
                 cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
         Constant *r = dyn_cast<Constant>(term->getReturnValue());
         assert(r || !"constant expression was not constant");
+#if LLVM_VERSION >= 170
+        CU->fam.clear(*fstate->func, fstate->func->getName());
+#endif
         fstate->func->eraseFromParent();
         return r;
     }
