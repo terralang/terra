@@ -140,7 +140,7 @@ pkg install -y cmake llvm13
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **13**. The following versions are also supported:
+The current recommended version of LLVM is **13** for most platforms, except Windows (x86) and Linux (ARM) where LLVM 11 is required. The following versions are also supported:
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
