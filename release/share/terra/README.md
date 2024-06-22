@@ -119,6 +119,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
   * LLVM and Clang (see suppport table below)
   * LuaJIT (note this is downloaded and installed automatically by default)
   * *Optional:* CUDA
+  * *Note:* In addition to CUDA, Terra also supports AMD and Intel GPUs. However, Terra does not link their GPU toolkits directly so this is not a build requirement.
 
 On recent versions of Ubuntu, you can get these dependencies with:
 
