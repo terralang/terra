@@ -2,8 +2,7 @@ freebsd_task:
   name: FreeBSD
   freebsd_instance:
     matrix:
-      image_family: freebsd-13-2
-      # image_family: freebsd-12-3
+      image_family: freebsd-14-0
   env:
     matrix:
       LLVM_VERSION: 11
