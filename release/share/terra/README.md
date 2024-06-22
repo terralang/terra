@@ -112,11 +112,12 @@ Building Terra
 
 If the binary releases are not appropriate, then you can also build Terra from source. Terra has the following dependencies:
 
-  * A working C/C++ compiler (GCC, Clang, MSVC, etc.)
-  * Windows only: Visual Studio 2013, 2015, 2017 or 2019
+  * A working C/C++ compiler (GCC, Clang, MSVC, etc.) that supports at least C++ 17
+  * Windows only: Visual Studio 2022 (other versions may work but are untested)
   * CMake (version 3.5 or greater)
+  * Linux, macOS, FreeBSD only: GNU Make (required for building LuaJIT)
   * LLVM and Clang (see suppport table below)
-  * LuaJIT (note this is downloaded and installed automatically be default)
+  * LuaJIT (note this is downloaded and installed automatically by default)
   * *Optional:* CUDA
 
 On recent versions of Ubuntu, you can get these dependencies with:
@@ -141,18 +142,20 @@ pkg install -y cmake llvm13
 
 The current recommended version of LLVM is **13**. The following versions are also supported:
 
-| Version | Linux | macOS | FreeBSD | Windows | CUDA | AMD GPU \* | Notes |
-| ------- | ----- | ----- | ------- | ------- | ---- | ---------- | ----- |
-| 11 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
-| 12 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | | |
-| 13 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 14 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 15 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 16 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 17 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
-| 18 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | :heavy_check_mark: | :heavy_check_mark: | |
+| Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
+| ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
+|      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                  | |
+|      12 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: |                |                  | |
+|      13 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
+|      14 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
+|      15 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
+|      16 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
+|      17 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |    :green_heart: | |
+|      18 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :green_heart:  |    :green_heart: | |
 
-\* Please note that AMD GPU support is currently experimental.
+\* AMD GPU support is currently experimental. LLVM 18 is **strongly** recommended.
+
+\*\* Intel GPU (SPIR-V) support is currently experimental.
 
 The following versions were previously supported by Terra:
 
