@@ -161,7 +161,7 @@ cmake .. -DCMAKE_INSTALL_PREFIX=$PWD/../install "${CMAKE_FLAGS[@]}"
 if [[ $(uname) = MINGW* ]]; then
   cmake --build . --target INSTALL --config Release
 else
-  make install -j${THREADS:-2}
+  make install VERBOSE=1 -j${THREADS:-2}
 fi
 
 # Skip ctest on Windows; this is currently broken.
