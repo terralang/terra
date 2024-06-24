@@ -174,16 +174,6 @@ jobs:
             static: '1'
             test: '1'
 
-          # LLVM 18 on Ubuntu 24.04
-          - distro: 'ubuntu-24.04'
-            llvm: '18'
-            lua: 'luajit'
-            cuda: '0'
-            variant: 'package'
-            slib: '1'
-            static: '1'
-            test: '1'
-
           # LLVM 14, no-slib/no-static, Ubuntu 22.04
           - distro: 'ubuntu-22.04'
             llvm: '14'
