@@ -174,6 +174,16 @@ jobs:
             static: '1'
             test: '1'
 
+          # LLVM 18 on Ubuntu 24.04
+          - distro: 'ubuntu-24.04'
+            llvm: '18'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'package'
+            slib: '1'
+            static: '1'
+            test: '1'
+
           # LLVM 14, no-slib/no-static, Ubuntu 22.04
           - distro: 'ubuntu-22.04'
             llvm: '14'
@@ -240,10 +250,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 13.0.1 luajit prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04" "" 18.1.7 luajit prebuilt 2
       - uses: actions/upload-artifact@v2
         with:
-          name: docker-ubuntu-18.04-x86_64-llvm-13
+          name: docker-ubuntu-18.04-x86_64-llvm-18
           path: |
             terra-*.tar.xz
             terra-*.7z
