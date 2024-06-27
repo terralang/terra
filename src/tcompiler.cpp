@@ -304,7 +304,12 @@ int terra_inittarget(lua_State *L) {
             // GV tables
             CodeModel::Small,
 #endif
-            CodeGenOpt::Aggressive);
+#if LLVM_VERSION < 180
+            CodeGenOpt::Aggressive
+#else
+            CodeGenOptLevel::Aggressive
+#endif
+    );
     TT->external = new Module("external", *TT->ctx);
     TT->external->setTargetTriple(TT->Triple);
     lua_pushlightuserdata(L, TT);
@@ -404,7 +409,13 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
             .setMAttrs(mattrs)
             .setEngineKind(EngineKind::JIT)
             .setTargetOptions(CU->TT->tm->Options)
-            .setOptLevel(CodeGenOpt::Aggressive)
+            .setOptLevel(
+#if LLVM_VERSION < 180
+                    CodeGenOpt::Aggressive
+#else
+                    CodeGenOptLevel::Aggressive
+#endif
+                    )
             .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
 #if LLVM_VERSION < 120
             .setUseOrcMCJITReplacement(true)
@@ -545,7 +556,11 @@ class Types {
                     CreatePrimitiveType(typ, t);
                 } break;
                 case T_niltype: {
+#if LLVM_VERSION < 170
                     t->type = Type::getInt8PtrTy(*CU->TT->ctx);
+#else
+                    t->type = PointerType::get(*CU->TT->ctx, 0);
+#endif
                 } break;
                 case T_opaque: {
                     t->type = Type::getInt8Ty(*CU->TT->ctx);
@@ -586,7 +601,13 @@ class Types {
             } break;
         }
     }
-    Type *FunctionPointerType() { return Type::getInt8PtrTy(*CU->TT->ctx); }
+    Type *FunctionPointerType() {
+#if LLVM_VERSION < 170
+        return Type::getInt8PtrTy(*CU->TT->ctx);
+#else
+        return PointerType::get(*CU->TT->ctx, 0);
+#endif
+    }
     bool LookupTypeCache(Obj *typ, TType **t) {
         *t = (TType *)CU->symbols->getud(typ);  // try to look up the cached type
         if (*t == NULL) {
@@ -762,14 +783,15 @@ struct CCallingConv {
     lua_State *L;
     terra_CompilerState *C;
     Types *Ty;
-    bool pass_struct_as_exploded_values;
     bool return_empty_struct_as_void;
-    bool wasm_cconv;
     bool aarch64_cconv;
+    bool amdgpu_cconv;
     bool ppc64_cconv;
     int ppc64_float_limit;
     int ppc64_int_limit;
     bool ppc64_count_used;
+    bool spirv_cconv;
+    bool wasm_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_),
@@ -777,19 +799,20 @@ struct CCallingConv {
               L(CU_->T->L),
               C(CU_->T->C),
               Ty(Ty_),
-              pass_struct_as_exploded_values(false),
               return_empty_struct_as_void(false),
-              wasm_cconv(false),
               aarch64_cconv(false),
+              amdgpu_cconv(false),
               ppc64_cconv(false),
               ppc64_float_limit(0),
               ppc64_int_limit(0),
-              ppc64_count_used(false) {
+              ppc64_count_used(false),
+              spirv_cconv(false),
+              wasm_cconv(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
-                pass_struct_as_exploded_values = true;
+                amdgpu_cconv = true;
             } break;
             case Triple::ArchType::aarch64:
             case Triple::ArchType::aarch64_be: {
@@ -806,16 +829,27 @@ struct CCallingConv {
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
             } break;
+#if LLVM_VERSION >= 150
+            case Triple::ArchType::spirv32:
+            case Triple::ArchType::spirv64: {
+                return_empty_struct_as_void = true;
+                spirv_cconv = true;
+            } break;
+#endif
             case Triple::ArchType::wasm32:
             case Triple::ArchType::wasm64: {
                 wasm_cconv = true;
             } break;
+            default:
+                break;
         }
 
         switch (Triple.getOS()) {
             case Triple::OSType::Win32: {
                 return_empty_struct_as_void = true;
             } break;
+            default:
+                break;
         }
     }
 
@@ -1088,11 +1122,11 @@ struct CCallingConv {
             return Argument(C_PRIMITIVE, t, usei1 ? Type::getInt1Ty(*CU->TT->ctx) : NULL);
         }
 
-        if (wasm_cconv && !WasmIsSingletonOrEmpty(t->type)) {
+        if ((wasm_cconv && !WasmIsSingletonOrEmpty(t->type)) || spirv_cconv) {
             return Argument(C_AGGREGATE_MEM, t);
         }
 
-        if (pass_struct_as_exploded_values) {
+        if (amdgpu_cconv) {
             return Argument(C_AGGREGATE_REG, t, t->type);
         }
 
@@ -1128,7 +1162,7 @@ struct CCallingConv {
 
         return Argument(C_AGGREGATE_REG, t, StructType::get(*CU->TT->ctx, elements));
     }
-    void Classify(Obj *ftype, Obj *params, Classification *info) {
+    void Classify(Obj *ftype, CallingConv::ID cconv, Obj *params, Classification *info) {
         Obj fparams, returntype;
         ftype->obj("parameters", &fparams);
         ftype->obj("returntype", &returntype);
@@ -1161,13 +1195,13 @@ struct CCallingConv {
                 CreateFunctionType(info, fparams.size(), ftype->boolean("isvararg"));
     }
 
-    Classification *ClassifyFunction(Obj *fntyp) {
+    Classification *ClassifyFunction(Obj *fntyp, CallingConv::ID cconv) {
         Classification *info = (Classification *)CU->symbols->getud(fntyp);
         if (!info) {
             info = new Classification();  // TODO: fix leak
             Obj params;
             fntyp->obj("parameters", &params);
-            Classify(fntyp, &params, info);
+            Classify(fntyp, cconv, &params, info);
             CU->symbols->setud(fntyp, info);
         }
         return info;
@@ -1279,8 +1313,9 @@ struct CCallingConv {
         }
     }
 
-    Function *CreateFunction(Module *M, Obj *ftype, const Twine &name) {
-        Classification *info = ClassifyFunction(ftype);
+    Function *CreateFunction(Module *M, Obj *ftype, CallingConv::ID cconv,
+                             const Twine &name) {
+        Classification *info = ClassifyFunction(ftype, cconv);
         Function *fn = Function::Create(info->fntype, Function::InternalLinkage, name, M);
         AttributeFnOrCall(fn, info);
         return fn;
@@ -1311,7 +1346,7 @@ struct CCallingConv {
     }
     void EmitEntry(IRBuilder<> *B, Obj *ftype, Function *func,
                    std::vector<Value *> *variables) {
-        Classification *info = ClassifyFunction(ftype);
+        Classification *info = ClassifyFunction(ftype, func->getCallingConv());
         assert(info->paramtypes.size() == variables->size());
         Function::arg_iterator ai = func->arg_begin();
         if (info->returntype.kind == C_AGGREGATE_MEM)
@@ -1359,7 +1394,7 @@ struct CCallingConv {
         }
     }
     void EmitReturn(IRBuilder<> *B, Obj *ftype, Function *function, Value *result) {
-        Classification *info = ClassifyFunction(ftype);
+        Classification *info = ClassifyFunction(ftype, function->getCallingConv());
         ArgumentKind kind = info->returntype.kind;
 
         if (C_AGGREGATE_REG == kind &&
@@ -1420,10 +1455,10 @@ struct CCallingConv {
         }
     }
 
-    Value *EmitCall(IRBuilder<> *B, Obj *ftype, Obj *paramtypes, Value *callee,
-                    std::vector<Value *> *actuals) {
+    Value *EmitCall(IRBuilder<> *B, Obj *ftype, CallingConv::ID cconv, Obj *paramtypes,
+                    Value *callee, std::vector<Value *> *actuals) {
         Classification info;
-        Classify(ftype, paramtypes, &info);
+        Classify(ftype, cconv, paramtypes, &info);
 
         std::vector<Value *> arguments;
 
@@ -1659,7 +1694,9 @@ static CallingConv::ID ParseCallingConv(const char *cc) {
         init = true;
         ccmap["fastcc"] = CallingConv::Fast;
         ccmap["coldcc"] = CallingConv::Cold;
+#if LLVM_VERSION < 180
         ccmap["webkit_jscc"] = CallingConv::WebKit_JS;
+#endif
         ccmap["anyregcc"] = CallingConv::AnyReg;
         ccmap["preserve_mostcc"] = CallingConv::PreserveMost;
         ccmap["preserve_allcc"] = CallingConv::PreserveAll;
@@ -1867,15 +1904,24 @@ struct FunctionEmitter {
                 if (fstate->func) return fstate;
             }
 
+            CallingConv::ID callingconv = CallingConv::MaxID;
+            if (funcobj->hasfield("callingconv")) {
+                callingconv = ParseCallingConv(funcobj->string("callingconv"));
+            }
+
             Obj ftype;
             funcobj->obj("type", &ftype);
             // function name is $+name so that it can't conflict with any symbols imported
             // from the C namespace
-            fstate->func = CC->CreateFunction(
-                    M, &ftype, Twine(StringRef((isextern) ? "" : "$"), name));
+            fstate->func =
+                    CC->CreateFunction(M, &ftype, callingconv,
+                                       Twine(StringRef((isextern) ? "" : "$"), name));
             if (isextern) {
                 // Set external linkage for extern functions.
                 fstate->func->setLinkage(GlobalValue::ExternalLinkage);
+            }
+            if (callingconv != CallingConv::MaxID) {
+                fstate->func->setCallingConv(callingconv);
             }
 
             if (funcobj->hasfield("alwaysinline")) {
@@ -1890,10 +1936,6 @@ struct FunctionEmitter {
                     fstate->func->addFnAttr(Attribute::OptimizeNone);
                     fstate->func->addFnAttr(Attribute::NoInline);
                 }
-            }
-            if (funcobj->hasfield("callingconv")) {
-                const char *callingconv = funcobj->string("callingconv");
-                fstate->func->setCallingConv(ParseCallingConv(callingconv));
             }
             if (funcobj->hasfield("noreturn")) {
                 if (funcobj->boolean("noreturn")) {
@@ -1986,6 +2028,9 @@ struct FunctionEmitter {
                 cast<ReturnInst>(fstate->func->getEntryBlock().getTerminator());
         Constant *r = dyn_cast<Constant>(term->getReturnValue());
         assert(r || !"constant expression was not constant");
+#if LLVM_VERSION >= 170
+        CU->fam.clear(*fstate->func, fstate->func->getName());
+#endif
         fstate->func->eraseFromParent();
         return r;
     }
@@ -2810,7 +2855,12 @@ struct FunctionEmitter {
 #if LLVM_VERSION < 170
                         return B->CreateBitCast(v, toT->type);
 #else
-                        return v;
+                        if (fromT->type->getPointerAddressSpace() !=
+                            toT->type->getPointerAddressSpace()) {
+                            return B->CreateAddrSpaceCast(v, toT->type);
+                        } else {
+                            return v;
+                        }
 #endif
                     } else {
                         assert(toT->type->isIntegerTy());
@@ -2846,7 +2896,6 @@ struct FunctionEmitter {
                 Value *v = emitAddressOf(&obj);
                 Obj entryType;
                 Value *result = emitStructSelect(&typ, v, offset, &entryType);
-                Type *ttype = getType(&typ)->type;
                 if (!exp->boolean("lvalue"))
                     result = B->CreateLoad(getType(&entryType)->type, result);
                 return result;
@@ -2987,7 +3036,6 @@ struct FunctionEmitter {
                 Value *a_result = B->CreateExtractValue(a, ArrayRef<unsigned>(0));
                 Value *a_success = B->CreateExtractValue(a, ArrayRef<unsigned>(1));
                 Value *a_success_i8 = B->CreateZExt(a_success, B->getInt8Ty());
-                Type *elt_types[2] = {a_result->getType(), B->getInt8Ty()};
                 Type *result_type = typeOfValue(exp)->type;
                 Value *result = UndefValue::get(result_type);
                 result = B->CreateInsertValue(result, a_result, ArrayRef<unsigned>(0));
@@ -3205,6 +3253,11 @@ struct FunctionEmitter {
 
         call->obj("value", &func);
 
+        CallingConv::ID callingconv = CallingConv::MaxID;
+        if (func.hasfield("callingconv")) {
+            callingconv = ParseCallingConv(func.string("callingconv"));
+        }
+
         Value *fn = emitExp(&func);
 
         Obj fnptrtyp;
@@ -3220,7 +3273,7 @@ struct FunctionEmitter {
             setInsertBlock(bb);
             deferred.push_back(bb);
         }
-        Value *r = CC->EmitCall(B, &fntyp, &paramtypes, fn, &actuals);
+        Value *r = CC->EmitCall(B, &fntyp, callingconv, &paramtypes, fn, &actuals);
         setInsertBlock(cur);  // defer may have changed it
         return r;
     }

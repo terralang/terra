@@ -1,8 +1,3 @@
-if terralib.llvm_version >= 170 and require("ffi").os == "Linux" then
-  print("Skipping broken test on Linux, see #644")
-  return -- FIXME: https://github.com/terralang/terra/issues/644
-end
-
 function failit(match,fn)
 	local success,msg = xpcall(fn,debug.traceback)
 	--print(msg)

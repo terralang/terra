@@ -2,8 +2,7 @@ freebsd_task:
   name: FreeBSD
   freebsd_instance:
     matrix:
-      image_family: freebsd-13-2
-      # image_family: freebsd-12-3
+      image_family: freebsd-14-0
   env:
     matrix:
       LLVM_VERSION: 11
@@ -13,6 +12,7 @@ freebsd_task:
       LLVM_VERSION: 15
       LLVM_VERSION: 16
       LLVM_VERSION: 17
+      LLVM_VERSION: 18
   install_script: pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
   script: |
     export CC=cc

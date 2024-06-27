@@ -961,14 +961,14 @@ static void doquote(LexState *ls, int isexp) {
 }
 
 // buf should be at least 128 chars
-static void number_type(LexState *ls, int flags, char *buf) {
+static void number_type(LexState *ls, int flags, char *buf, size_t bufsiz) {
     if (ls->in_terra) {
         if (flags & F_ISINTEGER) {
             const char *sign = (flags & F_ISUNSIGNED) ? "u" : "";
             const char *sz = (flags & F_IS8BYTES) ? "64" : "";
-            sprintf(buf, "%sint%s", sign, sz);
+            snprintf(buf, bufsiz, "%sint%s", sign, sz);
         } else {
-            sprintf(buf, "%s", (flags & F_IS8BYTES) ? "double" : "float");
+            snprintf(buf, bufsiz, "%s", (flags & F_IS8BYTES) ? "double" : "float");
         }
     }
 }
@@ -997,11 +997,11 @@ static void simpleexp(LexState *ls) {
         case TK_NUMBER: {
             char buf[128];
             int flags = ls->t.seminfo.flags;
-            number_type(ls, flags, &buf[0]);
+            number_type(ls, flags, &buf[0], sizeof(buf));
             if (flags & F_ISINTEGER) {
                 push_integer(ls, ls->t.seminfo.i);
                 push_literal(ls, buf);
-                sprintf(buf, "%" PRIu64, ls->t.seminfo.i);
+                snprintf(buf, sizeof(buf), "%" PRIu64, ls->t.seminfo.i);
                 push_string(ls, buf);
                 add_field(ls, -2, "stringvalue");
 
@@ -2053,7 +2053,7 @@ static void converttokentolua(LexState *ls, Token *t) {
             lua_pushstring(ls->L, "<number>");
             lua_setfield(ls->L, -2, "type");
             int flags = t->seminfo.flags;
-            number_type(ls, flags, &buf[0]);
+            number_type(ls, flags, &buf[0], sizeof(buf));
             push_type(ls, buf);
             lua_setfield(ls->L, -2, "valuetype");
             if (flags & F_IS8BYTES && flags & F_ISINTEGER) {
@@ -2326,8 +2326,8 @@ int luaY_parser(terra_State *T, ZIO *z, const char *name, int firstchar) {
                lexstate.output_buffer.data);
     }
     // loadbuffer doesn't like null terminators, so rewind to before them
-    while (lexstate.output_buffer.data[lexstate.output_buffer.N - 1] == '\0' &&
-           lexstate.output_buffer.N > 0) {
+    while (lexstate.output_buffer.N > 0 &&
+           lexstate.output_buffer.data[lexstate.output_buffer.N - 1] == '\0') {
         lexstate.output_buffer.N--;
     }
 

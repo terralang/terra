@@ -1,8 +1,13 @@
-# Unreleased Changes (Intended to be Version 1.2.0)
+# Release 1.2.0 (2024-06-25)
+
+This release adds new LLVM versions and introduces experimental support for SPIR-V code generation. Note that as of the tested LLVM versions, LLVM's native SPIR-V backend is unable to generate correct SPIR-V code in all cases; but the LLVM SPIR-V target can still be used in combination with the [LLVM/SPIR-V Translator](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) to generate valid code.
+
+Users who generate code for AMD GPUs are strongly encouraged to upgrade to LLVM 18 and ROCm 6.0.0, as previous version combinations generate bad code to varying degrees.
 
 ## Added features
 
-  * Support for LLVM 17
+  * Support for LLVM 17 and 18
+  * Experimental support for SPIR-V code generation (e.g., for Intel GPUs)
 
 ## Fixed Bugs
 

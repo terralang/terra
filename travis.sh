@@ -33,7 +33,13 @@ if [[ $(uname) = Linux ]]; then
   exit 1
 
 elif [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_VERSION = 17 ]]; then
+  if [[ $LLVM_VERSION = 18 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.7/clang+llvm-18.1.7-x86_64-apple-darwin.tar.xz
+    tar xf clang+llvm-18.1.7-x86_64-apple-darwin.tar.xz
+    ln -s clang+llvm-18.1.7-x86_64-apple-darwin/bin/llvm-config llvm-config-17
+    ln -s clang+llvm-18.1.7-x86_64-apple-darwin/bin/clang clang-17
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.7-x86_64-apple-darwin
+  elif [[ $LLVM_VERSION = 17 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-17.0.5/clang+llvm-17.0.5-x86_64-apple-darwin.tar.xz
     tar xf clang+llvm-17.0.5-x86_64-apple-darwin.tar.xz
     ln -s clang+llvm-17.0.5-x86_64-apple-darwin/bin/llvm-config llvm-config-17
@@ -172,7 +178,7 @@ if [[ $(uname) != Darwin ]]; then
 fi
 
 # Only deploy builds with LLVM 13 (macOS) and 11 (Windows).
-if [[ (( $(uname) == Darwin && $LLVM_VERSION = 13 ) || ( $(uname) == MINGW* && $LLVM_VERSION = 11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+if [[ (( $(uname) == Darwin && $LLVM_VERSION = 18 ) || ( $(uname) == MINGW* && $LLVM_VERSION = 11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
   RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
   mv install $RELEASE_NAME
   if [[ $(uname) = MINGW* ]]; then

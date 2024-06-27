@@ -99,7 +99,7 @@ public:
             std::string declstr;
             if (it->isAnonymousStructOrUnion()) {
                 char buf[32];
-                sprintf(buf, "_%d", anonname++);
+                snprintf(buf, sizeof(buf), "_%d", anonname++);
                 declstr = buf;
             } else {
                 declstr = declname.getAsString();
@@ -802,9 +802,6 @@ void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOpti
     }
 
     clang::driver::ToolChain const &TC = C->getDefaultToolChain();
-    std::string path = TC.GetLinkerPath();
-    const char *link = path.c_str();
-    for (auto &i : TC.getProgramPaths()) link = i.c_str();
 
     llvm::opt::ArgStringList IncludeArgs;
     TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);
