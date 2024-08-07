@@ -180,7 +180,7 @@ fi
 
 # Only deploy builds with LLVM 13 (macOS) and 11 (Windows).
 if [[ (( $(uname) == Darwin && $LLVM_VERSION = 18 ) || ( $(uname) == MINGW* && $LLVM_VERSION = 11 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
-  RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-`uname -m`-`git rev-parse --short HEAD`
+  RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-${arch}-`git rev-parse --short HEAD`
   mv install $RELEASE_NAME
   if [[ $(uname) = MINGW* ]]; then
     7z a -t7z $RELEASE_NAME.7z $RELEASE_NAME
