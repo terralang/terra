@@ -35,7 +35,7 @@ jobs:
           - os: 'macos-14'
             lua: 'moonjit'
 
-          # macOS 14: exclude LLVM 11-17
+          # macOS 14: exclude LLVM 11-15,17
           - os: 'macos-14'
             llvm: '11'
           - os: 'macos-14'
@@ -46,8 +46,6 @@ jobs:
             llvm: '14'
           - os: 'macos-14'
             llvm: '15'
-          - os: 'macos-14'
-            llvm: '16'
           - os: 'macos-14'
             llvm: '17'
 
