@@ -35,6 +35,22 @@ jobs:
           - os: 'macos-14'
             lua: 'moonjit'
 
+          # macOS 14: exclude LLVM 11-17
+          - os: 'macos-14'
+            llvm: '11'
+          - os: 'macos-14'
+            llvm: '12'
+          - os: 'macos-14'
+            llvm: '13'
+          - os: 'macos-14'
+            llvm: '14'
+          - os: 'macos-14'
+            llvm: '15'
+          - os: 'macos-14'
+            llvm: '16'
+          - os: 'macos-14'
+            llvm: '17'
+
           # Windows: exclude LLVM 12-18
           - os: 'windows-2022'
             llvm: '12'
