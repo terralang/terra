@@ -2767,6 +2767,151 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
+    --check if metamethod is implemented
+    local function hasmetamethod(v, method)
+        if not terralib.ext then return false end
+        local typ = v.type
+        if typ and typ:isstruct() and typ.methods[method] then
+            return true
+        end
+        return false
+    end
+
+    --check if methods.__init is implemented
+    local function checkmetainit(anchor, reciever)
+        if not terralib.ext then return end
+        local typ = reciever.type
+        if typ and typ:isstruct() then
+            --try to add missing __init method
+            if not typ.methods.__init then
+                terralib.ext.addmissing.__init(typ)
+            end
+            if typ.methods.__init then
+                if reciever:is "allocvar" then
+                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(typ)
+                end
+                return checkmethodwithreciever(anchor, false, "__init", reciever, terralib.newlist(), "statement")
+            end
+        end
+    end
+
+    local function checkmetainitializers(anchor, lhs)
+        if not terralib.ext then return end
+        local stmts = terralib.newlist()
+        for i,e in ipairs(lhs) do
+            local init = checkmetainit(anchor, e)
+            if init then
+                stmts:insert(init)
+            end
+        end
+        return stmts
+    end
+
+    --check if a __dtor metamethod is implemented for the type corresponding to `sym`
+    local function checkmetadtor(anchor, reciever)
+        if not terralib.ext then return end
+        local typ = reciever.type
+        if typ and typ:isstruct() then
+            --try to add missing __dtor method
+            if not typ.methods.__dtor then
+                terralib.ext.addmissing.__dtor(typ)
+            end
+            if typ.methods.__dtor then
+                if reciever:is "allocvar" then
+                    reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(typ)
+                end
+                return checkmethodwithreciever(anchor, false, "__dtor", reciever, terralib.newlist(), "statement")
+            end
+        end
+    end
+
+    local function checkmetadtors(anchor, stats)
+        if not terralib.ext then return stats end
+        --extract the return statement from `stats`, if there is one
+        local function extractreturnstat()
+            local n = #stats
+            if n>0 then
+                local s = stats[n]
+                if s:is "returnstat" then
+                    return s
+                end
+            end
+        end
+        local rstat = extractreturnstat()
+        --extract the returned `var` symbols from a return statement
+        local function extractreturnedsymbols()
+            local ret = {}
+            --loop over expressions in a `letin` return statement
+            for i,v in ipairs(rstat.expression.expressions) do
+                if v:is "var" then
+                    ret[v.name] = v.symbol
+                end
+            end
+            return ret
+        end
+
+        --get symbols that are returned in case of a return statement
+        local rsyms = rstat and extractreturnedsymbols() or {}
+        --get position at which to add destructor statements
+        local pos = rstat and #stats or #stats+1
+        for name,sym in pairs(env:localenv()) do
+            --if not a return variable ckeck for an implementation of methods.__dtor
+            if not rsyms[name] then
+                local reciever = newobject(anchor,T.var, name, sym):setlvalue(true):withtype(sym.type)
+                local dtor = checkmetadtor(anchor, reciever)
+                if dtor then
+                    --add deferred calls to the destructors
+                    table.insert(stats, pos, newobject(anchor, T.defer, dtor))
+                    pos = pos + 1
+                end
+            end
+        end
+        return stats
+    end
+
+    local function checkmetacopyassignment(anchor, from, to)
+        if not terralib.ext then return end
+        local ftype, ttype = from.type, to.type
+        if (ftype and ftype:isstruct()) or (ttype and ttype:isstruct()) then
+            --case of equal struct types
+            if ftype == ttype then
+                if not ftype.methods.__copy then
+                    --try add missing __copy method
+                    terralib.ext.addmissing.__copy(ftype)
+                end
+                --if __copy was unsuccessful return to do regular copy
+                if not (ftype.methods.__copy) then return end
+            else
+                --otherwise
+                if not (hasmetamethod(from, "__copy") or hasmetamethod(to, "__copy")) then return end
+            end
+        else
+            --only struct types are managed
+            --resort to regular copy
+            return
+        end
+        --if `to` is an allocvar then set type and turn into corresponding `var`
+        if to:is "allocvar" then
+            if not to.type then
+                to:settype(from.type or terra.types.error)
+            end
+            to = newobject(anchor,T.var,to.name,to.symbol):setlvalue(true):withtype(to.type)
+        end
+        --list of overloaded __copy metamethods
+        local overloads = terra.newlist()
+        local function checkoverload(v)
+            if hasmetamethod(v, "__copy") then
+                overloads:insert(asterraexpression(anchor, v.type.methods.__copy, "luaobject"))
+            end
+        end
+        --add overloaded methods based on left- and right-hand-side of the assignment
+        checkoverload(from)
+        checkoverload(to)
+        if #overloads > 0 then
+            return checkcall(anchor, overloads, terralib.newlist{from, to}, "all", true, "expression")
+        end
+    end
+
     local function checkmethod(exp, location)
         local methodname = checklabel(exp.name,true).value
         assert(type(methodname) == "string" or terra.islabel(methodname))
@@ -3193,7 +3338,48 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit)
     end
 
+    --divide assignment into regular assignments and copy assignments
+    local function assignmentkinds(anchor, lhs, rhs)
+        local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        for i=1,#lhs do
+            local cpassign = false
+            --ToDo: for now we call 'checkmetacopyassignment' twice. Refactor with 'createassignment'
+            local r = rhs[i]
+            if r then
+                --alternatively, work on the r.type and check for
+                --r.type:isprimitive(), r.type:isstruct(), etc
+                if r:is "operator" and r.operator == "&" then
+                    r = r.operands[1]
+                end
+                if r:is "var" or r:is "literal" or r:is "constant" or r:is "select" then
+                    if checkmetacopyassignment(anchor, r, lhs[i]) then
+                        cpassign = true
+                    end
+                end
+            end
+            if cpassign then
+                --add assignment by __copy call
+                byfcall.lhs:insert(lhs[i])
+                byfcall.rhs:insert(rhs[i])
+            else
+                --default to regular assignment
+                regular.lhs:insert(lhs[i])
+                regular.rhs:insert(rhs[i])
+            end
+        end
+        if #byfcall.lhs>0 and #byfcall.lhs+#regular.lhs>1 then
+            --__copy can potentially mutate left and right-handsides in an
+            --assignment. So we prohibit assignments that may involve something
+            --like a swap: u,v = v, u.
+            --for now we prohibit this by limiting such assignments
+            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+        end
+        return regular, byfcall
+    end
+
     local function createassignment(anchor,lhs,rhs)
+        --special case where a rhs struct is unpacked
         if #lhs > #rhs and #rhs > 0 then
             local last = rhs[#rhs]
             if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
@@ -3213,25 +3399,102 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return createstatementlist(anchor, List {a1, a2})
             end
         end
-        local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
-        rhs = insertcasts(anchor,vtypes,rhs)
-        for i,v in ipairs(lhs) do
-            local rhstype = rhs[i] and rhs[i].type or terra.types.error
-            if v:is "setteru" then
-                local rv,r = allocvar(v,rhstype,"<rhs>")
-                lhs[i] = newobject(v,T.setter, rv,v.setter(r))
-            elseif v:is "allocvar" then
-                v:settype(rhstype)
+
+        if not terralib.ext or #lhs < #rhs then
+            --an error may be reported later during type-checking: 'expected #lhs parameters (...), but found #rhs (...)'
+            local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
+            rhs = insertcasts(anchor, vtypes, rhs)
+            for i,v in ipairs(lhs) do
+                local rhstype = rhs[i] and rhs[i].type or terra.types.error
+                if v:is "setteru" then
+                    local rv,r = allocvar(v,rhstype,"<rhs>")
+                    lhs[i] = newobject(v,T.setter, rv,v.setter(r))
+                elseif v:is "allocvar" then
+                    v:settype(rhstype)
+                else
+                    ensurelvalue(v)
+                end
+            end
+            return newobject(anchor,T.assignment,lhs,rhs)
+        else
+            --standard case #lhs == #rhs
+            local stmts = terralib.newlist()
+            local post = terralib.newlist()
+            --first take care of regular assignments
+            local regular, byfcall = assignmentkinds(anchor, lhs, rhs)
+            local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
+            regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
+            for i,v in ipairs(regular.lhs) do
+                local rhstype = regular.rhs[i] and regular.rhs[i].type or terra.types.error
+                if v:is "setteru" then
+                    local rv,r = allocvar(v,rhstype,"<rhs>")
+                    regular.lhs[i] = newobject(v,T.setter, rv,v.setter(r))
+                elseif v:is "allocvar" then
+                    v:settype(rhstype)
+                else
+                    ensurelvalue(v)
+                    --if 'v' is a managed variable then
+                    --(1) var tmp = v       --store v in tmp
+                    --(2) v = rhs[i]        --perform assignment
+                    --(3) tmp:__dtor()      --delete old v
+                    --the temporary is necessary because rhs[i] may involve a function of 'v'
+                    if hasmetamethod(v, "__dtor") then
+                        --To avoid unwanted deletions we prohibit assignments that may involve something
+                        --like a swap: u,v = v, u.
+                        --for now we prohibit this by limiting assignments to a single one
+                        if #regular.lhs>1 then
+                            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+                        end
+                        local tmpa, tmp = allocvar(v, v.type,"<tmp_"..v.name..">")
+                        --store v in tmp
+                        stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
+                        --call tmp:__dtor()
+                        post:insert(checkmetadtor(anchor, tmp))
+                    end
+                end
+            end
+            --take care of copy assignments using methods.__copy
+            for i,v in ipairs(byfcall.lhs) do
+                local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
+                if v:is "setteru" then
+                    local rv,r = allocvar(v,rhstype,"<rhs>")
+                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], r))
+                    stmts:insert(newobject(v,T.setter, rv, v.setter(r)))
+                elseif v:is "allocvar" then
+                    if not v.type then
+                        v:settype(rhstype)
+                    end
+                    stmts:insert(v)
+                    local init = checkmetainit(anchor, v)
+                    if init then
+                        stmts:insert(init)
+                    end
+                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
+                else
+                    ensurelvalue(v)
+                    --apply copy assignment - memory resource management is in the
+                    --hands of the programmer
+                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
+                end
+            end
+            if #stmts==0 then
+                --standard case, no meta-copy-assignments
+                return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
             else
-                ensurelvalue(v)
+                --managed case using meta-copy-assignments
+                --the calls to `__copy` are in `stmts`
+                if #regular.lhs>0 then
+                    stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
+                end
+                stmts:insertall(post)
+                return createstatementlist(anchor, stmts)
             end
         end
-        return newobject(anchor,T.assignment,lhs,rhs)
     end
 
     function checkblock(s)
         env:enterblock()
-        local stats = checkstmts(s.statements)
+        local stats = checkmetadtors(s, checkstmts(s.statements))
         env:leaveblock()
         return s:copy {statements = stats}
     end
@@ -3314,9 +3577,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "defvar" then
                 local rhs = s.hasinit and checkexpressions(s.initializers)
                 local lhs = checkformalparameterlist(s.variables, not s.hasinit)
-                local res = s.hasinit and createassignment(s,lhs,rhs) 
-                            or createstatementlist(s,lhs)
-                return res
+                if s.hasinit then
+                    return createassignment(s,lhs,rhs)
+                else
+                    local res = createstatementlist(s,lhs)
+                    local ini = checkmetainitializers(s, lhs)
+                    if ini then
+                        res.statements:insertall(ini)
+                    end
+                    return res
+                end
             elseif s:is "assignment" then
                 local rhs = checkexpressions(s.rhs)
                 local lhs = checkexpressions(s.lhs,"lexpression")
