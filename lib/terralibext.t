@@ -1,7 +1,3 @@
-local std = {
-    io  = terralib.includec("stdio.h")
-}
-
 local function addmissinginit(T)
 
     --flag that signals that a missing __init method needs to
@@ -59,7 +55,6 @@ local function addmissinginit(T)
 
     if T:isstruct() and T.methods.__init == nil then
         local method = terra(self : &T)
-            std.io.printf("%s:__init - generated\n", [tostring(T)])
             generateinit(@self)
         end
         if generate then
@@ -126,7 +121,6 @@ local function addmissingdtor(T)
 
     if T:isstruct() and T.methods.__dtor==nil then
         local method = terra(self : &T)
-            std.io.printf("%s:__dtor - generated\n", [tostring(T)])
             generatedtor(@self)
         end
         if generate then
@@ -201,7 +195,6 @@ local function addmissingcopy(T)
 
     if T:isstruct() and T.methods.__copy==nil then
         local method = terra(from : &T, to : &T)
-            std.io.printf("%s:__copy - generate\n", [tostring(T)])
             generatecopy(@from, @to)
         end
         if generate then
