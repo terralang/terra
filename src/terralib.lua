@@ -3445,7 +3445,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                         if #regular.lhs>1 then
                             diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
                         end
-                        local tmpa, tmp = allocvar(v, v.type,"<tmp_"..v.name..">")
+                        local tmpa, tmp = allocvar(v, v.type,"<tmp>")
                         --store v in tmp
                         stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
                         --call tmp:__dtor()
