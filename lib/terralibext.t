@@ -1,3 +1,5 @@
+--local io = terralib.includec("stdio.h")
+
 local function addmissinginit(T)
 
     --flag that signals that a missing __init method needs to
@@ -56,6 +58,7 @@ local function addmissinginit(T)
     if T:isstruct() and T.methods.__init == nil then
         local method = terra(self : &T)
             generateinit(@self)
+            --io.printf("generated __init()\n")
         end
         if generate then
             T.methods.__init = method
@@ -121,6 +124,7 @@ local function addmissingdtor(T)
 
     if T:isstruct() and T.methods.__dtor==nil then
         local method = terra(self : &T)
+            --io.printf("generated __dtor()\n")
             generatedtor(@self)
         end
         if generate then
@@ -163,11 +167,11 @@ local function addmissingcopy(T)
                     to = from
                 end
             end
-        elseif V:isarray() and hasdtor(V) then
+        elseif V:isarray() and hascopy(V) then
             return quote
                 var pa = &self
                 for i = 0,V.N do
-                    rundtor((@pa)[i])
+                    runcopy((@pa)[i])
                 end
             end
         else
@@ -196,6 +200,7 @@ local function addmissingcopy(T)
     if T:isstruct() and T.methods.__copy==nil then
         local method = terra(from : &T, to : &T)
             generatecopy(@from, @to)
+            --io.printf("generated __copy()\n")
         end
         if generate then
             T.methods.__copy = method
