@@ -1,5 +1,22 @@
---local io = terralib.includec("stdio.h")
+--__forward takes a value by reference and simply forwards it by reference,
+--creating an rvalue
+local function addmissingforward(T)
+    if T:isstruct() then
+        if T.methods.__forward then
+            T.methods.__forward_generated = T.methods.__forward
+            return
+        end
+        if not T.methods.__forward and not T.methods.__forward_generated then
+            T.methods.__forward_generated = terra(self : &T)
+                return self --simply forward the variable (turning it into an rvalue)
+            end
+            T.methods.__forward = T.methods.__forward_generated
+            return
+        end
+    end
+end
 
+--__create a missing __init for 'T' and all its entries
 local function addmissinginit(T)
 
     --flag that signals that a missing __init method needs to
@@ -55,22 +72,30 @@ local function addmissinginit(T)
         return stmts
     end)
 
-    if T:isstruct() and T.methods.__init == nil then
-        local method = terra(self : &T)
-            generateinit(@self)
-            --io.printf("generated __init()\n")
+    if T:isstruct() then
+        --__init is implemented
+        if T.methods.__init and not T.methods.__init_generated then
+            T.methods.__init_generated = T.methods.__init
+            return
         end
-        if generate then
-            T.methods.__init = method
-        else
-            --set T.methods.__init to false. This means that addmissinginit(T) will not
-            --attempt to generate 'T.methods.__init' twice
-            T.methods.__init = false
+        --__dtor is not implemented
+        if not T.methods.__init and not T.methods.__init_generated then
+            T.methods.__init_generated = terra(self : &T)
+                generateinit(@self)
+            end
+            if generate then
+                T.methods.__init = T.methods.__init_generated
+            else
+                --set T.methods.__init to false. This means that addmissinginit(T) will not
+                --attempt to generate 'T.methods.__init' twice
+                T.methods.__init = false
+            end
+            return
         end
     end
 end
 
-
+--__create a missing __dtor for 'T' and all its entries
 local function addmissingdtor(T)
 
     --flag that signals that a missing __dtor method needs to
@@ -122,21 +147,31 @@ local function addmissingdtor(T)
         return stmts
     end)
 
-    if T:isstruct() and T.methods.__dtor==nil then
-        local method = terra(self : &T)
-            --io.printf("generated __dtor()\n")
-            generatedtor(@self)
+    if T:isstruct() then
+        --__dtor is implemented
+        if T.methods.__dtor and not T.methods.__dtor_generated then
+            T.methods.__dtor_generated = T.methods.__dtor
+            return
         end
-        if generate then
-            T.methods.__dtor = method
-        else
-            --set T.methods.__dtor to false. This means that addmissingdtor(T) will not
-            --attempt to generate 'T.methods.__dtor' twice
-            T.methods.__dtor = false
+        --__dtor is not implemented
+        if not T.methods.__dtor and not T.methods.__dtor_generated then
+            --generate __dtor
+            T.methods.__dtor_generated = terra(self : &T)
+                generatedtor(@self)
+            end
+            if generate then
+                T.methods.__dtor = T.methods.__dtor_generated
+            else
+                --set T.methods.__dtor to false. This means that addmissingdtor(T) will not
+                --attempt to generate 'T.methods.__dtor' twice
+                T.methods.__dtor = false
+            end
+            return
         end
     end
 end
 
+--__create a missing __copy for 'T' and all its entries
 local function addmissingcopy(T)
 
     --flag that signals that a missing __copy method needs to
@@ -197,25 +232,75 @@ local function addmissingcopy(T)
         return stmts
     end)
 
-    if T:isstruct() and T.methods.__copy==nil then
-        local method = terra(from : &T, to : &T)
-            generatecopy(@from, @to)
-            --io.printf("generated __copy()\n")
+    if T:isstruct() then
+        --__copy is implemented
+        if T.methods.__copy and not T.methods.__copy_generated then
+            T.methods.__copy_generated = T.methods.__copy
+            return
         end
-        if generate then
-            T.methods.__copy = method
-        else
-            --set T.methods.__copy to false. This means that addmissingcopy(T) will not
-            --attempt to generate 'T.methods.__copy' twice
-            T.methods.__copy = false
+        --__copy is not implemented
+        if not T.methods.__copy and not T.methods.__copy_generated then
+            --generate __copy
+            T.methods.__copy_generated = terra(from : &T, to : &T)
+                generatecopy(@from, @to)
+            end
+            if generate then
+                T.methods.__copy = T.methods.__copy_generated
+            else
+                --set T.methods.__copy to false. This means that addmissingcopy(T) will not
+                --attempt to generate 'T.methods.__copy' twice
+                T.methods.__copy = false
+            end
+            return
         end
     end
 end
 
+--generate __move, which moves resources to a new allocated variable
+local function addmissingmove(T)
+    if T:isstruct() then
+        if T.methods.__move and not T.methods.__move_generated then
+            T.methods.__move_generated = T.methods.__move
+            return
+        end
+
+        if not T.methods.__move and not T.methods.__move_generated then
+            --generate missing __forward and __init
+            addmissingforward(T)
+            addmissinginit(T)
+            --if an __init was generated then we can generate a specialized __move
+            if T.methods.__init then
+                T.methods.__move_generated = terra(self : &T)
+                    var new = self:__forward_generated() --shallow copy of 'self'
+                    self:__init_generated()   --initialize old 'self'
+                    return new
+                end
+                T.methods.__move = T.methods.__move_generated
+            --otherwise, __move is just __forward and is accessible only in __move_generated
+            else
+                T.methods.__move_generated = T.methods.__forward_generated
+                T.methods.__move = false
+            end
+            return
+        end
+    end
+end
+
+local function addmissingraii(T)
+    addmissingforward(T)
+    addmissingdinit(T)
+    addmissingdtor(T)
+    addmissingcopy(T)
+    addmissingmove(T)
+end
+
 terralib.ext = {
     addmissing = {
+        __forward = addmissingforward,
         __init = addmissinginit,
         __dtor = addmissingdtor,
-        __copy = addmissingcopy
+        __copy = addmissingcopy,
+        __move = addmissingmove,
+        __all = addmissingraii
     }
 }
