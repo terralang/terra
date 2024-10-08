@@ -20,6 +20,7 @@ add_custom_command(
   DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua"
     "${PROJECT_SOURCE_DIR}/lib/std.t"
+    "${PROJECT_SOURCE_DIR}/lib/terralibext.t"
     "${PROJECT_SOURCE_DIR}/lib/parsing.t"
     LuaJIT
   COMMAND ${LUAJIT_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/geninternalizedfiles.lua" ${PROJECT_BINARY_DIR}/internalizedfiles.h ${CLANG_RESOURCE_DIR} "%.h$" ${CLANG_RESOURCE_DIR} "%.modulemap$" "${PROJECT_SOURCE_DIR}/lib" "%.t$"
