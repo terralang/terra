@@ -271,7 +271,7 @@ local function addmissingmove(T)
             --if an __init was generated then we can generate a specialized __move
             if T.methods.__init then
                 T.methods.__move_generated = terra(self : &T)
-                    var new = self:__forward_generated() --shallow copy of 'self'
+                    var new = @self:__forward_generated() --shallow copy of 'self'
                     self:__init_generated()   --initialize old 'self'
                     return new
                 end
