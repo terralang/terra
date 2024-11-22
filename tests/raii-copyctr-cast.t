@@ -40,10 +40,11 @@ A.metamethods.__cast = function(from, to, exp)
     print("attempting cast from "..tostring(from).." --> "..tostring(to))
     if to == &A and from:ispointer() then
         return quote
-                var tmp = A{@exp}
-            in
-                &tmp
-            end
+            var tmp : A
+            tmp.data = @exp
+        in
+            &tmp
+        end
     end
 end
 
