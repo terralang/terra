@@ -95,9 +95,12 @@ terra testcopyassignment2()
 end
 test.eq(testcopyassignment2(), 5)
 
+--generate implementation for __move
+terralib.ext.addmissing.__move(A)
+
 printtestheader("raii.t - return from function.")
 terra returnone()
-    var a = A{4}
+    var a = A{4}:__move() --call __move to move resources into 'a' (make sure copy constructor is not called)
     return a
 end
 
@@ -108,9 +111,10 @@ end
 test.eq(testreturnfromfun1(), 4)
 
 printtestheader("raii.t - return tuple from function.")
+
 terra returntwo()
-    var a = A{4}
-    var b = A{5}
+    var a = A{4}:__move()   --call __move to move resources into 'a' (make sure copy constructor is not called)
+    var b = A{5}:__move()   --same for 'b'
     return a, b
 end
 
@@ -118,4 +122,5 @@ terra testreturnfromfun2()
     var a, b = returntwo()
     return a.data * b.data
 end
+print(testreturnfromfun2())
 test.eq(testreturnfromfun2(), 20)
