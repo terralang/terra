@@ -1,3 +1,5 @@
+/.idea
+/cmake-build-debug
 /build
 /cmake-build-debug
 /docs/_site
@@ -24,8 +26,6 @@
 /tests/objc
 /tests/objc2
 /tests/stdio.exe
-
-/.idea
 
 *.bc
 *.ll
