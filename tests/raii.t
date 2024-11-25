@@ -94,3 +94,28 @@ terra testcopyassignment2()
     return x
 end
 test.eq(testcopyassignment2(), 5)
+
+printtestheader("raii.t - return from function.")
+terra returnone()
+    var a = A{4}
+    return a
+end
+
+terra testreturnfromfun1()
+    var a = returnone()
+    return a.data
+end
+test.eq(testreturnfromfun1(), 4)
+
+printtestheader("raii.t - return tuple from function.")
+terra returntwo()
+    var a = A{4}
+    var b = A{5}
+    return a, b
+end
+
+terra testreturnfromfun2()
+    var a, b = returntwo()
+    return a.data * b.data
+end
+test.eq(testreturnfromfun2(), 20)
