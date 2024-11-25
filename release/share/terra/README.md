@@ -27,7 +27,7 @@ Installing Terra
 
 Terra currently runs on Linux (x86_64, AArch64, PPC64le), macOS (x86_64, AArch64), FreeBSD (x86_64), and Windows (x86_64). Binary releases for popular versions of these systems are available [online](https://github.com/terralang/terra/releases), and we recommend you use them if possible because building Terra requires a working install of LLVM and Clang, which can be difficult to get working.
 
-Note that as of macOS 10.15 Catalina, in order to include C headers in Terra you will need to define the following evironment variable:
+Note that as of macOS 10.15 Catalina, in order to include C headers in Terra you will need to define the following environment variable:
 
     export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
 
