@@ -3383,117 +3383,151 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return regular, byfcall
     end
 
-    local function createassignment(anchor,lhs,rhs)
-        --special case where a rhs struct is unpacked
-        if #lhs > #rhs and #rhs > 0 then
-            local last = rhs[#rhs]
-            if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
-                --struct pattern match
-                local av,v = allocvar(anchor,last.type,"<structpattern>")
-                local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
-                for i,l in ipairs(lhs) do
-                    if i < #rhs then
-                        newlhs:insert(l)
-                    else
-                        lhsp:insert(l)
-                        rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
-                    end
-                end
-                newlhs[#rhs] = av
-                local a1,a2 = createassignment(anchor,newlhs,rhs), createassignment(anchor,lhsp,rhsp)
-                return createstatementlist(anchor, List {a1, a2})
+    --struct assignment pattern matching applies? true / false
+    local function patterncanbematched(lhs, rhs)
+        local last = rhs[#rhs]
+        if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
+            return true
+        end
+        return false
+    end
+
+    local createassignment, createregularassignment
+
+    --try unpack struct and perform pattern match
+    local function trystructpatternmatching(anchor, lhs, rhs)
+        local last = rhs[#rhs]
+        local av,v = allocvar(anchor,last.type,"<structpattern>")
+        local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
+        for i,l in ipairs(lhs) do
+            if i < #rhs then
+                newlhs:insert(l)
+            else
+                lhsp:insert(l)
+                rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
             end
         end
+        newlhs[#rhs] = av
+        local a1 = createassignment(anchor, newlhs, rhs)            --potential managed assignment
+        local a2 = createregularassignment(anchor, lhsp, rhsp)      --regular assignment - __copy and __dtor are possibly already called in 'a1'
+        return createstatementlist(anchor, List {a1, a2})
+    end
 
-        if not terralib.ext or #lhs < #rhs then
-            --an error may be reported later during type-checking: 'expected #lhs parameters (...), but found #rhs (...)'
-            local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
-            rhs = insertcasts(anchor, vtypes, rhs)
-            for i,v in ipairs(lhs) do
-                local rhstype = rhs[i] and rhs[i].type or terra.types.error
-                if v:is "setteru" then
-                    local rv,r = allocvar(v,rhstype,"<rhs>")
-                    lhs[i] = newobject(v,T.setter, rv,v.setter(r))
-                elseif v:is "allocvar" then
-                    v:settype(rhstype)
-                else
-                    ensurelvalue(v)
-                end
+    --create regular assignment - no managed types
+    function createregularassignment(anchor, lhs, rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
             end
-            return newobject(anchor,T.assignment,lhs,rhs)
-        else
-            --standard case #lhs == #rhs
-            local stmts = terralib.newlist()
-            local post = terralib.newlist()
-            --first take care of regular assignments
-            local regular, byfcall = assignmentkinds(anchor, lhs, rhs)
-            local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
-            regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
-            for i,v in ipairs(regular.lhs) do
-                local rhstype = regular.rhs[i] and regular.rhs[i].type or terra.types.error
-                if v:is "setteru" then
-                    local rv,r = allocvar(v,rhstype,"<rhs>")
-                    regular.lhs[i] = newobject(v,T.setter, rv,v.setter(r))
-                elseif v:is "allocvar" then
-                    v:settype(rhstype)
-                else
-                    ensurelvalue(v)
-                    --if 'v' is a managed variable then
-                    --(1) var tmp = v       --store v in tmp
-                    --(2) v = rhs[i]        --perform assignment
-                    --(3) tmp:__dtor()      --delete old v
-                    --the temporary is necessary because rhs[i] may involve a function of 'v'
-                    if hasmetamethod(v, "__dtor") then
-                        --To avoid unwanted deletions we prohibit assignments that may involve something
-                        --like a swap: u,v = v, u.
-                        --for now we prohibit this by limiting assignments to a single one
-                        if #regular.lhs>1 then
-                            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
-                        end
-                        local tmpa, tmp = allocvar(v, v.type,"<tmp>")
-                        --store v in tmp
-                        stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
-                        --call tmp:__dtor()
-                        post:insert(checkmetadtor(anchor, tmp))
-                    end
-                end
-            end
-            --take care of copy assignments using methods.__copy
-            for i,v in ipairs(byfcall.lhs) do
-                local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
-                if v:is "setteru" then
-                    local rv,r = allocvar(v,rhstype,"<rhs>")
-                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], r))
-                    stmts:insert(newobject(v,T.setter, rv, v.setter(r)))
-                elseif v:is "allocvar" then
-                    if not v.type then
-                        v:settype(rhstype)
-                    end
-                    stmts:insert(v)
-                    local init = checkmetainit(anchor, v)
-                    if init then
-                        stmts:insert(init)
-                    end
-                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
-                else
-                    ensurelvalue(v)
-                    --apply copy assignment - memory resource management is in the
-                    --hands of the programmer
-                    stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
-                end
-            end
-            if #stmts==0 then
-                --standard case, no meta-copy-assignments
-                return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
+        end
+        --an error may be reported later during type-checking: 'expected #lhs parameters (...), but found #rhs (...)'
+        local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
+        rhs = insertcasts(anchor, vtypes, rhs)
+        for i,v in ipairs(lhs) do
+            local rhstype = rhs[i] and rhs[i].type or terra.types.error
+            if v:is "setteru" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                lhs[i] = newobject(v,T.setter, rv,v.setter(r))
+            elseif v:is "allocvar" then
+                v:settype(rhstype)
             else
-                --managed case using meta-copy-assignments
-                --the calls to `__copy` are in `stmts`
-                if #regular.lhs>0 then
-                    stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
-                end
-                stmts:insertall(post)
-                return createstatementlist(anchor, stmts)
+                ensurelvalue(v)
             end
+        end
+        return newobject(anchor,T.assignment,lhs,rhs)
+    end
+
+    local function createmanagedassignment(anchor, lhs, rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
+            end
+        end
+        --standard case #lhs == #rhs
+        local stmts = terralib.newlist()
+        local post = terralib.newlist()
+        --first take care of regular assignments
+        local regular, byfcall = assignmentkinds(anchor, lhs, rhs)
+        local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
+        regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
+        for i,v in ipairs(regular.lhs) do
+            local rhstype = regular.rhs[i] and regular.rhs[i].type or terra.types.error
+            if v:is "setteru" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                regular.lhs[i] = newobject(v,T.setter, rv,v.setter(r))
+            elseif v:is "allocvar" then
+                v:settype(rhstype)
+            else
+                ensurelvalue(v)
+                --if 'v' is a managed variable then
+                --(1) var tmp = v       --store v in tmp
+                --(2) v = rhs[i]        --perform assignment
+                --(3) tmp:__dtor()      --delete old v
+                --the temporary is necessary because rhs[i] may involve a function of 'v'
+                if hasmetamethod(v, "__dtor") then
+                    --To avoid unwanted deletions we prohibit assignments that may involve something
+                    --like a swap: u,v = v, u.
+                    --for now we prohibit this by limiting assignments to a single one
+                    if #regular.lhs>1 then
+                        diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+                    end
+                    local tmpa, tmp = allocvar(v, v.type,"<tmp>")
+                    --store v in tmp
+                    stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
+                    --call tmp:__dtor()
+                    post:insert(checkmetadtor(anchor, tmp))
+                end
+            end
+        end
+        --take care of copy assignments using methods.__copy
+        for i,v in ipairs(byfcall.lhs) do
+            local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
+            if v:is "setteru" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], r))
+                stmts:insert(newobject(v,T.setter, rv, v.setter(r)))
+            elseif v:is "allocvar" then
+                if not v.type then
+                    v:settype(rhstype)
+                end
+                stmts:insert(v)
+                local init = checkmetainit(anchor, v)
+                if init then
+                    stmts:insert(init)
+                end
+                stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
+            else
+                ensurelvalue(v)
+                --apply copy assignment - memory resource management is in the
+                --hands of the programmer
+                stmts:insert(checkmetacopyassignment(anchor, byfcall.rhs[i], v))
+            end
+        end
+        if #stmts==0 then
+            --standard case, no meta-copy-assignments
+            return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
+        else
+            --managed case using meta-copy-assignments
+            --the calls to `__copy` are in `stmts`
+            if #regular.lhs>0 then
+                stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
+            end
+            stmts:insertall(post)
+            return createstatementlist(anchor, stmts)
+        end
+    end
+
+    --create assignment - regular / copy assignment
+    function createassignment(anchor, lhs, rhs)
+        if not terralib.ext or #lhs < #rhs then
+            --regular assignment - __init, __copy and __dtor will not be scheduled
+            return createregularassignment(anchor, lhs, rhs)
+        else
+            --managed assignment - __init, __copy and __dtor are scheduled for managed
+            --variables
+            return createmanagedassignment(anchor, lhs, rhs)
         end
     end
 
@@ -3788,11 +3822,11 @@ function terra.includecstring(code,cargs,target)
         args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    local sdkroot = os.getenv("SDKROOT")
-    if sdkroot then
-        args:insert("-isysroot")
-        args:insert(sdkroot)
-    end
+    --local sdkroot = os.getenv("SDKROOT")
+    --if sdkroot then
+    --    args:insert("-isysroot")
+    --    args:insert(sdkroot)
+    --end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
         args:insert("-fgnuc-version=4.2.1")
