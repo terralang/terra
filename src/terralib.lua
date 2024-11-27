@@ -2767,6 +2767,131 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return checkcall(anchor, terra.newlist { fnlike }, fnargs, "first", false, location)
     end
 
+    --check if raii method is implemented, does not generate one
+    local function hasraiimethod(receiver, method)
+        if not terralib.ext then return false end
+        local typ = receiver.type
+        if typ and typ:isstruct() and typ.methods[method] then
+            return true
+        end
+        return false
+    end
+
+    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
+    local function ismanaged(receiver, method)
+        if not terralib.ext then return false end
+        local typ = receiver.type
+        if typ and typ:isstruct() then
+            terralib.ext.addmissing[method](typ)
+            if typ.methods[method] then
+                return true
+            end
+        end
+        return false
+    end
+
+    --type check raii method __init or __dtor. __copy is handled separately
+    --methods are generated if they are missing
+    local function checkraiimethodwithreceiver(anchor, reciever, method)
+        if not terralib.ext then return end
+        if ismanaged(reciever, method) then
+            if reciever:is "allocvar" then
+                reciever = newobject(anchor,T.var,reciever.name,reciever.symbol):setlvalue(true):withtype(reciever.type)
+            end
+            return checkmethodwithreciever(anchor, false, method, reciever, terralib.newlist(), "statement")
+        end
+    end
+
+    --generate and typecheck raii __init's for use in a 'defvar' statement
+    local function checkraiiinitializers(anchor, lhs)
+        if not terralib.ext then return end
+        local stmts = terralib.newlist()
+        for i,e in ipairs(lhs) do
+            local init = checkraiimethodwithreceiver(anchor, e, "__init")
+            if init then
+                stmts:insert(init)
+            end
+        end
+        return stmts
+    end
+
+    --generate and typecheck raii __dtor's for use in `block` (scope) statement
+    local function checkraiidtors(anchor, stats)
+        if not terralib.ext then return stats end
+        --extract the return statement from `stats`, if there is one
+        local function extractreturnstat()
+            local n = #stats
+            if n>0 then
+                local s = stats[n]
+                if s:is "returnstat" then
+                    return s
+                end
+            end
+        end
+        local rstat = extractreturnstat()
+        --extract the returned `var` symbols from a return statement
+        local function extractreturnedsymbols()
+            local ret = {}
+            --loop over expressions in a `letin` return statement
+            for i,v in ipairs(rstat.expression.expressions) do
+                if v:is "var" then
+                    ret[v.name] = v.symbol
+                end
+            end
+            return ret
+        end
+        --get symbols that are returned in case of a return statement
+        local rsyms = rstat and extractreturnedsymbols() or {}
+        --get position at which to add destructor statements
+        local pos = rstat and #stats or #stats+1
+        for name,sym in pairs(env:localenv()) do
+            --if not a return variable, then check for an implementation of methods.__dtor
+            if not rsyms[name] then
+                local reciever = newobject(anchor,T.var, name, sym):setlvalue(true):withtype(sym.type)
+                local dtor = checkraiimethodwithreceiver(anchor, reciever, "__dtor")
+                if dtor then
+                    --add deferred calls to the destructors
+                    table.insert(stats, pos, newobject(anchor, T.defer, dtor))
+                    pos = pos + 1
+                end
+            end
+        end
+        return stats
+    end
+    
+    --type check raii __copy (copy-assignment) methods. They are generated
+    --if they are missing.
+    local function checkraiicopyassignment(anchor, from, to)
+        if not terralib.ext then return end
+        --check for 'from.type.methods.__copy' and 'to.type.methods.__copy' and generate them
+        --if needed
+        if not (ismanaged(from, "__copy") or ismanaged(to, "__copy")) then
+            --return early in case types are not managed and 
+            --resort to regular copy
+            return
+        end
+        --if `to` is an allocvar then set type and turn into corresponding `var`
+        if to:is "allocvar" then
+            if not to.type then
+                to:settype(from.type or terra.types.error)
+            end
+            to = newobject(anchor,T.var,to.name,to.symbol):setlvalue(true):withtype(to.type)
+        end
+        --list of overloaded __copy metamethods
+        local overloads = terra.newlist()
+        local function checkoverload(v)
+            if hasraiimethod(v, "__copy") then
+                overloads:insert(asterraexpression(anchor, v.type.methods.__copy, "luaobject"))
+            end
+        end
+        --add overloaded methods based on left- and right-hand-side of the assignment
+        checkoverload(from)
+        checkoverload(to)
+        if #overloads > 0 then
+            return checkcall(anchor, overloads, terralib.newlist{from, to}, "all", true, "expression")
+        end
+    end
+
     local function checkmethod(exp, location)
         local methodname = checklabel(exp.name,true).value
         assert(type(methodname) == "string" or terra.islabel(methodname))
