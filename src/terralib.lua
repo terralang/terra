@@ -3440,9 +3440,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "defvar" then
                 local rhs = s.hasinit and checkexpressions(s.initializers)
                 local lhs = checkformalparameterlist(s.variables, not s.hasinit)
-                local res = s.hasinit and createassignment(s,lhs,rhs) 
-                            or createstatementlist(s,lhs)
-                return res
+                if s.hasinit then
+                    return createassignment(s,lhs,rhs)
+                else
+                    local res = createstatementlist(s,lhs)
+                    local ini = checkraiiinitializers(s, lhs)
+                    if ini then
+                        res.statements:insertall(ini)
+                    end
+                    return res
+                end
             elseif s:is "assignment" then
                 local rhs = checkexpressions(s.rhs)
                 local lhs = checkexpressions(s.lhs,"lexpression")
