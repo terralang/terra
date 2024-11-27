@@ -1,7 +1,6 @@
 /.idea
 /cmake-build-debug
 /build
-/cmake-build-debug
 /docs/_site
 /docs/_vendor
 /install
