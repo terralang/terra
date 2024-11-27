@@ -3318,6 +3318,46 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit)
     end
 
+    --divide assignment into regular assignments and copy assignments
+    local function divideintoregularandmanagedassignment(anchor, lhs, rhs)
+        local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        for i=1,#lhs do
+            local cpassign = false
+            --ToDo: for now we call 'checkraiicopyassignment' twice. Refactor with 'createassignment'
+            local r = rhs[i]
+            if r then
+                --alternatively, work on the r.type and check for
+                --r.type:isprimitive(), r.type:isstruct(), etc
+                if r:is "operator" and r.operator == "&" then
+                    r = r.operands[1]
+                end
+                if r:is "var" or r:is "literal" or r:is "constant" or r:is "select" or r:is "structcast" then
+                    if checkraiicopyassignment(anchor, r, lhs[i]) then
+                        cpassign = true
+                    end
+                end
+            end
+            if cpassign then
+                --add assignment by __copy call
+                byfcall.lhs:insert(lhs[i])
+                byfcall.rhs:insert(rhs[i])
+            else
+                --default to regular assignment
+                regular.lhs:insert(lhs[i])
+                regular.rhs:insert(rhs[i])
+            end
+        end
+        if #byfcall.lhs>0 and #byfcall.lhs+#regular.lhs>1 then
+            --__copy can potentially mutate left and right-handsides in an
+            --assignment. So we prohibit assignments that may involve something
+            --like a swap: u,v = v, u.
+            --for now we prohibit this by limiting such assignments
+            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+        end
+        return regular, byfcall
+    end
+
     --struct assignment pattern matching applies? true / false
     local function patterncanbematched(lhs, rhs)
         local last = rhs[#rhs]
@@ -3349,7 +3389,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     --create regular assignment - no managed types
-    local function createassignment(anchor,lhs,rhs)
+    function createregularassignment(anchor,lhs,rhs)
         --special case where a rhs struct is unpacked
         if #lhs > #rhs and #rhs > 0 then
             if patterncanbematched(lhs, rhs) then
@@ -3372,6 +3412,102 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
         end
         return newobject(anchor,T.assignment,lhs,rhs)
+    end
+
+    --create unmanaged/managed regular or copy assignments
+    local function createmanagedassignment(anchor, lhs, rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
+            end
+        end
+        --sanity check
+        assert(#lhs == #rhs)
+        --standard case #lhs == #rhs
+        local stmts, post = terralib.newlist(), terralib.newlist()
+        --first take care of regular assignments
+        local regular, byfcall = divideintoregularandmanagedassignment(anchor, lhs, rhs)
+        local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
+        regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
+        --take care of regular assignments of managed variables
+        for i,v in ipairs(regular.lhs) do
+            local rhstype = regular.rhs[i] and regular.rhs[i].type or terra.types.error
+            if v:is "setteru" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                regular.lhs[i] = newobject(v,T.setter, rv,v.setter(r))
+            elseif v:is "allocvar" then
+                v:settype(rhstype)
+            else
+                ensurelvalue(v)
+                --if 'v' is a managed variable then
+                --(1) var tmp = v       --store v in tmp
+                --(2) v = rhs[i]        --perform assignment
+                --(3) tmp:__dtor()      --delete old v
+                --the temporary is necessary because rhs[i] may involve a function of 'v'
+                if ismanaged(v, "__dtor") then
+                    --To avoid unwanted deletions we prohibit assignments that may involve something
+                    --like a swap: u,v = v, u.
+                    --for now we prohibit this by limiting assignments to a single one
+                    if #regular.lhs>1 then
+                        diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+                    end
+                    local tmpa, tmp = allocvar(v, v.type,"<tmp>")
+                    --store v in tmp
+                    stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{v}))
+                    --call tmp:__dtor()
+                    post:insert(checkraiimethodwithreceiver(anchor, tmp, "__dtor"))
+                end
+            end
+        end
+        --take care of copy assignments using methods.__copy
+        for i,v in ipairs(byfcall.lhs) do
+            local rhstype = byfcall.rhs[i] and byfcall.rhs[i].type or terra.types.error
+            if v:is "setteru" then
+                local rv,r = allocvar(v,rhstype,"<rhs>")
+                stmts:insert(checkraiicopyassignment(anchor, byfcall.rhs[i], r))
+                stmts:insert(newobject(v,T.setter, rv, v.setter(r)))
+            elseif v:is "allocvar" then
+                if not v.type then
+                    v:settype(rhstype)
+                end
+                stmts:insert(v)
+                local init = checkraiimethodwithreceiver(anchor, v, "__init")
+                if init then
+                    stmts:insert(init)
+                end
+                stmts:insert(checkraiicopyassignment(anchor, byfcall.rhs[i], v))
+            else
+                ensurelvalue(v)
+                --apply copy assignment - memory resource management is in the
+                --hands of the programmer
+                stmts:insert(checkraiicopyassignment(anchor, byfcall.rhs[i], v))
+            end
+        end
+        if #stmts==0 then
+            --standard case, no meta-copy-assignments
+            return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
+        else
+            --managed case using meta-copy-assignments
+            --the calls to `__copy` are in `stmts`
+            if #regular.lhs>0 then
+                stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
+            end
+            stmts:insertall(post)
+            return createstatementlist(anchor, stmts)
+        end
+    end
+
+    --create assignment - regular / copy assignment
+    function createassignment(anchor, lhs, rhs)
+        if not terralib.ext or #lhs < #rhs then
+            --regular assignment - __init, __copy and __dtor will not be scheduled
+            return createregularassignment(anchor, lhs, rhs)
+        else
+            --managed assignment - __init, __copy and __dtor are scheduled for managed
+            --variables
+            return createmanagedassignment(anchor, lhs, rhs)
+        end
     end
 
     --check block statements and generate and typecheck raii __dtor's
