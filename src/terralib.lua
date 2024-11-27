@@ -3318,26 +3318,46 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit)
     end
 
-    local function createassignment(anchor,lhs,rhs)
-        if #lhs > #rhs and #rhs > 0 then
-            local last = rhs[#rhs]
-            if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
-                --struct pattern match
-                local av,v = allocvar(anchor,last.type,"<structpattern>")
-                local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
-                for i,l in ipairs(lhs) do
-                    if i < #rhs then
-                        newlhs:insert(l)
-                    else
-                        lhsp:insert(l)
-                        rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
-                    end
-                end
-                newlhs[#rhs] = av
-                local a1,a2 = createassignment(anchor,newlhs,rhs), createassignment(anchor,lhsp,rhsp)
-                return createstatementlist(anchor, List {a1, a2})
+    --struct assignment pattern matching applies? true / false
+    local function patterncanbematched(lhs, rhs)
+        local last = rhs[#rhs]
+        if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
+            return true
+        end
+        return false
+    end
+
+    local createassignment, createregularassignment
+
+    --try unpack struct and perform pattern match
+    local function trystructpatternmatching(anchor, lhs, rhs)
+        local last = rhs[#rhs]
+        local av,v = allocvar(anchor,last.type,"<structpattern>")   --temporary variable "<structpattern>"
+        local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
+        for i,l in ipairs(lhs) do
+            if i < #rhs then
+                newlhs:insert(l)
+            else
+                lhsp:insert(l)
+                rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
             end
         end
+        newlhs[#rhs] = av
+        local a1 = createassignment(anchor, newlhs, rhs)            --potential managed assignment
+        local a2 = createregularassignment(anchor, lhsp, rhsp)      --regular assignment - __copy and __dtor are possibly already called in 'a1'
+        return createstatementlist(anchor, List {a1, a2})
+    end
+
+    --create regular assignment - no managed types
+    local function createassignment(anchor,lhs,rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
+            end
+        end
+        --if #lhs~=#rhs an error may be reported later during type-checking:
+        --'expected #lhs parameters (...), but found #rhs (...)'
         local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
         rhs = insertcasts(anchor,vtypes,rhs)
         for i,v in ipairs(lhs) do
