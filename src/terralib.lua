@@ -2858,7 +2858,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         return stats
     end
-    
+
     --type check raii __copy (copy-assignment) methods. They are generated
     --if they are missing.
     local function checkraiicopyassignment(anchor, from, to)
@@ -3354,9 +3354,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return newobject(anchor,T.assignment,lhs,rhs)
     end
 
+    --check block statements and generate and typecheck raii __dtor's
     function checkblock(s)
         env:enterblock()
-        local stats = checkstmts(s.statements)
+        local stats = checkraiidtors(s, checkstmts(s.statements))
         env:leaveblock()
         return s:copy {statements = stats}
     end
