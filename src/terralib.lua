@@ -2859,10 +2859,24 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return stats
     end
 
+    --__copy is only enabled for a set of right-hand-sides
+    local function validcopyrhs(from)
+        --allow one dereference
+        if from:is "operator" and #from.operands==1 then
+            from = from.operands[1]
+        end
+        if from:is "apply" or from:is "returnstat" or from:is "operator" then
+            return false
+        else
+            return true
+        end
+    end
+
     --type check raii __copy (copy-assignment) methods. They are generated
     --if they are missing.
     local function checkraiicopyassignment(anchor, from, to)
         if not terralib.ext then return end
+        if not validcopyrhs(from) then return end
         --check for 'from.type.methods.__copy' and 'to.type.methods.__copy' and generate them
         --if needed
         if not (ismanaged(from, "__copy") or ismanaged(to, "__copy")) then
@@ -3323,29 +3337,15 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
         for i=1,#lhs do
-            local cpassign = false
-            --ToDo: for now we call 'checkraiicopyassignment' twice. Refactor with 'createassignment'
-            local r = rhs[i]
-            if r then
-                --alternatively, work on the r.type and check for
-                --r.type:isprimitive(), r.type:isstruct(), etc
-                if r:is "operator" and r.operator == "&" then
-                    r = r.operands[1]
-                end
-                if r:is "var" or r:is "literal" or r:is "constant" or r:is "select" or r:is "structcast" then
-                    if checkraiicopyassignment(anchor, r, lhs[i]) then
-                        cpassign = true
-                    end
-                end
-            end
-            if cpassign then
+            local to, from = lhs[i], rhs[i]
+            if from and checkraiicopyassignment(anchor, from, to) then
                 --add assignment by __copy call
-                byfcall.lhs:insert(lhs[i])
-                byfcall.rhs:insert(rhs[i])
+                byfcall.rhs:insert(from)
+                byfcall.lhs:insert(to)
             else
                 --default to regular assignment
-                regular.lhs:insert(lhs[i])
-                regular.rhs:insert(rhs[i])
+                regular.rhs:insert(from)
+                regular.lhs:insert(to)
             end
         end
         if #byfcall.lhs>0 and #byfcall.lhs+#regular.lhs>1 then
