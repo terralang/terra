@@ -1199,7 +1199,7 @@ The functions `terralib.saveobj` and `terralib.includec` take an optional target
 
     local armtarget = terralib.newtarget {
         Triple = "armv6-unknown-linux-gnueabi"; -- LLVM target triple
-        CPU = "arm1176jzf-s";,  -- LLVM CPU name,
+        CPU = "arm1176jzf-s";  -- LLVM CPU name,
         Features = ""; -- LLVM feature string
         FloatABIHard = true; -- For ARM, use floating point registers
     }

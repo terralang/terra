@@ -1279,9 +1279,10 @@ Notice that the declaration of the symbol uses the escape `[a]` in place of `a`.
 
 ### Macros ###
 
-By default, when you call a Lua function from Terra code, it will execute at runtime, just like a normal Terra function. It is sometimes useful for the Lua function to execute at compile time instead. Calling the Lua function at compile-time is called a _macro_ since it behaves similarly to macros found in Lisp and other languages. You can create macro using the function `macro` which takes a normal Lua function and returns a macro:
+It is sometimes useful to have a construct in Terra that looks like a function call but haves like an escaped called to a Lua function. These are called macros in Terra, and create one with the `macro`  function which takes a normal Lua function and returns a macro:
 
-    local times2 = macro(function(ctx,tree,a)
+    local times2 = macro(function(a)
+        -- a is a Terra quote
         return `a + a
     end)
 
@@ -1291,12 +1292,6 @@ By default, when you call a Lua function from Terra code, it will execute at run
     end
 
 Unlike a normal function, which works on Terra values, the arguments to Terra macros are passed to the macro as _quotes_.
-
-The first argument to every macro is the compilation context `ctx`. It can be used to report an error if the macro doesn't apply to the arguments given, and is needed in certain API calls used in macros. The second argument to every macro (`tree`) is the AST node in the code that represents the macro call. It is typically used as the location at which to report an error in a macro call. The following code will cause the compiler to emit an error referring to the macro call with given error message:
-
-    ctx:reporterror(tree, "something in the macro went wrong")
-
-The remaining arguments to the macro are the AST nodes of the arguments to the macro function.
 
 Since macros take quotes rather than values, they have different behavior than function calls. For instance:
 
@@ -1312,18 +1307,11 @@ Since macros take quotes rather than values, they have different behavior than f
 
 The example returns `3` because `up()` is evaluated twice
 
-Some built-in operators are implemented as macros. For instance the `sizeof` operator just inserts a special AST node that will calculate the size of a type:
-
-    sizeof = macro(function(ctx,tree,typ)
-        return terralib.newtree(tree,{ kind = terra.kinds.sizeof,
-                                       oftype = typ:astype()})
-    end)
-
-`terra.newtree` creates a new node in this AST. For the most part, macros can rely on code quotations to generate AST nodes, and only need to fallback to explicitly creating AST nodes in special cases.
+Some built-in operators are implemented as macros. For instance the `sizeof` operator is just a macro that inserts a special intrinsic that looks up the size of a type.
 
 Macros can also be used to create useful patterns like a C++ style new operator:
 
-    new = macro(function(ctx,tree,typquote)
+    new = macro(function(typquote)
         local typ = typquote:astype()
         return `[&typ](C.malloc(sizeof(typ)))
     end)
@@ -1332,7 +1320,17 @@ Macros can also be used to create useful patterns like a C++ style new operator:
         var a = new(int)
     end
 
-You may be wondering why Terra includes both macros and escapes. They both allow you to splice Terra code into other expressions, and in some cases you can use either a macro or an escape to accomplish the same purpose.  Since macros look like function calls, they are normally used when it is not important for the end-user to know that the functionality is implemented by generating code.  For instance, in `myobj:mymethod(arg)`, `mymethod` can be implemented as a macros. Furthermore, while escapes are evaluated when a function is _defined_ (that is, when the surround Lua code executes), macros are run when a function is _compiled_, which only happens when a function is actually called. This means that macros have access to the types of expressions via the `myquote:gettype()` method call.
+In general, macros are just syntax sugar for escapes where each argument to the escape is quoted:
+
+    local function foo ...
+    local mfoo = macro(foo)
+
+    terra f()
+        var a,b = 1,2
+        [ foo(`a,`b,`3) ]
+        -- equivalent
+        mfoo(a,b,3)
+    end
 
 More Information
 ================

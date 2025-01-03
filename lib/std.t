@@ -204,6 +204,8 @@ end
 
 S.Vector = S.memoize(S.Vector)
 
+S.Version = "1.2.0"
+
 --import common C functions into std object table
 for k,v in pairs(C) do
     S[k] = v
