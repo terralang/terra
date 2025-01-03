@@ -18,9 +18,9 @@ jobs:
     strategy:
       matrix:
         os: [ 'ubuntu-22.04' ]
-        llvm: ['12', '13', '14', '15', '16', '17', '18']
+        llvm: ['11', '12', '13', '14', '15', '16', '17', '18']
         cuda: ['0', '1']
-        lua: ['luajit', 'moonjit']
+        lua: [ 'luajit' ]
         exclude:
           # CUDA: only LLVM 11
           - llvm: '12'
@@ -37,22 +37,6 @@ jobs:
             cuda: '1'
           - llvm: '18'
             cuda: '1'
-
-          # Moonjit: only LLVM 12
-          - llvm: '11'
-            lua: 'moonjit'
-          - llvm: '13'
-            lua: 'moonjit'
-          - llvm: '14'
-            lua: 'moonjit'
-          - llvm: '15'
-            lua: 'moonjit'
-          - llvm: '16'
-            lua: 'moonjit'
-          - llvm: '17'
-            lua: 'moonjit'
-          - llvm: '18'
-            lua: 'moonjit'
     steps:
       - uses: actions/checkout@v4
       - run: ./travis.sh
