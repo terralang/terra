@@ -18,7 +18,7 @@ jobs:
     strategy:
       matrix:
         os: [ 'ubuntu-22.04' ]
-        llvm: ['11', '12', '13', '14', '15', '16', '17', '18']
+        llvm: ['12', '13', '14', '15', '16', '17', '18']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
