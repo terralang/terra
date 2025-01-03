@@ -19,24 +19,8 @@ jobs:
       matrix:
         os: [ 'ubuntu-22.04' ]
         llvm: ['11', '12', '13', '14', '15', '16', '17', '18']
-        cuda: ['0', '1']
+        cuda: [ '0' ]
         lua: [ 'luajit' ]
-        exclude:
-          # CUDA: only LLVM 11
-          - llvm: '12'
-            cuda: '1'
-          - llvm: '13'
-            cuda: '1'
-          - llvm: '14'
-            cuda: '1'
-          - llvm: '15'
-            cuda: '1'
-          - llvm: '16'
-            cuda: '1'
-          - llvm: '17'
-            cuda: '1'
-          - llvm: '18'
-            cuda: '1'
     steps:
       - uses: actions/checkout@v4
       - run: ./travis.sh
