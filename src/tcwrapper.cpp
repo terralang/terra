@@ -884,7 +884,11 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
     double V;
     if (Literal.isFloatingLiteral()) {
         llvm::APFloat Result(0.0);
+#if LLVM_VERSION < 190
         Literal.GetFloatValue(Result);
+#else
+        Literal.GetFloatValue(Result, llvm::RoundingMode::NearestTiesToEven);
+#endif
         V = Result.convertToDouble();
     } else {
         llvm::APInt Result(64, 0);

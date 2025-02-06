@@ -223,14 +223,22 @@ bool OneTimeInit(struct terra_State *T) {
 
 // LLVM 3.1 doesn't enable avx even if it is present, we detect and force it here
 bool HostHasAVX() {
+#if LLVM_VERSION < 190
     StringMap<bool> Features;
     sys::getHostCPUFeatures(Features);
+#else
+    StringMap<bool> Features = sys::getHostCPUFeatures();
+#endif
     return Features["avx"];
 }
 
 bool HostHasAVX512() {
+#if LLVM_VERSION < 190
     StringMap<bool> Features;
     sys::getHostCPUFeatures(Features);
+#else
+    StringMap<bool> Features = sys::getHostCPUFeatures();
+#endif
     // The following instructions sets are supported by Intel CPUs starting 2017
     // (Skylake-SP and beyond) and AMD CPUs starting 2022 (Zen4 and beyond)
     const char *instruction_set[] = {
@@ -3358,7 +3366,12 @@ struct FunctionEmitter {
         ValueToValueMapTy VMap;
         DebugInfoFinder DIFinder;
         BasicBlock *NewBB =
+#if LLVM_VERSION < 20
                 CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr, &DIFinder);
+#else
+                // TODO: Check if DIFinder needs to be used in a different function.
+                CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr);
+#endif
         VMap[BB] = NewBB;
 
         BasicBlock::iterator oldII = BB->begin();
@@ -3740,8 +3753,13 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
     ExecutionEngine *ee = CU->ee;
     if (gv->isDeclaration()) {
         StringRef name = gv->getName();
+#if LLVM_VERSION < 180
         if (name.startswith("\01"))  // remove asm renaming tag before looking for symbol
             name = name.substr(1);
+#else
+        if (name.starts_with("\01"))  // remove asm renaming tag before looking for symbol
+            name = name.substr(1);
+#endif
         return ee->getPointerToNamedFunction(name);
     }
     void *ptr = GetGlobalValueAddress(CU, gv->getName());
