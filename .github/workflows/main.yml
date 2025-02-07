@@ -21,7 +21,7 @@ jobs:
       matrix:
         # Note: macOS 13 runs on x86 hardware, and 14 runs on M1 hardware
         os: ['macos-13', 'macos-14', 'windows-2022']
-        llvm: ['11', '12', '13', '14', '15', '16', '17', '18']
+        llvm: ['11', '12', '13', '14', '15', '16', '17', '18', '19']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
@@ -47,7 +47,7 @@ jobs:
           - os: 'macos-14'
             llvm: '15'
 
-          # Windows: exclude LLVM 12-18
+          # Windows: exclude LLVM 12-19
           - os: 'windows-2022'
             llvm: '12'
           - os: 'windows-2022'
@@ -62,6 +62,8 @@ jobs:
             llvm: '17'
           - os: 'windows-2022'
             llvm: '18'
+          - os: 'windows-2022'
+            llvm: '19'
 
           # CUDA: only LLVM 11
           - llvm: '12'
@@ -78,6 +80,8 @@ jobs:
             cuda: '1'
           - llvm: '18'
             cuda: '1'
+          - llvm: '19'
+            cuda: '1'
 
           # Moonjit: only LLVM 12
           - llvm: '11'
@@ -93,6 +97,8 @@ jobs:
           - llvm: '17'
             lua: 'moonjit'
           - llvm: '18'
+            lua: 'moonjit'
+          - llvm: '19'
             lua: 'moonjit'
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +127,6 @@ jobs:
         llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3', '17.0.5', '18.1.7']
         lua: ['luajit', 'moonjit']
         cuda: ['0', '1']
-        test: ['1']
         exclude:
           # CUDA with LLVM 13 only:
           - llvm: '11'
@@ -167,6 +172,15 @@ jobs:
 
           # Some additional configurations:
 
+          # LLVM 19
+          - distro: 'ubuntu-20.04'
+            llvm: '19.1.7'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'prebuilt'
+            slib: '1'
+            static: '1'
+
           # LLVM 12, 13, 14 on Ubuntu 22.04
           - distro: 'ubuntu-22.04'
             llvm: '12'
@@ -175,7 +189,6 @@ jobs:
             variant: 'package'
             slib: '1'
             static: '1'
-            test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '13'
             lua: 'luajit'
@@ -183,7 +196,6 @@ jobs:
             variant: 'package'
             slib: '1'
             static: '1'
-            test: '1'
           - distro: 'ubuntu-22.04'
             llvm: '14'
             lua: 'luajit'
@@ -191,7 +203,6 @@ jobs:
             variant: 'package'
             slib: '1'
             static: '1'
-            test: '1'
 
           # LLVM 14, no-slib/no-static, Ubuntu 22.04
           - distro: 'ubuntu-22.04'
@@ -201,7 +212,6 @@ jobs:
             variant: 'package'
             slib: '0'
             static: '1'
-            test: '1'
           # - distro: 'ubuntu-22.04'
           #   llvm: '14'
           #   lua: 'luajit'
@@ -209,7 +219,6 @@ jobs:
           #   variant: 'package'
           #   slib: '0'
           #   static: '0'
-          #   test: '1'
     steps:
       - uses: actions/checkout@v4
       - run: ./travis.sh
@@ -221,7 +230,7 @@ jobs:
           DOCKER_SLIB: ${{ matrix.slib }}
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
-          DOCKER_TEST: ${{ matrix.test }}
+          DOCKER_TEST: 1
   multiarch:
     name: Multiarch (${{ matrix.distro }}, ${{ matrix.arch }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
     runs-on: ubuntu-latest
@@ -232,7 +241,6 @@ jobs:
         llvm: ['11.1.0', '13.0.0']
         variant: ['prebuilt']
         cuda: ['0']
-        test: ['0']
         exclude:
           - arch: 'arm64'
             llvm: '13.0.0'
@@ -247,7 +255,7 @@ jobs:
           DOCKER_LLVM: ${{ matrix.llvm }}
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
-          DOCKER_TEST: ${{ matrix.test }}
+          DOCKER_TEST: 0
       - uses: actions/upload-artifact@v4
         with:
           name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
@@ -259,10 +267,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04 24.04" "" 18.1.7 luajit prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04" "" 19.1.7 luajit prebuilt 2
       - uses: actions/upload-artifact@v4
         with:
-          name: docker-ubuntu-18.04-x86_64-llvm-18
+          name: docker-ubuntu-20.04-x86_64-llvm-19
           path: |
             terra-*.tar.xz
             terra-*.7z
