@@ -24,6 +24,7 @@ jobs:
         llvm: ['11', '12', '13', '14', '15', '16', '17', '18', '19']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
+        slib: ['0', '1']
         exclude:
           # macOS: exclude cuda
           - os: 'macos-13'
@@ -100,6 +101,26 @@ jobs:
             lua: 'moonjit'
           - llvm: '19'
             lua: 'moonjit'
+
+          # LLVM 19 is incompatible with SLIB_INCLUDE_LLVM
+          - llvm: '11'
+            slib: '0'
+          - llvm: '12'
+            slib: '0'
+          - llvm: '13'
+            slib: '0'
+          - llvm: '14'
+            slib: '0'
+          - llvm: '15'
+            slib: '0'
+          - llvm: '16'
+            slib: '0'
+          - llvm: '17'
+            slib: '0'
+          - llvm: '18'
+            slib: '0'
+          - llvm: '19'
+            slib: '1'
     steps:
       - uses: actions/checkout@v4
       - run: ./travis.sh
@@ -109,7 +130,7 @@ jobs:
           USE_CUDA: ${{ matrix.cuda }}
           STATIC_LLVM: 1
           STATIC_LUAJIT: 1
-          SLIB_INCLUDE_LLVM: 1
+          SLIB_INCLUDE_LLVM: ${{ matrix.slib }}
           SLIB_INCLUDE_LUAJIT: 1
           TERRA_LUA: ${{ matrix.lua }}
       - uses: actions/upload-artifact@v4
@@ -178,7 +199,7 @@ jobs:
             lua: 'luajit'
             cuda: '0'
             variant: 'prebuilt'
-            slib: '1'
+            slib: '0'
             static: '1'
 
           # LLVM 12, 13, 14 on Ubuntu 22.04

@@ -69,7 +69,7 @@ elseif(TERRA_STATIC_LINK_LLVM)
     endif()
   endforeach()
 
-  if(UNIX AND NOT APPLE)
+  if(UNIX AND NOT APPLE AND TERRA_WHOLE_ARCHIVE_LLVM)
     list(APPEND ALL_LLVM_LIBRARIES
       -Wl,-export-dynamic
       -Wl,--whole-archive
@@ -77,14 +77,14 @@ elseif(TERRA_STATIC_LINK_LLVM)
   endif()
 
   foreach(LLVM_LIB_PATH ${LLVM_LIBRARIES} ${CLANG_LIBRARIES})
-    if(APPLE)
+    if(APPLE AND TERRA_WHOLE_ARCHIVE_LLVM)
       list(APPEND ALL_LLVM_LIBRARIES "-Wl,-force_load,${LLVM_LIB_PATH}")
     else()
       list(APPEND ALL_LLVM_LIBRARIES "${LLVM_LIB_PATH}")
     endif()
   endforeach()
 
-  if(UNIX AND NOT APPLE)
+  if(UNIX AND NOT APPLE AND TERRA_WHOLE_ARCHIVE_LLVM)
     list(APPEND ALL_LLVM_LIBRARIES
       -Wl,--no-whole-archive
     )
