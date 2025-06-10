@@ -23,7 +23,7 @@ $sudo_command apt-get update -qq
 if [[ $release = 1804 ]]; then
     $sudo_command apt-get install -qq cuda-compiler-12.1
 elif [[ $release = 2004 ]]; then
-    $sudo_command apt-get install -qq cuda-compiler-12.5
+    $sudo_command apt-get install -qq cuda-compiler-12.2
 else
     echo "Don't know how to install CUDA for this distro"
     cat /etc/lsb_release
