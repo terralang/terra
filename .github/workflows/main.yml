@@ -227,7 +227,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-20.04']
+        distro: ['ubuntu-22.04']
         arch: ['arm64', 'ppc64le']
         llvm: ['11.1.0', '16.0.3']
         variant: ['prebuilt']
