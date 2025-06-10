@@ -227,7 +227,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-18.04']
+        distro: [] # ['ubuntu-18.04'] # DISABLED
         arch: ['arm64', 'ppc64le']
         llvm: ['11.1.0', '13.0.0']
         variant: ['prebuilt']
@@ -263,6 +263,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-18
+          path: |
+            terra-*.tar.xz
+            terra-*.7z
+  compat_arm64:
+    name: Compatibility Test (ARM64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04 24.04" "" 11.1.0 luajit prebuilt 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-ubuntu-18.04-arm64-llvm-11
           path: |
             terra-*.tar.xz
             terra-*.7z
