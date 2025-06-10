@@ -5,8 +5,7 @@ set -x
 
 sudo_command="$1"
 
-release=$(. /etc/lsb-release; echo "${DISTRIB_RELEASE//
-.}")
+release=$(. /etc/lsb-release; echo "${DISTRIB_RELEASE//.}")
 
 arch=$(uname -m | sed -e s/aarch64/arm64/)
 
