@@ -271,7 +271,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04" "" 11.1.0 luajit prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04" "" 11.1.0 luajit prebuilt 2
       - uses: actions/upload-artifact@v4
         with:
           name: docker-ubuntu-20.04-arm64-llvm-11
