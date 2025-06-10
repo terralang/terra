@@ -5,7 +5,7 @@ set -x
 
 sudo_command="$1"
 
-arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
+arch=$(uname -m | sed -e s/aarch64/arm64/)
 
 $sudo_command apt-get update -qq
 $sudo_command apt-get install -qq software-properties-common
