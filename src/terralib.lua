@@ -3519,7 +3519,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     end
 
     --create regular assignment - no managed types
-    local function createregularassignment(anchor,lhs,rhs)
+    function createregularassignment(anchor,lhs,rhs)
         --special case where a rhs struct is unpacked
         if #lhs > #rhs and #rhs > 0 then
             if patterncanbematched(lhs, rhs) then
