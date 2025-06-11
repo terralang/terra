@@ -1833,6 +1833,14 @@ function T.tree:withtype(type) -- for typed tree
     self.type = type
     return self
 end
+--set assignment typ to 'move' or 'handle'
+--if 'assignment=nil' then we try a copy-assignment
+function T.tree:setassignment(v)
+    if v then
+        self.assignment = v
+    end
+    return self
+end
 -- END TYPE
 
 
@@ -2213,7 +2221,8 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     -- all implicit casts (struct,reciever,generic) take a speculative argument
     --if speculative is true, then errors will not be reported (caller must check)
     --this is used to see if an overloaded function can apply to the argument list
-
+    local createassignment --handles assignments and splits them up into regular and managed assignments
+    
     --create a new variable allocation and a var node that refers to it, used to create temporary variables
     local function allocvar(anchor,typ,name)
         local av = newobject(anchor,T.allocvar,name,terra.newsymbol(typ,name)):setlvalue(true):withtype(typ:tcomplete(anchor))
@@ -2775,7 +2784,24 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return checkmethodwithreciever(exp, false, methodname, reciever, arguments, location)
     end
 
+    local ismanaged
+
     local function checkapply(exp, location)
+        if exp.value.name == "__move__" then
+            local arguments = checkexpressions(exp.arguments,"luavalue")
+            assert(#arguments == 1, "__move__ takes only a single argument.")
+            local v = arguments[1]
+            if ismanaged(v, "__move") then
+                v:setassignment("move")
+            end
+            return v
+        elseif exp.value.name == "__handle__" then
+            local arguments = checkexpressions(exp.arguments,"luavalue")
+            assert(#arguments == 1, "__handle__ takes only a single argument.")
+            local v = arguments[1]
+            v:setassignment("handle")
+            return v
+        end
         local fnlike = checkexp(exp.value,"luavalue")
         local arguments = checkexpressions(exp.arguments,"luavalue")
         if not fnlike:is "luaobject" then
@@ -2794,6 +2820,143 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         return checkcall(exp, terra.newlist { fnlike } , arguments, "none", false, location)
     end
+    
+    --raii-methods--start
+
+    --check if raii method is implemented, does not generate one
+    local function hasraiimethod(receiver, method)
+        if not terralib.ext then return false end
+        local typ = receiver.type
+        if typ and typ:isstruct() then
+            terralib.ext.addmissing[method](typ)
+            if typ.methods[method] then
+                return true
+            end
+        end
+        return false
+    end
+
+    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
+    local function ismanagedtype(T, method)
+        if T:isstruct() then
+            terralib.ext.addmissing[method](T)
+            if T.methods[method] then
+                return true
+            end
+        elseif T:isarray() then
+            return ismanagedtype(T.type, method)
+        end
+        return false
+    end
+
+    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
+    function ismanaged(receiver, method)
+        if not terralib.ext then return false end
+        local typ = receiver.type
+        return typ~=nil and ismanagedtype(typ, method)
+    end
+
+    --type check raii method __init or __dtor. __copy is handled separately
+    --methods are generated if they are missing
+    local function checkraiimethodwithreceiver(anchor, receiver, method)
+        if not terralib.ext then return end
+        local typ = receiver.type
+        if ismanagedtype(typ, method) then
+            if receiver:is "allocvar" then
+                receiver = newobject(anchor,T.var,receiver.name,receiver.symbol):setlvalue(true):withtype(typ)
+            end
+            if typ:isstruct() then
+                return checkmethodwithreciever(anchor, false, method, receiver, terralib.newlist(), "statement")
+            elseif typ:isarray() then
+                local init = terralib.ext.addmissing.arraymethod(typ, method)
+                if init then
+                    local f = asterraexpression(anchor, init, "luaobject")
+                    return checkcall(anchor, List{f}, List{receiver}, "all", true, "expression")
+                end
+            end
+        end
+    end
+
+    --generate and typecheck raii __init's for use in a 'defvar' statement
+    local function checkraiiinitializers(anchor, lhs)
+        if not terralib.ext then return end
+        local stmts = terralib.newlist()
+        for i,e in ipairs(lhs) do
+            local init = checkraiimethodwithreceiver(anchor, e, "__init")
+            if init then
+                stmts:insert(init)
+            end
+        end
+        return stmts
+    end
+
+    --__copy is only enabled for a set of right-hand-sides
+    local function validcopyrhs(from)
+        --allow one dereference
+        if from:is "operator" and #from.operands==1 then
+            from = from.operands[1]
+        end
+        if from:is "structcast" or from:is "apply" or from:is "returnstat" or from:is "operator" or from:is "letin" then
+            return false
+        else
+            return true
+        end
+    end
+
+    --type check raii __copy (copy-assignment) methods. They are generated
+    --if they are missing.
+    local function checkraiicopyormoveassignment(anchor, from, to, copyormove)
+        if not terralib.ext then return end
+        if not validcopyrhs(from) then return end
+        --check for 'from.type.methods.[copyormove]' and 'to.type.methods.[copyormove]' and 
+        --generate them if needed
+        if not (ismanaged(from, copyormove) or ismanaged(to, copyormove)) then
+            --return early in case types are not managed and 
+            --resort to regular copy
+            return
+        end
+        --if `to` is an allocvar then set type and turn into corresponding `var`
+        if to:is "allocvar" then
+            if not to.type then
+                to:settype(from.type or terra.types.error)
+            end
+            to = newobject(anchor,T.var,to.name,to.symbol):setlvalue(true):withtype(to.type)
+        end
+        --list of overloaded __copy metamethods
+        local overloads = terra.newlist()
+        local function checkoverload(v)
+            local typ = v.type
+            if typ:isstruct() and hasraiimethod(v, copyormove) then
+                overloads:insert(asterraexpression(anchor, v.type.methods[copyormove], "luaobject"))
+            elseif typ:isarray() then
+                local method = terralib.ext.addmissing.arraymethod(typ, copyormove)
+                if method then
+                    overloads:insert(asterraexpression(anchor, method, "luaobject"))
+                end
+            end
+        end
+        --add overloaded methods based on left- and right-hand-side of the assignment
+        checkoverload(from)
+        checkoverload(to)
+        if #overloads > 0 then
+            return checkcall(anchor, overloads, terralib.newlist{from, to}, "all", true, "expression")
+        end
+    end
+
+    --type check raii __copy (copy-assignment) methods. They are generated
+    --if they are missing.
+    local function checkraiicopyassignment(anchor, from, to)
+        return checkraiicopyormoveassignment(anchor, from, to, "__copy")
+    end
+
+    --type check raii __move (move-assignment) methods. They are generated
+    --if they are missing.
+    local function checkraiimoveassignment(anchor, from, to)
+        return checkraiicopyormoveassignment(anchor, from, to, "__move")
+    end
+
+    --raii-methods--end
+    
     function checkcall(anchor, fnlikelist, arguments, castbehavior, allowambiguous, location)
         --arguments are always typed trees, or a lua object
         assert(#fnlikelist > 0)
@@ -2836,6 +2999,36 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
 
         local function createcall(callee, paramlist)
+            local function tryinjectcopyormoveassignment(i, p)
+                local stmts = List()
+                local lv,l = allocvar(p, p.type, "<tmp>")
+                --only update the parameter if a copy-/move-assignment is implemented
+                --that maps 'from' onto 'to' of the same type.
+                local cp = (p.assignment ~= "move") and checkraiicopyassignment(p, p, l) or checkraiimoveassignment(p, p, l)
+                if cp then
+                    --allocate temporary
+                    stmts:insert(lv)
+                    --insert __init for temporary
+                    local init = checkraiimethodwithreceiver(p, l, "__init")
+                    if init then
+                        stmts:insert(init)
+                    end
+                    --inject copy/move assignment
+                    stmts:insert(cp)
+                    --reset parameter input as the temporary object that is initialized using
+                    --the copy-assignment
+                    paramlist[i] = createlet(p, stmts, List{l}, true)
+                end
+            end
+            --inject copy/move-assignment for all managed variables that are passed by value
+            --and that are not pased as a `__handle__`
+            for i,p in ipairs(paramlist) do
+                local typ = p.type
+                if (typ:isstruct() or typ:isarray()) and validcopyrhs(p) and p.assignment ~= "handle" then
+                    tryinjectcopyormoveassignment(i, p)
+                end
+            end
+            --create actual call with this parameterlist
             callee.type.type:tcompletefunction(anchor)
             return newobject(anchor,T.apply,callee,paramlist):withtype(callee.type.type.returntype)
         end
@@ -2867,65 +3060,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         assert(diag:haserrors())
         return anchor:aserror()
     end
-
-
-    --raii-methods--start
-
-    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
-    local function ismanagedtype(T, method)
-        if T:isstruct() then
-            terralib.ext.addmissing[method](T)
-            if T.methods[method] then
-                return true
-            end
-        elseif T:isarray() then
-            return ismanagedtype(T.type, method)
-        end
-        return false
-    end
-
-    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
-    local function ismanaged(receiver, method)
-        if not terralib.ext then return false end
-        local typ = receiver.type
-        return typ~=nil and ismanagedtype(typ, method)
-    end
-
-    --type check raii method __init or __dtor. __copy is handled separately
-    --methods are generated if they are missing
-    local function checkraiimethodwithreceiver(anchor, receiver, method)
-        if not terralib.ext then return end
-        local typ = receiver.type
-        if ismanagedtype(typ, method) then
-            if receiver:is "allocvar" then
-                receiver = newobject(anchor,T.var,receiver.name,receiver.symbol):setlvalue(true):withtype(typ)
-            end
-            if typ:isstruct() then
-                return checkmethodwithreciever(anchor, false, method, receiver, terralib.newlist(), "statement")
-            elseif typ:isarray() then
-                local init = terralib.ext.addmissing.arraymethod(typ, method)
-                if init then
-                    local f = asterraexpression(anchor, init, "luaobject")
-                    return checkcall(anchor, List{f}, List{receiver}, "all", true, "expression")
-                end
-            end
-        end
-    end
-
-    --generate and typecheck raii __init's for use in a 'defvar' statement
-    local function checkraiiinitializers(anchor, lhs)
-        if not terralib.ext then return end
-        local stmts = terralib.newlist()
-        for i,e in ipairs(lhs) do
-            local init = checkraiimethodwithreceiver(anchor, e, "__init")
-            if init then
-                stmts:insert(init)
-            end
-        end
-        return stmts
-    end
-
-    --raii-methods--end
 
 
     --functions that handle the checking of expressions
@@ -3252,41 +3386,204 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     local function createstatementlist(anchor,stmts)
         return newobject(anchor,T.letin, stmts, List {}, true):withtype(terra.types.unit)
     end
-
-    local function createassignment(anchor,lhs,rhs)
-        if #lhs > #rhs and #rhs > 0 then
-            local last = rhs[#rhs]
-            if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
-                --struct pattern match
-                local av,v = allocvar(anchor,last.type,"<structpattern>")
-                local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
-                for i,l in ipairs(lhs) do
-                    if i < #rhs then
-                        newlhs:insert(l)
-                    else
-                        lhsp:insert(l)
-                        rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
-                    end
-                end
-                newlhs[#rhs] = av
-                local a1,a2 = createassignment(anchor,newlhs,rhs), createassignment(anchor,lhsp,rhsp)
-                return createstatementlist(anchor, List {a1, a2})
+    
+    --divide assignment into regular assignments and copy assignments
+    local function divideintoregularandmanagedassignment(anchor, lhs, rhs)
+        local regular = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        local byfcall = {lhs = terralib.newlist(), rhs = terralib.newlist()}
+        for i=1,#lhs do
+            local to, from = lhs[i], rhs[i]
+            if from.assignment == "handle" then
+                --we return a handle to the object, which does not invoke a __dtor
+                to.symbol:sethandle(true)
+                regular.rhs:insert(from)
+                regular.lhs:insert(to)
+            elseif (from.assignment~="move") and checkraiicopyassignment(anchor, from, to) or checkraiimoveassignment(anchor, from, to) then
+                --add assignment by __copy call
+                byfcall.rhs:insert(from)
+                byfcall.lhs:insert(to)
+            else
+                --default to regular assignment
+                regular.rhs:insert(from)
+                regular.lhs:insert(to)
             end
         end
+        if #byfcall.lhs>0 and #byfcall.lhs+#regular.lhs>1 then
+            --__copy can potentially mutate left and right-handsides in an
+            --assignment. So we prohibit assignments that may involve something
+            --like a swap: u,v = v, u.
+            --for now we prohibit this by limiting such assignments
+            diag:reporterror(anchor, "assignments of managed objects is not supported for tuples.")
+        end
+        return regular, byfcall
+    end
+
+    --struct assignment pattern matching applies? true / false
+    local function patterncanbematched(lhs, rhs)
+        local last = rhs[#rhs]
+        if last.type:isstruct() and last.type.convertible == "tuple" and #last.type.entries + #rhs - 1 == #lhs then
+            return true
+        end
+        return false
+    end
+
+    local createregularassignment
+
+    --try unpack struct and perform pattern match
+    local function trystructpatternmatching(anchor, lhs, rhs)
+        local last = rhs[#rhs]
+        local av,v = allocvar(anchor,last.type,"<structpattern>")   --temporary variable "<structpattern>"
+        local newlhs,lhsp,rhsp = terralib.newlist(),terralib.newlist(),terralib.newlist()
+        for i,l in ipairs(lhs) do
+            if i < #rhs then
+                newlhs:insert(l)
+            else
+                lhsp:insert(l)
+                rhsp:insert((insertselect(v,"_"..tostring(i - #rhs))))
+            end
+        end
+        newlhs[#rhs] = av
+        local a1 = createassignment(anchor, newlhs, rhs)            --potential managed assignment
+        local a2 = createregularassignment(anchor, lhsp, rhsp)      --regular assignment - __copy and __dtor are possibly already called in 'a1'
+        return createstatementlist(anchor, List {a1, a2})
+    end
+
+    local function createregularsingleassignment(anchor, lhs, rhs)
+        local rhstype = rhs and rhs.type or terra.types.error
+        if lhs:is "setteru" then
+            local rv,r = allocvar(lhs, rhstype,"<rhs>")
+            lhs = newobject(lhs,T.setter, rv,lhs.setter(r))
+        elseif lhs:is "allocvar" then
+            lhs:settype(rhstype)
+        else
+            ensurelvalue(lhs)
+        end
+        return lhs, rhs
+    end
+
+    local function createunmanagedsingleassignment(anchor, stmts, lhs, rhs)
+        local rhstype = rhs and rhs.type or terra.types.error
+        if lhs:is "setteru" then
+            local rv,r = allocvar(lhs, rhstype,"<rhs>")
+            lhs = newobject(lhs, T.setter, rv, lhs.setter(r))
+        elseif lhs:is "allocvar" then
+            lhs:settype(rhstype)
+        else
+            ensurelvalue(lhs)
+            --if 'v' is a managed variable then
+            --(1) var tmp = v       --store v in tmp
+            --(2) v = rhs[i]        --perform assignment (will be done by the callee)
+            --(3) tmp:__dtor()      --delete old v (will be a defered call)
+            --the temporary is necessary because rhs[i] may involve a function of 'v'
+            if ismanaged(lhs, "__dtor") then
+                local tmpa, tmp = allocvar(lhs, lhs.type, "<tmp>")
+                --store v in tmp
+                stmts:insert(newobject(anchor,T.assignment, List{tmpa}, List{lhs}))
+                --add defered destructor call - tmp:__dtor()
+                stmts:insert(newobject(anchor, T.defer, checkraiimethodwithreceiver(anchor, tmp, "__dtor")))
+            end
+        end
+        return lhs, rhs
+    end
+
+    local function createmanagedsingleassignment(anchor, stmts, lhs, rhs)
+        local rhstype = rhs and rhs.type or terra.types.error
+        if lhs:is "setteru" then
+            local rv,r = allocvar(lhs, rhstype,"<rhs>")
+            local copyassignment = checkraiicopyassignment(anchor, rhs, r)
+            if copyassignment then stmts:insert(copyassignment) end
+            stmts:insert(newobject(lhs, T.setter, rv, lhs.setter(r)))
+        elseif lhs:is "allocvar" then
+            if not lhs.type then
+                lhs:settype(rhstype)
+            end
+            stmts:insert(lhs)
+            local init = checkraiimethodwithreceiver(anchor, lhs, "__init")
+            if init then
+                stmts:insert(init)
+            end
+            --insert copy-/move-assignment
+            local cp = (rhs.assignment~="move") and checkraiicopyassignment(anchor, rhs, lhs) or checkraiimoveassignment(anchor, rhs, lhs)
+            if cp then
+                stmts:insert(cp)
+            end
+        else
+            ensurelvalue(lhs)
+            --apply copy/move assignment - memory resource management is in the
+            --hands of the programmer
+            --insert copy-/move-assignment
+            local cp = (rhs.assignment~="move") and checkraiicopyassignment(anchor, rhs, lhs) or checkraiimoveassignment(anchor, rhs, lhs)
+            if cp then stmts:insert(cp) end
+        end
+        return lhs, rhs
+    end
+
+    --create regular assignment - no managed types
+    local function createregularassignment(anchor,lhs,rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
+            end
+        end
+        --if #lhs~=#rhs an error may be reported later during type-checking:
+        --'expected #lhs parameters (...), but found #rhs (...)'
         local vtypes = lhs:map(function(v) return v.type or "passthrough" end)
         rhs = insertcasts(anchor,vtypes,rhs)
         for i,v in ipairs(lhs) do
-            local rhstype = rhs[i] and rhs[i].type or terra.types.error
-            if v:is "setteru" then
-                local rv,r = allocvar(v,rhstype,"<rhs>")
-                lhs[i] = newobject(v,T.setter, rv,v.setter(r))
-            elseif v:is "allocvar" then
-                v:settype(rhstype)
-            else
-                ensurelvalue(v)
-            end
+            lhs[i], rhs[i] = createregularsingleassignment(anchor, v, rhs[i])
         end
         return newobject(anchor,T.assignment,lhs,rhs)
+    end
+
+
+    --create unmanaged/managed regular or copy assignments
+    local function createmanagedassignment(anchor, lhs, rhs)
+        --special case where a rhs struct is unpacked
+        if #lhs > #rhs and #rhs > 0 then
+            if patterncanbematched(lhs, rhs) then
+                return trystructpatternmatching(anchor, lhs, rhs)
+            end
+        end
+        --sanity check
+        assert(#lhs == #rhs)
+        --standard case #lhs == #rhs
+        local stmts, post = terralib.newlist(), terralib.newlist()
+        --first take care of regular assignments
+        local regular, byfcall = divideintoregularandmanagedassignment(anchor, lhs, rhs)
+        local vtypes = regular.lhs:map(function(v) return v.type or "passthrough" end)
+        regular.rhs = insertcasts(anchor, vtypes, regular.rhs)
+        --take care of regular assignments of managed variables
+        for i,v in ipairs(regular.lhs) do
+            regular.lhs[i], regular.rhs[i] = createunmanagedsingleassignment(anchor, stmts, v, regular.rhs[i])
+        end
+        --take care of copy assignments using methods.__copy
+        for i,v in ipairs(byfcall.lhs) do
+            byfcall.lhs[i], byfcall.rhs[i] = createmanagedsingleassignment(anchor, stmts, v, byfcall.rhs[i])
+        end
+        if #stmts==0 then
+            --standard case, no meta-copy-assignments
+            return newobject(anchor,T.assignment, regular.lhs, regular.rhs)
+        else
+            --managed case using meta-copy-assignments
+            --the calls to `__copy` are in `stmts`
+            if #regular.lhs>0 then
+                stmts:insert(newobject(anchor,T.assignment, regular.lhs, regular.rhs))
+            end
+            return createstatementlist(anchor, stmts)
+        end
+    end
+
+    --create assignment - regular / copy assignment
+    function createassignment(anchor, lhs, rhs)
+        if not terralib.ext or #lhs < #rhs then
+            --regular assignment - __init, __copy and __dtor will not be scheduled
+            return createregularassignment(anchor, lhs, rhs)
+        else
+            --managed assignment - __init, __copy and __dtor are scheduled for managed
+            --variables
+            return createmanagedassignment(anchor, lhs, rhs)
+        end
     end
 
     function checkblock(s)
