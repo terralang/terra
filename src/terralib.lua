@@ -294,10 +294,15 @@ terra.environment.__index = terra.environment
 
 function terra.environment:enterblock()
     local e = {}
+    local q = {}
+    self.scopedepth = self.scopedepth + 1
     self._localenv = setmetatable(e,{ __index = self._localenv })
+    self._queue = setmetatable(q,{ __index = self._queue })
 end
 function terra.environment:leaveblock()
+    self.scopedepth = self.scopedepth - 1
     self._localenv = getmetatable(self._localenv).__index
+    self._queue = getmetatable(self._queue).__index
 end
 function terra.environment:localenv()
     return self._localenv
@@ -307,6 +312,9 @@ function terra.environment:luaenv()
 end
 function terra.environment:combinedenv()
     return self._combinedenv
+end
+function terra.environment:queue()
+    return self._queue
 end
 
 function terra.newenvironment(_luaenv)
@@ -320,6 +328,9 @@ function terra.newenvironment(_luaenv)
             error("cannot define global variables or assign to upvalues in an escape")
         end;
     })
+    self.scopedepth = -1
+    self.isfundef = false --flag to signal type-checked code is a terra function or a let-in block
+    self._queue = List()
     self:enterblock()
     return self
 end
@@ -2632,7 +2643,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
     function createlet(anchor, ns, ne, hasstatements)
         local r = newobject(anchor,T.letin,ns,ne,hasstatements)
         if #ne == 1 then
-            r:withtype(ne[1].type):setlvalue(ne[1].lvalue)
+            r:withtype(ne[1].type):setlvalue(ne[1].lvalue):setassignment(ne[1].assignment)
         else
             r:withtype(terra.types.tuple(unpack(ne:map("type"))))
         end
@@ -2888,6 +2899,122 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             end
         end
         return stmts
+    end
+
+    --generate and typecheck raii __dtor's for use in `block` (scope) statement
+    local function checkraiidtors(anchor, stats, exprs)
+        if not terralib.ext then return stats end
+        --extract the return statement from `stats`, if there is one
+        local function extractreturnstat()
+            local n = #stats
+            if n>0 then
+                local s = stats[n]
+                if s:is "returnstat" or s:is "breakstat" then
+                    return s
+                end
+            end
+        end
+        local rstat = extractreturnstat()
+        --extract the returned `var` symbols from a return statement
+        local function extractreturnedsymbols()
+            local function addtoreturnedsymbols(ret, expressions)
+                for i,v in ipairs(expressions) do
+                    if v:is "var" then
+                        ret[v.name] = v.symbol
+                    end
+                end
+            end
+            local ret = {}
+            --loop over expressions in a `letin` return statement
+            if rstat then
+                addtoreturnedsymbols(ret, rstat.expression.expressions)
+            end
+            --loop over expressions from a 'letin' block
+            if exprs then
+                addtoreturnedsymbols(ret, exprs)
+            end
+            return ret
+        end
+        --get symbols that are returned in case of a return statement
+        --or 'exprs' in a letin block
+        local rsyms = (rstat and rstat:is "returnstat" or exprs) and extractreturnedsymbols() or {}
+        --get position at which to add destructor statements
+        local pos = rstat and #stats or #stats+1
+        --place destructor calls for variables that are not returned
+        local function placedestructorcall(name, sym)
+            if not rsyms[name] and not sym.ishandle then
+                --if not a return variable, then check for an implementation of methods.__dtor
+                local typ = sym.type
+                if typ:isstruct() or typ:isarray() then
+                    local receiver = newobject(anchor, T.var, name, sym):setlvalue(true):withtype(typ)
+                    local dtor = checkraiimethodwithreceiver(anchor, receiver, "__dtor")
+                    if dtor then
+                        --add deferred calls to the destructors
+                        table.insert(stats, pos, newobject(anchor, T.defer, dtor))
+                    end
+                end
+            end
+        end
+        --add destructor calls for variables local to current scope
+        local function clearcurrentscope()
+            local lenv = env:localenv()
+            local queue = env:queue()
+            if queue and #queue > 0 then
+                --call destructor in reverse order of object creation
+                for k=#queue,1,-1 do
+                    local name = queue[k]
+                    local sym = lenv[name]
+                    placedestructorcall(name, sym)
+                end
+            end
+        end
+        --add destructor calls for variables from all outer scopes
+        local clearouterscopes
+        function clearouterscopes()
+            env:leaveblock()
+            if env:localenv() then
+                clearcurrentscope()
+                clearouterscopes()
+            end
+        end
+        --clear the current scope
+        clearcurrentscope()
+        --clear remaining variables in a break-statement
+        if rstat and rstat:is "breakstat" then
+            --we've already cleaned up the managed variables corresponding to the current scope.
+            --now we still need to clean up the managed variables of the outer scope, which is
+            --the loop that we leave using the 'break' statement.
+            local savedlocalenv = env._localenv
+            local savedenvqueue = env._queue
+            local scopedepth = env.scopedepth
+            env:leaveblock()
+            clearcurrentscope()
+            --would have been nicer to use 'env:leaveblock()' followed by 'env:enterblock()' but
+            --unfortunately this has side effects once you go to scopedepth zero. so we just
+            --save the local environment and reset it now that we are done.
+            env._localenv = savedlocalenv
+            env._queue = savedenvqueue
+            env.scopedepth = scopedepth
+            --clear remaining input arguments
+        elseif (rstat and rstat:is "returnstat") or (env.isfundef and (env.scopedepth==0 or env.scopedepth==1)) then
+            --we've already cleaned up the managed variables corresponding to the current scope.
+            --if this is a return statement then clear all remaining managed variables from outer
+            --scopes before the return
+            --if this is the outer most scope of a function (env.isfundef and env.scopedepth==1) then clean up all the
+            --remaining variables. The case (env.scopedepth==0) is needed for the corner case of functions that are
+            --empty - that don't do anything, but have variables that are passed by value.
+            local savedlocalenv = env._localenv
+            local savedenvqueue = env._queue
+            local scopedepth = env.scopedepth
+            clearouterscopes()
+            --would have been nicer to use 'env:leaveblock()' followed by 'env:enterblock()' but
+            --unfortunately this has side effects once you go to scopedepth zero. so we just
+            --save the local environment and reset it now that we are done.
+            env._localenv = savedlocalenv
+            env._queue = savedenvqueue
+            env.scopedepth = scopedepth
+        end
+        return stats
     end
 
     --__copy is only enabled for a set of right-hand-sides
@@ -3280,6 +3407,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif e:is "letin" then
                 local ns = checkstmts(e.statements)
                 local ne = checkexpressions(e.expressions)
+                if e.hasstatements then
+                    --in case of statements check for dtors of managed variables
+                    ns = checkraiidtors(e, ns, ne)
+                end
                 return createlet(e,ns,ne,e.hasstatements)
            elseif e:is "constructoru" then
                 local paramlist = terra.newlist()
@@ -3357,11 +3488,6 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
         return e
     end
-    local function checkcasebranch(s)
-        local e = checkexpintegral(s.condition)
-        local body = checkblock(s.body)
-        return copyobject(s,{condition = e, body = body})
-    end
 
     local function checkformalparameterlist(paramlist, requiretypes)
         local evalparams = evaluateparameterlist(diag,env:combinedenv(),paramlist,requiretypes)
@@ -3369,10 +3495,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         for i,p in ipairs(evalparams) do
             if p.isnamed then
                 local lenv = env:localenv()
+                local queue = env:queue()
                 if rawget(lenv,p.name) then
                     diag:reporterror(p,"duplicate definition of variable ",p.name)
                 end
                 lenv[p.name] = p.symbol
+                queue[#queue+1] = p.name
             end
             local r = newobject(p,T.allocvar,p.name,p.symbol)
             if p.type then
@@ -3586,9 +3714,10 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         end
     end
 
+    --check block statements and generate and typecheck raii __dtor's
     function checkblock(s)
         env:enterblock()
-        local stats = checkstmts(s.statements)
+        local stats = checkraiidtors(s, checkstmts(s.statements))
         env:leaveblock()
         return s:copy {statements = stats}
     end
@@ -3792,6 +3921,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
 
     local result
     if topexp:is "functiondefu" then
+        env.isfundef = true
         local typed_parameters = checkformalparameterlist(topexp.parameters, true)
         local parameter_types = typed_parameters:map("type")
         local body,returntype = checkreturns(checkblock(topexp.body),topexp.returntype)
