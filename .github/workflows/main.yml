@@ -222,38 +222,38 @@ jobs:
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
           DOCKER_TEST: ${{ matrix.test }}
-  multiarch:
-    name: Multiarch (${{ matrix.distro }}, ${{ matrix.arch }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        distro: ['ubuntu-18.04']
-        arch: ['arm64', 'ppc64le']
-        llvm: ['11.1.0', '13.0.0']
-        variant: ['prebuilt']
-        cuda: ['0']
-        test: ['0']
-        exclude:
-          - arch: 'arm64'
-            llvm: '13.0.0'
-          - arch: 'ppc64le'
-            llvm: '11.1.0'
-    steps:
-      - uses: actions/checkout@v4
-      - run: ./travis.sh
-        env:
-          DOCKER_DISTRO: ${{ matrix.distro }}
-          DOCKER_ARCH: ${{ matrix.arch }}
-          DOCKER_LLVM: ${{ matrix.llvm }}
-          DOCKER_CUDA: ${{ matrix.cuda }}
-          DOCKER_VARIANT: ${{ matrix.variant }}
-          DOCKER_TEST: ${{ matrix.test }}
-      - uses: actions/upload-artifact@v4
-        with:
-          name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
-          path: |
-            terra-*.tar.xz
-            terra-*.7z
+  # multiarch:
+  #   name: Multiarch (${{ matrix.distro }}, ${{ matrix.arch }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       distro: ['ubuntu-18.04']
+  #       arch: ['arm64', 'ppc64le']
+  #       llvm: ['11.1.0', '13.0.0']
+  #       variant: ['prebuilt']
+  #       cuda: ['0']
+  #       test: ['0']
+  #       exclude:
+  #         - arch: 'arm64'
+  #           llvm: '13.0.0'
+  #         - arch: 'ppc64le'
+  #           llvm: '11.1.0'
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - run: ./travis.sh
+  #       env:
+  #         DOCKER_DISTRO: ${{ matrix.distro }}
+  #         DOCKER_ARCH: ${{ matrix.arch }}
+  #         DOCKER_LLVM: ${{ matrix.llvm }}
+  #         DOCKER_CUDA: ${{ matrix.cuda }}
+  #         DOCKER_VARIANT: ${{ matrix.variant }}
+  #         DOCKER_TEST: ${{ matrix.test }}
+  #     - uses: actions/upload-artifact@v4
+  #       with:
+  #         name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
+  #         path: |
+  #           terra-*.tar.xz
+  #           terra-*.7z
   compat:
     name: Compatibility Test
     runs-on: ubuntu-latest
@@ -263,6 +263,18 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-18
+          path: |
+            terra-*.tar.xz
+            terra-*.7z
+  compat_arm64:
+    name: Compatibility Test (ARM64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04" "" 11.1.0 luajit prebuilt 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: docker-ubuntu-20.04-arm64-llvm-11
           path: |
             terra-*.tar.xz
             terra-*.7z
