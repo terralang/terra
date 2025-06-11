@@ -2868,6 +2868,66 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         return anchor:aserror()
     end
 
+
+    --raii-methods--start
+
+    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
+    local function ismanagedtype(T, method)
+        if T:isstruct() then
+            terralib.ext.addmissing[method](T)
+            if T.methods[method] then
+                return true
+            end
+        elseif T:isarray() then
+            return ismanagedtype(T.type, method)
+        end
+        return false
+    end
+
+    --check if raii method is implemented and generates one using `terralibext.t` if it is missing
+    local function ismanaged(receiver, method)
+        if not terralib.ext then return false end
+        local typ = receiver.type
+        return typ~=nil and ismanagedtype(typ, method)
+    end
+
+    --type check raii method __init or __dtor. __copy is handled separately
+    --methods are generated if they are missing
+    local function checkraiimethodwithreceiver(anchor, receiver, method)
+        if not terralib.ext then return end
+        local typ = receiver.type
+        if ismanagedtype(typ, method) then
+            if receiver:is "allocvar" then
+                receiver = newobject(anchor,T.var,receiver.name,receiver.symbol):setlvalue(true):withtype(typ)
+            end
+            if typ:isstruct() then
+                return checkmethodwithreciever(anchor, false, method, receiver, terralib.newlist(), "statement")
+            elseif typ:isarray() then
+                local init = terralib.ext.addmissing.arraymethod(typ, method)
+                if init then
+                    local f = asterraexpression(anchor, init, "luaobject")
+                    return checkcall(anchor, List{f}, List{receiver}, "all", true, "expression")
+                end
+            end
+        end
+    end
+
+    --generate and typecheck raii __init's for use in a 'defvar' statement
+    local function checkraiiinitializers(anchor, lhs)
+        if not terralib.ext then return end
+        local stmts = terralib.newlist()
+        for i,e in ipairs(lhs) do
+            local init = checkraiimethodwithreceiver(anchor, e, "__init")
+            if init then
+                stmts:insert(init)
+            end
+        end
+        return stmts
+    end
+
+    --raii-methods--end
+
+
     --functions that handle the checking of expressions
     local function checkluaexpression(e,location)
         local value = {}
@@ -3314,9 +3374,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             elseif s:is "defvar" then
                 local rhs = s.hasinit and checkexpressions(s.initializers)
                 local lhs = checkformalparameterlist(s.variables, not s.hasinit)
-                local res = s.hasinit and createassignment(s,lhs,rhs) 
-                            or createstatementlist(s,lhs)
-                return res
+                if s.hasinit then
+                    return createassignment(s,lhs,rhs)
+                else
+                    local res = createstatementlist(s,lhs)
+                    local ini = checkraiiinitializers(s, lhs)
+                    if ini then
+                        res.statements:insertall(ini)
+                    end
+                    return res
+                end
             elseif s:is "assignment" then
                 local rhs = checkexpressions(s.rhs)
                 local lhs = checkexpressions(s.lhs,"lexpression")
@@ -3513,11 +3580,11 @@ function terra.includecstring(code,cargs,target)
     	args:insert(path)
     end
     -- Obey the SDKROOT variable on macOS to match Clang behavior.
-    local sdkroot = os.getenv("SDKROOT")
-    if sdkroot then
-      args:insert("-isysroot")
-      args:insert(sdkroot)
-    end
+    --local sdkroot = os.getenv("SDKROOT")
+    --if sdkroot then
+    --  args:insert("-isysroot")
+    --  args:insert(sdkroot)
+    --end
     -- Set GNU C version to match value set by Clang: https://github.com/llvm/llvm-project/blob/f77c948d56b09b839262e258af5c6ad701e5b168/clang/lib/Driver/ToolChains/Clang.cpp#L5750-L5753
     if ffi.os ~= "Windows" and terralib.llvm_version >= 100 then
       args:insert("-fgnuc-version=4.2.1")
