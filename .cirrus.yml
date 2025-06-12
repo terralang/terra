@@ -17,16 +17,3 @@ freebsd_task:
   script: |
     export CC=cc
     bash travis.sh
-
-arm_task:
-  name: Linux AArch64
-  arm_container:
-    image: ubuntu:20.04
-  env:
-    llvm: 11.1.0
-    cuda: 0
-    variant: prebuilt
-    test: 1
-    threads: 2
-  script: |
-    ./docker/install_script.sh
