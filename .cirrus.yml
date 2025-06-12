@@ -21,7 +21,7 @@ freebsd_task:
 arm_task:
   name: Linux AArch64
   arm_container:
-    image: ubuntu:18.04
+    image: ubuntu:20.04
   env:
     llvm: 11.1.0
     cuda: 0
