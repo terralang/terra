@@ -2253,6 +2253,14 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
         local from = exp.type:getlayout(exp)
         local to = typ:getlayout(exp)
 
+        --take care of (managed and partial) struct initialization
+        if terralib.ext and exp:is "constructor" and terralib.ext.ismanaged(typ) then
+            local f = terralib.ext.addmissing.constructor(exp.type, typ)
+            local fnlike = asterraexpression(exp, f, "luaobject")
+            local arguments = List {unpack(exp.expressions)}
+            return checkcall(exp, List { fnlike } , arguments, "none", false, "expression")
+        end
+
         local valid = true
         local function err(...)
             valid = false
