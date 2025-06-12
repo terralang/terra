@@ -974,6 +974,14 @@ function T.Symbol:__tostring()
 end
 function T.Symbol:tocname() return "__symbol"..tostring(self.id) end
 
+--flag that signals that this symbol is attached to a variable that is like
+--a handle to a managed variable, and should not invoke a __dtor
+--In the future we may want to add this directly to a 'var' or 'allocvar' 
+function T.Symbol:sethandle(v)
+    self.ishandle = v
+    return self
+end
+
 _G["symbol"] = terra.newsymbol 
 
 -- LABEL
