@@ -117,8 +117,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        distro: ['ubuntu-18.04']
-        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.2', '16.0.3', '17.0.5', '18.1.7']
+        distro: ['ubuntu-20.04']
+        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.7', '16.0.6', '17.0.6', '18.1.8']
         lua: ['luajit', 'moonjit']
         cuda: ['0', '1']
         test: ['1']
@@ -130,13 +130,13 @@ jobs:
             cuda: '1'
           - llvm: '14.0.6'
             cuda: '1'
-          - llvm: '15.0.2'
+          - llvm: '15.0.7'
             cuda: '1'
-          - llvm: '16.0.3'
+          - llvm: '16.0.6'
             cuda: '1'
-          - llvm: '17.0.5'
+          - llvm: '17.0.6'
             cuda: '1'
-          - llvm: '18.1.7'
+          - llvm: '18.1.8'
             cuda: '1'
 
           # Moonjit with LLVM 14 only:
@@ -146,13 +146,13 @@ jobs:
             lua: 'moonjit'
           - llvm: '13.0.1'
             lua: 'moonjit'
-          - llvm: '15.0.2'
+          - llvm: '15.0.7'
             lua: 'moonjit'
-          - llvm: '16.0.3'
+          - llvm: '16.0.6'
             lua: 'moonjit'
-          - llvm: '17.0.5'
+          - llvm: '17.0.6'
             lua: 'moonjit'
-          - llvm: '18.1.7'
+          - llvm: '18.1.8'
             lua: 'moonjit'
 
         include:
@@ -259,7 +259,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 18.04 "18.04 20.04 22.04 24.04" "" 18.1.7 luajit prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04 25.04" "" 18.1.8 luajit prebuilt 2
       - uses: actions/upload-artifact@v4
         with:
           name: docker-ubuntu-18.04-x86_64-llvm-18
