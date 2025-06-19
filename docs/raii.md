@@ -333,6 +333,7 @@ The following files have been added to the terra testsuite:
 | raii-meta.t                   | Tests use of RAII objects in macros.                                          |
 | raii-shared_ptr.t             | Validates RAII with `shared_ptr` for shared resource ownership.               |
 | raii-unique_ptr.t             | Tests RAII with `unique_ptr` for unique resource ownership.                   |
+| raii-offset_ptr.t             | Tests RAII with offset-based pointer implementations.                         |
 | raii.t                        | General tests for core RAII principles and functionality.                     |
 | fails/raii-tuple-default-copy.t | Checks if tuple assignment is prohibited for managed moveable types         |
 | fails/raii-tuple-custom-copy.t | Checks if tuple assignment is prohibited for managed copyable types          |
