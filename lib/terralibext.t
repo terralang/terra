@@ -212,37 +212,22 @@ addmissingmove = terralib.memoize(function(T)
     end)
     --generate __move
     if T:isstruct() and ismanaged(T) and not T.methods.__move then
-        if hasmanagedfields(T) then
-            T.methods.__move_generated = terra(from : &T, to : &T)
-                escape
-                    for i,e in ipairs(T:getentries()) do
-                        if e.field then
-                            emit quote runmove(from.[e.field], to.[e.field]) end
-                        else
-                            checkuniontypelist(e)
-                            emit quote runmove(from.[e[1].field], to.[e[1].field]) end
-                        end
+        addmissinginit(T)
+        T.methods.__move_generated = terra(from : &T, to : &T)
+            to:__dtor()     --clear old resources of 'to', just-in-case
+            escape
+                --copying field-by-field. otherwise the copy-constructor
+                --may be called
+                for i,e in ipairs(T:getentries()) do
+                    if e.field then
+                        emit quote runmove(from.[e.field], to.[e.field]) end
+                    else
+                        checkuniontypelist(e)
+                        emit quote runmove(from.[e[1].field], to.[e[1].field]) end
                     end
                 end
-            end
-        else
-            addmissinginit(T)
-            T.methods.__move_generated = terra(from : &T, to : &T)
-                to:__dtor()     --clear old resources of 'to', just-in-case
-                escape
-                    --copying field-by-field. otherwise the copy-constructor
-                    --may be called
-                    for i,e in ipairs(T:getentries()) do
-                        if e.field then
-                            emit quote to.[e.field] = from.[e.field] end
-                        else
-                            checkuniontypelist(e)
-                            emit quote to.[e[1].field] = from.[e[1].field] end
-                        end
-                    end
-                    if T.methods.__init then
-                        emit quote from:__init() end   --re-initializing bits of 'from'
-                    end
+                if T.methods.__init then
+                    emit quote from:__init() end   --re-initializing bits of 'from'
                 end
             end
         end
