@@ -3539,7 +3539,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
             local to, from = lhs[i], rhs[i]
             if from.assignment == "handle" then
                 --we return a handle to the object, which does not invoke a __dtor
-                to.symbol:sethandle(true)
+                if to.symbol then to.symbol:sethandle(true) end
                 regular.rhs:insert(from)
                 regular.lhs:insert(to)
             elseif (from.assignment~="move") and checkraiicopyassignment(anchor, from, to) or checkraiimoveassignment(anchor, from, to) then
