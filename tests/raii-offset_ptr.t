@@ -2,19 +2,24 @@ require "terralibext"   --load 'terralibext' to enable raii
 local test = require("test")
 
 local std = {
-    io = terralib.includec("stdio.h")
+    io = terralib.includec("stdio.h"),
+    lib = terralib.includec("stdlib.h")
 }
 
 struct offset_ptr{
-    offset : int
+    offset : int64
     init : bool
 }
 
-offset_ptr.methods.__copy = terra(from : &int64, to : &offset_ptr)
+offset_ptr.methods.__copy = terralib.overloadedfunction("offset_ptr.methods.__copy", {terra(from : &int64, to : &offset_ptr)
     to.offset = [&int8](from) - [&int8](to)
     to.init = true
     std.io.printf("offset_ptr: __copy &int -> &offset_ptr\n")
-end
+end, terra(from : &offset_ptr, to : &&int64)
+    @to = [&int64]([&int8](from) + from.offset)
+    std.io.printf("offset_ptr: __copy &offset_ptr -> &int\n")
+end -- terra(from : &offset_ptr, to : &offset_ptr) working with the offset_ptr as normal pointer would require stable this pointer, see limitations for further information
+})
 
 local struct A{
     integer_1 : int64

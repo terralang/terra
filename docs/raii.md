@@ -44,7 +44,7 @@ Compiler support is provided for the following methods:
 | `__move__`                                     | Prefer `__move` over `__copy` for efficient resource transfer.               |
 | `__handle__`                                   | Get a handle to a managed object without transferring ownership. Performs an allocation.             |
 
-These methods facilitate the implementation of smart containers and pointers, such as `std::string`, `std::vector` and `std::unique_ptr`, `std::shared_ptr`, `boost:offset_ptr` in C++.
+These methods facilitate the implementation of smart containers and pointers, such as `std::string`, `std::vector` and `std::unique_ptr`, `std::shared_ptr` in C++.
 
 #### Managed types
 A struct is managed if it implements `__dtor`. Managed types require explicit resource cleanup (e.g., freeing heap memory). Without `__dtor`, a type behaves as a regular stack-allocated object with no special management.
@@ -331,7 +331,6 @@ The following files have been added to the terra testsuite:
 | raii-integration-copy.t       | Integration tests of RAII classes with focus on value semantics.              |
 | raii-integration-move.t       | Integration tests of RAII classes with focus on move semantics.               |
 | raii-meta.t                   | Tests use of RAII objects in macros.                                          |
-| raii-offset_ptr.t             | Tests RAII with offset-based pointer implementations.                         |
 | raii-shared_ptr.t             | Validates RAII with `shared_ptr` for shared resource ownership.               |
 | raii-unique_ptr.t             | Tests RAII with `unique_ptr` for unique resource ownership.                   |
 | raii.t                        | General tests for core RAII principles and functionality.                     |
@@ -345,6 +344,7 @@ You can have a look there for some common code patterns. Useful, in particular, 
 * Destructors are called in reverse order of object definition, a 'var x : A' or 'var x = ...' statement. 
 * Currently, `__init` is used to fully initialize an object, in a copy- and move-construction. This is convenient but not optimal, since some fields will be assigned to twice.
 * Destructors are sometimes called even if the object has been initialized to nil. This is not optimal.
+* The address of an object may change between `__init` and `__dtor`, as passing arguments by-value still follows C-semantics. Assume that an object may change address without `__move` or another metamethod being called. This mainly affects classes depending on the address of an object, a common example being `boost::offset_ptr` or objects that use the address as identity
 * Tuple (copy) assignment (regular or using `__copy`) are prohibited by the compiler in case of managed variables. This is done to prevent memory leaks or unwanted deletions in assignments such as
 ```
 a, b = b, a
