@@ -3078,9 +3078,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 end
             end
         end
-        --add overloaded methods based on left- and right-hand-side of the assignment
-        checkoverload(from)
+        --Add overloaded methods based on left- and right-hand-side of the assignment
+        --To invoke the right method in case of a cast the type of 'to' takes precedense 
+        --over the type of 'from'. So we first add 'to' since we want checkcall to first 
+        --try the 'move' or 'copy' related to the type of 'to'.
         checkoverload(to)
+        checkoverload(from)
         if #overloads > 0 then
             return checkcall(anchor, overloads, terralib.newlist{from, to}, "all", true, "expression")
         end
