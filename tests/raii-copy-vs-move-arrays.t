@@ -44,6 +44,7 @@ A.methods.__dtor = terra(self : &A)
     self.data = -1
 end
 
+A.__move_overload = true --enable custom move-assignment
 A.methods.__move = terra(from : &A, to : &A)
     nmovecalls = nmovecalls + 1
     to.data = from.data

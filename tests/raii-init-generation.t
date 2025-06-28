@@ -24,10 +24,13 @@ terra A:__init()
     ninitcalls = ninitcalls + 1
 end
 
+terra A:__dtor() end --trivial '__dtor' making the type managed
+
 local struct B{
     a : A
     b : &A
 }
+terralib.ext.addmissing.__init(B)
 
 local struct C{
     a : A
