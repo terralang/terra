@@ -6,6 +6,10 @@
 -- __move :: {&A, &A} -> {}
 -- In addition, (incomplete) named and unnamed constructors are generated
 
+local C = terralib.includecstring [[
+   #include <string.h>
+]]
+
 local addmissingdtor, addmissinginit
 
 -- A struct is managed if it implements __dtor
@@ -13,7 +17,6 @@ local function ismanaged(T)
     if T:isstruct() then
         addmissingdtor(T)
         if T.methods.__dtor then
-            addmissinginit(T)
             return true
         end
     elseif T:isarray() then
@@ -22,11 +25,53 @@ local function ismanaged(T)
     return false
 end
 
+--is this a regular entry
+local function isregularentry(entry)
+    if entry.field and entry.type then
+        return true
+    end
+    return false
+end
+
+--is this a valid union entry
+local function validateunionentry(entry)
+    assert(not isregularentry(entry) and terralib.israwlist(entry) and #entry > 0, "CompileError: not a valid union field.")
+    for i,e in ipairs(entry) do
+        assert(isregularentry(e), "CompileError: expected a regular entry.")
+        assert(not ismanaged(e.type), "CompileError: managed types not allowed in union type.")
+    end
+end
+
+--select the {field, type} in a union that forms the largest allocation
+local function selectunionmaxentry(entry)
+    validateunionentry(entry)
+    local size, index = 0, 1
+    for i,e in ipairs(entry) do
+        if sizeof(e.type) > size then 
+            size, index = sizeof(e.type), i
+        end
+    end
+    return entry[index]
+end
+
+--return a valid entry {field, type} for regular as well as union fields
+local function selectvalidentry(entry)
+    if isregularentry(entry) then
+        return entry
+    else
+        return selectunionmaxentry(entry)
+    end
+end
+
 -- Are any fields of the struct managed?
 local function hasmanagedfields(V)
     for i,e in ipairs(V:getentries()) do
-        if ismanaged(e.type) then
-            return true
+        if isregularentry(e) then
+            if ismanaged(e.type) then
+                return true --return early
+            end
+        else
+            validateunionentry(e) --check the union field - it's not supposed to be managed
         end
     end
     return false
@@ -37,23 +82,6 @@ local function hasmethod(W, method)
     if W:isstruct() then return W.methods[method]
     elseif W:isarray() then return hasmethod(W.type, method)
     else return false end
-end
-
---check if we are dealing with a union field. We do not allow union fields inside a 
---managed type
-local function checkuniontypelist(t)
-    assert(terralib.israwlist(t) and #t > 0, "CompileError: expected a union type.")
-    assert(t[1].type, "CompileError: expected a valid type.")
-    local size = sizeof(t[1].type)
-    for i,e in ipairs(t) do
-        local T = e.type
-        if T then
-            assert(not ismanaged(T), "CompileError: managed types not allowed in union type.")
-            --assert(sizeof(T) == size, "CompileError: expected union types to have identical size.")
-        else
-            error("CompileError: expected a valid type.")
-        end
-    end
 end
 
 --check if object is a pointer (not a function pointer) or has pointer
@@ -81,55 +109,46 @@ end
 
 --__create a missing __init for struct 'T' and all its entries
 addmissinginit = terralib.memoize(function(T)
-    local generated = false --flag that tracks if non-trivial code has been generated
     local runinit
     runinit = macro(function(receiver)
         local V = receiver:gettype()
-        if V:isstruct() then
+        if V:isstruct() and ismanaged(V) then
             addmissinginit(V)
             if hasmethod(V, "__init") then
-                generated = true
                 return `receiver:__init()
             end
-        elseif V:isarray() then
+        elseif V:isarray() and ismanaged(V.type) then
             addmissinginit(V.type)
             if hasmethod(V, "__init") then
-                generated = true
                 return quote
                     for i = 0, V.N do
                         runinit(receiver[i])
                     end
                 end
             end
-        elseif V:ispointer() then
-            generated = true
-            return quote receiver = nil end
+        else
+            return `C.memset(&receiver, 0, [sizeof(V)])
         end
-        return quote end
     end)
     --generate __init method
     if T:isstruct() and not T.methods.__init and not T.__init_generated then
-        local imp = terra(self : &T)
-            escape
-                for i,e in ipairs(T:getentries()) do
-                    if e.field then
-                        --regular fields
-                        emit quote runinit(self.[e.field]) end
-                    else
-                        --take care of 'union' types
-                        checkuniontypelist(e)
-                        emit quote runinit(self.[e[1].field]) end
+        if sizeof(T) > 0 then --no need to generate an `__init` if there is no data
+            if hasmanagedfields(T) then
+                T.methods.__init = terra(self : &T)
+                    escape
+                        for i,e in ipairs(T:getentries()) do
+                            local entry = selectvalidentry(e) --select a valid entry (max of the union or regular entry)
+                            emit quote runinit(self.[entry.field]) end
+                        end
                     end
+                end
+            else
+                T.methods.__init = terra(self : &T)
+                    C.memset(self, 0, [sizeof(T)])
                 end
             end
         end
-        --flag that `addmissinginit` already has been called
-        T.__init_generated = true
-        --only add implementation of __init and __init_generated if a non-trivial one was generated
-        if generated then
-            T.methods.__init_generated = imp
-            T.methods.__init = T.methods.__init_generated
-        end
+        T.__init_generated = true --flag that signals that `__init is generated`
     end
 end)
 
@@ -163,7 +182,7 @@ addmissingdtor = terralib.memoize(function(T)
         local imp = terra(self : &T)
             escape
                 for i,e in ipairs(T:getentries()) do
-                    if e.field then
+                    if isregularentry(e) then --union's are skipped
                         emit quote rundtor(self.[e.field]) end
                     end
                 end
@@ -180,60 +199,24 @@ addmissingdtor = terralib.memoize(function(T)
     end
 end)
 
---create a missing __move for 'T' and all its entries
+--create a missing __move for 'T'
 local addmissingmove
 addmissingmove = terralib.memoize(function(T)
-    --macro for moveing data
-    local runmove
-    runmove = macro(function(from, to)
-        local V = from:gettype()
-        if V:isstruct() and ismanaged(V) then
-            addmissingmove(V)
-            --move will always be generated for a managed variable, so
-            --we do a sanity check 
-            assert(hasmethod(V, "__move"), "__move could not be generated.")
-            return quote [V.methods.__move](&from, &to) end --__move is always generated, so no need for an if-here
-        elseif V:isarray() then
-            return quote
-                for i = 0, V.N do
-                    runmove(from[i], to[i])
+    if T:isstruct() and ismanaged(T) then
+        if not T.methods.__move and not T.__move_generated then
+            if sizeof(T)>0 then
+                addmissinginit(T)
+                T.methods.__move = terra(from : &T, to : &T)
+                    to:__dtor()                         --clear old resources of 'to', just-in-case
+                    C.memcpy(to, from, [sizeof(T)])     --copy data over
+                    from:__init()                       --re-initializing bits of 'from'
                 end
             end
-        elseif V:ispointer() then
-            return quote
-                to = from           --regular bitcopy for unmanaged variables
-                from = nil          --initialize old variables
-            end
-        else
-            return quote
-                to = from       --regular bitcopy for unmanaged variables
-            end
+            T.__move_generated = true
+        elseif T.methods.__move and not T.__move_generated and not T.__move_overload then
+            --`__move` cannot be user-implemented unless the `__move_overload` trait is set to true
+            error("Compile Error: `"..tostring(T) ..".methods.__move` cannot be overloaded.")
         end
-    end)
-    --generate __move
-    if T:isstruct() and ismanaged(T) and not T.methods.__move then
-        addmissinginit(T)
-        T.methods.__move_generated = terra(from : &T, to : &T)
-            to:__dtor()     --clear old resources of 'to', just-in-case
-            escape
-                --copying field-by-field. otherwise the copy-constructor
-                --may be called
-                for i,e in ipairs(T:getentries()) do
-                    if e.field then
-                        emit quote runmove(from.[e.field], to.[e.field]) end
-                    else
-                        checkuniontypelist(e)
-                        emit quote runmove(from.[e[1].field], to.[e[1].field]) end
-                    end
-                end
-                if T.methods.__init then
-                    emit quote from:__init() end   --re-initializing bits of 'from'
-                end
-            end
-        end
-        --the following flag will signal that addmissingmove(T) will not
-        --attempt to generate 'T.methods.__move' twice
-        T.methods.__move = T.methods.__move_generated
     end
 end)
 
@@ -293,16 +276,12 @@ addmissingcopy = terralib.memoize(function(T)
         local imp = terra(from : &T, to : &T)
             escape
                 for i,e in ipairs(T:getentries()) do
-                    if e.field then
-                        emit quote runcopy(from.[e.field], to.[e.field]) end
-                    else
-                        checkuniontypelist(e)
-                        emit quote runcopy(from.[e[1].field], to.[e[1].field]) end
-                    end
+                    local entry = selectvalidentry(e) --select a valid entry (max of the union or regular entry)
+                    emit quote runcopy(from.[entry.field], to.[entry.field]) end
                 end
             end
         end
-        --flag that `addmissingdtor` already has been called
+        --flag that `addmissingcopy` has already been called
         T.__copy_generated = true
         --if non-trivial and valid copy-assignment code was actually generated then
         --set assign the implementation to '__copy' and '__copy_generated'
