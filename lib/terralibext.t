@@ -10,17 +10,16 @@ local C = terralib.includecstring [[
    #include <string.h>
 ]]
 
-local addmissingdtor, addmissinginit
-
 -- A struct is managed if it implements __dtor
-local function ismanaged(T)
+local function ismanaged(T, method)
+    local method = method or "__dtor"
     if T:isstruct() then
-        addmissingdtor(T)
-        if T.methods.__dtor then
+        terralib.ext.addmissing[method](T)
+        if T.methods[method] then
             return true
         end
     elseif T:isarray() then
-        return ismanaged(T.type)
+        return ismanaged(T.type, method)
     end
     return false
 end
@@ -64,10 +63,11 @@ local function selectvalidentry(entry)
 end
 
 -- Are any fields of the struct managed?
-local function hasmanagedfields(V)
+local function hasmanagedfields(V, method)
+    local method = method or "__dtor"
     for i,e in ipairs(V:getentries()) do
         if isregularentry(e) then
-            if ismanaged(e.type) then
+            if ismanaged(e.type, method) then
                 return true --return early
             end
         else
@@ -108,17 +108,16 @@ end
 --------------------------------------------------------------------------------
 
 --__create a missing __init for struct 'T' and all its entries
+local addmissinginit
 addmissinginit = terralib.memoize(function(T)
     local runinit
     runinit = macro(function(receiver)
         local V = receiver:gettype()
-        if V:isstruct() and ismanaged(V) then
-            addmissinginit(V)
+        if V:isstruct() and ismanaged(V, "__init") then
             if hasmethod(V, "__init") then
                 return `receiver:__init()
             end
-        elseif V:isarray() and ismanaged(V.type) then
-            addmissinginit(V.type)
+        elseif V:isarray() and ismanaged(V.type, "__init") then
             if hasmethod(V, "__init") then
                 return quote
                     for i = 0, V.N do
@@ -126,14 +125,13 @@ addmissinginit = terralib.memoize(function(T)
                     end
                 end
             end
-        else
-            return `C.memset(&receiver, 0, [sizeof(V)])
         end
+        return `C.memset(&receiver, 0, [sizeof(V)])
     end)
     --generate __init method
     if T:isstruct() and not T.methods.__init and not T.__init_generated then
         if sizeof(T) > 0 then --no need to generate an `__init` if there is no data
-            if hasmanagedfields(T) then
+            if hasmanagedfields(T, "__init") then
                 T.methods.__init = terra(self : &T)
                     escape
                         for i,e in ipairs(T:getentries()) do
@@ -153,6 +151,7 @@ addmissinginit = terralib.memoize(function(T)
 end)
 
 --__create a missing __dtor for 'T' and all its entries
+local addmissingdtor
 addmissingdtor = terralib.memoize(function(T)
     local generated = false --flag that tracks if non-trivial code has been generated
     local rundtor
@@ -339,23 +338,6 @@ local constructor = terralib.memoize(function(from, to)
 end)
 
 --------------------------------------------------------------------------------
-------------------------- Add methods to terralib ------------------------------
---------------------------------------------------------------------------------
-
---add definitions such that we can access them from terralib
-terralib.ext = {
-    addmissing = {
-        __init = addmissinginit,
-        __dtor = addmissingdtor,
-        __copy = addmissingcopy,
-        __move = addmissingmove,
-        constructor = constructor
-    },
-    ismanaged = ismanaged,
-    hasmanagedfields = hasmanagedfields
-}
-
---------------------------------------------------------------------------------
 ------------------------- Generate Array methods -------------------------------
 --------------------------------------------------------------------------------
 
@@ -391,5 +373,21 @@ generatearraymethod = terralib.memoize(function(V, method)
     end
 end)
 
---add to addmissing exported methods
-terralib.ext.addmissing.arraymethod = generatearraymethod
+
+--------------------------------------------------------------------------------
+------------------------- Add methods to terralib ------------------------------
+--------------------------------------------------------------------------------
+
+--add definitions such that we can access them from terralib
+terralib.ext = {
+    addmissing = {
+        __init = addmissinginit,
+        __dtor = addmissingdtor,
+        __copy = addmissingcopy,
+        __move = addmissingmove,
+        constructor = constructor,
+        arraymethod = generatearraymethod
+    },
+    ismanaged = ismanaged,
+    hasmanagedfields = hasmanagedfields
+}

@@ -39,6 +39,8 @@ terra A:__dtor()
     ndestructorcalls = ndestructorcalls + 1
 end
 
+assert(terralib.ext.ismanaged(A), "Error: not a managed type.")
+
 printtestheader("raii-dtor.t - testing __dtor pass by value")
 
 terra mytest0(a : A)
