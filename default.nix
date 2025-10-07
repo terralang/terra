@@ -6,7 +6,7 @@
 
 let
 
-  llvmPackages = pkgs.llvmPackages_16;
+  llvmPackages = pkgs.llvmPackages_13;
   stdenv = llvmPackages.stdenv;
   cuda = if cudaPackages ? cudatoolkit_12 then [
            cudaPackages.cudatoolkit_12
