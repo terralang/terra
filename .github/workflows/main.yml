@@ -30,11 +30,21 @@ jobs:
           - os: 'macos-15'
             cuda: '1'
 
-          # macOS 14: exclude Moonjit (M1 requires LuaJIT)
+          # macOS 15 ARM: exclude Moonjit (M1 requires LuaJIT)
           - os: 'macos-15'
             lua: 'moonjit'
 
-          # macOS 14: exclude LLVM 11-15
+          # macOS 15 Intel: exclude LLVM 11-14
+          - os: 'macos-15-intel'
+            llvm: '11'
+          - os: 'macos-15-intel'
+            llvm: '12'
+          - os: 'macos-15-intel'
+            llvm: '13'
+          - os: 'macos-15-intel'
+            llvm: '14'
+
+          # macOS 15 ARM: exclude LLVM 11-15
           - os: 'macos-15'
             llvm: '11'
           - os: 'macos-15'
@@ -78,14 +88,14 @@ jobs:
           - llvm: '18'
             cuda: '1'
 
-          # Moonjit: only LLVM 12
+          # Moonjit: only LLVM 15
           - llvm: '11'
+            lua: 'moonjit'
+          - llvm: '12'
             lua: 'moonjit'
           - llvm: '13'
             lua: 'moonjit'
           - llvm: '14'
-            lua: 'moonjit'
-          - llvm: '15'
             lua: 'moonjit'
           - llvm: '16'
             lua: 'moonjit'
