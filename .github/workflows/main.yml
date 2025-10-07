@@ -292,7 +292,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nixpkgs: ['unstable', '24.05']
+        nixpkgs: ['unstable', '25.05']
         cuda: ['false', 'true']
     steps:
       - uses: actions/checkout@v4
