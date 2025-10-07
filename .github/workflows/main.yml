@@ -19,32 +19,31 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # Note: macOS 13 runs on x86 hardware, and 14 runs on M1 hardware
-        os: ['macos-13', 'macos-14', 'windows-2022']
+        os: ['macos-15-intel', 'macos-15', 'windows-2022']
         llvm: ['11', '12', '13', '14', '15', '16', '17', '18']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
           # macOS: exclude cuda
-          - os: 'macos-13'
+          - os: 'macos-15-intel'
             cuda: '1'
-          - os: 'macos-14'
+          - os: 'macos-15'
             cuda: '1'
 
           # macOS 14: exclude Moonjit (M1 requires LuaJIT)
-          - os: 'macos-14'
+          - os: 'macos-15'
             lua: 'moonjit'
 
           # macOS 14: exclude LLVM 11-15
-          - os: 'macos-14'
+          - os: 'macos-15'
             llvm: '11'
-          - os: 'macos-14'
+          - os: 'macos-15'
             llvm: '12'
-          - os: 'macos-14'
+          - os: 'macos-15'
             llvm: '13'
-          - os: 'macos-14'
+          - os: 'macos-15'
             llvm: '14'
-          - os: 'macos-14'
+          - os: 'macos-15'
             llvm: '15'
 
           # Windows: exclude LLVM 12-18
