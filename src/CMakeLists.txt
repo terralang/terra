@@ -141,6 +141,7 @@ if(WIN32)
       /w      # disable warnings
       #/MD    # Don't do this, cmake chooses the correct version automatically
       /Zi     # debug info
+      /Zc:preprocessor
   )
   target_compile_definitions(TerraObjectFiles
     PRIVATE
