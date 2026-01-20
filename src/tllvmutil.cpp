@@ -623,10 +623,10 @@ int llvmutil_executeandwait(LLVM_PATH_TYPE program, const char **args, std::stri
         return WEXITSTATUS(status);
     }
 #else
-    #if LLVM_VERSION < 160
-        return llvm::sys::Wait(Info, 0, true, err).ReturnCode;
-    #else
-        return llvm::sys::Wait(Info, std::nullopt, err).ReturnCode;
-    #endif
+#if LLVM_VERSION < 160
+    return llvm::sys::Wait(Info, 0, true, err).ReturnCode;
+#else
+    return llvm::sys::Wait(Info, std::nullopt, err).ReturnCode;
+#endif
 #endif
 }
