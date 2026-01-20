@@ -116,7 +116,7 @@ elif [[ $(uname) = MINGW* ]]; then
     7z x -y clang+llvm-14.0.6-${arch}-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.6-${arch}-windows-msvc17
   elif [[ $LLVM_VERSION = 13 ]]; then
-    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-13.0.1-${arch}-windows-msvc17.7z
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.1/clang+llvm-13.0.1-${arch}-windows-msvc17.7z
     7z x -y clang+llvm-13.0.1-${arch}-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.1-${arch}-windows-msvc17
   elif [[ $LLVM_VERSION = 12 ]]; then
