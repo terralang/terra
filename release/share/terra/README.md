@@ -141,18 +141,18 @@ pkg install -y cmake gmake llvm18
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **18** for most platforms, except Windows (x86) and Linux (ARM) where LLVM 11 is required. The following versions are also supported:
+The current recommended version of LLVM is **18** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
 |      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                  | |
-|      12 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: |                |                  | |
-|      13 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
-|      14 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |                  | |
-|      15 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |   :yellow_heart: | |
-|      16 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |   :yellow_heart: | |
-|      17 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: | :yellow_heart: |    :green_heart: | |
-|      18 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: |  :green_heart: |    :green_heart: | |
+|      12 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                  | |
+|      13 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                  | |
+|      14 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                  | |
+|      15 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
+|      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
+|      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
+|      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
 
 \* AMD GPU support is currently experimental. LLVM 18 is **strongly** recommended.
 
