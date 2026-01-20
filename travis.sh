@@ -95,10 +95,34 @@ elif [[ $(uname) = Darwin ]]; then
   export PATH=$PWD:$PATH
 
 elif [[ $(uname) = MINGW* ]]; then
-  if [[ $LLVM_VERSION = 14 ]]; then
-    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.0/clang+llvm-14.0.0-${arch}-windows-msvc17.7z
-    7z x -y clang+llvm-14.0.0-${arch}-windows-msvc17.7z
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.0-${arch}-windows-msvc17
+  if [[ $LLVM_VERSION = 18 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.8/clang+llvm-18.1.8-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-18.1.8-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.8-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 17 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-17.0.6/clang+llvm-17.0.6-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-17.0.6-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-17.0.6-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 16 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-16.0.6/clang+llvm-16.0.6-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-16.0.6-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-16.0.6-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 15 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-15.0.7/clang+llvm-15.0.7-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-15.0.7-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-15.0.7-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 14 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-14.0.6/clang+llvm-14.0.6-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-14.0.6-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-14.0.6-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 13 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-13.0.1/clang+llvm-13.0.1-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-13.0.1-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-13.0.1-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 12 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-12.0.1/clang+llvm-12.0.1-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-12.0.1-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-12.0.1-${arch}-windows-msvc17
   elif [[ $LLVM_VERSION = 11 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-11.1.0/clang+llvm-11.1.0-${arch}-windows-msvc17.7z
     7z x -y clang+llvm-11.1.0-${arch}-windows-msvc17.7z

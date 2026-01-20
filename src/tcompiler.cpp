@@ -25,6 +25,8 @@ extern "C" {
 
 #if LLVM_VERSION < 120
 #include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
+#else
+#include "llvm/ExecutionEngine/MCJIT.h"
 #endif
 
 #include "llvm/Support/Atomic.h"
