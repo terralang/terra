@@ -140,6 +140,10 @@ static Position getposition(LexState *ls) {
 static void table_setposition(LexState *ls, int t, Position p) {
     lua_pushinteger(ls->L, p.linenumber);
     lua_setfield(ls->L, t, "linenumber");
+    lua_pushinteger(ls->L, ls->start_offset);
+    lua_setfield(ls->L, t, "start_offset");
+    lua_pushinteger(ls->L, ls->ws_start_offset);
+    lua_setfield(ls->L, t, "ws_start_offset");
     lua_pushinteger(ls->L, p.offset);
     lua_setfield(ls->L, t, "offset");
     lua_pushstring(ls->L, getstr(ls->source));
