@@ -3266,7 +3266,7 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                 return newobject(s,T.fornum,variable,initial,limit,step,body)
             elseif s:is "forlist" then
                 local iterator = checkexp(s.iterator)
-            
+
                 local typ = iterator.type
                 if typ:ispointertostruct() then
                     typ,iterator = typ.type, insertdereference(iterator)
@@ -3275,8 +3275,16 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     diag:reporterror(iterator,"expected a struct with a __for metamethod but found ",typ)
                     return s
                 end
+                local itersym = terra.newsymbol(typ, "__for_iter")
+                local itervar = newobject(s, T.allocvar, "__for_iter", itersym)
+                local iterref = newobject(s, T.var, "__for_iter", itersym)
+                iterref.type = typ
+                local iterAssign = asterraexpression(
+                    s,
+                    createassignment(s, List {itervar}, List {asterraexpression(s, iterator)}),
+                    "statement")
                 local generator = typ.metamethods.__for
-            
+
                 local function bodycallback(...)
                     local exps = List()
                     for i = 1,select("#",...) do
@@ -3291,9 +3299,12 @@ function typecheck(topexp,luaenv,simultaneousdefinitions)
                     local stats = createstatementlist(s, List { assign, body })
                     return terra.newquote(stats)
                 end
-            
-                local value = invokeuserfunction(s, "invoking __for", false ,generator,terra.newquote(iterator), bodycallback)
-                return asterraexpression(s,value,"statement")
+
+                local value = asterraexpression(
+                    s,
+                    invokeuserfunction(s, "invoking __for", false, generator, iterref, bodycallback),
+                    "statement")
+                return asterraexpression(s,createstatementlist(s, List { iterAssign, value }),"statement")
             elseif s:is "ifstat" then
                 local br = s.branches:map(checkcondbranch)
                 local els = (s.orelse and checkblock(s.orelse))
