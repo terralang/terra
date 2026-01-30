@@ -235,7 +235,9 @@ set_target_properties(TerraLibraryShared PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${
 target_link_libraries(TerraLibraryShared
   PRIVATE
     ${LUAJIT_LIBRARIES}
+    -Wl,--start-group
     ${ALL_LLVM_LIBRARIES}
+    -Wl,--end-group
     ${LLVM_SYSTEM_LIBRARIES}
 )
 
