@@ -168,15 +168,6 @@ jobs:
 
           # Some additional configurations:
 
-          # LLVM 19
-          - distro: 'ubuntu-20.04'
-            llvm: '19.1.7'
-            lua: 'luajit'
-            cuda: '0'
-            variant: 'prebuilt'
-            slib: '0'
-            static: '1'
-
           # LLVM 12, 13, 14 on Ubuntu 22.04
           - distro: 'ubuntu-22.04'
             llvm: '12'
