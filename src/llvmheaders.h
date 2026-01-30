@@ -70,6 +70,8 @@
 #include "llvmheaders_170.h"
 #elif LLVM_VERSION < 190
 #include "llvmheaders_180.h"
+#elif LLVM_VERSION < 200
+#include "llvmheaders_190.h"
 #else
 #error "unsupported LLVM version"
 // for OSX code completion
