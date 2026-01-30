@@ -887,7 +887,7 @@ static void AddMacro(terra_State *T, Preprocessor &PP, const IdentifierInfo *II,
 #if LLVM_VERSION < 190
         Literal.GetFloatValue(Result);
 #else
-        Literal.GetFloatValue(Result, llvm::RoundingMode::TowardZero);
+        Literal.GetFloatValue(Result, llvm::RoundingMode::NearestTiesToEven);
 #endif
         V = Result.convertToDouble();
     } else {

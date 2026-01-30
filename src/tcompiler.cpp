@@ -3750,7 +3750,7 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
     ExecutionEngine *ee = CU->ee;
     if (gv->isDeclaration()) {
         StringRef name = gv->getName();
-#if LLVM_VERSION < 190
+#if LLVM_VERSION < 180
         if (name.startswith("\01"))  // remove asm renaming tag before looking for symbol
             name = name.substr(1);
 #else
