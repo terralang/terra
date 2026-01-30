@@ -77,7 +77,7 @@ A simple example initializes Terra and then runs code from the file specified in
         terra_init(L);
         for(int i = 1; i < argc; i++)
             //run the terra code in each file
-            if(terra_dofile(L,argv[i]))  
+            if(terra_dofile(L,argv[i]))
                 return 1; //error
         return 0;
     }
@@ -141,7 +141,7 @@ pkg install -y cmake gmake llvm18
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **18** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
+The current recommended version of LLVM is **19** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
@@ -153,8 +153,9 @@ The current recommended version of LLVM is **18** for most platforms, except Lin
 |      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
 |      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
 |      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
+|      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
 
-\* AMD GPU support is currently experimental. LLVM 18 is **strongly** recommended.
+\* AMD GPU support is currently experimental. LLVM 19 is **strongly** recommended.
 
 \*\* Intel GPU (SPIR-V) support is currently experimental.
 
@@ -526,7 +527,7 @@ Functions
 We have already seen some simple function definitions. In addition to taking multiple parameters, functions in Terra (and Lua) can return multiple values:
 
     terra sort2(a : int, b : int) : {int,int} --the return type is optional
-        if a < b then   
+        if a < b then
             return a, b
         else
             return b, a
@@ -1055,7 +1056,7 @@ We've already seen examples of Lua code calling Terra functions. In general, you
     assert( foo( {1,2.3} ) == 3.3)
     assert( foo( {b = 1, a = 2.3} ) == 3 )
 
-More examples are in `tests/luabridge*.t`.  
+More examples are in `tests/luabridge*.t`.
 
 It is also possible to call Lua functions from Terra. Again, the translation from Terra objects to Lua uses LuaJITs conversion rules. Primitive types like `double` will be converted to their respective Lua type, while aggregate and derived types will be boxed in a LuaJIT `ctype` that can be modified from Lua:
 

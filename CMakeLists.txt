@@ -61,6 +61,10 @@ if(WIN32 AND TERRA_SLIB_INCLUDE_LUAJIT)
   message(FATAL_ERROR "TERRA_SLIB_INCLUDE_LUAJIT is not supported on Windows")
 endif()
 
+if(LLVM_VERSION_MAJOR GREATER 18 AND TERRA_SLIB_INCLUDE_LLVM)
+  message(FATAL_ERROR "TERRA_SLIB_INCLUDE_LLVM is not supported on LLVM 19+")
+endif()
+
 include(GNUInstallDirs)
 include(VersionNumber)
 include(BuildDirs)
