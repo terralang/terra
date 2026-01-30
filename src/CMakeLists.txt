@@ -355,7 +355,9 @@ elseif(UNIX)
       TerraLibrary
       -Wl,--no-whole-archive
       ${LUAJIT_LIBRARIES}
+      -Wl,--start-group
       ${ALL_LLVM_LIBRARIES}
+      -Wl,--end-group
       ${LLVM_SYSTEM_LIBRARIES}
   )
 else()
