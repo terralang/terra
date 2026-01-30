@@ -359,15 +359,6 @@ elseif(UNIX)
   target_link_libraries(TerraExecutable
     PRIVATE
       TerraLibrary
-  )
-  if(TERRA_WHOLE_ARCHIVE_LLVM)
-    target_link_libraries(TerraExecutable
-      PRIVATE
-        -Wl,--no-whole-archive
-    )
-  endif()
-  target_link_libraries(TerraExecutable
-    PRIVATE
       ${LUAJIT_LIBRARIES}
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
