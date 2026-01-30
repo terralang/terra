@@ -34,12 +34,18 @@ if [[ $(uname) = Linux ]]; then
   exit 1
 
 elif [[ $(uname) = Darwin ]]; then
-  if [[ $LLVM_VERSION = 18 ]]; then
-    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.7/clang+llvm-18.1.7-${arch}-apple-darwin.tar.xz
-    tar xf clang+llvm-18.1.7-${arch}-apple-darwin.tar.xz
-    ln -s clang+llvm-18.1.7-${arch}-apple-darwin/bin/llvm-config llvm-config-17
-    ln -s clang+llvm-18.1.7-${arch}-apple-darwin/bin/clang clang-17
-    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.7-${arch}-apple-darwin
+  if [[ $LLVM_VERSION = 19 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-19.1.7/clang+llvm-19.1.7-${arch}-apple-darwin.tar.xz
+    tar xf clang+llvm-19.1.7-${arch}-apple-darwin.tar.xz
+    ln -s clang+llvm-19.1.7-${arch}-apple-darwin/bin/llvm-config llvm-config-19
+    ln -s clang+llvm-19.1.7-${arch}-apple-darwin/bin/clang clang-19
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-19.1.7-${arch}-apple-darwin
+  elif [[ $LLVM_VERSION = 18 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.8/clang+llvm-18.1.8-${arch}-apple-darwin.tar.xz
+    tar xf clang+llvm-18.1.8-${arch}-apple-darwin.tar.xz
+    ln -s clang+llvm-18.1.8-${arch}-apple-darwin/bin/llvm-config llvm-config-18
+    ln -s clang+llvm-18.1.8-${arch}-apple-darwin/bin/clang clang-18
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.8-${arch}-apple-darwin
   elif [[ $LLVM_VERSION = 17 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-17.0.5/clang+llvm-17.0.5-${arch}-apple-darwin.tar.xz
     tar xf clang+llvm-17.0.5-${arch}-apple-darwin.tar.xz
@@ -95,7 +101,11 @@ elif [[ $(uname) = Darwin ]]; then
   export PATH=$PWD:$PATH
 
 elif [[ $(uname) = MINGW* ]]; then
-  if [[ $LLVM_VERSION = 18 ]]; then
+  if [[ $LLVM_VERSION = 19 ]]; then
+    curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-19.1.7/clang+llvm-19.1.7-${arch}-windows-msvc17.7z
+    7z x -y clang+llvm-19.1.7-${arch}-windows-msvc17.7z
+    export CMAKE_PREFIX_PATH=$PWD/clang+llvm-19.1.7-${arch}-windows-msvc17
+  elif [[ $LLVM_VERSION = 18 ]]; then
     curl -L -O https://github.com/terralang/llvm-build/releases/download/llvm-18.1.8/clang+llvm-18.1.8-${arch}-windows-msvc17.7z
     7z x -y clang+llvm-18.1.8-${arch}-windows-msvc17.7z
     export CMAKE_PREFIX_PATH=$PWD/clang+llvm-18.1.8-${arch}-windows-msvc17
