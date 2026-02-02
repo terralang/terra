@@ -56,6 +56,10 @@ jobs:
           - os: 'macos-15'
             llvm: '15'
 
+          # Windows: LLVM 21 is broken
+          - os: 'windows-2022'
+            llvm: '21'
+
           # CUDA: only LLVM 11
           - llvm: '12'
             cuda: '1'
