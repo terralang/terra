@@ -232,8 +232,8 @@ if [[ $(uname) != Darwin ]]; then
     popd
 fi
 
-# Only deploy builds with LLVM 21.
-if [[ $LLVM_VERSION = 21 && ( ! ( $(uname) == MINGW* ) && $USE_CUDA -eq 1 ) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
+# Only deploy builds with LLVM 21 (macOS) and 20 (Windows).
+if [[ (( $(uname) == Darwin && $LLVM_VERSION = 21 ) || ( $(uname) == MINGW* && $LLVM_VERSION = 20 && $USE_CUDA -eq 1 )) && $SLIB_INCLUDE_LLVM -eq 1 && $TERRA_LUA = luajit ]]; then
   RELEASE_NAME=terra-`uname | sed -e s/Darwin/OSX/ | sed -e s/MINGW.*/Windows/`-${arch}-`git rev-parse --short HEAD`
   mv install $RELEASE_NAME
   if [[ $(uname) = MINGW* ]]; then
