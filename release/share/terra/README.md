@@ -141,7 +141,7 @@ pkg install -y cmake gmake llvm18
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **20** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
+The current recommended version of LLVM is **21** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
@@ -155,8 +155,9 @@ The current recommended version of LLVM is **20** for most platforms, except Lin
 |      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
 |      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
 |      20 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
+|      21 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
 
-\* AMD GPU support is currently experimental. LLVM 20 is **strongly** recommended.
+\* AMD GPU support is currently experimental. LLVM 21 is **strongly** recommended.
 
 \*\* Intel GPU (SPIR-V) support is currently experimental.
 

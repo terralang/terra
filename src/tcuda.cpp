@@ -89,11 +89,19 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     int nmajor, nminor;
     CUDA_DO(T->cuda->nvvmVersion(&nmajor, &nminor));
     int nversion = nmajor * 10 + nminor;
+#if LLVM_VERSION < 210
     if (nversion >= 12)
         M->setTargetTriple("nvptx64-nvidia-cuda");
     else
         M->setTargetTriple("");  // clear these because nvvm doesn't like them
-    M->setDataLayout("");        // nvvm doesn't like data layout either
+#else
+    if (nversion >= 12)
+        M->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
+    else
+        M->setTargetTriple(
+                llvm::Triple(""));  // clear these because nvvm doesn't like them
+#endif
+    M->setDataLayout("");  // nvvm doesn't like data layout either
 
     std::stringstream cpu;
     cpu << "sm_" << major << minor;
@@ -133,7 +141,11 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     auto TargetMachine =
             Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
 
+#if LLVM_VERSION < 210
     LDEVICE->setTargetTriple("nvptx64-nvidia-cuda");
+#else
+    LDEVICE->setTargetTriple(llvm::Triple("nvptx64-nvidia-cuda"));
+#endif
     LDEVICE->setDataLayout(TargetMachine->createDataLayout());
 
     llvm::Linker Linker(*M);
@@ -293,7 +305,7 @@ int terra_cudainit(struct terra_State *T) {
 
 #else
 /* cuda disabled, just do nothing */
-int terra_cudainit(struct terra_State* T) { return 0; }
+int terra_cudainit(struct terra_State *T) { return 0; }
 #endif
 
 int terra_cudafree(struct terra_State *T) {

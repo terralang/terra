@@ -37,6 +37,10 @@
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
 #endif
 
+#if LLVM_VERSION >= 200
+#include "llvm/Transforms/Utils/ExtraPassManager.h"
+#endif
+
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
@@ -117,7 +121,11 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
     FPM.addPass(InstCombinePass());
 
     if (Level.getSpeedupLevel() > 1 && ExtraVectorizerPasses) {
+#if LLVM_VERSION < 200
         ExtraVectorPassManager ExtraPasses;
+#else
+        ExtraFunctionPassManager<ShouldRunExtraVectorPasses> ExtraPasses;
+#endif
         // At higher optimization levels, try to clean up any runtime overlap and
         // alignment checks inserted by the vectorizer. We want to track correlated
         // runtime checks for two inner loops in the same outer loop, fold any

@@ -346,7 +346,13 @@ int terra_inittarget(lua_State *L) {
 #endif
     );
     TT->external = new Module("external", *TT->ctx);
-    TT->external->setTargetTriple(TT->Triple);
+    TT->external->setTargetTriple(
+#if LLVM_VERSION < 210
+            TT->Triple
+#else
+            llvm::Triple(TT->Triple)
+#endif
+    );
     lua_pushlightuserdata(L, TT);
     return 1;
 }
@@ -405,7 +411,13 @@ int terra_initcompilationunit(lua_State *L) {
     lobj_removereftable(L, ref_table);
 
     CU->M = new Module("terra", *TT->ctx);
-    CU->M->setTargetTriple(TT->Triple);
+    CU->M->setTargetTriple(
+#if LLVM_VERSION < 210
+            TT->Triple
+#else
+            llvm::Triple(TT->Triple)
+#endif
+    );
     CU->M->setDataLayout(TT->tm->createDataLayout());
 
 #if LLVM_VERSION < 170
@@ -430,9 +442,21 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
     std::string MCJITTriple = CU->TT->Triple;
     MCJITTriple.append("-elf");  // on windows we need to use an elf container because
                                  // coff is not supported yet
-    topeemodule->setTargetTriple(MCJITTriple);
+    topeemodule->setTargetTriple(
+#if LLVM_VERSION < 210
+            MCJITTriple
 #else
-    topeemodule->setTargetTriple(CU->TT->Triple);
+            llvm::Triple(MCJITTriple)
+#endif
+    );
+#else
+    topeemodule->setTargetTriple(
+#if LLVM_VERSION < 210
+            CU->TT->Triple
+#else
+            llvm::Triple(CU->TT->Triple)
+#endif
+    );
 #endif
 
     std::string err;
@@ -3368,7 +3392,7 @@ struct FunctionEmitter {
         ValueToValueMapTy VMap;
         DebugInfoFinder DIFinder;
         BasicBlock *NewBB =
-#if LLVM_VERSION < 20
+#if LLVM_VERSION < 200
                 CloneBasicBlock(BB, VMap, "defer", fstate->func, nullptr, &DIFinder);
 #else
                 // TODO: Check if DIFinder needs to be used in a different function.
@@ -4079,7 +4103,13 @@ static int terra_linkllvmimpl(lua_State *L) {
         }
     }
     Module *M = mm.get().release();
-    M->setTargetTriple(TT->Triple);
+    M->setTargetTriple(
+#if LLVM_VERSION < 210
+            TT->Triple
+#else
+            llvm::Triple(TT->Triple)
+#endif
+    );
     if (LLVMLinkModules2(llvm::wrap(TT->external), llvm::wrap(M))) {
         if (fromstring)
             terra_pusherror(T, "linker reported error");
