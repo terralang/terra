@@ -407,14 +407,14 @@ end
 
 local TRACEBACK_LEVELS1 = 12
 local TRACEBACK_LEVELS2 = 10
-local function findfirstnilstackframe() --because stack size is not exposed we binary search for it
+local function findfirstnilstackframe(thread) --because stack size is not exposed we binary search for it
     local low,high = 1,1
-    while debug.getinfo(high,"") ~= nil do
+    while debug.getinfo(thread,high,"") ~= nil do
         low,high = high,high*2
     end --invariant: low is non-nil frame, high is nil frame, range gets smaller each iteration
     while low + 1 ~= high do
         local m = math.floor((low+high)/2)
-        if debug.getinfo(m,"") ~= nil then
+        if debug.getinfo(thread,m,"") ~= nil then
             low = m
         else
             high = m
@@ -437,7 +437,12 @@ end
 terra.fulltrace = false
 terra.slimtrace = false
 -- override the lua traceback function to be aware of Terra compilation contexts
-function debug.traceback(msg,level)
+function debug.traceback(thread,msg,level)
+    if type(thread) ~= 'thread' then
+      level = msg
+      msg = thread
+      thread = coroutine.running()
+    end
     level = level or 1
     level = level + 1 -- don't count ourselves
     local lim = terra.fulltrace and math.huge or TRACEBACK_LEVELS1 + 1
@@ -451,11 +456,11 @@ function debug.traceback(msg,level)
     end
     lines:insert("stack traceback:")
     while true do
-        local di = debug.getinfo(level,"Snlf")
+        local di = debug.getinfo(thread,level,"Snlf")
         if not di then break end
         if di.func == invokeuserfunction then
-            local anchorname,anchor = debug.getlocal(level,1)
-            local whatname,what = debug.getlocal(level,2)
+            local anchorname,anchor = debug.getlocal(thread,level,1)
+            local whatname,what = debug.getlocal(thread,level,2)
             assert(anchorname == "anchor" and whatname == "what")
             lines:insert("\n\t")
             lines:insert(formaterror(anchor,"Errors reported during "..what):sub(1,-2)) 
@@ -485,9 +490,9 @@ function debug.traceback(msg,level)
         end
         level = level + 1
         if level == lim then
-            if debug.getinfo(level + TRACEBACK_LEVELS2,"") ~= nil then
+            if debug.getinfo(thread,level + TRACEBACK_LEVELS2,"") ~= nil then
                 lines:insert("\n\t...")
-                level = findfirstnilstackframe() - TRACEBACK_LEVELS2
+                level = findfirstnilstackframe(thread) - TRACEBACK_LEVELS2
             end
             lim = math.huge
         end
