@@ -1696,16 +1696,6 @@ static GlobalVariable *CreateGlobalVariable(TerraCompilationUnit *CU, Obj *globa
     GlobalVariable *gv = new GlobalVariable(*CU->M, typ, global->boolean("constant"),
                                             linkage, llvmconstant, name, NULL,
                                             GlobalVariable::NotThreadLocal, as);
-    // Globals that Terra defines itself always live in the JIT's address space
-    // alongside the code referring to them, so they can never be preempted.
-    // Marking them dso_local lets the backend address them directly instead of
-    // going through a GOT entry. Terra's functions are already dso_local (they
-    // are created with internal linkage and only later made external, which
-    // latches the flag), and the GOT path is not merely slower: RuntimeDyld
-    // misplaces AArch64 GOT entries for all but the first object it loads, so
-    // reaching a global through one reads a pointer out of another module's
-    // code. Globals declared extern refer to symbols elsewhere in the process,
-    // which can be too far away for direct addressing, so leave those alone.
     if (!global->boolean("extern")) gv->setDSOLocal(true);
     return gv;
 }
