@@ -239,6 +239,16 @@ static std::string HostFeatureString() {
     return result;
 }
 
+// ARM and AArch64 ELF ABIs reserve symbols named $a, $d, $t and $x (optionally
+// followed by a period and further characters). Avoid the collision by
+// doubling the prefix.
+static const char *TerraSymbolPrefix(StringRef name) {
+    bool ismappingletter = name.size() > 0 && (name[0] == 'a' || name[0] == 'd' ||
+                                               name[0] == 't' || name[0] == 'x');
+    if (ismappingletter && (name.size() == 1 || name[1] == '.')) return "$$";
+    return "$";
+}
+
 int terra_inittarget(lua_State *L) {
     terra_State *T = terra_getstate(L, 1);
     TerraTarget *TT = new TerraTarget();
@@ -1955,9 +1965,9 @@ struct FunctionEmitter {
             funcobj->obj("type", &ftype);
             // function name is $+name so that it can't conflict with any symbols imported
             // from the C namespace
-            fstate->func =
-                    CC->CreateFunction(M, &ftype, callingconv,
-                                       Twine(StringRef((isextern) ? "" : "$"), name));
+            fstate->func = CC->CreateFunction(
+                    M, &ftype, callingconv,
+                    Twine(StringRef((isextern) ? "" : TerraSymbolPrefix(name)), name));
             if (isextern) {
                 // Set external linkage for extern functions.
                 fstate->func->setLinkage(GlobalValue::ExternalLinkage);
