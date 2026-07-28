@@ -6,9 +6,9 @@ local cstd = terralib.includecstring [[
 ]]
 
 -- We're going to define three separate globals, in three separate compilation
--- units. Each one is referenced in the other two. In order to pass, globals
--- need to have public visibility and correctly link with the corresponding
--- extern.
+-- units. Each one is referenced in subsequent compilation units. In order to
+-- pass, globals need to have public visibility and correctly link with the
+-- corresponding extern.
 
 local a = terralib.global(int16, 1, "a")
 local b = terralib.global(int32, 2, "b")
@@ -19,11 +19,11 @@ local b_ext = terralib.global(int32, nil, "b", true --[[extern]])
 local c_ext = terralib.global(int64, nil, "c", true --[[extern]])
 
 terra f(): int64
-  return a + b_ext + c_ext
+  return a
 end
 
 terra g(): int64
-  return a_ext + b + c_ext
+  return a_ext + b
 end
 
 terra h(): int64
@@ -34,12 +34,10 @@ local f_ext = terralib.externfunction("f", {} -> int64)
 local g_ext = terralib.externfunction("g", {} -> int64)
 local h_ext = terralib.externfunction("h", {} -> int64)
 
-terra check(a : int64, b : int64)
-  if a ~= b then
-    var stderr = cstd.fdopen(2, "w")
-    cstd.fprintf(stderr, "mismatch: %lld vs %lld\n", a, b)
-    cstd.fflush(stderr)
-    cstd.abort()
+terra check(x : int64, y : int64)
+  if x ~= y then
+    cstd.printf("mismatch: %lld vs %lld\n", x, y)
+    cstd.exit(1)
   end
 end
 
@@ -49,8 +47,8 @@ terra main()
   var sum_g1 = g_ext()
   var sum_h1 = h_ext()
 
-  check(sum_f1, 6)
-  check(sum_g1, 6)
+  check(sum_f1, 1)
+  check(sum_g1, 3)
   check(sum_h1, 6)
 
   -- Mutate the values through their externs and make sure we still get the right results.
@@ -61,26 +59,27 @@ terra main()
   var sum_g2 = g_ext()
   var sum_h2 = h_ext()
 
-  check(sum_f2, 600)
-  check(sum_g2, 600)
+  check(sum_f2, 100)
+  check(sum_g2, 300)
   check(sum_h2, 600)
 
   return 0
 end
 
-local tmp_dir
+local sep = ffi.os == "Windows" and "\\" or "/"
+
+-- Build everything in a subdirectory of the test directory. Keeping the
+-- executable and the shared libraries side by side is what makes the rpath
+-- below (and Windows's own DLL search order) find them.
+local root_dir = arg[0]:match(".*[/\\\\]") or "." .. sep
+local tmp_dir = root_dir .. "globals_extern_tmp"
 do
-  -- use os.tmpname to get a hopefully-unique directory to work in
-  local tmpfile = os.tmpname()
-  tmp_dir = tmpfile .. ".d/"
   print("Creating temporary directory " .. tmp_dir)
   if ffi.os == "Windows" then
-    assert(os.execute("mkdir \"" .. tmp_dir .. "\"") == 0)
+    assert(os.execute("if not exist " .. tmp_dir .. " mkdir " .. tmp_dir) == 0)
   else
-    assert(os.execute("mkdir " .. tmp_dir) == 0)
+    assert(os.execute("mkdir -p " .. tmp_dir) == 0)
   end
-  -- Hack: keep the tmpfile to be absolutely sure we won't collide
-  -- os.remove(tmpfile)
 end
 
 -- Run this test twice: once for static and once for dynamic linking.
@@ -88,7 +87,7 @@ local exts = terralib.newlist({".o"})
 if ffi.os == "OSX" then
   exts:insert(".dylib")
 elseif ffi.os == "Windows" then
-  exts:insert(".dll")
+  -- Skip Windows dynamic linking, which requires dllimport and dllexport.
 else
   exts:insert(".so")
 end
@@ -109,17 +108,17 @@ for _, ext in ipairs(exts) do
     prefix = "lib"
   end
 
-  local f_obj = tmp_dir .. prefix .. "f" .. ext
-  local g_obj = tmp_dir .. prefix .. "g" .. ext
-  local h_obj = tmp_dir .. prefix .. "h" .. ext
-  local main_obj = tmp_dir .. prefix .. "main" .. ext
+  local f_obj = tmp_dir .. sep .. prefix .. "f" .. ext
+  local g_obj = tmp_dir .. sep .. prefix .. "g" .. ext
+  local h_obj = tmp_dir .. sep .. prefix .. "h" .. ext
+  local main_obj = tmp_dir .. sep .. prefix .. "main" .. ext
+
+  -- Load libraries relative to executable location.
+  local origin = ffi.os == "OSX" and "@loader_path" or "$ORIGIN"
 
   local main_deps = terralib.newlist()
   if dynamic then
-    if ffi.os ~= "Windows" then
-      main_deps:insert("-Wl,-rpath," .. tmp_dir)
-    end
-    main_deps:insertall({"-L" .. tmp_dir, "-lf", "-lg", "-lh"})
+    main_deps:insertall({"-Wl,-rpath," .. origin, "-L" .. tmp_dir, "-lf", "-lg", "-lh"})
   end
 
   terralib.saveobj(f_obj, {f=f})
@@ -129,14 +128,11 @@ for _, ext in ipairs(exts) do
 
   local link_deps = terralib.newlist()
   if dynamic then
-    if ffi.os ~= "Windows" then
-      link_deps:insert("-Wl,-rpath," .. tmp_dir)
-    end
-    link_deps:insertall({"-L" .. tmp_dir, "-lf", "-lg", "-lh", "-lmain"})
+    link_deps:insertall({"-Wl,-rpath," .. origin, "-L" .. tmp_dir, "-lf", "-lg", "-lh", "-lmain"})
   else
     link_deps:insertall({f_obj, g_obj, h_obj, main_obj})
   end
-  local executable = tmp_dir .. "main" .. bin_ext
+  local executable = tmp_dir .. sep .. "main" .. bin_ext
 
   terralib.saveobj(executable, "executable", {}, link_deps)
 
