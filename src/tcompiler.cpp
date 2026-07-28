@@ -1683,10 +1683,9 @@ static GlobalVariable *CreateGlobalVariable(TerraCompilationUnit *CU, Obj *globa
             (global->boolean("constant") && !global->boolean("extern"))
                     ? GlobalValue::InternalLinkage
                     : GlobalValue::ExternalLinkage;
-    GlobalVariable *gv =
-            new GlobalVariable(*CU->M, typ, global->boolean("constant"), linkage,
-                               llvmconstant, name, NULL, GlobalVariable::NotThreadLocal,
-                               as);
+    GlobalVariable *gv = new GlobalVariable(*CU->M, typ, global->boolean("constant"),
+                                            linkage, llvmconstant, name, NULL,
+                                            GlobalVariable::NotThreadLocal, as);
     // Globals that Terra defines itself always live in the JIT's address space
     // alongside the code referring to them, so they can never be preempted.
     // Marking them dso_local lets the backend address them directly instead of
