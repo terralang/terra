@@ -99,23 +99,40 @@ if ffi.os == "Windows" then
 end
 
 for _, ext in ipairs(exts) do
+  local dynamic = ext ~= ".o"
+
   print()
   print("Running test for " .. ext)
 
-  local f_obj = tmp_dir .. "f" .. ext
-  local g_obj = tmp_dir .. "g" .. ext
-  local h_obj = tmp_dir .. "h" .. ext
-  local main_obj = tmp_dir .. "main" .. ext
+  local prefix = ""
+  if dynamic then
+    prefix = "lib"
+  end
+
+  local f_obj = tmp_dir .. prefix .. "f" .. ext
+  local g_obj = tmp_dir .. prefix .. "g" .. ext
+  local h_obj = tmp_dir .. prefix .. "h" .. ext
+  local main_obj = tmp_dir .. prefix .. "main" .. ext
+
+  local main_deps = terralib.newlist()
+  if dynamic then
+    main_deps:insertall({"-L" .. tmp_dir, "-lf", "-lg", "-lh"})
+  end
 
   terralib.saveobj(f_obj, {f=f})
   terralib.saveobj(g_obj, {g=g})
   terralib.saveobj(h_obj, {h=h})
-  terralib.saveobj(main_obj, {main=main})
+  terralib.saveobj(main_obj, {main=main}, main_deps)
 
-  local objs = terralib.newlist({f_obj, g_obj, h_obj, main_obj})
+  local link_deps = terralib.newlist()
+  if dynamic then
+    link_deps:insertall({"-L" .. tmp_dir, "-lf", "-lg", "-lh", "-lmain"})
+  else
+    link_deps:insertall({f_obj, g_obj, h_obj, main_obj})
+  end
   local executable = tmp_dir .. "main" .. bin_ext
 
-  terralib.saveobj(executable, "executable", {}, objs)
+  terralib.saveobj(executable, "executable", {}, link_deps)
 
   print("Running command: " .. executable)
   assert(os.execute(executable) == 0)
