@@ -126,6 +126,9 @@ for _, ext in ipairs(exts) do
 
   local link_deps = terralib.newlist()
   if dynamic then
+    if ffi.os ~= "Windows" then
+      link_deps:insert("-Wl,-rpath," .. tmp_dir)
+    end
     link_deps:insertall({"-L" .. tmp_dir, "-lf", "-lg", "-lh", "-lmain"})
   else
     link_deps:insertall({f_obj, g_obj, h_obj, main_obj})
