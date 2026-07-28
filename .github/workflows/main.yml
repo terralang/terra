@@ -291,7 +291,7 @@ jobs:
           run: |
             pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
             export CC=cc
-            ./travis.sh
+            bash ./travis.sh
         env:
           LLVM_VERSION: ${{ matrix.llvm }}
   compat:
