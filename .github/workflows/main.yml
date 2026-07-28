@@ -243,6 +243,35 @@ jobs:
           DOCKER_CUDA: ${{ matrix.cuda }}
           DOCKER_VARIANT: ${{ matrix.variant }}
           DOCKER_TEST: ${{ matrix.test }}
+  docker_arm64:
+    name: Docker ARM64 (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        distro: ['ubuntu-20.04']
+        llvm: ['11.1.0', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8']
+        lua: ['luajit']
+        cuda: ['0']
+        test: ['1']
+        include:
+          # Defaults:
+          - slib: '1'
+          - static: '1'
+
+          # Assign variants to the basic configurations:
+          - variant: 'prebuilt'
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./travis.sh
+        env:
+          DOCKER_DISTRO: ${{ matrix.distro }}
+          DOCKER_LLVM: ${{ matrix.llvm }}
+          DOCKER_LUA: ${{ matrix.lua }}
+          DOCKER_STATIC: ${{ matrix.static }}
+          DOCKER_SLIB: ${{ matrix.slib }}
+          DOCKER_CUDA: ${{ matrix.cuda }}
+          DOCKER_VARIANT: ${{ matrix.variant }}
+          DOCKER_TEST: ${{ matrix.test }}
   # multiarch:
   #   name: Multiarch (${{ matrix.distro }}, ${{ matrix.arch }}, llvm-${{ matrix.llvm }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
   #   runs-on: ubuntu-latest
@@ -311,10 +340,10 @@ jobs:
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04" "" 11.1.0 luajit prebuilt 2
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04" "" 21.1.8 luajit prebuilt 2
       - uses: actions/upload-artifact@v4
         with:
-          name: docker-ubuntu-20.04-arm64-llvm-11
+          name: docker-ubuntu-20.04-arm64-llvm-21
           path: |
             terra-*.tar.xz
             terra-*.7z
