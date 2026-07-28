@@ -74,7 +74,11 @@ do
   local tmpfile = os.tmpname()
   tmp_dir = tmpfile .. ".d/"
   print("Creating temporary directory " .. tmp_dir)
-  assert(os.execute("mkdir " .. tmp_dir) == 0)
+  if ffi.os == "Windows" then
+    assert(os.execute("mkdir \"" .. tmp_dir "\"") == 0)
+  else
+    assert(os.execute("mkdir " .. tmp_dir) == 0)
+  end
   -- Hack: keep the tmpfile to be absolutely sure we won't collide
   -- os.remove(tmpfile)
 end
@@ -111,13 +115,7 @@ for _, ext in ipairs(exts) do
   local objs = terralib.newlist({f_obj, g_obj, h_obj, main_obj})
   local executable = tmp_dir .. "main" .. bin_ext
 
-  local cc = os.getenv("CC") or "cc"
-  local cc_cmd = cc .. " " .. objs:concat(" ") .. " -o " .. executable
-  print("Running command: " .. cc_cmd)
-  if os.execute(cc_cmd) ~= 0 then
-    print("Error: command failed " .. cc_cmd)
-    assert(false)
-  end
+  terralib.saveobj(executable, "executable", {}, objs)
 
   print("Running command: " .. executable)
   assert(os.execute(executable) == 0)
