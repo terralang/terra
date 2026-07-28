@@ -275,6 +275,24 @@ jobs:
   #         path: |
   #           terra-*.tar.xz
   #           terra-*.7z
+  freebsd:
+    name: FreeBSD (llvm-${{ matrix.llvm }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        llvm: ['12', '13', '15', '16', '17', '18', '19', '20', '21']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.4"
+          usesh: true
+      - run: |
+          pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
+          export CC=cc
+          ./travis.sh
+        env:
+          LLVM_VERSION: ${{ matrix.llvm }}
   compat:
     name: Compatibility Test
     runs-on: ubuntu-latest
