@@ -223,38 +223,20 @@ bool OneTimeInit(struct terra_State *T) {
     return success;
 }
 
-// LLVM 3.1 doesn't enable avx even if it is present, we detect and force it here
-bool HostHasAVX() {
+static std::string HostFeatureString() {
 #if LLVM_VERSION < 190
     StringMap<bool> Features;
     sys::getHostCPUFeatures(Features);
 #else
     StringMap<bool> Features = sys::getHostCPUFeatures();
 #endif
-    return Features["avx"];
-}
-
-bool HostHasAVX512() {
-#if LLVM_VERSION < 190
-    StringMap<bool> Features;
-    sys::getHostCPUFeatures(Features);
-#else
-    StringMap<bool> Features = sys::getHostCPUFeatures();
-#endif
-    // The following instructions sets are supported by Intel CPUs starting 2017
-    // (Skylake-SP and beyond) and AMD CPUs starting 2022 (Zen4 and beyond)
-    const char *instruction_set[] = {
-            "avx512f",   // Foundation
-            "avx512dq",  // Double Word, Quad Word
-            "avx512bw",  // Vector Byte and Word
-            "avx512vl",  // Vector Length
-            "avx512cd",  // Conflict Detection
-    };
-    bool has_avx512 = true;
-    for (auto &instr : instruction_set) {
-        has_avx512 &= Features[instr];
+    std::string result;
+    for (const auto &Feature : Features) {
+        if (!result.empty()) result += ",";
+        result += Feature.getValue() ? "+" : "-";
+        result += Feature.getKey().str();
     }
-    return has_avx512;
+    return result;
 }
 
 int terra_inittarget(lua_State *L) {
@@ -282,19 +264,8 @@ int terra_inittarget(lua_State *L) {
 
     if (!lua_isnil(L, 3))
         TT->Features = lua_tostring(L, 3);
-    else {
-#ifdef DISABLE_AVX
-        TT->Features = "-avx";
-#else
-        if (HostHasAVX512()) {
-            TT->Features = "+avx512f,+avx512dq,+avx512bw,+avx512vl,+avx512cd";
-        } else if (HostHasAVX()) {
-            TT->Features = "+avx";
-        } else {
-            TT->Features = "";
-        }
-#endif
-    }
+    else
+        TT->Features = HostFeatureString();
 
     TargetOptions options;
     if (lua_toboolean(L, 4)) {  // FloatABIHard boolean
