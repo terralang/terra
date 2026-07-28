@@ -287,10 +287,12 @@ jobs:
         with:
           release: "14.4"
           usesh: true
-      - run: |
-          pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
-          export CC=cc
-          ./travis.sh
+      - uses: vmactions/freebsd-vm@v1
+        with:
+          run: |
+            pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
+            export CC=cc
+            ./travis.sh
         env:
           LLVM_VERSION: ${{ matrix.llvm }}
   compat:
