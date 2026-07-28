@@ -287,8 +287,7 @@ jobs:
         with:
           release: "14.4"
           usesh: true
-      - uses: vmactions/freebsd-vm@v1
-        with:
+          envs: 'LLVM_VERSION'
           run: |
             pkg install -y bash coreutils cmake gmake llvm$LLVM_VERSION
             export CC=cc
