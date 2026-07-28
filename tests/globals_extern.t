@@ -75,7 +75,7 @@ do
   tmp_dir = tmpfile .. ".d/"
   print("Creating temporary directory " .. tmp_dir)
   if ffi.os == "Windows" then
-    assert(os.execute("mkdir \"" .. tmp_dir "\"") == 0)
+    assert(os.execute("mkdir \"" .. tmp_dir .. "\"") == 0)
   else
     assert(os.execute("mkdir " .. tmp_dir) == 0)
   end
