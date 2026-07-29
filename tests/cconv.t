@@ -486,3 +486,214 @@ test.meq({8,7},c2())
 test.meq({4,3,4},c3())
 test.meq({4.25,3.25,4.25},c4())
 test.meq({1,0,1,8,3},c5())
+
+
+-- Argument register exhaustion.
+--
+-- These cases have to cross into C. A Terra-to-Terra call agrees with itself no
+-- matter how its arguments get classified, so only calling a Clang-compiled
+-- function (or being called by one) can catch a disagreement about which
+-- arguments travel in registers and which are passed on the stack.
+--
+-- Each test sits exactly on the boundary where one of the register files runs
+-- out, which is where x86-64 SysV is easiest to get wrong. See
+-- https://github.com/terralang/terra/issues/576. The exhaustive version of this
+-- lives in cconv_more.t and cconv_fuzz.t; what is here is the short list worth
+-- checking on every run.
+--
+-- Every scalar slot gets a distinct value (1, 2, 3, ...) and the C side returns
+-- a weighted sum, so a dropped, duplicated, or reordered argument all show up.
+
+local cc = terralib.includecstring [[
+#include <stdint.h>
+
+typedef struct CF2 { float a; float b; } CF2;                 /* one SSE eightbyte */
+typedef struct CI1 { int64_t a; } CI1;                        /* one INTEGER eightbyte */
+typedef struct CU1 { uint8_t a; } CU1;                        /* one byte, coerces to i8 */
+typedef struct CU3 { uint8_t a; uint8_t b; uint8_t c; } CU3;  /* three bytes, coerces to i24 */
+typedef struct CIF { int32_t a; float b; } CIF;               /* mixed, one INTEGER eightbyte */
+typedef struct CD2 { double a; double b; } CD2;               /* two SSE eightbytes */
+typedef struct CBIG { int64_t a; int64_t b; int64_t c; int64_t d; } CBIG;
+
+/* The 8 SSE registers are used up by the first 8 aggregates, so the 9th and 10th
+   go on the stack even though integer registers are still free.
+
+   Two of them have to spill, not one: a stack slot for an SSE eightbyte is 8
+   bytes wide, but a <2 x float> passed the same way takes 16, so a lone spilled
+   argument still lands at the right offset and only the one after it moves. */
+__attribute__ ((noinline)) double sse_spill(
+    CF2 x1, CF2 x2, CF2 x3, CF2 x4, CF2 x5,
+    CF2 x6, CF2 x7, CF2 x8, CF2 x9, CF2 x10) {
+  return 1*x1.a + 2*x1.b + 3*x2.a + 4*x2.b + 5*x3.a + 6*x3.b
+       + 7*x4.a + 8*x4.b + 9*x5.a + 10*x5.b + 11*x6.a + 12*x6.b
+       + 13*x7.a + 14*x7.b + 15*x8.a + 16*x8.b + 17*x9.a + 18*x9.b
+       + 19*x10.a + 20*x10.b;
+}
+
+/* The 6 integer registers are gone after the 6th aggregate. Clang does not use
+   byval here: with no integer register left to hold a pointer it coerces the
+   aggregate to an integer of the same size and lets that land on the stack. */
+__attribute__ ((noinline)) double int_spill(
+    CI1 x1, CI1 x2, CI1 x3, CI1 x4, CI1 x5, CI1 x6, CI1 x7) {
+  return 1*x1.a + 2*x2.a + 3*x3.a + 4*x4.a + 5*x5.a + 6*x6.a + 7*x7.a;
+}
+
+/* Same, at sizes that are not a whole eightbyte: these coerce to i8 and i24. */
+__attribute__ ((noinline)) double int_spill_i8(
+    CU1 x1, CU1 x2, CU1 x3, CU1 x4, CU1 x5, CU1 x6, CU1 x7) {
+  return 1*x1.a + 2*x2.a + 3*x3.a + 4*x4.a + 5*x5.a + 6*x6.a + 7*x7.a;
+}
+
+__attribute__ ((noinline)) double int_spill_i24(
+    CU3 x1, CU3 x2, CU3 x3, CU3 x4, CU3 x5, CU3 x6, CU3 x7) {
+  return 1*x1.a + 2*x1.b + 3*x1.c + 4*x2.a + 5*x2.b + 6*x2.c
+       + 7*x3.a + 8*x3.b + 9*x3.c + 10*x4.a + 11*x4.b + 12*x4.c
+       + 13*x5.a + 14*x5.b + 15*x5.c + 16*x6.a + 17*x6.b + 18*x6.c
+       + 19*x7.a + 20*x7.b + 21*x7.c;
+}
+
+/* A struct of mixed class that still occupies a single INTEGER eightbyte. */
+__attribute__ ((noinline)) double int_spill_mixed(
+    CIF x1, CIF x2, CIF x3, CIF x4, CIF x5, CIF x6, CIF x7) {
+  return 1*x1.a + 2*x1.b + 3*x2.a + 4*x2.b + 5*x3.a + 6*x3.b
+       + 7*x4.a + 8*x4.b + 9*x5.a + 10*x5.b + 11*x6.a + 12*x6.b
+       + 13*x7.a + 14*x7.b;
+}
+
+/* Both register files are exhausted before the aggregate. The coercion is to an
+   integer even though the aggregate is SSE classed. */
+__attribute__ ((noinline)) double both_spill(
+    int64_t i1, int64_t i2, int64_t i3, int64_t i4, int64_t i5, int64_t i6,
+    double d1, double d2, double d3, double d4,
+    double d5, double d6, double d7, double d8, CF2 x, CF2 y) {
+  return 1*i1 + 2*i2 + 3*i3 + 4*i4 + 5*i5 + 6*i6
+       + 7*d1 + 8*d2 + 9*d3 + 10*d4 + 11*d5 + 12*d6 + 13*d7 + 14*d8
+       + 15*x.a + 16*x.b + 17*y.a + 18*y.b;
+}
+
+/* The returned struct is too big for registers, so a hidden pointer takes the
+   first integer register and only five are left for i1..i6. The aggregate needs
+   no integer register at all, though, so it still travels in SSE registers. */
+__attribute__ ((noinline)) CBIG sret_and_int_spill(
+    int64_t i1, int64_t i2, int64_t i3, int64_t i4, int64_t i5, int64_t i6,
+    CD2 x) {
+  double t = 1*i1 + 2*i2 + 3*i3 + 4*i4 + 5*i5 + 6*i6 + 7*x.a + 8*x.b;
+  CBIG r;
+  r.a = (int64_t)t; r.b = 2*(int64_t)t; r.c = 3*(int64_t)t; r.d = 4*(int64_t)t;
+  return r;
+}
+
+/* An argument that spills does not consume a register, so the trailing integer
+   still arrives in one. */
+__attribute__ ((noinline)) double spill_then_reg(
+    double d1, double d2, double d3, double d4,
+    double d5, double d6, double d7, double d8, CF2 x, CF2 y, int32_t n) {
+  return 1*d1 + 2*d2 + 3*d3 + 4*d4 + 5*d5 + 6*d6 + 7*d7 + 8*d8
+       + 9*x.a + 10*x.b + 11*y.a + 12*y.b + 13*n;
+}
+
+/* The reverse direction: C calls a Terra function whose arguments spill. This
+   checks how Terra defines such a function, not just how it calls one. */
+typedef double (*sse_spill_fn)(CF2, CF2, CF2, CF2, CF2, CF2, CF2, CF2, CF2, CF2);
+__attribute__ ((noinline)) double call_sse_spill(sse_spill_fn f) {
+  CF2 a1 = {1,2}, a2 = {3,4}, a3 = {5,6}, a4 = {7,8}, a5 = {9,10};
+  CF2 a6 = {11,12}, a7 = {13,14}, a8 = {15,16}, a9 = {17,18}, a10 = {19,20};
+  return f(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10);
+}
+
+typedef double (*int_spill_fn)(CI1, CI1, CI1, CI1, CI1, CI1, CI1);
+__attribute__ ((noinline)) double call_int_spill(int_spill_fn f) {
+  CI1 a1 = {1}, a2 = {2}, a3 = {3}, a4 = {4}, a5 = {5}, a6 = {6}, a7 = {7};
+  return f(a1, a2, a3, a4, a5, a6, a7);
+}
+]]
+
+-- Sum of i*i for i = 1..n, which is what each weighted sum above comes to when
+-- slot i holds the value i.
+local function sumsq(n)
+	local s = 0
+	for i = 1, n do s = s + i * i end
+	return s
+end
+
+terra c25()
+	return cc.sse_spill(
+		cc.CF2 { 1, 2 }, cc.CF2 { 3, 4 }, cc.CF2 { 5, 6 },
+		cc.CF2 { 7, 8 }, cc.CF2 { 9, 10 }, cc.CF2 { 11, 12 },
+		cc.CF2 { 13, 14 }, cc.CF2 { 15, 16 }, cc.CF2 { 17, 18 },
+		cc.CF2 { 19, 20 })
+end
+test.eq(c25(), sumsq(20))
+
+terra c26()
+	return cc.int_spill(
+		cc.CI1 { 1 }, cc.CI1 { 2 }, cc.CI1 { 3 }, cc.CI1 { 4 },
+		cc.CI1 { 5 }, cc.CI1 { 6 }, cc.CI1 { 7 })
+end
+test.eq(c26(), sumsq(7))
+
+terra c27()
+	return cc.int_spill_i8(
+		cc.CU1 { 1 }, cc.CU1 { 2 }, cc.CU1 { 3 }, cc.CU1 { 4 },
+		cc.CU1 { 5 }, cc.CU1 { 6 }, cc.CU1 { 7 })
+end
+test.eq(c27(), sumsq(7))
+
+terra c28()
+	return cc.int_spill_i24(
+		cc.CU3 { 1, 2, 3 }, cc.CU3 { 4, 5, 6 }, cc.CU3 { 7, 8, 9 },
+		cc.CU3 { 10, 11, 12 }, cc.CU3 { 13, 14, 15 }, cc.CU3 { 16, 17, 18 },
+		cc.CU3 { 19, 20, 21 })
+end
+test.eq(c28(), sumsq(21))
+
+terra c29()
+	return cc.int_spill_mixed(
+		cc.CIF { 1, 2 }, cc.CIF { 3, 4 }, cc.CIF { 5, 6 }, cc.CIF { 7, 8 },
+		cc.CIF { 9, 10 }, cc.CIF { 11, 12 }, cc.CIF { 13, 14 })
+end
+test.eq(c29(), sumsq(14))
+
+terra c30()
+	return cc.both_spill(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+		cc.CF2 { 15, 16 }, cc.CF2 { 17, 18 })
+end
+test.eq(c30(), sumsq(18))
+
+terra c31()
+	var r = cc.sret_and_int_spill(1, 2, 3, 4, 5, 6, cc.CD2 { 7, 8 })
+	return double(r.a + r.b + r.c + r.d)
+end
+-- The callee returns t, 2t, 3t and 4t, so the four fields sum to 10t.
+test.eq(c31(), 10 * sumsq(8))
+
+terra c32()
+	return cc.spill_then_reg(1, 2, 3, 4, 5, 6, 7, 8,
+		cc.CF2 { 9, 10 }, cc.CF2 { 11, 12 }, 13)
+end
+test.eq(c32(), sumsq(13))
+
+terra f33(x1 : cc.CF2, x2 : cc.CF2, x3 : cc.CF2, x4 : cc.CF2, x5 : cc.CF2,
+          x6 : cc.CF2, x7 : cc.CF2, x8 : cc.CF2, x9 : cc.CF2, x10 : cc.CF2) : double
+	return 1*x1.a + 2*x1.b + 3*x2.a + 4*x2.b + 5*x3.a + 6*x3.b
+	     + 7*x4.a + 8*x4.b + 9*x5.a + 10*x5.b + 11*x6.a + 12*x6.b
+	     + 13*x7.a + 14*x7.b + 15*x8.a + 16*x8.b + 17*x9.a + 18*x9.b
+	     + 19*x10.a + 20*x10.b
+end
+f33:setinlined(false)
+
+terra c33()
+	return cc.call_sse_spill(f33)
+end
+test.eq(c33(), sumsq(20))
+
+terra f34(x1 : cc.CI1, x2 : cc.CI1, x3 : cc.CI1, x4 : cc.CI1, x5 : cc.CI1,
+          x6 : cc.CI1, x7 : cc.CI1) : double
+	return 1*x1.a + 2*x2.a + 3*x3.a + 4*x4.a + 5*x5.a + 6*x6.a + 7*x7.a
+end
+f34:setinlined(false)
+
+terra c34()
+	return cc.call_int_spill(f34)
+end
+test.eq(c34(), sumsq(7))

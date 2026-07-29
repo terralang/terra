@@ -837,6 +837,7 @@ struct CCallingConv {
     bool ppc64_count_used;
     bool spirv_cconv;
     bool wasm_cconv;
+    bool x86_64_sysv_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_),
@@ -852,9 +853,16 @@ struct CCallingConv {
               ppc64_int_limit(0),
               ppc64_count_used(false),
               spirv_cconv(false),
-              wasm_cconv(false) {
+              wasm_cconv(false),
+              x86_64_sysv_cconv(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
+            case Triple::ArchType::x86_64: {
+                // Only SysV has a limited pool of argument registers that we have
+                // to track. Win64 puts everything past the first four arguments on
+                // the stack, which LLVM already models on its own.
+                x86_64_sysv_cconv = !Triple.isOSWindows();
+            } break;
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
                 amdgpu_cconv = true;
@@ -1210,7 +1218,32 @@ struct CCallingConv {
         int nfloat = (classes[0] == C_SSE_FLOAT || classes[0] == C_SSE_DOUBLE) +
                      (classes[1] == C_SSE_FLOAT || classes[1] == C_SSE_DOUBLE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
-        if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
+        // SysV provides 6 integer and 8 SSE registers for arguments. The counters
+        // can run past those limits, because scalars keep being counted after the
+        // registers are gone, so clamp before asking how many are left.
+        int freefloat = std::max(0, 8 - *usedfloat);
+        int freeint = std::max(0, 6 - *usedint);
+        bool fits = nfloat <= freefloat && nint <= freeint;
+
+        // An aggregate that does not fit in the registers still free is passed on
+        // the stack instead. The counters are deliberately left alone in that case,
+        // so a later, smaller argument can still be passed in registers. Return
+        // values use a dedicated set of registers and never spill, so they are
+        // exempt. Targets other than x86-64 land here with a classification that is
+        // only an approximation of their ABI, so only reconsider the aggregates
+        // they already used to reject (those needing more than one eightbyte).
+        if (!isreturn && !fits && (x86_64_sysv_cconv || sz > 8)) {
+            // Clang avoids byval when no integer register is left to hold the
+            // pointer: an aggregate occupying a single eightbyte is coerced to an
+            // integer of the same size and passed directly, which puts it on the
+            // stack all the same (see X86_64ABIInfo::getIndirectResult). Note the
+            // coercion is to an integer even for the SSE classes. We have to make
+            // the same choice here, or Terra and C disagree on the stack layout.
+            if (x86_64_sysv_cconv && freeint == 0 && sz <= 8 &&
+                CU->getDataLayout().getABITypeAlign(t->type).value() <= 8) {
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(TypeForClass(sz, C_INTEGER)));
+            }
             return Argument(C_AGGREGATE_MEM, t);
         }
 
