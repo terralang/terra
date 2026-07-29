@@ -138,8 +138,13 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
 #else
     std::optional<llvm::Reloc::Model> RM = std::nullopt;
 #endif
-    auto TargetMachine =
-            Target->createTargetMachine("nvptx64-nvidia-cuda", cpuopt, Features, opt, RM);
+    auto TargetMachine = Target->createTargetMachine(
+#if LLVM_VERSION < 220
+            "nvptx64-nvidia-cuda",
+#else
+            llvm::Triple("nvptx64-nvidia-cuda"),
+#endif
+            cpuopt, Features, opt, RM);
 
 #if LLVM_VERSION < 210
     LDEVICE->setTargetTriple("nvptx64-nvidia-cuda");
