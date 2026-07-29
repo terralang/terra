@@ -124,24 +124,24 @@ If the binary releases are not appropriate, then you can also build Terra from s
 On recent versions of Ubuntu, you can get these dependencies with:
 
 ```
-sudo apt-get install build-essential cmake git llvm-18-dev libclang-18-dev clang-18 libmlir-18-dev libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
+sudo apt-get install build-essential cmake git llvm-21-dev libclang-21-dev clang-21 libmlir-21-dev libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
 ```
 
 On macOS with Homebrew, the following should be sufficient:
 
 ```
-brew install cmake llvm@18
+brew install cmake llvm@21
 ```
 
 On FreeBSD, use:
 
 ```
-pkg install -y cmake gmake llvm18
+pkg install -y cmake gmake llvm21
 ```
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **20** for most platforms, except Linux (ARM) where LLVM 11 is required. The following versions are also supported:
+The current recommended version of LLVM is **21** for all platforms, except when AMD GPU support is required (see below). The following versions are also supported:
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
@@ -153,11 +153,11 @@ The current recommended version of LLVM is **20** for most platforms, except Lin
 |      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
 |      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
 |      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
-|      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
+|      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
 |      20 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
-|      21 | :green_heart: | :green_heart: | :green_heart: |               | :green_heart: |  :green_heart: |    :green_heart: | |
+|      21 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
 
-\* AMD GPU support is currently experimental. LLVM 20 is **strongly** recommended.
+\* AMD GPU support is currently experimental. Note that the LLVM version must match the specific ROCm/HIP toolchain version. ROCm/HIP version 6.x requires LLVM 18, 7.0 requires LLVM 20.
 
 \*\* Intel GPU (SPIR-V) support is currently experimental.
 
