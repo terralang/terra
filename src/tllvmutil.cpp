@@ -523,6 +523,18 @@ struct CopyConnectedComponent : public ValueMaterializer {
     }
 };
 
+// CloneFunctionInto always inserts an llvm.dbg.cu node into the destination
+// module, even when the function it clones carries no debug info, which leaves
+// an empty node behind. As of LLVM 21 the AsmPrinter takes the mere presence of
+// llvm.dbg.cu on a Windows target as a cue to emit CodeView compiler
+// information, and CodeViewDebug::beginModule then reads the node's first
+// operand -- out of bounds when the node is empty, so it crashes on whatever
+// garbage it picks up. Drop the node rather than leave that landmine behind.
+static void llvmutil_removeemptydebugcus(llvm::Module *M) {
+    NamedMDNode *CUs = M->getNamedMetadata("llvm.dbg.cu");
+    if (CUs && CUs->getNumOperands() == 0) M->eraseNamedMetadata(CUs);
+}
+
 llvm::Module *llvmutil_extractmodulewithproperties(
         llvm::StringRef DestName, llvm::Module *Src, llvm::GlobalValue **gvs, size_t N,
         llvmutil_Property copyGlobal, void *data, llvm::ValueToValueMapTy &VMap) {
@@ -532,6 +544,7 @@ llvm::Module *llvmutil_extractmodulewithproperties(
     cp.CopyDebugMetadata();
     for (size_t i = 0; i < N; i++) MapValue(gvs[i], VMap, RF_None, NULL, &cp);
     cp.finalize();
+    llvmutil_removeemptydebugcus(Dest);
     return Dest;
 }
 void llvmutil_copyfrommodule(llvm::Module *Dest, llvm::Module *Src,
@@ -540,6 +553,7 @@ void llvmutil_copyfrommodule(llvm::Module *Dest, llvm::Module *Src,
     llvm::ValueToValueMapTy VMap;
     CopyConnectedComponent cp(Dest, Src, copyGlobal, data, VMap);
     for (size_t i = 0; i < N; i++) MapValue(gvs[i], VMap, RF_None, NULL, &cp);
+    llvmutil_removeemptydebugcus(Dest);
 }
 
 void llvmutil_optimizemodule(Module *M, TargetMachine *TM) {
