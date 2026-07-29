@@ -1136,6 +1136,22 @@ struct CCallingConv {
         if ((ppc64_count_used ? *usedint : 0) + sz <= limit) {
             *usedint += sz;
 
+            if (aarch64_cconv && !isreturn) {
+                // AArch64 passes such arguments as a whole number of registers,
+                // padding the aggregate out rather than passing its tail at its
+                // natural width (see Clang's AArch64ABIInfo::classifyArgumentType).
+                // The padding is observable on Apple platforms, where an argument
+                // that spills to the stack gets a slot only as wide as its type, so
+                // a narrow tail would leave the callee reading the wrong offset.
+                // Return values are not padded, so they fall through below.
+                int64_t regbits = align > 64 ? 128 : 64;
+                int64_t bits = CU->getDataLayout().getTypeAllocSizeInBits(t->type);
+                std::vector<Type *> elements((bits + regbits - 1) / regbits,
+                                             Type::getIntNTy(*CU->TT->ctx, regbits));
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(*CU->TT->ctx, elements));
+            }
+
             // Pack arguments
             std::vector<Type *> elements;
             int64_t bits = 0;
@@ -1353,6 +1369,27 @@ struct CCallingConv {
         }
     }
 
+    // An aggregate's coerced (ABI) form can be bigger than the aggregate itself,
+    // because the ABI may pad it out to a whole number of registers.
+    bool IsCoercionPadded(Type *type, Type *cctype) {
+        return CU->getDataLayout().getTypeAllocSize(cctype) >
+               CU->getDataLayout().getTypeAllocSize(type);
+    }
+    // Scratch space to convert between the two, big enough to be accessed as
+    // either one.
+    Value *CreateCoercionAlloca(IRBuilder<> *B, Type *type, Type *cctype) {
+        return CreateAlloca(B, IsCoercionPadded(type, cctype) ? cctype : type);
+    }
+    // View such scratch space as a pointer to t (a no-op with opaque pointers).
+    Value *CoercionPtr(IRBuilder<> *B, Value *scratch, Type *t) {
+#if LLVM_VERSION < 170
+        unsigned as = scratch->getType()->getPointerAddressSpace();
+        return B->CreateBitCast(scratch, Ptr(t, as));
+#else
+        return scratch;
+#endif
+    }
+
     Function *CreateFunction(Module *M, Obj *ftype, CallingConv::ID cconv,
                              const Twine &name) {
         Classification *info = ClassifyFunction(ftype, cconv);
@@ -1408,13 +1445,17 @@ struct CCallingConv {
                     ++ai;
                     break;
                 case C_AGGREGATE_REG: {
-#if LLVM_VERSION < 170
-                    unsigned as = v->getType()->getPointerAddressSpace();
-                    Value *dest = B->CreateBitCast(v, Ptr(p->cctype, as));
-                    EmitEntryAggReg(B, dest, p->cctype, ai);
-#else
-                    EmitEntryAggReg(B, v, p->cctype, ai);
-#endif
+                    // When the ABI pads the aggregate out to whole registers, the
+                    // incoming values do not fit in the variable's own storage, so
+                    // land them in scratch space and copy back.
+                    bool padded = IsCoercionPadded(p->type->type, p->cctype);
+                    Value *dest = padded ? CreateAlloca(B, p->cctype) : v;
+                    EmitEntryAggReg(B, CoercionPtr(B, dest, p->cctype), p->cctype, ai);
+                    if (padded) {
+                        Value *casted = CoercionPtr(B, dest, p->type->type);
+                        emitStoreAgg(B, p->type->type,
+                                     B->CreateLoad(p->type->type, casted), v);
+                    }
                 } break;
                 case C_ARRAY_REG: {
                     Value *scratch = CreateAlloca(B, p->cctype);
@@ -1447,15 +1488,12 @@ struct CCallingConv {
             emitStoreAgg(B, info->returntype.type->type, result, &*function->arg_begin());
             B->CreateRetVoid();
         } else if (C_AGGREGATE_REG == kind) {
-            Value *dest = CreateAlloca(B, info->returntype.type->type);
-            emitStoreAgg(B, info->returntype.type->type, result, dest);
+            Value *dest = CreateCoercionAlloca(B, info->returntype.type->type,
+                                               info->returntype.cctype);
+            emitStoreAgg(B, info->returntype.type->type, result,
+                         CoercionPtr(B, dest, info->returntype.type->type));
             StructType *type = cast<StructType>(info->returntype.cctype);
-#if LLVM_VERSION < 170
-            unsigned as = dest->getType()->getPointerAddressSpace();
-            Value *result = B->CreateBitCast(dest, Ptr(type, as));
-#else
-            Value *result = dest;
-#endif
+            Value *result = CoercionPtr(B, dest, type);
             Type *result_type = type;
             if (info->returntype.GetNumberOfTypesInParamList() == 1) {
                 do {
@@ -1520,15 +1558,11 @@ struct CCallingConv {
                     arguments.push_back(scratch);
                 } break;
                 case C_AGGREGATE_REG: {
-                    Value *scratch = CreateAlloca(B, a->type->type);
-                    emitStoreAgg(B, a->type->type, actual, scratch);
-#if LLVM_VERSION < 170
-                    unsigned as = scratch->getType()->getPointerAddressSpace();
-                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
-                    EmitCallAggReg(B, casted, a->cctype, arguments);
-#else
-                    EmitCallAggReg(B, scratch, a->cctype, arguments);
-#endif
+                    Value *scratch = CreateCoercionAlloca(B, a->type->type, a->cctype);
+                    emitStoreAgg(B, a->type->type, actual,
+                                 CoercionPtr(B, scratch, a->type->type));
+                    EmitCallAggReg(B, CoercionPtr(B, scratch, a->cctype), a->cctype,
+                                   arguments);
                 } break;
                 case C_ARRAY_REG: {
                     Value *scratch = CreateAlloca(B, a->type->type);
@@ -1568,14 +1602,10 @@ struct CCallingConv {
             if (C_AGGREGATE_MEM == info.returntype.kind) {
                 aggregate = arguments[0];
             } else if (C_AGGREGATE_REG == info.returntype.kind) {
-                aggregate = CreateAlloca(B, info.returntype.type->type);
+                aggregate = CreateCoercionAlloca(B, info.returntype.type->type,
+                                                 info.returntype.cctype);
                 StructType *type = cast<StructType>(info.returntype.cctype);
-#if LLVM_VERSION < 170
-                unsigned as = aggregate->getType()->getPointerAddressSpace();
-                Value *casted = B->CreateBitCast(aggregate, Ptr(type, as));
-#else
-                Value *casted = aggregate;
-#endif
+                Value *casted = CoercionPtr(B, aggregate, type);
                 if (info.returntype.GetNumberOfTypesInParamList() == 1) {
                     do {
                         casted = CreateConstGEP2_32(B, casted, type, 0, 0);
@@ -1596,7 +1626,8 @@ struct CCallingConv {
             } else {
                 assert(!"unhandled argument kind");
             }
-            return B->CreateLoad(info.returntype.type->type, aggregate);
+            return B->CreateLoad(info.returntype.type->type,
+                                 CoercionPtr(B, aggregate, info.returntype.type->type));
         }
     }
     void GatherArgumentsAggReg(Type *type, std::vector<Type *> &arguments) {
