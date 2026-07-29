@@ -76,7 +76,7 @@ apt-get install -qq "${packages[@]}"
 # Use an upstream CMake so that we can control the exact version.
 wget -nv https://github.com/Kitware/CMake/releases/download/v3.24.4/cmake-3.24.4-linux-$(uname -m).tar.gz
 tar xf cmake-3.24.4-linux-$(uname -m).tar.gz
-export PATH="$PATH:$PWD/cmake-3.24.4-linux-$(uname -m)"
+export PATH="$PATH:$PWD/cmake-3.24.4-linux-$(uname -m)/bin"
 
 if [[ $variant = "prebuilt" ]]; then
     wget -nv https://github.com/terralang/llvm-build/releases/download/llvm-$llvm/clang+llvm-$llvm-$arch-linux-gnu.tar.xz
