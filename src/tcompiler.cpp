@@ -1162,13 +1162,7 @@ struct CCallingConv {
                 int64_t nregs = (bits + regbits - 1) / regbits;
                 Type *regtype = Type::getIntNTy(*CU->TT->ctx, regbits);
                 if (nregs > 1) {
-                    // The aggregate has to stay a single argument in the LLVM
-                    // signature. AAPCS never splits one across the register/stack
-                    // boundary: if the registers left cannot hold all of it, the
-                    // whole thing goes on the stack. Handing LLVM one argument per
-                    // register would instead let it fill the last free register and
-                    // spill only the tail, so an argument list that runs out of
-                    // registers part way through an aggregate would disagree with C.
+                    // Multi-register values must be passed as a single argument.
                     return Argument(C_ARRAY_REG, t, ArrayType::get(regtype, nregs));
                 }
                 // One register, or none at all for an empty aggregate.
