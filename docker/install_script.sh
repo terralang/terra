@@ -43,7 +43,7 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
         )
     fi
 elif [[ $variant = "prebuilt" ]]; then
-    # none required
+    true # no dependencies
 else
     echo "Don't know this variant: $variant"
     exit 1
