@@ -29,7 +29,7 @@ echo "######################################################################"
 arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
 
 packages=(
-    build-essential git
+    build-essential git wget
 )
 if [[ $variant = "package" || $variant = "upstream" ]]; then
     packages+=(
@@ -43,17 +43,10 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
         )
     fi
 elif [[ $variant = "prebuilt" ]]; then
-    packages+=(
-        wget
-    )
+    # none required
 else
     echo "Don't know this variant: $variant"
     exit 1
-fi
-if [[ $cuda -eq 1 ]]; then
-    packages+=(
-        wget
-    )
 fi
 
 set -x
