@@ -37,8 +37,16 @@
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
 #endif
 
+#if LLVM_VERSION >= 180
+#include "llvm/Transforms/Scalar/InferAlignment.h"
+#endif
+
 #if LLVM_VERSION >= 200
 #include "llvm/Transforms/Utils/ExtraPassManager.h"
+#endif
+
+#if LLVM_VERSION >= 220
+#include "llvm/Transforms/Scalar/DropUnnecessaryAssumes.h"
 #endif
 
 #ifndef _WIN32
@@ -85,8 +93,13 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
     FPM.addPass(LoopVectorizePass(
             LoopVectorizeOptions(!PTO.LoopInterleaving, !PTO.LoopVectorization)));
 
-    // if (EnableInferAlignmentPass)
-    //   FPM.addPass(InferAlignmentPass());
+#if LLVM_VERSION >= 220
+    FPM.addPass(DropUnnecessaryAssumesPass(/*DropDereferenceable=*/true));
+#endif
+
+#if LLVM_VERSION >= 180
+    FPM.addPass(InferAlignmentPass());
+#endif
     if (IsFullLTO) {
         // The vectorizer may have significantly shortened a loop body; unroll
         // again. Unroll small loops to hide loop backedge latency and saturate any
@@ -166,6 +179,9 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
     FPM.addPass(SimplifyCFGPass(SimplifyCFGOptions()
                                         .forwardSwitchCondToPhi(true)
                                         .convertSwitchRangeToICmp(true)
+#if LLVM_VERSION >= 220
+                                        .convertSwitchToArithmetic(true)
+#endif
                                         .convertSwitchToLookupTable(true)
                                         .needCanonicalLoops(false)
                                         .hoistCommonInsts(true)
@@ -213,8 +229,9 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
     }
 
-    // if (EnableInferAlignmentPass)
-    //   FPM.addPass(InferAlignmentPass());
+#if LLVM_VERSION >= 180
+    FPM.addPass(InferAlignmentPass());
+#endif
     FPM.addPass(InstCombinePass());
 
     // This is needed for two reasons:
