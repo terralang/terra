@@ -13,9 +13,55 @@ else()
   list(APPEND ALL_LLVM_DEFINITIONS ${LLVM_DEFINITIONS_LIST})
 endif()
 
-# The official binary for 3.8 on macOS is buggy and lists LTO (a dynamic
-# library) even though LLVMLTO (a static library) is already on the list.
-list(REMOVE_ITEM LLVM_AVAILABLE_LIBS LTO)
+# LLVM_AVAILABLE_LIBS can name libraries that this installation does not
+# actually provide, in two different ways.
+#
+# The name may not be an imported target at all: Ubuntu's llvm-20-dev lists the
+# BOLT libraries but exports no targets for them. Those have to be dropped
+# before anything reads their properties, or every later loop over
+# LLVM_AVAILABLE_LIBS errors out.
+#
+# Or the target may exist while its file does not. Ubuntu packages Polly, MLIR
+# and the llvm-libc tools separately from llvm-N-dev but exports all of them.
+# Dropping those is usually fine (Terra needs none of them by name), except
+# when another library Terra does link pulls one in: LLVMExtensions lists Polly
+# as a dependency, so without it the link fails on getPollyPluginInfo. So drop
+# the ones nothing depends on, and report the ones that would break the link.
+set(LLVM_EXPORTED_LIBS ${LLVM_AVAILABLE_LIBS})
+foreach(LLVM_LIB ${LLVM_EXPORTED_LIBS})
+  if(NOT TARGET ${LLVM_LIB})
+    message(STATUS "Skipping LLVM library ${LLVM_LIB}: no such target")
+    list(REMOVE_ITEM LLVM_AVAILABLE_LIBS ${LLVM_LIB})
+    list(REMOVE_ITEM LLVM_EXPORTED_LIBS ${LLVM_LIB})
+    continue()
+  endif()
+  get_property(LLVM_LIB_TYPE TARGET ${LLVM_LIB} PROPERTY TYPE)
+  if(${LLVM_LIB_TYPE} STREQUAL STATIC_LIBRARY OR ${LLVM_LIB_TYPE} STREQUAL SHARED_LIBRARY)
+    get_property(LLVM_LIB_LOCATION TARGET ${LLVM_LIB} PROPERTY LOCATION)
+    if(NOT EXISTS "${LLVM_LIB_LOCATION}")
+      list(APPEND LLVM_MISSING_LIBS ${LLVM_LIB})
+      list(REMOVE_ITEM LLVM_AVAILABLE_LIBS ${LLVM_LIB})
+    endif()
+  endif()
+endforeach()
+
+# Collect what the libraries we kept actually depend on, so we can tell an
+# unreferenced library from one that is about to be needed.
+foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
+  get_property(LLVM_LIB_DEPENDENCIES TARGET ${LLVM_LIB} PROPERTY INTERFACE_LINK_LIBRARIES)
+  list(APPEND LLVM_KEPT_DEPENDENCIES ${LLVM_LIB_DEPENDENCIES})
+  get_property(LLVM_LIB_DEPENDENCIES TARGET ${LLVM_LIB}
+               PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES)
+  list(APPEND LLVM_KEPT_DEPENDENCIES ${LLVM_LIB_DEPENDENCIES})
+endforeach()
+
+foreach(LLVM_LIB ${LLVM_MISSING_LIBS})
+  get_property(LLVM_LIB_LOCATION TARGET ${LLVM_LIB} PROPERTY LOCATION)
+  if(${LLVM_LIB} IN_LIST LLVM_KEPT_DEPENDENCIES)
+    message(FATAL_ERROR "LLVM's CMake configuration exports ${LLVM_LIB}, and other LLVM libraries depend on it, but ${LLVM_LIB_LOCATION} does not exist. Install the development package that provides it. (On Ubuntu, llvm-N-dev exports the Polly targets but Polly is packaged separately in libpolly-N-dev.)")
+  endif()
+  message(STATUS "Skipping LLVM library ${LLVM_LIB}: ${LLVM_LIB_LOCATION} does not exist")
+endforeach()
 
 if(TERRA_SLIB_INCLUDE_LLVM)
   set(LLVM_OBJECT_DIR "${PROJECT_BINARY_DIR}/llvm_objects")
@@ -119,8 +165,23 @@ foreach(LLVM_LIB ${LLVM_AVAILABLE_LIBS})
   list(APPEND LLVM_SYSTEM_LIBRARIES ${LLVM_LINK_LIBRARIES})
   unset(LLVM_LINK_LIBRARIES)
 endforeach()
-list(REMOVE_ITEM LLVM_SYSTEM_LIBRARIES ${LLVM_AVAILABLE_LIBS})
+list(REMOVE_ITEM LLVM_SYSTEM_LIBRARIES ${LLVM_EXPORTED_LIBS})
 list(REMOVE_DUPLICATES LLVM_SYSTEM_LIBRARIES)
+
+# LLVM's exported targets can name imported targets that LLVMConfig.cmake
+# never defines. (LLVM 16 has LLVMLineEditor link against LibEdit::LibEdit,
+# but never calls find_package(LibEdit).) Find those packages ourselves so
+# that linking against LLVM works.
+foreach(LLVM_SYSTEM_LIB ${LLVM_SYSTEM_LIBRARIES})
+  if(NOT TARGET ${LLVM_SYSTEM_LIB} AND "${LLVM_SYSTEM_LIB}" MATCHES "^([A-Za-z0-9_]+)::")
+    set(LLVM_SYSTEM_LIB_PACKAGE "${CMAKE_MATCH_1}")
+    message(STATUS "LLVM references undefined target ${LLVM_SYSTEM_LIB}, searching for ${LLVM_SYSTEM_LIB_PACKAGE}")
+    find_package(${LLVM_SYSTEM_LIB_PACKAGE})
+    if(NOT TARGET ${LLVM_SYSTEM_LIB})
+      message(FATAL_ERROR "LLVM's exported targets reference ${LLVM_SYSTEM_LIB}, but LLVM's CMake configuration does not define it and package ${LLVM_SYSTEM_LIB_PACKAGE} was not found. Install the development package that provides it (e.g., libedit-dev for LibEdit).")
+    endif()
+  endif()
+endforeach()
 
 mark_as_advanced(
   ALL_LLVM_LIBRARIES

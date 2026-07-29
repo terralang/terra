@@ -192,25 +192,25 @@ jobs:
 
           # Some additional configurations:
 
-          # LLVM 12, 13, 14 on Ubuntu 22.04
-          - distro: 'ubuntu-22.04'
-            llvm: '12'
+          # LLVM 12, 13, 14 on Ubuntu 24.04
+          - distro: 'ubuntu-24.04'
+            llvm: '18'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
             slib: '1'
             static: '1'
             test: '1'
-          - distro: 'ubuntu-22.04'
-            llvm: '13'
+          - distro: 'ubuntu-24.04'
+            llvm: '19'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
             slib: '1'
             static: '1'
             test: '1'
-          - distro: 'ubuntu-22.04'
-            llvm: '14'
+          - distro: 'ubuntu-24.04'
+            llvm: '20'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
@@ -218,23 +218,23 @@ jobs:
             static: '1'
             test: '1'
 
-          # LLVM 14, no-slib/no-static, Ubuntu 22.04
-          - distro: 'ubuntu-22.04'
-            llvm: '14'
+          # LLVM 21, no-slib/no-static, Ubuntu 24.04
+          - distro: 'ubuntu-24.04'
+            llvm: '21'
             lua: 'luajit'
             cuda: '0'
             variant: 'package'
             slib: '0'
             static: '1'
             test: '1'
-          # - distro: 'ubuntu-22.04'
-          #   llvm: '14'
-          #   lua: 'luajit'
-          #   cuda: '0'
-          #   variant: 'package'
-          #   slib: '0'
-          #   static: '0'
-          #   test: '1'
+          - distro: 'ubuntu-24.04'
+            llvm: '21'
+            lua: 'luajit'
+            cuda: '0'
+            variant: 'package'
+            slib: '0'
+            static: '0'
+            test: '1'
     steps:
       - uses: actions/checkout@v6
       - run: ./travis.sh
