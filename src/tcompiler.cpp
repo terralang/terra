@@ -1159,8 +1159,20 @@ struct CCallingConv {
                 // Return values are not padded, so they fall through below.
                 int64_t regbits = align > 64 ? 128 : 64;
                 int64_t bits = CU->getDataLayout().getTypeAllocSizeInBits(t->type);
-                std::vector<Type *> elements((bits + regbits - 1) / regbits,
-                                             Type::getIntNTy(*CU->TT->ctx, regbits));
+                int64_t nregs = (bits + regbits - 1) / regbits;
+                Type *regtype = Type::getIntNTy(*CU->TT->ctx, regbits);
+                if (nregs > 1) {
+                    // The aggregate has to stay a single argument in the LLVM
+                    // signature. AAPCS never splits one across the register/stack
+                    // boundary: if the registers left cannot hold all of it, the
+                    // whole thing goes on the stack. Handing LLVM one argument per
+                    // register would instead let it fill the last free register and
+                    // spill only the tail, so an argument list that runs out of
+                    // registers part way through an aggregate would disagree with C.
+                    return Argument(C_ARRAY_REG, t, ArrayType::get(regtype, nregs));
+                }
+                // One register, or none at all for an empty aggregate.
+                std::vector<Type *> elements(nregs, regtype);
                 return Argument(C_AGGREGATE_REG, t,
                                 StructType::get(*CU->TT->ctx, elements));
             }
@@ -1496,17 +1508,11 @@ struct CCallingConv {
                     }
                 } break;
                 case C_ARRAY_REG: {
-                    Value *scratch = CreateAlloca(B, p->cctype);
-                    emitStoreAgg(B, p->cctype, &*ai, scratch);
-#if LLVM_VERSION < 170
-                    unsigned as = scratch->getType()->getPointerAddressSpace();
-                    Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
+                    Value *scratch = CreateCoercionAlloca(B, p->type->type, p->cctype);
+                    emitStoreAgg(B, p->cctype, &*ai, CoercionPtr(B, scratch, p->cctype));
+                    Value *casted = CoercionPtr(B, scratch, p->type->type);
                     emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, casted),
                                  v);
-#else
-                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, scratch),
-                                 v);
-#endif
                     ++ai;
                 } break;
             }
@@ -1603,15 +1609,11 @@ struct CCallingConv {
                                    arguments);
                 } break;
                 case C_ARRAY_REG: {
-                    Value *scratch = CreateAlloca(B, a->type->type);
-                    emitStoreAgg(B, a->type->type, actual, scratch);
-#if LLVM_VERSION < 170
-                    unsigned as = scratch->getType()->getPointerAddressSpace();
-                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
-                    EmitCallAggReg(B, casted, a->cctype, arguments);
-#else
-                    EmitCallAggReg(B, scratch, a->cctype, arguments);
-#endif
+                    Value *scratch = CreateCoercionAlloca(B, a->type->type, a->cctype);
+                    emitStoreAgg(B, a->type->type, actual,
+                                 CoercionPtr(B, scratch, a->type->type));
+                    EmitCallAggReg(B, CoercionPtr(B, scratch, a->cctype), a->cctype,
+                                   arguments);
                 } break;
                 default: {
                     assert(!"unhandled argument kind");
