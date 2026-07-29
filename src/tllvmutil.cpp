@@ -140,9 +140,14 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
                              /*AllowSpeculation=*/true));
         LPM.addPass(
                 SimpleLoopUnswitchPass(/* NonTrivial */ Level == OptimizationLevel::O3));
+#if LLVM_VERSION < 220
         ExtraPasses.addPass(
                 createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/true,
                                                 /*UseBlockFrequencyInfo=*/true));
+#else
+        ExtraPasses.addPass(
+                createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/true));
+#endif
         ExtraPasses.addPass(
                 SimplifyCFGPass(SimplifyCFGOptions().convertSwitchRangeToICmp(true)));
         ExtraPasses.addPass(InstCombinePass());
@@ -218,10 +223,17 @@ void addVectorPasses(PipelineTuningOptions PTO, OptimizationLevel Level,
     //      divide result.
     //   2. It helps to clean up some loop-invariant code created by the loop
     //      unroll pass when IsFullLTO=false.
+#if LLVM_VERSION < 220
     FPM.addPass(createFunctionToLoopPassAdaptor(
             LICMPass(PTO.LicmMssaOptCap, PTO.LicmMssaNoAccForPromotionCap,
                      /*AllowSpeculation=*/true),
             /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+#else
+    FPM.addPass(createFunctionToLoopPassAdaptor(
+            LICMPass(PTO.LicmMssaOptCap, PTO.LicmMssaNoAccForPromotionCap,
+                     /*AllowSpeculation=*/true),
+            /*UseMemorySSA=*/true));
+#endif
 
     // Now that we've vectorized and unrolled loops, we may have more refined
     // alignment information, try to re-derive it here.

@@ -302,7 +302,12 @@ int terra_inittarget(lua_State *L) {
                    TT->Triple.c_str(), err.c_str());
     }
     TT->tm = TheTarget->createTargetMachine(
-            TT->Triple, TT->CPU, TT->Features, options,
+#if LLVM_VERSION < 220
+            TT->Triple,
+#else
+            llvm::Triple(TT->Triple),
+#endif
+            TT->CPU, TT->Features, options,
 #if defined(__linux__) || defined(__unix__)
             Reloc::PIC_,
 #else

@@ -141,25 +141,24 @@ pkg install -y cmake gmake llvm21
 
 ### Supported LLVM Versions ###
 
-The current recommended version of LLVM is **21** for all platforms, except when AMD GPU support is required (see below). The following versions are also supported:
+The current recommended version of LLVM is **22** for all platforms. The following versions are also supported:
 
-| Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP \*     | Intel/SPIRV \*\* | Notes |
-| ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | ---------------- | ----- |
-|      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                  | |
-|      12 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                  | |
-|      13 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                  | |
-|      14 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                  | |
-|      15 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
-|      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |   :yellow_heart: | |
-|      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
-|      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
-|      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
-|      20 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |    :green_heart: | |
-|      21 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |    :green_heart: | |
+| Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP        | Intel/SPIRV \* | Notes |
+| ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | -------------- | ----- |
+|      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | |
+|      12 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | |
+|      13 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | |
+|      14 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | |
+|      15 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: | :yellow_heart: | |
+|      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: | :yellow_heart: | |
+|      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |  :green_heart: | |
+|      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
+|      19 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
+|      20 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
+|      21 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
+|      22 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
 
-\* AMD GPU support is currently experimental. Note that the LLVM version must match the specific ROCm/HIP toolchain version. ROCm/HIP version 6.x requires LLVM 18, 7.0 requires LLVM 20.
-
-\*\* Intel GPU (SPIR-V) support is currently experimental.
+\* Intel GPU (SPIR-V) support is currently experimental.
 
 The following versions were previously supported by Terra:
 
@@ -176,6 +175,20 @@ The following versions were previously supported by Terra:
 | 8 | 1.1.1 |
 | 9 | 1.1.1 |
 | 10 | 1.1.1 |
+
+### AMD GPU Support
+
+AMD GPUs require choosing a compatible set of ROCm/HIP and LLVM
+versions. Terra itself supports all LLVM versions beginning with LLVM
+13, but ROCm ships with LLVM bitcode libraries that require specific
+LLVM versions to be fully compatible. The known compatible versions
+are listed below.
+
+| ROCm/HIP Version | LLVM Version |
+| ------- | ----- |
+| 6.x | 18 |
+| 7.0 | 20 |
+| 7.1&ndash;7.2 | 22 |
 
 ### Instructions for Building LLVM from Source
 

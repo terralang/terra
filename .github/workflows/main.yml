@@ -10,7 +10,7 @@ jobs:
     name: Check Format
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: ./travis.sh
         env:
           CHECK_CLANG_FORMAT: 1
@@ -20,7 +20,7 @@ jobs:
     strategy:
       matrix:
         os: ['macos-15-intel', 'macos-15', 'windows-2022']
-        llvm: ['11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21']
+        llvm: ['11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22']
         cuda: ['0', '1']
         lua: ['luajit', 'moonjit']
         exclude:
@@ -77,6 +77,8 @@ jobs:
             cuda: '1'
           - llvm: '21'
             cuda: '1'
+          - llvm: '22'
+            cuda: '1'
 
           # Moonjit: only LLVM 15
           - llvm: '11'
@@ -99,8 +101,10 @@ jobs:
             lua: 'moonjit'
           - llvm: '21'
             lua: 'moonjit'
+          - llvm: '22'
+            lua: 'moonjit'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: ./travis.sh
         shell: bash
         env:
@@ -111,7 +115,7 @@ jobs:
           SLIB_INCLUDE_LLVM: 1
           SLIB_INCLUDE_LUAJIT: 1
           TERRA_LUA: ${{ matrix.lua }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: terra-${{ matrix.os }}-x86_64-llvm-${{ matrix.llvm }}
           path: |
@@ -123,7 +127,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-20.04']
-        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.7', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8']
+        llvm: ['11', '12.0.1', '13.0.1', '14.0.6', '15.0.7', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8', '22.1.8']
         lua: ['luajit', 'moonjit']
         cuda: ['0', '1']
         test: ['1']
@@ -149,6 +153,8 @@ jobs:
             cuda: '1'
           - llvm: '21.1.8'
             cuda: '1'
+          - llvm: '22.1.8'
+            cuda: '1'
 
           # Moonjit with LLVM 14 only:
           - llvm: '11'
@@ -170,6 +176,8 @@ jobs:
           - llvm: '20.1.8'
             lua: 'moonjit'
           - llvm: '21.1.8'
+            lua: 'moonjit'
+          - llvm: '22.1.8'
             lua: 'moonjit'
 
         include:
@@ -228,7 +236,7 @@ jobs:
           #   static: '0'
           #   test: '1'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: ./travis.sh
         env:
           DOCKER_DISTRO: ${{ matrix.distro }}
@@ -245,7 +253,7 @@ jobs:
     strategy:
       matrix:
         distro: ['ubuntu-20.04']
-        llvm: ['11.1.0', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8']
+        llvm: ['11.1.0', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8', '22.1.8']
         lua: ['luajit']
         cuda: ['0']
         test: ['1']
@@ -257,7 +265,7 @@ jobs:
           # Assign variants to the basic configurations:
           - variant: 'prebuilt'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: ./travis.sh
         env:
           DOCKER_DISTRO: ${{ matrix.distro }}
@@ -285,7 +293,7 @@ jobs:
   #         - arch: 'ppc64le'
   #           llvm: '11.1.0'
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v6
   #     - run: ./travis.sh
   #       env:
   #         DOCKER_DISTRO: ${{ matrix.distro }}
@@ -294,7 +302,7 @@ jobs:
   #         DOCKER_CUDA: ${{ matrix.cuda }}
   #         DOCKER_VARIANT: ${{ matrix.variant }}
   #         DOCKER_TEST: ${{ matrix.test }}
-  #     - uses: actions/upload-artifact@v4
+  #     - uses: actions/upload-artifact@v7
   #       with:
   #         name: docker-${{ matrix.distro }}-${{ matrix.arch }}-llvm-${{ matrix.llvm }}
   #         path: |
@@ -305,9 +313,9 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        llvm: ['12', '13', '15', '16', '17', '18', '19', '20', '21']
+        llvm: ['12', '13', '15', '16', '17', '18', '19', '20', '21', '22']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: vmactions/freebsd-vm@v1
         with:
           release: "14.4"
@@ -323,11 +331,11 @@ jobs:
     name: Compatibility Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04 25.04" "" 21.1.8 luajit prebuilt 2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v6
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04 26.04" "" 22.1.8 luajit prebuilt 2
+      - uses: actions/upload-artifact@v7
         with:
-          name: docker-ubuntu-20.04-x86_64-llvm-21
+          name: docker-ubuntu-20.04-x86_64-llvm-22
           path: |
             terra-*.tar.xz
             terra-*.7z
@@ -335,11 +343,11 @@ jobs:
     name: Compatibility Test (ARM64)
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04" "" 21.1.8 luajit prebuilt 2
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v6
+      - run: ./docker/compatibility_test.sh ubuntu 20.04 "20.04 22.04 24.04 26.04" "" 22.1.8 luajit prebuilt 2
+      - uses: actions/upload-artifact@v7
         with:
-          name: docker-ubuntu-20.04-arm64-llvm-21
+          name: docker-ubuntu-20.04-arm64-llvm-22
           path: |
             terra-*.tar.xz
             terra-*.7z
@@ -351,7 +359,7 @@ jobs:
         nixpkgs: ['25.05']
         cuda: ['false', 'true']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: cachix/install-nix-action@v13
         with:
           nix_path: nixpkgs=channel:nixos-${{ matrix.nixpkgs }}

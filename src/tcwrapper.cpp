@@ -145,7 +145,11 @@ public:
                 lua_call(L, 3, 1);
                 tt->initFromStack(L, ref_table);
                 if (!tt->boolean("llvm_definingfunction")) {
+#if LLVM_VERSION < 220
                     size_t argpos = RegisterRecordType(Context->getRecordType(rd));
+#else
+                    size_t argpos = RegisterRecordType(Context->getCanonicalTagType(rd));
+#endif
                     lua_pushstring(L, livenessfunction.c_str());
                     tt->setfield("llvm_definingfunction");
                     lua_pushinteger(L, TT->id);
@@ -837,7 +841,12 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                             llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS) {
     // CompilerInstance will hold the instance of the Clang compiler for us,
     // managing the various objects needed to run the compiler.
-#if LLVM_VERSION < 200
+#if LLVM_VERSION >= 220
+    // Since LLVM 22 the CompilerInstance owns the VFS and the other create*
+    // methods below take it from there instead of receiving it as an argument.
+    TheCompInst->setVirtualFileSystem(FS);
+#endif
+#if LLVM_VERSION < 200 || LLVM_VERSION >= 220
     TheCompInst->createDiagnostics();
 #else
     TheCompInst->createDiagnostics(*FS);
@@ -847,7 +856,7 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
                                        TheCompInst->getDiagnostics());
     // need to recreate the diagnostics engine so that it actually listens to warning
     // flags like -Wno-deprecated this cannot go before CreateFromArgs
-#if LLVM_VERSION < 200
+#if LLVM_VERSION < 200 || LLVM_VERSION >= 220
     TheCompInst->createDiagnostics();
 #else
     TheCompInst->createDiagnostics(*FS);
@@ -865,9 +874,13 @@ static void initializeclang(terra_State *T, llvm::MemoryBuffer *membuffer,
     );
     TheCompInst->setTarget(TI);
 
+#if LLVM_VERSION < 220
     TheCompInst->createFileManager(FS);
-    FileManager &FileMgr = TheCompInst->getFileManager();
-    TheCompInst->createSourceManager(FileMgr);
+    TheCompInst->createSourceManager(TheCompInst->getFileManager());
+#else
+    TheCompInst->createFileManager();
+    TheCompInst->createSourceManager();
+#endif
     SourceManager &SourceMgr = TheCompInst->getSourceManager();
     TheCompInst->createPreprocessor(TU_Complete);
     TheCompInst->createASTContext();
@@ -989,13 +1002,16 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
     clang_args.insert(clang_args.end(), args.begin(), args.end());
     initializeclang(T, membuffer, clang_args, &TheCompInst, FS);
 
-    CodeGenerator *codegen = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
+    auto codegen_result = CreateLLVMCodeGen(TheCompInst.getDiagnostics(), "mymodule",
 #if LLVM_VERSION >= 150
-                                               FS,
+                                            FS,
 #endif
-                                               TheCompInst.getHeaderSearchOpts(),
-                                               TheCompInst.getPreprocessorOpts(),
-                                               TheCompInst.getCodeGenOpts(), *TT->ctx);
+                                            TheCompInst.getHeaderSearchOpts(),
+                                            TheCompInst.getPreprocessorOpts(),
+                                            TheCompInst.getCodeGenOpts(), *TT->ctx);
+    // Prior to LLVM 22 this returns an owning raw pointer, afterwards a unique_ptr.
+    std::unique_ptr<CodeGenerator> codegen_owner(std::move(codegen_result));
+    CodeGenerator *codegen = codegen_owner.get();
 
     std::stringstream ss;
     ss << "__makeeverythinginclanglive_";
@@ -1025,8 +1041,12 @@ static int dofile(terra_State *T, TerraTarget *TT, const char *code,
         AddMacro(T, PP, II, MD, &macros);
     }
 
+#if LLVM_VERSION < 220
     llvm::Module *M = codegen->ReleaseModule();
-    delete codegen;
+#else
+    llvm::Module *M = codegen->ReleaseModule().release();
+#endif
+    codegen_owner.reset();
     if (!M) {
         terra_reporterror(T, "compilation of included c code failed\n");
     }
