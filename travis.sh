@@ -170,8 +170,8 @@ elif [[ $(uname) = MINGW* ]]; then
   fi
 
   if [[ $USE_CUDA -eq 1 ]]; then
-    curl -L -O https://developer.download.nvidia.com/compute/cuda/12.9.0/local_installers/cuda_12.9.0_576.02_windows.exe
-    ./cuda_12.9.0_576.02_windows.exe -s nvcc_12.9 cudart_12.9
+    curl -L -O https://developer.download.nvidia.com/compute/cuda/12.9.2/local_installers/cuda_12.9.2_576.57_windows.exe
+    ./cuda_12.9.2_576.57_windows.exe -s nvcc_12.9 cudart_12.9
     export PATH="$PATH:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.9/bin"
   fi
 
