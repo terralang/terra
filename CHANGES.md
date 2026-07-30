@@ -21,6 +21,10 @@ macOS AArch64 C calling conventions have been fixed.
     registers
   * Fixed a compile-time regression when loading large aggregates
 
+## Deprecated features
+
+  * Deprecated support for LLVM <= 15
+
 # Release 1.2.0 (2024-06-25)
 
 This release adds new LLVM versions and introduces experimental support for SPIR-V code generation. Note that as of the tested LLVM versions, LLVM's native SPIR-V backend is unable to generate correct SPIR-V code in all cases; but the LLVM SPIR-V target can still be used in combination with the [LLVM/SPIR-V Translator](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) to generate valid code.
