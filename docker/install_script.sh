@@ -38,7 +38,6 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
     )
     if [[ $llvm -ge 13 ]]; then
         packages+=(
-            libmlir-$llvm-dev
             libpfm4-dev
         )
     fi
