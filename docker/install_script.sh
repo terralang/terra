@@ -44,6 +44,7 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
     if [[ $llvm -ge 18 ]]; then
         packages+=(
             libpolly-$llvm-dev
+            libcurl4-openssl-dev
             libzstd-dev
         )
     fi
