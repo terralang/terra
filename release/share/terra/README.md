@@ -145,11 +145,11 @@ The current recommended version of LLVM is **22** for all platforms. The followi
 
 | Version |         Linux |         macOS |       FreeBSD |       Windows |   NVIDIA/CUDA | AMD/HIP        | Intel/SPIRV \* | Notes |
 | ------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------- | -------------- | ----- |
-|      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | |
-|      12 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | |
-|      13 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | |
-|      14 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | |
-|      15 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: | :yellow_heart: | |
+|      11 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | [deprecated](https://github.com/terralang/terra/issues/703) |
+|      12 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |                |                | [deprecated](https://github.com/terralang/terra/issues/703) |
+|      13 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | [deprecated](https://github.com/terralang/terra/issues/703) |
+|      14 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |                | [deprecated](https://github.com/terralang/terra/issues/703) |
+|      15 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: | :yellow_heart: | [deprecated](https://github.com/terralang/terra/issues/703) |
 |      16 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: | :yellow_heart: | |
 |      17 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :yellow_heart: |  :green_heart: | |
 |      18 | :green_heart: | :green_heart: | :green_heart: | :green_heart: | :green_heart: |  :green_heart: |  :green_heart: | |
