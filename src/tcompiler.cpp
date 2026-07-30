@@ -82,6 +82,17 @@ static llvm_shutdown_obj llvmshutdownobj;
 
 #define MEM_ARRAY_THRESHOLD 64
 
+// When we turn a `store (load src), dst` pair into a memcpy, the memcpy reads
+// straight from the load's address, so the load itself becomes dead. Clean it
+// up here instead of leaving it for the optimizer. SROA expands a load of an
+// aggregate into one instruction per element, so a leftover load of a large
+// array is a compile time disaster unless something deletes it first. The
+// legacy pass manager happened to run InstCombine before SROA and got away
+// with it; the new pass manager (used since LLVM 17) runs SROA first.
+static void eraseDeadAggregateLoad(LoadInst *l) {
+    if (l->use_empty() && !l->isVolatile() && !l->isAtomic()) l->eraseFromParent();
+}
+
 struct DisassembleFunctionListener : public JITEventListener {
     TerraCompilationUnit *CU;
     terra_State *T;
@@ -1406,6 +1417,7 @@ struct CCallingConv {
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
             Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
+            eraseDeadAggregateLoad(l);
             return m;
         } else {
             StoreInst *st = B->CreateStore(src, addr_dst);
@@ -2671,6 +2683,7 @@ struct FunctionEmitter {
 #endif
                                                        ),
                                        size_v, isVolatile);
+            eraseDeadAggregateLoad(l);
             return m;
         } else {
             StoreInst *st = B->CreateStore(value, addr);
