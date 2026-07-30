@@ -56,7 +56,9 @@ jobs:
           - os: 'macos-15'
             llvm: '15'
 
-          # CUDA: only LLVM 11
+          # CUDA: only LLVM 22
+          - llvm: '12'
+            cuda: '1'
           - llvm: '12'
             cuda: '1'
           - llvm: '13'
@@ -77,10 +79,8 @@ jobs:
             cuda: '1'
           - llvm: '21'
             cuda: '1'
-          - llvm: '22'
-            cuda: '1'
 
-          # Moonjit: only LLVM 15
+          # Moonjit: only LLVM 16
           - llvm: '11'
             lua: 'moonjit'
           - llvm: '12'
@@ -89,7 +89,7 @@ jobs:
             lua: 'moonjit'
           - llvm: '14'
             lua: 'moonjit'
-          - llvm: '16'
+          - llvm: '15'
             lua: 'moonjit'
           - llvm: '17'
             lua: 'moonjit'
