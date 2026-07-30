@@ -837,6 +837,7 @@ struct CCallingConv {
     bool ppc64_count_used;
     bool spirv_cconv;
     bool wasm_cconv;
+    bool x86_64_sysv_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
             : CU(CU_),
@@ -852,9 +853,16 @@ struct CCallingConv {
               ppc64_int_limit(0),
               ppc64_count_used(false),
               spirv_cconv(false),
-              wasm_cconv(false) {
+              wasm_cconv(false),
+              x86_64_sysv_cconv(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
+            case Triple::ArchType::x86_64: {
+                // Only SysV has a limited pool of argument registers that we have
+                // to track. Win64 puts everything past the first four arguments on
+                // the stack, which LLVM already models on its own.
+                x86_64_sysv_cconv = !Triple.isOSWindows();
+            } break;
             case Triple::ArchType::amdgcn: {
                 return_empty_struct_as_void = true;
                 amdgpu_cconv = true;
@@ -1151,8 +1159,14 @@ struct CCallingConv {
                 // Return values are not padded, so they fall through below.
                 int64_t regbits = align > 64 ? 128 : 64;
                 int64_t bits = CU->getDataLayout().getTypeAllocSizeInBits(t->type);
-                std::vector<Type *> elements((bits + regbits - 1) / regbits,
-                                             Type::getIntNTy(*CU->TT->ctx, regbits));
+                int64_t nregs = (bits + regbits - 1) / regbits;
+                Type *regtype = Type::getIntNTy(*CU->TT->ctx, regbits);
+                if (nregs > 1) {
+                    // Multi-register values must be passed as a single argument.
+                    return Argument(C_ARRAY_REG, t, ArrayType::get(regtype, nregs));
+                }
+                // One register, or none at all for an empty aggregate.
+                std::vector<Type *> elements(nregs, regtype);
                 return Argument(C_AGGREGATE_REG, t,
                                 StructType::get(*CU->TT->ctx, elements));
             }
@@ -1210,7 +1224,32 @@ struct CCallingConv {
         int nfloat = (classes[0] == C_SSE_FLOAT || classes[0] == C_SSE_DOUBLE) +
                      (classes[1] == C_SSE_FLOAT || classes[1] == C_SSE_DOUBLE);
         int nint = (classes[0] == C_INTEGER) + (classes[1] == C_INTEGER);
-        if (sz > 8 && (*usedfloat + nfloat > 8 || *usedint + nint > 6)) {
+        // SysV provides 6 integer and 8 SSE registers for arguments. The counters
+        // can run past those limits, because scalars keep being counted after the
+        // registers are gone, so clamp before asking how many are left.
+        int freefloat = std::max(0, 8 - *usedfloat);
+        int freeint = std::max(0, 6 - *usedint);
+        bool fits = nfloat <= freefloat && nint <= freeint;
+
+        // An aggregate that does not fit in the registers still free is passed on
+        // the stack instead. The counters are deliberately left alone in that case,
+        // so a later, smaller argument can still be passed in registers. Return
+        // values use a dedicated set of registers and never spill, so they are
+        // exempt. Targets other than x86-64 land here with a classification that is
+        // only an approximation of their ABI, so only reconsider the aggregates
+        // they already used to reject (those needing more than one eightbyte).
+        if (!isreturn && !fits && (x86_64_sysv_cconv || sz > 8)) {
+            // Clang avoids byval when no integer register is left to hold the
+            // pointer: an aggregate occupying a single eightbyte is coerced to an
+            // integer of the same size and passed directly, which puts it on the
+            // stack all the same (see X86_64ABIInfo::getIndirectResult). Note the
+            // coercion is to an integer even for the SSE classes. We have to make
+            // the same choice here, or Terra and C disagree on the stack layout.
+            if (x86_64_sysv_cconv && freeint == 0 && sz <= 8 &&
+                CU->getDataLayout().getABITypeAlign(t->type).value() <= 8) {
+                return Argument(C_AGGREGATE_REG, t,
+                                StructType::get(TypeForClass(sz, C_INTEGER)));
+            }
             return Argument(C_AGGREGATE_MEM, t);
         }
 
@@ -1463,17 +1502,11 @@ struct CCallingConv {
                     }
                 } break;
                 case C_ARRAY_REG: {
-                    Value *scratch = CreateAlloca(B, p->cctype);
-                    emitStoreAgg(B, p->cctype, &*ai, scratch);
-#if LLVM_VERSION < 170
-                    unsigned as = scratch->getType()->getPointerAddressSpace();
-                    Value *casted = B->CreateBitCast(scratch, Ptr(p->type->type, as));
+                    Value *scratch = CreateCoercionAlloca(B, p->type->type, p->cctype);
+                    emitStoreAgg(B, p->cctype, &*ai, CoercionPtr(B, scratch, p->cctype));
+                    Value *casted = CoercionPtr(B, scratch, p->type->type);
                     emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, casted),
                                  v);
-#else
-                    emitStoreAgg(B, p->type->type, B->CreateLoad(p->type->type, scratch),
-                                 v);
-#endif
                     ++ai;
                 } break;
             }
@@ -1570,15 +1603,11 @@ struct CCallingConv {
                                    arguments);
                 } break;
                 case C_ARRAY_REG: {
-                    Value *scratch = CreateAlloca(B, a->type->type);
-                    emitStoreAgg(B, a->type->type, actual, scratch);
-#if LLVM_VERSION < 170
-                    unsigned as = scratch->getType()->getPointerAddressSpace();
-                    Value *casted = B->CreateBitCast(scratch, Ptr(a->cctype, as));
-                    EmitCallAggReg(B, casted, a->cctype, arguments);
-#else
-                    EmitCallAggReg(B, scratch, a->cctype, arguments);
-#endif
+                    Value *scratch = CreateCoercionAlloca(B, a->type->type, a->cctype);
+                    emitStoreAgg(B, a->type->type, actual,
+                                 CoercionPtr(B, scratch, a->type->type));
+                    EmitCallAggReg(B, CoercionPtr(B, scratch, a->cctype), a->cctype,
+                                   arguments);
                 } break;
                 default: {
                     assert(!"unhandled argument kind");
