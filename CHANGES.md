@@ -1,3 +1,26 @@
+# Release 1.2.1 (2026-07-29)
+
+This release adds new LLVM versions and brings lagging platforms (Windows and
+Linux ARM) up to date with the rest of Terra. Multiple bugs in the x86-64 and
+macOS AArch64 C calling conventions have been fixed.
+
+## Added features
+
+  * Support for LLVM 19, 20, 21, and 22
+  * Windows now supports LLVM 12 through 22
+  * Linux ARM now supports LLVM 12 through 22
+  * Host target detection now discovers ALL of the features of the host CPU
+    (similar to `-march=native`)
+  * Vectorizer passes have been synchronized with upstream LLVM for versions 18
+    through 22
+
+## Fixed Bugs
+
+  * Fixed x86-64 C calling convention when interleaving aggregates and scalars
+  * Fixed macOS AArch64 C calling convention when an aggregate cannot fit in
+    registers
+  * Fixed a compile-time regression when loading large aggregates
+
 # Release 1.2.0 (2024-06-25)
 
 This release adds new LLVM versions and introduces experimental support for SPIR-V code generation. Note that as of the tested LLVM versions, LLVM's native SPIR-V backend is unable to generate correct SPIR-V code in all cases; but the LLVM SPIR-V target can still be used in combination with the [LLVM/SPIR-V Translator](https://github.com/KhronosGroup/SPIRV-LLVM-Translator) to generate valid code.
