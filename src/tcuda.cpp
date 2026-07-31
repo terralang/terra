@@ -20,6 +20,9 @@ extern "C" {
 #include "tllvmutil.h"
 #include "tobj.h"
 #include "cudalib.h"
+#if LLVM_VERSION >= 210
+#include "llvm/IR/AutoUpgrade.h"
+#endif
 #include <fstream>
 #include <sstream>
 #ifndef _WIN32
@@ -248,6 +251,10 @@ int terra_toptx(lua_State *L) {
         annotateKernel(T, M, kernel, annotationname, annotationvalue);
         lua_pop(L, 4);  // annotation table and 3 values in it
     }
+
+#if LLVM_VERSION >= 210
+    llvm::UpgradeNVVMAnnotations(*M);
+#endif
 
     // sanitize names
     for (llvm::Module::iterator it = M->begin(), end = M->end(); it != end; ++it) {
