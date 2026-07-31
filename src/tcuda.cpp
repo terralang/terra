@@ -154,7 +154,9 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     LDEVICE->setDataLayout(TargetMachine->createDataLayout());
 
     llvm::Linker Linker(*M);
-    Linker.linkInModule(std::move(LDEVICE));
+    if (Linker.linkInModule(std::move(LDEVICE), llvm::Linker::Flags::LinkOnlyNeeded)) {
+        assert(false && "failed to link libdevice.bc");
+    }
 
     M->setDataLayout(TargetMachine->createDataLayout());
 
