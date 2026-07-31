@@ -4477,9 +4477,10 @@ if ffi.os == "Windows" then
             return linker,vclib,vcpath
         end
     end
-    if terra.cudahome then
-        terra.systemincludes:insertall{terra.cudahome.."\\include"}
-    end
+end
+if terra.cudahome then
+    local sep = ffi.os == "Windows" and "\\" or "/"
+    terra.systemincludes:insert(terra.cudahome .. sep .. "include")
 end
 
 
