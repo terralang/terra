@@ -819,8 +819,6 @@ void InitHeaderSearchFlagsAndArgs(std::string const &TripleStr, HeaderSearchOpti
     llvm::opt::ArgStringList IncludeArgs;
     TC.AddClangSystemIncludeArgs(C->getArgs(), IncludeArgs);
 
-    TC.AddCudaIncludeArgs(C->getArgs(), IncludeArgs);
-
     // organized in pairs "-<flag> <directory>"
     assert(((IncludeArgs.size() & 1) == 0) && "even number of IncludeArgs");
     HSO.UserEntries.reserve(IncludeArgs.size() / 2);
