@@ -298,6 +298,7 @@ local terra loadmodule(cudaM : &C.CUmodule, ptx : rawstring, ptx_sz : uint64,
     else
         cd("cuModuleLoadData",cudaM, ptx)
     end
+    return 0
 end
 
 function cudalib.wrapptx(module,ptx)
