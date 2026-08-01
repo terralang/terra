@@ -418,15 +418,17 @@ int terra_initcompilationunit(lua_State *L) {
     CU->M->setDataLayout(TT->tm->createDataLayout());
 
 #if LLVM_VERSION < 170
-    // FIXME (Elliott): need to restore the manual inliner in LLVM 17
     CU->mi = new ManualInliner(TT->tm, CU->M);
     CU->fpm = new FunctionPassManagerT(CU->M);
     llvmutil_addtargetspecificpasses(CU->fpm, TT->tm);
     llvmutil_addoptimizationpasses(CU->fpm);
     CU->fpm->doInitialization();
 #else
+    // Must build the pass manager first: it is what registers the analyses in
+    // the managers the inliner reads from.
     CU->fpm = new FunctionPassManager(llvmutil_createoptimizationpasses(
             TT->tm, CU->lam, CU->fam, CU->cgam, CU->mam));
+    CU->mi = new ManualInliner(TT->tm, CU->M, CU->fam, CU->mam);
 #endif
     lua_pushlightuserdata(L, CU);
     return 1;
@@ -518,10 +520,7 @@ int terra_freetarget(lua_State *L) {
 static void freecompilationunit(TerraCompilationUnit *CU) {
     assert(CU->nreferences > 0);
     if (0 == --CU->nreferences) {
-#if LLVM_VERSION < 170
-        // FIXME (Elliott): need to restore the manual inliner in LLVM 17
         delete CU->mi;
-#endif
         delete CU->fpm;
         if (CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
@@ -2087,10 +2086,7 @@ struct FunctionEmitter {
                             printf("%s%s", s.c_str(), (fstate == f) ? "\n" : " ");
                         }
                     } while (fstate != f);
-#if LLVM_VERSION < 170
-                    // FIXME (Elliott): need to restore the manual inliner in LLVM 17
                     CU->mi->run(scc.begin(), scc.end());
-#endif
                     for (size_t i = 0; i < scc.size(); i++) {
                         VERBOSE_ONLY(T) {
                             std::string s = scc[i]->getName().str();
