@@ -44,7 +44,7 @@ let
 
 in stdenv.mkDerivation rec {
   pname = "terra";
-  version = "1.2.0";
+  version = "1.2.1";
 
   src = ./.;
 
