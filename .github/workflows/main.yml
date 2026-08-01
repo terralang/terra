@@ -192,7 +192,7 @@ jobs:
 
           # Some additional configurations:
 
-          # LLVM 12, 13, 14 on Ubuntu 24.04
+          # LLVM 18, 19, 20 on Ubuntu 24.04
           - distro: 'ubuntu-24.04'
             llvm: '18'
             lua: 'luajit'
