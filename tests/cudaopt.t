@@ -21,11 +21,10 @@ if not terralib.cudacompile then
     return
 end
 
--- PTX generation never queries the device, so the target is fixed rather than
--- taken from the local GPU. Compute capability 7.5 (Turing) is the oldest
--- architecture CUDA 13 still supports -- it dropped Maxwell, Pascal and Volta
--- -- and LLVM has accepted sm_75 since LLVM 8, so it is valid across the whole
--- range of LLVM and CUDA versions Terra supports.
+-- We can generate PTX without querying the device, so the target is fixed
+-- rather than taken from the local GPU. The exact choice doesn't make much
+-- difference. We choose compute capability 7.5 (Turing) because it's the
+-- oldest architecture CUDA 13 still supports.
 local ARCH = 75
 
 local tid = cudalib.nvvm_read_ptx_sreg_tid_x
