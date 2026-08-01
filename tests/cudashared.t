@@ -9,6 +9,14 @@ end
 
 local tid = cudalib.nvvm_read_ptx_sreg_tid_x--terralib.intrinsic("llvm.nvvm.read.ptx.sreg.tid.x",{} -> int)
 
+local barrier0
+if terralib.llvmversion >= 210 then
+    local ctasync = terralib.intrinsic("llvm.nvvm.barrier.cta.sync.aligned.all", int -> {})
+    barrier0 = macro(function() return `ctasync(0) end)
+else
+    barrier0 = cudalib.nvvm_barrier0
+end
+
 N = 1024
 
 somedata = cudalib.sharedmemory(int,N)
@@ -16,7 +24,7 @@ somedata = cudalib.sharedmemory(int,N)
 terra bar(result : &int)
     var t = tid()
     somedata[t] = t
-    cudalib.nvvm_barrier0()
+    barrier0()
     result[t] = somedata[N - 1 - t]  
 end
 
