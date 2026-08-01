@@ -12,6 +12,7 @@ llvm::FunctionPassManager llvmutil_createoptimizationpasses(
         llvm::TargetMachine *TM, llvm::LoopAnalysisManager &LAM,
         llvm::FunctionAnalysisManager &FAM, llvm::CGSCCAnalysisManager &CGAM,
         llvm::ModuleAnalysisManager &MAM);
+void llvmutil_optimizedevicemodule(llvm::Module *M, llvm::TargetMachine *TM);
 #endif
 extern "C" void llvmutil_disassemblefunction(void *data, size_t sz, size_t inst);
 bool llvmutil_emitobjfile(llvm::Module *Mod, llvm::TargetMachine *TM,

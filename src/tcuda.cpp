@@ -189,7 +189,11 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
 #if LLVM_VERSION < 170
     PMB.populateModulePassManager(PM);
 #else
+    // The new pass manager cannot be mixed into the legacy PassManager that
+    // addPassesToEmitFile populates, so optimize the module here, up front,
+    // rather than scheduling the passes alongside code generation.
     M->setDataLayout(TargetMachine->createDataLayout());
+    llvmutil_optimizedevicemodule(M, TargetMachine);
 #endif
 
     if (TargetMachine->addPassesToEmitFile(PM, str_dest, nullptr, FileType)) {
