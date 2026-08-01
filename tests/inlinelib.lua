@@ -21,18 +21,10 @@
 
 local M = {}
 
-local DUMP = "._inline_jit_ir.ll"
-
 local function jitir()
-    -- optimize=false matters: with optimization on, saveobj would run the whole
-    -- module pipeline, whose own inliner would inline everything regardless of
-    -- what the JIT did, masking exactly what we are trying to observe.
-    terralib.jitcompilationunit:saveobj(DUMP, "llvmir", {}, false)
-    local h = assert(io.open(DUMP, "r"), "could not open " .. DUMP)
-    local ir = h:read("*a")
-    h:close()
-    os.remove(DUMP)
-    return ir
+    -- Keep optimizations disabled so that we don't accidentally run the module-level inliner.
+    return assert(terralib.jitcompilationunit:saveobj(nil, "llvmir", {}, false --[[ optimize ]]),
+                  "no LLVM IR returned for the JIT compilation unit")
 end
 
 local function nameof(fn)
