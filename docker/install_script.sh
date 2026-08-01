@@ -29,7 +29,7 @@ echo "######################################################################"
 arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
 
 packages=(
-    build-essential cmake git
+    build-essential git wget
 )
 if [[ $variant = "package" || $variant = "upstream" ]]; then
     packages+=(
@@ -43,17 +43,10 @@ if [[ $variant = "package" || $variant = "upstream" ]]; then
         )
     fi
 elif [[ $variant = "prebuilt" ]]; then
-    packages+=(
-        wget
-    )
+    true # no dependencies
 else
     echo "Don't know this variant: $variant"
     exit 1
-fi
-if [[ $cuda -eq 1 ]]; then
-    packages+=(
-        wget
-    )
 fi
 
 set -x
@@ -72,6 +65,11 @@ if [[ $variant = "upstream" ]]; then
 fi
 
 apt-get install -qq "${packages[@]}"
+
+# Use an upstream CMake so that we can control the exact version.
+wget -nv https://github.com/Kitware/CMake/releases/download/v3.24.4/cmake-3.24.4-linux-$(uname -m).tar.gz
+tar xf cmake-3.24.4-linux-$(uname -m).tar.gz
+export PATH="$PATH:$PWD/cmake-3.24.4-linux-$(uname -m)/bin"
 
 if [[ $variant = "prebuilt" ]]; then
     wget -nv https://github.com/terralang/llvm-build/releases/download/llvm-$llvm/clang+llvm-$llvm-$arch-linux-gnu.tar.xz

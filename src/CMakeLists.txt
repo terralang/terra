@@ -346,12 +346,11 @@ target_compile_definitions(TerraExecutable
 if(APPLE)
   target_link_libraries(TerraExecutable
     PRIVATE
-      -Wl,-force_load,$<TARGET_LINKER_FILE:TerraLibrary>
+      $<LINK_LIBRARY:WHOLE_ARCHIVE,TerraLibrary>
       ${LUAJIT_LIBRARIES}
       ${ALL_LLVM_LIBRARIES}
       ${LLVM_SYSTEM_LIBRARIES}
   )
-  add_dependencies(TerraExecutable TerraLibrary)
 elseif(UNIX)
   if(NOT TERRA_STATIC_LINK_LLVM OR NOT TERRA_STATIC_LINK_LUAJIT)
     target_link_libraries(TerraExecutable
@@ -362,9 +361,7 @@ elseif(UNIX)
   target_link_libraries(TerraExecutable
     PRIVATE
       -Wl,-export-dynamic
-      -Wl,--whole-archive
-      TerraLibrary
-      -Wl,--no-whole-archive
+      $<LINK_LIBRARY:WHOLE_ARCHIVE,TerraLibrary>
       ${LUAJIT_LIBRARIES}
       -Wl,--start-group
       ${ALL_LLVM_LIBRARIES}
