@@ -93,16 +93,11 @@ list(APPEND TERRA_LIB_SRC
   tcuda.cpp        tcuda.h
   tdebug.cpp       tdebug.h
   tinternalizedfiles.cpp
+  tinline.cpp      tinline.h
   lj_strscan.c     lj_strscan.h
 
   ${PROJECT_BINARY_DIR}/include/terra/terra.h
 )
-
-if(LLVM_VERSION_MAJOR LESS 17)
-  list(APPEND TERRA_LIB_SRC
-    tinline.cpp    tinline.h
-  )
-endif()
 
 list(APPEND TERRA_BIN_SRC
   main.cpp
@@ -170,13 +165,6 @@ if(NOT WIN32 AND NOT ${LLVM_ENABLE_RTTI})
     PRIVATE
       # FIXME: Find portable ways to do all these
       $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
-  )
-endif()
-
-if(NOT ${LLVM_ENABLE_ASSERTIONS})
-  target_compile_definitions(TerraObjectFiles
-    PRIVATE
-      TERRA_LLVM_HEADERS_HAVE_NDEBUG
   )
 endif()
 
