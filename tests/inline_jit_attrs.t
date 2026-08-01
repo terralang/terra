@@ -4,16 +4,14 @@
 -- the positive checks fail while these still pass, inlining is genuinely off
 -- rather than the detection being wrong.
 local I = require("inlinelib")
-print("inline_jit_attrs:")
 
 local C = terralib.includec("stdio.h")
 
 -- setinlined(true) puts alwaysinline on the callee.
-local attr_shouty = terra()
+terra attr_shouty()
     C.printf("") C.printf("") C.printf("") C.printf("") C.printf("")
     C.printf("") C.printf("") C.printf("") C.printf("") C.printf("")
 end
-attr_shouty:setname("attr_shouty")
 attr_shouty:setinlined(true)
 terra attr_usesshouty()
     attr_shouty()

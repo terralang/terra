@@ -2,7 +2,6 @@
 -- component, so vary how many SCCs there are and how they are connected.
 -- See tests/inlinelib.lua for how inlining is detected.
 local I = require("inlinelib")
-print("inline_jit_scc:")
 
 -- Two SCCs: one callee, one caller, one call site. The simplest thing that can
 -- possibly work.

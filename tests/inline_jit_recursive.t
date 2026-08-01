@@ -10,7 +10,6 @@
 -- These do declare return types, because inference does not always terminate
 -- through a recursive cycle.
 local I = require("inlinelib")
-print("inline_jit_recursive:")
 
 terra rec_helper(x : int) return x + 1 end
 

@@ -5,7 +5,6 @@
 -- not the others. Also covers inlining a C function into Terra in the JIT --
 -- inline_c.t covers the same thing for saveobj, which uses a different pipeline.
 local I = require("inlinelib")
-print("inline_jit_types:")
 
 -- Small struct: returned in registers on most targets.
 struct TySmall { a : int, b : int }

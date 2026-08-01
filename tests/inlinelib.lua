@@ -35,7 +35,7 @@ end
 local function escape(s) return (s:gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0")) end
 
 -- Terra emits its own functions as @"$name", doubling the $ for a few names
--- that would otherwise collide with clang's (TerraSymbolPrefix in
+-- that would otherwise collide with ELF's ARM ABI (TerraSymbolPrefix in
 -- src/tcompiler.cpp). Functions imported from C keep their own name unprefixed.
 local function candidates(fn)
     local n = nameof(fn)
