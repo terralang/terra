@@ -20,7 +20,6 @@ if not terralib.cudacompile then
     print("CUDA not enabled, not performing test...")
     return
 end
-print("cudaopt:")
 
 -- PTX generation never queries the device, so the target is fixed rather than
 -- taken from the local GPU. Compute capability 7.5 (Turing) is the oldest
