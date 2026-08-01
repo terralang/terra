@@ -1,4 +1,4 @@
-# Release 1.2.1 (2026-07-29)
+# Release 1.2.1 (2026-07-31)
 
 This release adds new LLVM versions and brings lagging platforms (Windows and
 Linux ARM) up to date with the rest of Terra. Multiple bugs in the x86-64 and

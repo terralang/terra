@@ -187,8 +187,8 @@ are listed below.
 | ROCm/HIP Version | LLVM Version |
 | ------- | ----- |
 | 6.x | 18 |
-| 7.0 | 20 |
-| 7.1&ndash;7.2 | 22 |
+| 7.0&ndash;7.1 | 20 |
+| 7.2 | 22 |
 
 ### Instructions for Building LLVM from Source
 
