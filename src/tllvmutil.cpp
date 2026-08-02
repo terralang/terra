@@ -293,6 +293,37 @@ FunctionPassManager llvmutil_createoptimizationpasses(TargetMachine *TM,
 
     return FPM;
 }
+
+// Optimize a device module (currently NVPTX) before handing it to the code
+// generator. This is the same -O3 module pipeline llvmutil_optimizemodule runs
+// for the host, with two differences:
+//
+//   * the vectorizers stay off -- NVPTX is a SIMT target, so loop and SLP
+//     vectorization have nothing to gain there; and
+//   * there is no up-front verify-and-GlobalDCE. That pair exists on the host
+//     path to prune everything outside the export table before optimizing; here
+//     the kernels are already the module's only external symbols, and the O3
+//     pipeline runs GlobalDCE on its own.
+void llvmutil_optimizedevicemodule(Module *M, TargetMachine *TM) {
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    PipelineTuningOptions PTO;
+    PTO.LoopVectorization = false;
+    PTO.SLPVectorization = false;
+    PassBuilder PB(TM, PTO);
+
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(OptimizationLevel::O3);
+    MPM.run(*M, MAM);
+}
 #endif
 
 void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
