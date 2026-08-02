@@ -16,9 +16,9 @@ endif()
 # LLVM_AVAILABLE_LIBS can name libraries that this installation does not
 # actually provide, in two different ways.
 #
-# The name may not be an imported target at all: Ubuntu's llvm-20-dev lists the
-# BOLT libraries but exports no targets for them. Those have to be dropped
-# before anything reads their properties, or every later loop over
+# The name may not be an imported target at all: Ubuntu 24.04's llvm-20-dev
+# lists the BOLT libraries but exports no targets for them. Those have to be
+# dropped before anything reads their properties, or every later loop over
 # LLVM_AVAILABLE_LIBS errors out.
 #
 # Or the target may exist while its file does not. Ubuntu packages Polly, MLIR
@@ -28,6 +28,16 @@ endif()
 # as a dependency, so without it the link fails on getPollyPluginInfo. So drop
 # the ones nothing depends on, and report the ones that would break the link.
 set(LLVM_EXPORTED_LIBS ${LLVM_AVAILABLE_LIBS})
+
+# Remove BOLT by name, because Ubuntu 24.04's LLVM 18 ships it by default
+# (within llvm-18-dev), and linking it with Clang creates conflicts over
+# command-line arguments.
+foreach(LLVM_LIB ${LLVM_EXPORTED_LIBS})
+  if("${LLVM_LIB}" MATCHES "^LLVMBOLT")
+    list(REMOVE_ITEM LLVM_AVAILABLE_LIBS ${LLVM_LIB})
+  endif()
+endforeach()
+
 foreach(LLVM_LIB ${LLVM_EXPORTED_LIBS})
   if(NOT TARGET ${LLVM_LIB})
     message(STATUS "Skipping LLVM library ${LLVM_LIB}: no such target")
