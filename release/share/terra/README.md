@@ -124,7 +124,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
 On recent versions of Ubuntu, you can get these dependencies with:
 
 ```
-sudo apt-get install build-essential cmake git llvm-21-dev libclang-21-dev clang-21 libmlir-21-dev libedit-dev libncurses5-dev zlib1g-dev libpfm4-dev
+sudo apt-get install build-essential cmake git llvm-21-dev libclang-21-dev clang-21 libpolly-21-dev libncurses-dev libzstd-dev zlib1g-dev
 ```
 
 On macOS with Homebrew, the following should be sufficient:

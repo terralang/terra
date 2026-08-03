@@ -34,12 +34,11 @@ packages=(
 if [[ $variant = "package" || $variant = "upstream" ]]; then
     packages+=(
         llvm-$llvm-dev libclang-$llvm-dev clang-$llvm
-        libedit-dev libncurses5-dev zlib1g-dev
+        libncurses-dev libzstd-dev zlib1g-dev
     )
-    if [[ $llvm -ge 13 ]]; then
+    if [[ $llvm -ge 18 ]]; then
         packages+=(
-            libmlir-$llvm-dev
-            libpfm4-dev
+            libpolly-$llvm-dev
         )
     fi
 elif [[ $variant = "prebuilt" ]]; then
