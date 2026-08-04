@@ -1,7 +1,7 @@
 #include <stdio.h>
 
-int myfoobarthing(int a, double b, int c, int* d) {
-    FILE* foo = fopen("what", "r");
+int myfoobarthing(int a, double b, int c, int *d) {
+    FILE *foo = fopen("what", "r");
     printf("my foobar thing is alive %d %f %d\n", a, b, c);
     *d = 8;
     return 7;

@@ -6,16 +6,16 @@
 extern "C" {
 #include "lua.h"
 }
-static const char* kindtostr[] = {
+static const char *kindtostr[] = {
 #define T_KIND_STRING(a, str) str,
         T_KIND_LIST(T_KIND_STRING) NULL};
-const char* tkindtostr(T_Kind k) {
+const char *tkindtostr(T_Kind k) {
     assert(k < T_NUM_KINDS);
     return kindtostr[k];
 }
 
-void terra_kindsinit(terra_State* T) {
-    lua_State* L = T->L;
+void terra_kindsinit(terra_State *T) {
+    lua_State *L = T->L;
     lua_getfield(L, LUA_GLOBALSINDEX, "terra");
     lua_newtable(L);
     for (int i = 0; i < T_NUM_KINDS; i++) {

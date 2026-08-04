@@ -80,8 +80,7 @@ __attribute__((noinline))
 #else
 __declspec(noinline)
 #endif
-static int
-terra_backtrace(void **frames, int maxN, void *rip, void *rbp) {
+static int terra_backtrace(void **frames, int maxN, void *rip, void *rbp) {
     if (maxN > 0) frames[0] = rip;
     Frame *frame = (Frame *)rbp;
     if (!frame) return 1;
@@ -264,7 +263,7 @@ static void *createclosure(uint8_t *buf, void *fn, int nargs, void **env, int ne
 #define ENCODE_MOV(reg, imm)           \
     do {                               \
         *code++ = 0x48 | ((reg) >> 3); \
-        *code++ = 0xb8 | ((reg)&7);    \
+        *code++ = 0xb8 | ((reg) & 7);  \
         void *data = (imm);            \
         memcpy(code, &data, 8);        \
         code += 8;                     \
@@ -311,6 +310,6 @@ int terra_debuginit(struct terra_State *T) {
 
 #else /* it arm code just don't include debug interface for now */
 
-int terra_debuginit(struct terra_State* T) { return 0; }
+int terra_debuginit(struct terra_State *T) { return 0; }
 
 #endif
