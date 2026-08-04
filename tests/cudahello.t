@@ -18,7 +18,7 @@ foo = terra(result : &float)
 end
 
 
-sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
+sync = terralib.externfunction("cudaDeviceSynchronize", {} -> int)
 
 local R = terralib.cudacompile({ bar = foo })
 

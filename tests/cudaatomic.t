@@ -21,7 +21,7 @@ local C = terralib.includecstring [[
 #include <stdio.h>
 ]]
 
-sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
+sync = terralib.externfunction("cudaDeviceSynchronize", {} -> int)
 
 local R = terralib.cudacompile({ bar = foo },true)
 

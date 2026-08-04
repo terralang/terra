@@ -27,7 +27,7 @@ foo = terra(result : C.cudaTextureObject_t)
     vprintf("%f\n",[&int8](&rr))    
 end
 
-sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
+sync = terralib.externfunction("cudaDeviceSynchronize", {} -> int)
 
 local R = terralib.cudacompile({ foo = foo })
 
