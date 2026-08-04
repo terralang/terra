@@ -6,7 +6,7 @@
 
 let
 
-  llvmPackages = pkgs.llvmPackages_13;
+  llvmPackages = pkgs.llvmPackages_16;
   stdenv = llvmPackages.stdenv;
   cuda = if cudaPackages ? cudatoolkit_12 then [
            cudaPackages.cudatoolkit_12
@@ -15,14 +15,14 @@ let
            cudaPackages.cuda_cudart
          ];
 
-  luajitRev = "04dca7911ea255f37be799c18d74c305b921c1a6";
+  luajitRev = "14d8a7a27dc8c626ab9e7c7e9e50b6df6def4f03";
   luajitBase = "LuaJIT-${luajitRev}";
   luajitArchive = "${luajitBase}.tar.gz";
   luajitSrc = fetchFromGitHub {
     owner = "LuaJIT";
     repo = "LuaJIT";
     rev = luajitRev;
-    sha256 = "0694z8rmqskx86a375ag7qp2wbdri986l5qdz0zalllp4b1hxy92";
+    sha256 = "0faij1v5qq7jd4h0np6dnbxfdjd707bjrwmasy32zj43530gsrvk";
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
@@ -92,8 +92,7 @@ in stdenv.mkDerivation rec {
   meta = with lib; {
     description = "A low-level counterpart to Lua";
     homepage = "http://terralang.org/";
-    # Note: Nix has removed LLVM 11, required for Linux AArch64
-    platforms = platforms.x86_64 ++ platforms.darwin; # ++ platforms.aarch64;
+    platforms = platforms.all;
     maintainers = with maintainers; [ jb55 thoughtpolice ];
     license = licenses.mit;
   };
