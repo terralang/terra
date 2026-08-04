@@ -20,7 +20,8 @@ int luaO_hexavalue(int c);
 /*
 ** `module' operation for hashing (size is always a power of 2)
 */
-#define lmod(s, size) (check_exp((size & (size - 1)) == 0, (cast(int, (s) & ((size)-1)))))
+#define lmod(s, size) \
+    (check_exp((size & (size - 1)) == 0, (cast(int, (s) & ((size) - 1)))))
 
 /* internal assertions for in-house debugging */
 #if defined(luaP_assert)

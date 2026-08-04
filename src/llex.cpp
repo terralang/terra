@@ -14,15 +14,15 @@
 #define LUA_CORE
 
 #include "llex.h"
-//#include "lua.h"
+// #include "lua.h"
 #include "lctype.h"
-//#include "ldo.h"
+// #include "ldo.h"
 #include "llex.h"
 #include "lobject.h"
-//#include "lparser.h"
-//#include "lstate.h"
+// #include "lparser.h"
+// #include "lstate.h"
 #include "lstring.h"
-//#include "ltable.h"
+// #include "ltable.h"
 #include "lzio.h"
 #include "treadnumber.h"
 

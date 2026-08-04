@@ -101,8 +101,8 @@ using llvm::FunctionPassManager;
 #endif
 
 typedef llvm::raw_pwrite_stream emitobjfile_t;
-typedef llvm::DIFile* DIFileP;
+typedef llvm::DIFile *DIFileP;
 
-inline void LLVMDisposeMessage(char* Message) { free(Message); }
+inline void LLVMDisposeMessage(char *Message) { free(Message); }
 
 #endif

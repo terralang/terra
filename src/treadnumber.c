@@ -4,7 +4,7 @@
 
 #include "lj_strscan.h"
 
-int treadnumber(const char* buf, ReadNumber* result, int cstylesuffixes) {
+int treadnumber(const char *buf, ReadNumber *result, int cstylesuffixes) {
     TLJ_TValue o;
     StrScanFmt fmt;
     int opt = STRSCAN_OPT_TOINT | STRSCAN_OPT_LL;
@@ -13,7 +13,7 @@ int treadnumber(const char* buf, ReadNumber* result, int cstylesuffixes) {
     else
         opt |= STRSCAN_OPT_IMAG;
 
-    fmt = terra_lj_strscan_scan((const uint8_t*)buf, &o, opt);
+    fmt = terra_lj_strscan_scan((const uint8_t *)buf, &o, opt);
     result->flags = 0;
     switch (fmt) {
         case STRSCAN_ERROR:

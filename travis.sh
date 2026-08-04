@@ -5,8 +5,8 @@ set -x
 
 if [[ $CHECK_CLANG_FORMAT -eq 1 ]]; then
     if [[ $(uname) = Linux ]]; then
-        sudo apt-get install -y clang-format-14
-        export PATH="/usr/lib/llvm-14/bin:$PATH"
+        sudo apt-get install -y clang-format-22
+        export PATH="/usr/lib/llvm-22/bin:$PATH"
     else
         exit 1
     fi

@@ -8,7 +8,7 @@ on:
 jobs:
   check_format:
     name: Check Format
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v6
       - run: ./travis.sh

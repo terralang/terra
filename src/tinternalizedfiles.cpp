@@ -3,7 +3,7 @@
 #include "internalizedfiles.h"
 #include "terra.h"
 
-void terra_registerinternalizedfiles(lua_State* L, int terratable) {
+void terra_registerinternalizedfiles(lua_State *L, int terratable) {
     lua_getfield(L, terratable, "registerinternalizedfiles");
     lua_pushlightuserdata(L, &headerfile_names[0]);
     lua_pushlightuserdata(L, &headerfile_contents[0]);

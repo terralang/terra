@@ -82,7 +82,7 @@ enum T_Kind {
     T_KIND_LIST(T_KIND_ENUM) T_NUM_KINDS
 };
 
-const char* tkindtostr(T_Kind k);
-void terra_kindsinit(terra_State* T);
+const char *tkindtostr(T_Kind k);
+void terra_kindsinit(terra_State *T);
 
 #endif
