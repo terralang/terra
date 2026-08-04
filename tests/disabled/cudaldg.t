@@ -24,7 +24,7 @@ end
 
 terralib.includepath = terralib.includepath..";/usr/local/cuda/include"
 
-sync = terralib.externfunction("cudaThreadSynchronize", {} -> int)
+sync = terralib.externfunction("cudaDeviceSynchronize", {} -> int)
 
 local R = terralib.cudacompile({ foo = foo })
 
