@@ -58,7 +58,7 @@ in stdenv.mkDerivation rec {
     "-DTERRA_VERSION=${version}"
     "-DTERRA_LUA=luajit"
     "-DTERRA_SKIP_LUA_DOWNLOAD=ON"
-    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/${clangVersion}"
+    "-DCLANG_RESOURCE_DIR=${llvmMerged}/lib/clang/${lib.versions.major clangVersion}"
   ] ++ lib.optional enableCUDA "-DTERRA_ENABLE_CUDA=ON";
 
   doCheck = true;
