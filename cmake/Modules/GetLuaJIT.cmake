@@ -14,10 +14,14 @@ if(TERRA_LUA STREQUAL "luajit")
   set(LUAJIT_BASE "luajit")
   set(LUAJIT_VERSION_MAJOR 2)
   set(LUAJIT_VERSION_MINOR 1)
-  set(LUAJIT_VERSION_PATCH 1720049189)
+  set(LUAJIT_VERSION_PATCH 1784360928)
   set(LUAJIT_VERSION_EXTRA "")
-  set(LUAJIT_COMMIT "04dca7911ea255f37be799c18d74c305b921c1a6") # 2024-08-07
-  set(LUAJIT_HASH_SHA256 "346b028d9ba85e04b7e23a43cc51ec076574d2efc0d271d4355141b0145cd6e0")
+  # This is the commit immediately prior to
+  # a2ce8114f107464473070427e69e84f4923bd08a which backports LuaJIT 3.0 syntax
+  # into v2.1. Bumping this commit any futher may require changes to Terra to
+  # keep up with the LuaJIT language changes.
+  set(LUAJIT_COMMIT "14d8a7a27dc8c626ab9e7c7e9e50b6df6def4f03") # 2026-07-18
+  set(LUAJIT_HASH_SHA256 "daf57ed14e863e70ca202909a4ec4c2fda8e271e6c9dd00c502242ebc4ccbe79")
   if(NOT LUAJIT_VERSION_COMMIT STREQUAL "")
     set(LUAJIT_URL_PREFIX "https://github.com/LuaJIT/LuaJIT/archive/")
   else()
