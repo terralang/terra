@@ -291,11 +291,11 @@ jobs:
           DOCKER_TEST: ${{ matrix.test }}
   docker_arm64:
     name: Docker ARM64 (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         distro: ['ubuntu-20.04']
-        llvm: ['11.1.0', '16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8', '22.1.8']
+        llvm: ['16.0.6', '17.0.6', '18.1.8', '19.1.7', '20.1.8', '21.1.8', '22.1.8']
         lua: ['luajit']
         cuda: ['0']
         test: ['1']
