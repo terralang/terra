@@ -291,7 +291,7 @@ jobs:
           DOCKER_TEST: ${{ matrix.test }}
   docker_arm64:
     name: Docker ARM64 (${{ matrix.distro }}, llvm-${{ matrix.llvm }}, ${{ matrix.lua }}, static=${{ matrix.static }}, slib=${{ matrix.slib }}, cuda=${{ matrix.cuda }}, ${{ matrix.variant }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
         distro: ['ubuntu-20.04']
