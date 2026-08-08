@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.26.4)
 project(Terra)
 
 list(INSERT CMAKE_MODULE_PATH 0 "${Terra_SOURCE_DIR}/cmake/Modules")
@@ -8,11 +8,11 @@ find_package(Clang REQUIRED)
 find_package(Git) # for version number
 
 if(TERRA_ENABLE_CUDA)
-  find_package(CUDA REQUIRED)
+  find_package(CUDAToolkit REQUIRED)
 elseif(NOT DEFINED TERRA_ENABLE_CUDA)
-  find_package(CUDA)
+  find_package(CUDAToolkit)
 endif()
-set(TERRA_ENABLE_CUDA ${CUDA_FOUND} CACHE BOOL "Build Terra with support for CUDA")
+set(TERRA_ENABLE_CUDA ${CUDAToolkit_FOUND} CACHE BOOL "Build Terra with support for CUDA")
 
 if(DEFINED TERRA_STATIC_LINK_LLVM)
   set(DEFAULT_TERRA_SLIB_INCLUDE_LLVM ${TERRA_STATIC_LINK_LLVM})
