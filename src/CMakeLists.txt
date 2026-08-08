@@ -2,19 +2,6 @@
 ### Terra Generated Source Files
 ###
 
-if(TERRA_ENABLE_CUDA)
-  list(APPEND TERRA_CUDA_INCLUDE_DIRS
-    ${CUDA_INCLUDE_DIRS}
-    ${CUDA_TOOLKIT_ROOT_DIR}/nvvm/include
-  )
-  # FIXME: Find a portable way to do this.
-  foreach(TERRA_CUDA_INCLUDE_DIR ${TERRA_CUDA_INCLUDE_DIRS})
-    list(APPEND TERRA_CUDA_INCLUDE_DIR_FLAGS
-      "-I" "${TERRA_CUDA_INCLUDE_DIR}"
-    )
-  endforeach()
-endif()
-
 add_custom_command(
   OUTPUT "${PROJECT_BINARY_DIR}/internalizedfiles.h"
   DEPENDS
@@ -175,7 +162,8 @@ if(TERRA_ENABLE_CUDA)
   )
   target_include_directories(TerraObjectFiles
     PRIVATE
-      ${TERRA_CUDA_INCLUDE_DIRS}
+      ${CUDAToolkit_INCLUDE_DIRS}
+      ${CUDAToolkit_LIBRARY_ROOT}/nvvm/include
   )
 endif()
 
