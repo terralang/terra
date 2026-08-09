@@ -1,8 +1,7 @@
 { pkgs ? import <nixpkgs> { }, lib ? pkgs.lib
 , fetchFromGitHub ? pkgs.fetchFromGitHub, ncurses ? pkgs.ncurses
 , cmake ? pkgs.cmake, libxml2 ? pkgs.libxml2, symlinkJoin ? pkgs.symlinkJoin
-, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false
-, libpfm ? pkgs.libpfm }:
+, cudaPackages ? pkgs.cudaPackages, enableCUDA ? false }:
 
 let
 
@@ -26,18 +25,14 @@ let
   };
   llvmMerged = symlinkJoin {
     name = "llvmClangMerged";
-    paths = with llvmPackages;
-      if llvm ? dev then [
-        llvm.out
-        llvm.dev
-        llvm.lib
-        clang-unwrapped.out
-        clang-unwrapped.dev
-        clang-unwrapped.lib
-      ] else [
-        llvm
-        clang-unwrapped
-      ];
+    paths = with llvmPackages; [
+      llvm.out
+      llvm.dev
+      llvm.lib
+      clang-unwrapped.out
+      clang-unwrapped.dev
+      clang-unwrapped.lib
+    ];
   };
 
   clangVersion = llvmPackages.clang-unwrapped.version;
@@ -48,10 +43,9 @@ in stdenv.mkDerivation rec {
 
   src = ./.;
 
-  nativeBuildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake ] ++ lib.optionals enableCUDA [ cudaPackages.cuda_nvcc ];
   buildInputs = [ llvmMerged ncurses libxml2 ]
-    ++ lib.optionals enableCUDA cuda
-    ++ lib.optional (!stdenv.isDarwin) libpfm;
+    ++ lib.optionals enableCUDA [ cudaPackages.cuda_nvcc cudaPackages.cuda_cudart ];
 
   cmakeFlags = [
     "-DHAS_TERRA_VERSION=0"

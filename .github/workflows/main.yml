@@ -398,11 +398,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        nixpkgs: ['25.05']
+        nixpkgs: ['26.05']
         cuda: ['false', 'true']
     steps:
       - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v13
+      - uses: cachix/install-nix-action@v31
         with:
           nix_path: nixpkgs=channel:nixos-${{ matrix.nixpkgs }}
       - run: nix-build --arg enableCUDA ${{ matrix.cuda }}
