@@ -26,6 +26,7 @@
 /tests/objc2
 /tests/stdio.exe
 /tests/globals_extern_tmp
+/tests/debuginfo_tmp
 
 
 *.bc

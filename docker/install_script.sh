@@ -29,7 +29,7 @@ echo "######################################################################"
 arch=$(uname -m | sed -e s/ppc64le/powerpc64le/)
 
 packages=(
-    build-essential git wget
+    build-essential gdb git wget
 )
 if [[ $variant = "package" || $variant = "upstream" ]]; then
     packages+=(
