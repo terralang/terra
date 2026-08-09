@@ -109,7 +109,7 @@ if [[ $cuda -eq 1 ]]; then
 fi
 
 cd build
-cmake -DCMAKE_PREFIX_PATH=/llvm/install -DCMAKE_INSTALL_PREFIX=/terra_install "${cmake_flags[@]}" ..
+cmake -DCMAKE_PREFIX_PATH=/llvm -DCMAKE_INSTALL_PREFIX=/terra_install "${cmake_flags[@]}" ..
 make install -j$threads
 
 if [[ $test -eq 1 ]]; then
