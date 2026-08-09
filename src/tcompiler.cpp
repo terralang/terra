@@ -32,6 +32,8 @@ extern "C" {
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Intrinsics.h"
 #include "tllvmutil.h"
 
 #ifdef _WIN32
@@ -66,6 +68,7 @@ using namespace llvm;
     _(linkllvmimpl, 1)                                                                   \
     _(currenttimeinseconds, 0)                                                           \
     _(isintegral, 0)                                                                     \
+    _(intrinsicid, 0)                                                                    \
     _(dumpmodule, 1)
 
 #define DEF_LIBFUNCTION(nm, isclo) static int terra_##nm(lua_State *L);
@@ -4109,6 +4112,21 @@ static int terra_isintegral(lua_State *L) {
     double v = luaL_checknumber(L, -1);
     bool integral = ISFINITE(v) && (double)(int)v == v;
     lua_pushboolean(L, integral);
+    return 1;
+}
+// Look up the LLVM intrinsic ID for a name, returning 0 (Intrinsic::not_intrinsic)
+// if LLVM does not know it. The name table lives in libLLVMCore and covers every
+// target, so this is independent of which backends this LLVM was built with.
+// Overloaded intrinsics match on their base name, so mangled suffixes such as
+// llvm.exp.v4f32 resolve correctly.
+static int terra_intrinsicid(lua_State *L) {
+    const char *name = luaL_checkstring(L, 1);
+#if LLVM_VERSION >= 200
+    Intrinsic::ID id = Intrinsic::lookupIntrinsicID(name);
+#else
+    Intrinsic::ID id = Function::lookupIntrinsicID(name);
+#endif
+    lua_pushnumber(L, id);
     return 1;
 }
 static int terra_linklibraryimpl(lua_State *L) {
