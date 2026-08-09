@@ -1002,6 +1002,10 @@ function terra.intrinsic(str, typ)
             diag:reporterror(e,"expected intrinsic to resolve to a function type but found ",terra.type(intrinsictype))
             intrinsictype = terra.types.funcpointer(types,{})
         end
+        if type(name) == "string" and name:match("^llvm%.") and terra.intrinsicid(name) == 0 then
+            diag:reporterror(e,"unknown LLVM intrinsic '",name,"' (not recognized by LLVM ",terra.llvmversion,
+                             "); it may have been renamed or removed in this LLVM version")
+        end
         local fn = terralib.externfunction(name,intrinsictype,e)
         local fnref = newobject(e,T.luaexpression,function() return fn end,true)
         return typecheck(newobject(e,T.apply,fnref,args))
