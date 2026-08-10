@@ -291,14 +291,14 @@ int terra_inittarget(lua_State *L) {
     else
         TT->Features = HostFeatureString();
 
+    llvm::Triple TheTriple(TT->Triple);
+
     TargetOptions options;
     if (lua_toboolean(L, 4)) {  // FloatABIHard boolean
         options.FloatABIType = FloatABI::Hard;
-    } else {
-#ifdef __arm__
+    } else if (TheTriple.isARM() || TheTriple.isThumb()) {
         // force hard float since we currently onlly work on platforms that have it
         options.FloatABIType = FloatABI::Hard;
-#endif
     }
 
     TT->next_unused_id = 0;
@@ -850,6 +850,7 @@ struct CCallingConv {
     bool ppc64_count_used;
     bool spirv_cconv;
     bool wasm_cconv;
+    bool win_cconv;
     bool x86_64_sysv_cconv;
 
     CCallingConv(TerraCompilationUnit *CU_, Types *Ty_)
@@ -867,6 +868,7 @@ struct CCallingConv {
               ppc64_count_used(false),
               spirv_cconv(false),
               wasm_cconv(false),
+              win_cconv(false),
               x86_64_sysv_cconv(false) {
         auto Triple = CU->TT->tm->getTargetTriple();
         switch (Triple.getArch()) {
@@ -913,6 +915,7 @@ struct CCallingConv {
         switch (Triple.getOS()) {
             case Triple::OSType::Win32: {
                 return_empty_struct_as_void = true;
+                win_cconv = true;
             } break;
             default:
                 break;
@@ -1011,8 +1014,11 @@ struct CCallingConv {
         } else
             assert(!"unexpected value in classification");
     }
-#ifndef _WIN32
     Type *TypeForClass(size_t size, RegisterClass clz) {
+        if (win_cconv) {
+            assert(size <= 8);
+            return Type::getIntNTy(*CU->TT->ctx, size * 8);
+        }
         switch (clz) {
             case C_SSE_FLOAT:
             case C_SSE_DOUBLE:
@@ -1034,17 +1040,13 @@ struct CCallingConv {
                 assert(!"unexpected class");
         }
     }
-    bool ValidAggregateSize(size_t sz) { return sz <= 16; }
-#else
-    Type *TypeForClass(size_t size, RegisterClass clz) {
-        assert(size <= 8);
-        return Type::getIntNTy(*CU->TT->ctx, size * 8);
-    }
     bool ValidAggregateSize(size_t sz) {
-        bool isPow2 = sz && !(sz & (sz - 1));
-        return sz <= 8 && isPow2;
+        if (win_cconv) {
+            bool isPow2 = sz && !(sz & (sz - 1));
+            return sz <= 8 && isPow2;
+        }
+        return sz <= 16;
     }
-#endif
 
     void CountValuesPPC64(Type *t, bool &all_float, bool &all_double, int &n_elts,
                           int64_t &align) {
@@ -1369,13 +1371,11 @@ struct CCallingConv {
         for (size_t i = 0; i < info->paramtypes.size(); i++) {
             Argument *v = &info->paramtypes[i];
             if (v->kind == C_AGGREGATE_MEM) {
-#ifndef _WIN32
-                if (!aarch64_cconv) {
-                    addByValAttr(r, argidx, v->cctype);
-                } else {
+                if (aarch64_cconv) {
                     addNoUndefAttr(r, argidx);
+                } else if (!win_cconv) {
+                    addByValAttr(r, argidx, v->cctype);
                 }
-#endif
             }
             addExtAttrIfNeeded(v->type, r, argidx);
             argidx += v->GetNumberOfTypesInParamList();
