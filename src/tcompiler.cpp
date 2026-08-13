@@ -833,6 +833,45 @@ static Value *CreateConstGEP2_32(IRBuilder<> *B, Value *Ptr, Type *ValueType,
     return B->CreateConstGEP2_32(ValueType, Ptr, Idx0, Idx1);
 }
 
+// Copying an aggregate is emitted as `store (load src), dst`, then rewritten to
+// `memcpy(dst, src)` to keep large aggregates out of LLVM's
+// first-class-aggregate paths (see eraseDeadAggregateLoad). The memcpy reads
+// `src` at the store rather than at the load, so a write in between makes it
+// copy the wrong value; `a, b = b, a` and `f(a, g(&a))` both put one there.
+// Return an address holding the value the load saw: the load's own address when
+// nothing intervened, else a snapshot taken right after the load, which the
+// load's dominance over the store leaves room for. Writing the snapshot that
+// early is safe only because it is a fresh per-copy alloca nothing else reaches.
+static Value *AggregateCopySource(IRBuilder<> *B, LoadInst *l, uint64_t size,
+                                  MaybeAlign *srcalign) {
+    BasicBlock *bb = l->getParent();
+    bool clobbered = bb != B->GetInsertBlock();
+    if (!clobbered) {
+        BasicBlock::iterator insertpt = B->GetInsertPoint();
+        for (BasicBlock::iterator i = std::next(l->getIterator());
+             i != bb->end() && i != insertpt; ++i) {
+            if (i->mayWriteToMemory()) {
+                clobbered = true;
+                break;
+            }
+        }
+    }
+    if (!clobbered) {
+        *srcalign = MaybeAlign(l->getAlign());
+        return l->getPointerOperand();
+    }
+    AllocaInst *tmp = CreateAlloca(B, l->getType(), NULL, "<aggcopy>");
+    IRBuilder<> snapshot(bb, std::next(l->getIterator()));
+    // IRBuilder takes its location from the instruction it inserts before, so
+    // it has none to take when the load ends the block. Use the load's.
+    snapshot.SetCurrentDebugLocation(l->getDebugLoc());
+    snapshot.CreateMemCpy(tmp, tmp->getAlign(), l->getPointerOperand(),
+                          MaybeAlign(l->getAlign()),
+                          ConstantInt::get(Type::getInt64Ty(bb->getContext()), size));
+    *srcalign = MaybeAlign(tmp->getAlign());
+    return tmp;
+}
+
 // functions that handle the details of the x86_64 ABI (this really should be handled by
 // LLVM...)
 struct CCallingConv {
@@ -1386,19 +1425,6 @@ struct CCallingConv {
         assert(t1->isAggregateType());
         LoadInst *l = dyn_cast<LoadInst>(src);
         if ((t1->isStructTy() || (t1->isArrayTy())) && l) {
-            Value *addr_src = l->getOperand(0);
-#if LLVM_VERSION < 170
-            // create bitcasts of src and dest address
-            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
-            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
-            unsigned as_dst = addr_dst->getType()->getPointerAddressSpace();
-            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
-            Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
-            Value *addr_source = B->CreateBitCast(addr_src, t_src);
-#else
-            Value *addr_dest = addr_dst;
-            Value *addr_source = addr_src;
-#endif
             uint64_t size = 0;
             MaybeAlign a1;
             if (t1->isStructTy()) {
@@ -1416,9 +1442,23 @@ struct CCallingConv {
                 a1 = MaybeAlign(CU->getDataLayout().getABITypeAlign(t1));
             } else
                 assert(!"unhandled type in emitStoreAgg");
+            MaybeAlign a_src;
+            Value *addr_src = AggregateCopySource(B, l, size, &a_src);
+#if LLVM_VERSION < 170
+            // create bitcasts of src and dest address
+            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
+            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
+            unsigned as_dst = addr_dst->getType()->getPointerAddressSpace();
+            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
+            Value *addr_dest = B->CreateBitCast(addr_dst, t_dst);
+            Value *addr_source = B->CreateBitCast(addr_src, t_src);
+#else
+            Value *addr_dest = addr_dst;
+            Value *addr_source = addr_src;
+#endif
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
-            Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a1, size_v);
+            Value *m = B->CreateMemCpy(addr_dest, a1, addr_source, a_src, size_v);
             eraseDeadAggregateLoad(l);
             return m;
         } else {
@@ -2634,21 +2674,6 @@ struct FunctionEmitter {
         LoadInst *l = dyn_cast<LoadInst>(&*value);
         Type *t1 = value->getType();
         if ((t1->isStructTy() || t1->isArrayTy()) && l) {
-#if LLVM_VERSION < 170
-            unsigned as_dst = addr->getType()->getPointerAddressSpace();
-            // create bitcasts of src and dest address
-            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
-            // addr_dst
-            Value *addr_dst = B->CreateBitCast(addr, t_dst);
-            // addr_src
-            Value *addr_src = l->getOperand(0);
-            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
-            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
-            addr_src = B->CreateBitCast(addr_src, t_src);
-#else
-            Value *addr_dst = addr;
-            Value *addr_src = l->getOperand(0);
-#endif
             uint64_t size = 0;
             MaybeAlign a1;
             if (t1->isStructTy()) {
@@ -2671,17 +2696,23 @@ struct FunctionEmitter {
                 if (alignment) st->setAlignment(*alignment);
                 return st;
             }
+            MaybeAlign a_src;
+            Value *addr_src = AggregateCopySource(B, l, size, &a_src);
+#if LLVM_VERSION < 170
+            unsigned as_dst = addr->getType()->getPointerAddressSpace();
+            // create bitcasts of src and dest address
+            Type *t_dst = Type::getInt8PtrTy(*CU->TT->ctx, as_dst);
+            // addr_dst
+            Value *addr_dst = B->CreateBitCast(addr, t_dst);
+            unsigned as_src = addr_src->getType()->getPointerAddressSpace();
+            Type *t_src = Type::getInt8PtrTy(*CU->TT->ctx, as_src);
+            addr_src = B->CreateBitCast(addr_src, t_src);
+#else
+            Value *addr_dst = addr;
+#endif
             Value *size_v = ConstantInt::get(Type::getInt64Ty(*CU->TT->ctx), size);
             // perform the copy
-            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src,
-                                       MaybeAlign(
-#if LLVM_VERSION < 150
-                                               l->getAlignment()
-#else
-                                               l->getAlign()
-#endif
-                                                       ),
-                                       size_v, isVolatile);
+            Value *m = B->CreateMemCpy(addr_dst, a1, addr_src, a_src, size_v, isVolatile);
             eraseDeadAggregateLoad(l);
             return m;
         } else {
