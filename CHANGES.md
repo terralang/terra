@@ -1,3 +1,32 @@
+# Release 1.2.2 (2026-08-14)
+
+This release fixes some long-standing issues with LLVM versions >= 17 that have
+been present since the original introduction of these LLVM versions in Terra
+1.2.0. Additionally, Terra has been upgraded to avoid deprecated CMake modules
+removed in recent versions of CMake and to fix missing build dependencies due to
+CMake's intepretation of whole-archive build flags. Note that, due to bugs in
+CMake prior to 3.26.4, the minimum CMake has also been updated.
+
+## Improvements
+
+  * Update LuaJIT to 2026-07-18 commit
+  * Update Nix build to 26.05
+
+## Fixed Bugs
+
+  * Restore the manual inliner for JIT mode on LLVM 17+
+  * Restore CUDA optimizations on LLVM 17+
+  * Fix missing build dependency of Terra binary on static library when
+    whole-archive mode is enabled
+  * Stop hard-coding C calling convention based on compile-time host detection
+  * Fix tests using CUDA APIs removed in CUDA 13
+  * Fix parallel assignment of aggregates
+
+## Changed behaviors
+
+  * Upgrade CMake build from deprecated FindCUDA to FindCUDAToolkit
+  * Build now requires CMake 3.26.4 or newer
+
 # Release 1.2.1 (2026-07-31)
 
 This release adds new LLVM versions and brings lagging platforms (Windows and
