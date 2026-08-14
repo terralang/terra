@@ -114,7 +114,7 @@ If the binary releases are not appropriate, then you can also build Terra from s
 
   * A working C/C++ compiler (GCC, Clang, MSVC, etc.) that supports at least C++ 17
   * Windows only: Visual Studio 2022 (other versions may work but are untested)
-  * CMake (version 3.5 or greater)
+  * CMake (version 3.26.4 or greater)
   * Linux, macOS, FreeBSD only: GNU Make (required for building LuaJIT)
   * LLVM and Clang (see suppport table below)
   * LuaJIT (note this is downloaded and installed automatically by default)
@@ -250,8 +250,8 @@ following CMake flag:
 -DTERRA_ENABLE_CUDA=ON # or OFF
 ```
 
-For more details on how CMake detects CUDA, see [the FindCUDA
-documentation](https://cmake.org/cmake/help/v3.5/module/FindCUDA.html).
+For more details on how CMake detects CUDA, see [the FindCUDAToolkit
+documentation](https://cmake.org/cmake/help/v3.26/module/FindCUDAToolkit.html).
 
 ### Additional Build Flags for CMake
 

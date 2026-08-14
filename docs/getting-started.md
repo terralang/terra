@@ -1178,44 +1178,39 @@ In general, macros are just syntax sugar for escapes where each argument to the 
 Building Terra
 --------------
 
-If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM 3.5, Clang 3.5 (the C/C++ frontend for LLVM), and LuaJIT 2.0.3 -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM.
+If the binary releases are not appropriate, then you can also build Terra from source. Terra uses LLVM, Clang (the C/C++ frontend for LLVM), and LuaJIT -- a tracing-JIT for Lua code.  Terra will download and compile LuaJIT for you, but you will need to install Clang and LLVM. See the top-level README for a [list of the supported LLVM versions](https://github.com/terralang/terra#supported-llvm-versions).
 
+### Obtaining LLVM ###
 
-### Windows ###
+The Terra project maintains a curated set of LLVM binaries [here](https://github.com/terralang/llvm-build/releases). The page for each release describes the available build configurations and their options. The dependencies are intentionally minimized to maximize compatibility: generally, the only thing you need to build against these binaries are the base OS toolchain (`build-essential` or equivalent) and CMake.
 
-For instructions on installing Terra in Windows see this [readme](https://github.com/terralang/terra/blob/master/msvc/README.md). You will need a built copy of LLVM and Clang 3.5, as well as a copy of the LuaJIT sources.
+You can also use LLVM binaries from the distribution or from LLVM itself. We have found in the past that the quality of these binaries varies: for example, Ubuntu packages are known to slice their components into multiple pieces, but without updating the installed CMake files, leading to broken builds in some cases. They often also have hidden, extra dependencies that are not officially recorded. Support for these binaries is therefore more unstable and may vary by distro and release version.
 
+### CMake Build ###
 
-### Linux/OSX ###
+All platforms now build via CMake. A typical build procedure for Terra looks like:
 
-The easiest way to get a working LLVM/Clang install is to download the download the _Clang Binaries_ (which also include LLVM binaries) from the
-[LLVM download](http://llvm.org/releases/download.html) page, and unzip this package.
+    git clone https://github.com/terralang/terra.git
+    cd terra/build
+    cmake -DCMAKE_INSTALL_PREFIX=$PWD/../install ..
+    make install -j4 # tune this for how many cores you have
 
-Now get the Terra sources:
+Alternatively, on Windows, use the appropriate build tool for your CMake generation target, or use CMake's native `--build` option.
 
-    git clone https://github.com/terralang/terra
+CMake uses the standard methods to specify the location of LLVM. Specify either `CMAKE_PREFIX_PATH` or `LLVM_ROOT` to tell CMake where to find LLVM.
 
-To point the Terra build to the version of LLVM and Clang you downloaded, create a new file `Makefile.inc` in the `terra` source directory that points to your LLVM install by including the following contents:
+Similarly CMake uses its standard FindCUDAToolkit package to discover CUDA. See the [documentation](https://cmake.org/cmake/help/latest/module/FindCUDAToolkit.html) for how to configure the CUDA location.
 
-    LLVM_CONFIG = <path-to-llvm-install>/bin/llvm-config
+Please note that on macOS, the following is required to enable the C/C++ compiler (and Terra) to find the system headers:
 
-Now run make in the `terra` directory to download LuaJIT and build Terra:
-
-    $ make
-
-If you do not create a `Makefile.inc`, the Makefile will look for the LLVM config script and Clang using these values:
-
-    LLVM_CONFIG = $(shell which llvm-config)
-    LLVM_COMPILER_BIN = $(shell $(LLVM_CONFIG) --bindir)
-    LLVM_CXX = $(LLVM_COMPILER_BIN)/clang++
-    LLVM_CC  = $(LLVM_COMPILER_BIN)/clang
-
-If your installation has these files in a different place, you can override these defaults in the `Makefile.inc` that you created in the `terra` directory.
+```
+export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+```
 
 Embedding Terra-Lua inside of C
 -------------------------------
 
-Terra can also be used as a library from C by linking against `libterra.a` (windows:  `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
+Terra can also be used as a library from C by linking against `libterra_s.a` or `libterra.so` (Windows: `terra.dll`). The interface is very similar that of the [Lua interpreter](http://queue.acm.org/detail.cfm?id=1983083).
 A simple example initializes Terra and then runs code from the file specified in each argument:
 
     //simple.cpp
