@@ -330,28 +330,50 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     InitializeNativeTargetDisassembler();
     std::string Error;
     std::string TripleName = llvm::sys::getProcessTriple();
+    llvm::Triple TheTriple(TripleName);
     std::string CPU = llvm::sys::getHostCPUName().str();
 
-    const Target *TheTarget = TargetRegistry::lookupTarget(TripleName, Error);
+    const Target *TheTarget = TargetRegistry::lookupTarget(
+#if LLVM_VERSION < 210
+            TripleName,
+#else
+            TheTriple,
+#endif
+            Error);
     assert(TheTarget && "Unable to create target!");
+#if LLVM_VERSION < 220
     const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
             *TheTarget->createMCRegInfo(TripleName), TripleName, MCTargetOptions());
+#else
+    const MCAsmInfo *MAI = TheTarget->createMCAsmInfo(
+            *TheTarget->createMCRegInfo(TheTriple), TheTriple, MCTargetOptions());
+#endif
     assert(MAI && "Unable to create target asm info!");
     const MCInstrInfo *MII = TheTarget->createMCInstrInfo();
     assert(MII && "Unable to create target instruction info!");
-    const MCRegisterInfo *MRI = TheTarget->createMCRegInfo(TripleName);
+    const MCRegisterInfo *MRI = TheTarget->createMCRegInfo(
+#if LLVM_VERSION < 220
+            TripleName
+#else
+            TheTriple
+#endif
+    );
     assert(MRI && "Unable to create target register info!");
 
     std::string FeaturesStr;
-    const MCSubtargetInfo *STI =
-            TheTarget->createMCSubtargetInfo(TripleName, CPU, FeaturesStr);
+    const MCSubtargetInfo *STI = TheTarget->createMCSubtargetInfo(
+#if LLVM_VERSION < 220
+            TripleName,
+#else
+            TheTriple,
+#endif
+            CPU, FeaturesStr);
     assert(STI && "Unable to create subtarget info!");
 
 #if LLVM_VERSION < 130
     MCContext Ctx(MAI, MRI, NULL);
 #else
-    llvm::Triple TRI(llvm::sys::getProcessTriple());
-    MCContext Ctx(TRI, MAI, MRI, NULL);
+    MCContext Ctx(TheTriple, MAI, MRI, NULL);
 #endif
 
     MCDisassembler *DisAsm = TheTarget->createMCDisassembler(*STI, Ctx);
@@ -359,8 +381,8 @@ void llvmutil_disassemblefunction(void *data, size_t numBytes, size_t numInst) {
     assert(DisAsm && "Unable to create disassembler!");
 
     int AsmPrinterVariant = MAI->getAssemblerDialect();
-    MCInstPrinter *IP = TheTarget->createMCInstPrinter(
-            Triple(TripleName), AsmPrinterVariant, *MAI, *MII, *MRI);
+    MCInstPrinter *IP = TheTarget->createMCInstPrinter(TheTriple, AsmPrinterVariant, *MAI,
+                                                       *MII, *MRI);
     assert(IP && "Unable to create instruction printer!");
 
     ArrayRef<uint8_t> Bytes((uint8_t *)data, numBytes);
