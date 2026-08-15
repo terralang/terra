@@ -67,7 +67,7 @@ class PassManagerWrapper : public PassManagerBase {
 public:
     PassManagerBase *PM;
     PassManagerWrapper(PassManagerBase *PM_) : PM(PM_) {}
-    virtual void add(Pass *P) {
+    virtual void add(Pass *P) override {
         if (P->getPotentialPassManagerType() > PMT_CallGraphPassManager ||
             P->getAsImmutablePass() != NULL)
             PM->add(P);

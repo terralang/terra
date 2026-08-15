@@ -581,49 +581,55 @@ public:
             : CG(CG_), Visitor(result, TT, livenessfunction) {}
     CodeGenerator *CG;
     IncludeCVisitor Visitor;
-    virtual ~CodeGenProxy() {}
-    virtual void Initialize(ASTContext &Context) {
+    virtual ~CodeGenProxy() override {}
+    virtual void Initialize(ASTContext &Context) override {
         Visitor.SetContext(&Context);
         CG->Initialize(Context);
     }
-    virtual bool HandleTopLevelDecl(DeclGroupRef D) {
+    virtual bool HandleTopLevelDecl(DeclGroupRef D) override {
         for (DeclGroupRef::iterator b = D.begin(), e = D.end(); b != e; ++b)
             Visitor.TraverseDecl(*b);
         return CG->HandleTopLevelDecl(D);
     }
-    virtual void HandleInterestingDecl(DeclGroupRef D) { CG->HandleInterestingDecl(D); }
-    virtual void HandleTranslationUnit(ASTContext &Ctx) {
+    virtual void HandleInterestingDecl(DeclGroupRef D) override {
+        CG->HandleInterestingDecl(D);
+    }
+    virtual void HandleTranslationUnit(ASTContext &Ctx) override {
         Decl *Decl = Visitor.GetLivenessFunction();
         DeclGroupRef R = DeclGroupRef::Create(Ctx, &Decl, 1);
         CG->HandleTopLevelDecl(R);
         CG->HandleTranslationUnit(Ctx);
     }
-    virtual void HandleTagDeclDefinition(TagDecl *D) { CG->HandleTagDeclDefinition(D); }
-    virtual void HandleCXXImplicitFunctionInstantiation(FunctionDecl *D) {
+    virtual void HandleTagDeclDefinition(TagDecl *D) override {
+        CG->HandleTagDeclDefinition(D);
+    }
+    virtual void HandleCXXImplicitFunctionInstantiation(FunctionDecl *D) override {
         CG->HandleCXXImplicitFunctionInstantiation(D);
     }
-    virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) {
+    virtual void HandleTopLevelDeclInObjCContainer(DeclGroupRef D) override {
         CG->HandleTopLevelDeclInObjCContainer(D);
     }
-    virtual void CompleteTentativeDefinition(VarDecl *D) {
+    virtual void CompleteTentativeDefinition(VarDecl *D) override {
         CG->CompleteTentativeDefinition(D);
     }
-    virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *D) {
+    virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *D) override {
         CG->HandleCXXStaticMemberVarInstantiation(D);
     }
-    virtual void HandleVTable(CXXRecordDecl *RD) { CG->HandleVTable(RD); }
-    virtual ASTMutationListener *GetASTMutationListener() {
+    virtual void HandleVTable(CXXRecordDecl *RD) override { CG->HandleVTable(RD); }
+    virtual ASTMutationListener *GetASTMutationListener() override {
         return CG->GetASTMutationListener();
     }
-    virtual ASTDeserializationListener *GetASTDeserializationListener() {
+    virtual ASTDeserializationListener *GetASTDeserializationListener() override {
         return CG->GetASTDeserializationListener();
     }
-    virtual void PrintStats() { CG->PrintStats(); }
+    virtual void PrintStats() override { CG->PrintStats(); }
 
-    virtual void HandleImplicitImportDecl(ImportDecl *D) {
+    virtual void HandleImplicitImportDecl(ImportDecl *D) override {
         CG->HandleImplicitImportDecl(D);
     }
-    virtual bool shouldSkipFunctionBody(Decl *D) { return CG->shouldSkipFunctionBody(D); }
+    virtual bool shouldSkipFunctionBody(Decl *D) override {
+        return CG->shouldSkipFunctionBody(D);
+    }
 };
 
 class LuaProvidedFile : public llvm::vfs::File {
