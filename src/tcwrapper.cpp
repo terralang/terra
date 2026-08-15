@@ -591,6 +591,9 @@ public:
             Visitor.TraverseDecl(*b);
         return CG->HandleTopLevelDecl(D);
     }
+    virtual void HandleInlineFunctionDefinition(FunctionDecl *D) override {
+        CG->HandleInlineFunctionDefinition(D);
+    }
     virtual void HandleInterestingDecl(DeclGroupRef D) override {
         CG->HandleInterestingDecl(D);
     }
@@ -603,6 +606,9 @@ public:
     virtual void HandleTagDeclDefinition(TagDecl *D) override {
         CG->HandleTagDeclDefinition(D);
     }
+    virtual void HandleTagDeclRequiredDefinition(const TagDecl *D) override {
+        CG->HandleTagDeclRequiredDefinition(D);
+    }
     virtual void HandleCXXImplicitFunctionInstantiation(FunctionDecl *D) override {
         CG->HandleCXXImplicitFunctionInstantiation(D);
     }
@@ -611,6 +617,18 @@ public:
     }
     virtual void CompleteTentativeDefinition(VarDecl *D) override {
         CG->CompleteTentativeDefinition(D);
+    }
+#if LLVM_VERSION < 190
+    virtual void CompleteExternalDeclaration(VarDecl *D) override {
+        CG->CompleteExternalDeclaration(D);
+    }
+#else
+    virtual void CompleteExternalDeclaration(DeclaratorDecl *D) override {
+        CG->CompleteExternalDeclaration(D);
+    }
+#endif
+    virtual void AssignInheritanceModel(CXXRecordDecl *RD) override {
+        CG->AssignInheritanceModel(RD);
     }
     virtual void HandleCXXStaticMemberVarInstantiation(VarDecl *D) override {
         CG->HandleCXXStaticMemberVarInstantiation(D);
