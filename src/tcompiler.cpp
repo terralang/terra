@@ -114,8 +114,8 @@ struct DisassembleFunctionListener : public JITEventListener {
         }
     }
 
-    virtual void NotifyObjectEmitted(const object::ObjectFile &Obj,
-                                     const RuntimeDyld::LoadedObjectInfo &L) {
+    virtual void notifyObjectLoaded(ObjectKey K, const object::ObjectFile &Obj,
+                                    const RuntimeDyld::LoadedObjectInfo &L) override {
         auto size_map = llvm::object::computeSymbolSizes(Obj);
         for (auto &S : size_map) {
             object::SymbolRef sym = S.first;
@@ -124,34 +124,6 @@ struct DisassembleFunctionListener : public JITEventListener {
             if (name && type) InitializeDebugData(name.get(), type.get(), S.second);
         }
     }
-};
-
-class TerraSectionMemoryManager : public SectionMemoryManager {
-public:
-    TerraSectionMemoryManager(TerraCompilationUnit *CU_in, MemoryMapper *MM = nullptr)
-            : SectionMemoryManager(MM) {
-        CU = CU_in;
-    }
-
-    TerraSectionMemoryManager(const TerraSectionMemoryManager &) = delete;
-    void operator=(const TerraSectionMemoryManager &) = delete;
-
-    void notifyObjectLoaded(ExecutionEngine *EE, const object::ObjectFile &obj) override {
-        auto size_map = llvm::object::computeSymbolSizes(obj);
-        for (auto &S : size_map) {
-            object::SymbolRef sym = S.first;
-            auto name = sym.getName();
-            auto type = sym.getType();
-            // printf("notify: %s %d %#010llx\n", cantFail(std::move(name)).data(),
-            // cantFail(std::move(type)), S.second);
-            if (name && type)
-                static_cast<DisassembleFunctionListener *>(CU->jiteventlistener)
-                        ->InitializeDebugData(name.get(), type.get(), S.second);
-        }
-    }
-
-private:
-    TerraCompilationUnit *CU;
 };
 
 static double CurrentTimeInSeconds() {
@@ -479,11 +451,12 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
                     CodeGenOptLevel::Aggressive
 #endif
                     )
-            .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU));
+            .setMCJITMemoryManager(std::make_unique<SectionMemoryManager>());
 
     CU->ee = eb.create();
     if (!CU->ee) terra_reporterror(CU->T, "llvm: %s\n", err.c_str());
     CU->jiteventlistener = new DisassembleFunctionListener(CU);
+    CU->ee->RegisterJITEventListener(CU->jiteventlistener);
 }
 
 int terra_compilerinit(struct terra_State *T) {
