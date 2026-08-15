@@ -19,7 +19,7 @@
 
 #include "llvm/IR/LegacyPassManager.h"
 
-#if LLVM_VERSION < 170
+#if LLVM_VERSION < 160
 #include "llvm/Support/Host.h"
 #else
 #include "llvm/TargetParser/Host.h"

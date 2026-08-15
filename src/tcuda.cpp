@@ -113,7 +113,13 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     auto Features = "";
 
     std::string Error;
-    auto Target = llvm::TargetRegistry::lookupTarget("nvptx64-nvidia-cuda", Error);
+    auto Target = llvm::TargetRegistry::lookupTarget(
+#if LLVM_VERSION < 210
+            "nvptx64-nvidia-cuda",
+#else
+            llvm::Triple("nvptx64-nvidia-cuda"),
+#endif
+            Error);
 
     // Print an error and exit if we couldn't find the requested target.
     // This generally occurs if we've forgotten to initialise the
@@ -136,13 +142,13 @@ void moduleToPTX(terra_State *T, llvm::Module *M, int major, int minor, std::str
     auto &LDEVICE = *E_LDEVICE;
 
     llvm::TargetOptions opt;
-#if LLVM_VERSION < 170
+#if LLVM_VERSION < 160
     auto RM = llvm::Optional<llvm::Reloc::Model>();
 #else
     std::optional<llvm::Reloc::Model> RM = std::nullopt;
 #endif
     auto TargetMachine = Target->createTargetMachine(
-#if LLVM_VERSION < 220
+#if LLVM_VERSION < 210
             "nvptx64-nvidia-cuda",
 #else
             llvm::Triple("nvptx64-nvidia-cuda"),

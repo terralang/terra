@@ -23,11 +23,7 @@ extern "C" {
 #endif
 #include "llvm/Support/ManagedStatic.h"
 
-#if LLVM_VERSION < 120
-#include "llvm/ExecutionEngine/OrcMCJITReplacement.h"
-#else
 #include "llvm/ExecutionEngine/MCJIT.h"
-#endif
 
 #include "llvm/Support/Atomic.h"
 #include "llvm/Support/FileSystem.h"
@@ -310,16 +306,22 @@ int terra_inittarget(lua_State *L) {
     TT->ctx->setOpaquePointers(false);
 #endif
     std::string err;
-    const Target *TheTarget = TargetRegistry::lookupTarget(TT->Triple, err);
+    const Target *TheTarget = TargetRegistry::lookupTarget(
+#if LLVM_VERSION < 210
+            TT->Triple,
+#else
+            TheTriple,
+#endif
+            err);
     if (!TheTarget) {
         luaL_error(L, "failed to initialize target for LLVM Triple: %s (%s)",
                    TT->Triple.c_str(), err.c_str());
     }
     TT->tm = TheTarget->createTargetMachine(
-#if LLVM_VERSION < 220
+#if LLVM_VERSION < 210
             TT->Triple,
 #else
-            llvm::Triple(TT->Triple),
+            TheTriple,
 #endif
             TT->CPU, TT->Features, options,
 #if defined(__linux__) || defined(__unix__)
@@ -477,11 +479,7 @@ static void InitializeJIT(TerraCompilationUnit *CU) {
                     CodeGenOptLevel::Aggressive
 #endif
                     )
-            .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU))
-#if LLVM_VERSION < 120
-            .setUseOrcMCJITReplacement(true)
-#endif
-            ;
+            .setMCJITMemoryManager(std::make_unique<TerraSectionMemoryManager>(CU));
 
     CU->ee = eb.create();
     if (!CU->ee) terra_reporterror(CU->T, "llvm: %s\n", err.c_str());
@@ -583,7 +581,12 @@ class Types {
                     Type *baset = (base.kind("kind") == T_functype)
                                           ? Type::getInt8Ty(*CU->TT->ctx)
                                           : GetIncomplete(&base)->type;
+#if LLVM_VERSION < 170
                     t->type = PointerType::get(baset, typ->number("addressspace"));
+#else
+                    t->type = PointerType::get(baset->getContext(),
+                                               typ->number("addressspace"));
+#endif
                 } break;
                 case T_array: {
                     Obj base;
@@ -936,7 +939,7 @@ struct CCallingConv {
                 ppc64_int_limit = 8;
                 ppc64_count_used = true;
             } break;
-#if LLVM_VERSION >= 150
+#if LLVM_VERSION >= 140
             case Triple::ArchType::spirv32:
             case Triple::ArchType::spirv64: {
                 return_empty_struct_as_void = true;
@@ -1372,11 +1375,7 @@ struct CCallingConv {
     }
     template <typename FnOrCall>
     void addByValAttr(FnOrCall *r, int idx, Type *ty) {
-#if LLVM_VERSION < 120
-        r->addParamAttr(idx - 1, Attribute::ByVal);
-#else
         r->addParamAttr(idx - 1, Attribute::getWithByValType(*CU->TT->ctx, ty));
-#endif
     }
     template <typename FnOrCall>
     void addNoUndefAttr(FnOrCall *r, int idx) {
@@ -1496,7 +1495,13 @@ struct CCallingConv {
         return fn;
     }
 
-    PointerType *Ptr(Type *t, unsigned as = 0) { return PointerType::get(t, as); }
+    PointerType *Ptr(Type *t, unsigned as = 0) {
+#if LLVM_VERSION < 170
+        return PointerType::get(t, as);
+#else
+        return PointerType::get(t->getContext(), as);
+#endif
+    }
     Value *ConvertPrimitive(IRBuilder<> *B, Value *src, Type *dstType, bool issigned) {
         if (!dstType->isIntegerTy()) return src;
         if (dstType == Type::getInt1Ty(*CU->TT->ctx)) {
@@ -2663,7 +2668,11 @@ struct FunctionEmitter {
 #endif
         ) {
             unsigned as = addr->getType()->getPointerAddressSpace();
+#if LLVM_VERSION < 170
             Type *resultType = PointerType::get(entryTType->type, as);
+#else
+            Type *resultType = PointerType::get(entryTType->type->getContext(), as);
+#endif
             addr = B->CreateBitCast(addr, resultType);
         }
 
@@ -3247,7 +3256,7 @@ struct FunctionEmitter {
         Type *resultType = Type::getInt1Ty(*CU->TT->ctx);
         if (cond->getType()->isVectorTy()) {
             VectorType *vt = cast<VectorType>(cond->getType());
-#if LLVM_VERSION < 130
+#if LLVM_VERSION < 120
             resultType = VectorType::get(resultType, vt->getNumElements(), false);
 #else
             resultType = VectorType::get(resultType,
@@ -3355,16 +3364,10 @@ struct FunctionEmitter {
         DEBUG_ONLY(T) {
             MDNode *scope = debugScopeForFile(customfilename ? customfilename
                                                              : obj->string("filename"));
-#if LLVM_VERSION < 120
-            B->SetCurrentDebugLocation(DebugLoc::get(
-                    customfilename ? customlinenumber : obj->number("linenumber"), 0,
-                    scope));
-#else
             B->SetCurrentDebugLocation(DILocation::get(
                     scope->getContext(),
                     customfilename ? customlinenumber : obj->number("linenumber"), 0,
                     scope));
-#endif
         }
     }
 
@@ -3870,7 +3873,7 @@ static void *JITGlobalValue(TerraCompilationUnit *CU, GlobalValue *gv) {
     ExecutionEngine *ee = CU->ee;
     if (gv->isDeclaration()) {
         StringRef name = gv->getName();
-#if LLVM_VERSION < 180
+#if LLVM_VERSION < 160
         if (name.startswith("\01"))  // remove asm renaming tag before looking for symbol
             name = name.substr(1);
 #else
