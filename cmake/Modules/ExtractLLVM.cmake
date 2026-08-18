@@ -25,6 +25,7 @@ list(APPEND TERRA_LLVM_COMPONENTS
   bitwriter
   codegen
   core
+  debuginfodwarf
   executionengine
   instcombine
   ipo

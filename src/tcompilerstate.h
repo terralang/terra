@@ -4,11 +4,32 @@
 #include "llvmheaders.h"
 #include "tinline.h"
 
+#include <memory>
+#include <string>
+#include <vector>
+
+// One row of a line table, at the address the code was actually loaded at. A
+// zero line means no source line for this address, which covers both the end of
+// a sequence and a row whose line or file the DWARF did not give.
+struct TerraLineInfo {
+    uint64_t addr;
+    uint32_t line;
+    uint32_t fileid;  // indexes TerraDebugInfo::filenames
+};
+
+// The line table of one JIT'd object, shared by every function in it. It is
+// read when the object loads rather than when a frame is printed, because
+// printing happens from a signal handler, where parsing DWARF would allocate.
+struct TerraDebugInfo {
+    std::vector<TerraLineInfo> lines;  // sorted by addr
+    std::vector<std::string> filenames;
+};
+
 struct TerraFunctionInfo {
-    llvm::LLVMContext *ctx;
     std::string name;
     void *addr;
     size_t size;
+    std::shared_ptr<TerraDebugInfo> debug;
 };
 class Types;
 struct CCallingConv;
@@ -79,7 +100,8 @@ struct TerraCompilationUnit {
 };
 
 struct terra_CompilerState {
-    int nreferences;
+    int nreferences = 0;
+    int debug = 0;
     llvm::sys::MemoryBlock MB;
     llvm::DenseMap<const void *, TerraFunctionInfo> functioninfo;
 };

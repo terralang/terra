@@ -9,3 +9,4 @@ ContinuationIndentWidth: 8
 DerivePointerAlignment: false
 PointerAlignment: Right
 SortIncludes: false # breaks the build when enabled
+Standard: c++17

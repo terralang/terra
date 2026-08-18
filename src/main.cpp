@@ -1,5 +1,6 @@
 /* See Copyright Notice in ../LICENSE.txt */
 
+#include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,10 @@
 #include <signal.h>
 #include <getopt.h>
 #include <unistd.h>
+#include <sys/mman.h>
+#if !defined(MAP_ANONYMOUS) && defined(MAP_ANON)
+#define MAP_ANONYMOUS MAP_ANON
+#endif
 #endif
 #include "terra.h"
 
@@ -31,37 +36,101 @@ void parse_args(lua_State *L, int argc, char **argv, terra_Options *options,
 static int getargs(lua_State *L, char **argv, int n);
 static int docall(lua_State *L, int narg, int clear);
 
-static void (*terratraceback)(void *);
+static void (*volatile terratraceback)(void *);
 
 #ifndef _WIN32
 void sigsegv(int sig, siginfo_t *info, void *uap) {
     signal(sig,
            SIG_DFL);  // reset signal to default, just in case traceback itself crashes
-    terratraceback(uap);  // call terra's pretty traceback
-    raise(sig);           // rethrow the signal to the default handler
+    if (terratraceback) terratraceback(uap);  // terra's pretty traceback
+    fflush(NULL);
+    raise(sig);  // rethrow the signal to the default handler
 }
+
+// Run signal handler on an altstack in case of stack overflow. Terra's main
+// process is single-threaded, so we only need one of these.
+static struct {
+    void *region;
+    size_t regionsize;
+    void *stack;
+    size_t stacksize;
+} altstack;
+
+static void installaltstack() {
+    size_t pagesize = (size_t)sysconf(_SC_PAGESIZE);
+    // Expand altstack to be 64KB minimum, plus two guard pages.
+    size_t wanted = (size_t)std::max<long>(SIGSTKSZ, 64 * 1024);
+    size_t stacksize = (wanted + pagesize - 1) & ~(pagesize - 1);
+    size_t regionsize = stacksize + 2 * pagesize;
+
+    char *region = (char *)mmap(NULL, regionsize, PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (region == MAP_FAILED) {
+        perror("terra: could not map a signal stack");
+        return;
+    }
+
+    char *stack = region + pagesize;
+    if (mprotect(region, pagesize, PROT_NONE) != 0 ||
+        mprotect(stack + stacksize, pagesize, PROT_NONE) != 0) {
+        perror("terra: could not guard the signal stack");
+        munmap(region, regionsize);
+        return;
+    }
+    stack_t ss;
+    ss.ss_sp = stack;
+    ss.ss_size = stacksize;
+    ss.ss_flags = 0;
+    if (sigaltstack(&ss, NULL) != 0) {
+        perror("terra: could not install the signal stack");
+        munmap(region, regionsize);
+        return;
+    }
+    altstack.region = region;
+    altstack.regionsize = regionsize;
+    altstack.stack = stack;
+    altstack.stacksize = stacksize;
+}
+
+void releasesignalstack() {
+    if (!altstack.region) return;
+    // Disable altstack before unmapping to avoid use after free.
+    stack_t ss;
+    ss.ss_sp = altstack.stack;
+    ss.ss_size = altstack.stacksize;
+    ss.ss_flags = SS_DISABLE;
+    if (sigaltstack(&ss, NULL) != 0) return;
+    munmap(altstack.region, altstack.regionsize);
+    memset(&altstack, 0, sizeof(altstack));
+}
+
 void registerhandler() {
+    installaltstack();
+
     struct sigaction sa;
-    sa.sa_flags = SA_RESETHAND | SA_SIGINFO;
+    sa.sa_flags = SA_RESETHAND | SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     sa.sa_sigaction = sigsegv;
     sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGBUS, &sa, NULL);
     sigaction(SIGILL, &sa, NULL);
+    sigaction(SIGFPE, &sa, NULL);
 }
 #else
 LONG WINAPI windowsheapcorruptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == STATUS_HEAP_CORRUPTION) {
         // The traceback is often useless, so make it clear what happened
         printf("Heap corruption detected!\n");
-        terratraceback(ExceptionInfo->ContextRecord);
-        fflush(stdout);
+        if (terratraceback) terratraceback(ExceptionInfo->ContextRecord);
+        fflush(NULL);
         TerminateProcess(GetCurrentProcess(),
                          ExceptionInfo->ExceptionRecord->ExceptionCode);
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
 LONG WINAPI windowsexceptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
-    terratraceback(ExceptionInfo->ContextRecord);
+    if (terratraceback) terratraceback(ExceptionInfo->ContextRecord);
+    fflush(NULL);
     return EXCEPTION_EXECUTE_HANDLER;
 }
 void registerhandler() {
@@ -69,7 +138,18 @@ void registerhandler() {
     AddVectoredExceptionHandler(1, windowsheapcorruptionhandler);
     SetUnhandledExceptionFilter(windowsexceptionhandler);
 }
+void releasesignalstack() {}
 #endif
+
+// lua_close tears down the compiler state (captured in the traceback
+// closure), so clear the pointer here to avoid a use after free during
+// shutdown. This means that user finalizer code called in shutdown will not
+// get stack traces, but the signal handler will at least make sure the
+// streams get flushed.
+void teardowncrashsignal() {
+    terratraceback = NULL;
+    releasesignalstack();
+}
 
 void setupcrashsignal(lua_State *L) {
     lua_getglobal(L, "terralib");
@@ -124,6 +204,7 @@ int main(int argc, char **argv) {
         dotty(L);
     }
 
+    teardowncrashsignal();
     lua_close(L);
     terra_llvmshutdown();
 

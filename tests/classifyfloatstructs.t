@@ -82,12 +82,22 @@ add4_val_val:disas()
  
 
 if terralib.lookupsymbol and require("ffi").os ~= "Windows" then
-    terra sizecheck() 
+    terra sizecheck()
      var si : terralib.SymbolInfo
-     terralib.lookupsymbol(add4_val_val,&si)
+     if not terralib.lookupsymbol(add4_val_val,&si) then return [uint64](0) end
      return si.size
     end
-    assert(sizecheck() < 16)
+    -- The struct has to be passed and returned in registers: going through
+    -- memory costs far more than the few instructions the adds take. x86-64
+    -- packs it into two SIMD adds and a return; a fixed width instruction set
+    -- spends four bytes each on four scalar adds and the return.
+    local arch = require("ffi").arch
+    local maxsize = arch == "arm64" and 24 or 16
+    local size = tonumber(sizecheck())
+    assert(size > 0, "lookupsymbol did not find add4_val_val")
+    assert(size < maxsize,
+           "add4_val_val is "..size.." bytes on "..arch
+           ..", expected fewer than "..maxsize)
 end
 --------------------------------------------------------------------------------
  

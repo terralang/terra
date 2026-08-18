@@ -11,9 +11,11 @@ extern "C" {
 #include <stdio.h>
 #include <inttypes.h>
 
+#include <algorithm>
 #include <cmath>
 #include <sstream>
 #include "llvmheaders.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 
 #include "tcompilerstate.h"  //definition of terra_CompilerState which contains LLVM state
 #include "tobj.h"
@@ -97,31 +99,163 @@ struct DisassembleFunctionListener : public JITEventListener {
     terra_State *T;
     DisassembleFunctionListener(TerraCompilationUnit *CU_) : CU(CU_), T(CU_->T) {}
 
-    void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz) {
-        if (type == object::SymbolRef::ST_Function) {
-#if !defined(__arm__) && !defined(__linux__) && !defined(__FreeBSD__)
-            name = name.substr(1);
+    void InitializeDebugData(StringRef name, object::SymbolRef::Type type, uint64_t sz,
+                             const std::shared_ptr<TerraDebugInfo> &debug) {
+        if (type != object::SymbolRef::ST_Function) return;
+        // MachO prefixes symbols with an underscore; the ELF container the JIT
+        // uses everywhere else, Windows included, does not.
+#if defined(__APPLE__)
+        name = name.substr(1);
 #endif
-            void *addr = (void *)CU->ee->getFunctionAddress(name.str());
-            if (addr) {
-                assert(addr);
-                TerraFunctionInfo &fi = T->C->functioninfo[addr];
-                fi.ctx = CU->TT->ctx;
-                fi.name = name.str();
-                fi.addr = addr;
-                fi.size = sz;
+        void *addr = (void *)CU->ee->getFunctionAddress(name.str());
+        if (!addr) return;
+        TerraFunctionInfo &fi = T->C->functioninfo[addr];
+        fi.name = name.str();
+        fi.addr = addr;
+        fi.size = sz;
+        fi.debug = debug;
+        registered.push_back(addr);
+    }
+
+    // Dropped when the compilation unit goes away: its execution engine unmaps
+    // the code, and the JIT hands the same addresses out again.
+    std::vector<void *> registered;
+    void forgetfunctions() {
+        for (void *addr : registered) T->C->functioninfo.erase(addr);
+        registered.clear();
+    }
+
+    // Where a section was loaded, against where the object says it is.
+    struct SectionBias {
+        uint64_t start, end;
+        int64_t bias;
+    };
+
+    static void loadedsections(const object::ObjectFile &Obj,
+                               const RuntimeDyld::LoadedObjectInfo &L,
+                               std::vector<SectionBias> *out) {
+        for (const object::SectionRef &sec : Obj.sections()) {
+            uint64_t load = L.getSectionLoadAddress(sec);
+            if (!load) continue;
+            out->push_back({sec.getAddress(), sec.getAddress() + sec.getSize(),
+                            (int64_t)(load - sec.getAddress())});
+        }
+    }
+
+    static bool rebase(const std::vector<SectionBias> &sections, uint64_t addr,
+                       uint64_t *out) {
+        if (sections.empty()) {  // already relocated for us
+            *out = addr;
+            return true;
+        }
+        for (const SectionBias &s : sections) {
+            if (addr < s.start || addr > s.end) continue;
+            *out = (uint64_t)((int64_t)addr + s.bias);
+            return true;
+        }
+        return false;
+    }
+
+    // Flatten the line table into the rows stacktrace_findline reads, at the
+    // addresses the code was loaded at.
+    static void readlinetable(DWARFContext *dwarf,
+                              const std::vector<SectionBias> &sections,
+                              TerraDebugInfo *debug) {
+        DILineInfoSpecifier spec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath);
+        llvm::StringMap<uint32_t> fileids;
+        for (const auto &cu : dwarf->compile_units()) {
+            const DWARFDebugLine::LineTable *lt = dwarf->getLineTableForUnit(cu.get());
+            if (!lt) continue;
+            for (const DWARFDebugLine::Row &row : lt->Rows) {
+                TerraLineInfo li = {0, 0, 0};
+                if (!rebase(sections, row.Address.Address, &li.addr)) continue;
+                DILineInfo info;
+                if (!row.EndSequence && getlineinfo(dwarf, row.Address, spec, &info) &&
+                    info.Line != 0 && info.FileName != DILineInfo::BadString) {
+                    auto it = fileids.insert(
+                            {info.FileName, (uint32_t)debug->filenames.size()});
+                    if (it.second) debug->filenames.push_back(info.FileName);
+                    li.line = info.Line;
+                    li.fileid = it.first->second;
+                }
+                debug->lines.push_back(li);
             }
         }
+        // Where a sequence ends exactly where the next begins, the row with a
+        // line has to win, so sort the terminator first and take the last match.
+        std::stable_sort(debug->lines.begin(), debug->lines.end(),
+                         [](const TerraLineInfo &a, const TerraLineInfo &b) {
+                             if (a.addr != b.addr) return a.addr < b.addr;
+                             return a.line == 0 && b.line != 0;
+                         });
+    }
+
+    static bool getlineinfo(DWARFContext *dwarf, object::SectionedAddress addr,
+                            DILineInfoSpecifier spec, DILineInfo *out) {
+#if LLVM_VERSION < 210
+        *out = dwarf->getLineInfoForAddress(addr, spec);
+        return true;
+#else
+        std::optional<DILineInfo> li = dwarf->getLineInfoForAddress(addr, spec);
+        if (!li) return false;
+        *out = *li;
+        return true;
+#endif
+    }
+
+    // RuntimeDyld only hands back a copy of the object relocated to where the
+    // code was loaded for ELF. Otherwise take the debug sections as emitted and
+    // rebase the rows by hand.
+    std::shared_ptr<TerraDebugInfo> readdebuginfo(
+            const object::ObjectFile &Obj, const RuntimeDyld::LoadedObjectInfo &L) {
+        // The context holds references into whichever of these it is built over,
+        // so both are declared first and destroyed after it.
+        object::OwningBinary<object::ObjectFile> debugobj = L.getObjectForDebug(Obj);
+        llvm::StringMap<std::unique_ptr<MemoryBuffer>> copies;
+        std::unique_ptr<DWARFContext> dwarf;
+        std::vector<SectionBias> sections;
+        if (debugobj.getBinary()) {
+            dwarf = DWARFContext::create(*debugobj.getBinary());
+        } else {
+            for (const object::SectionRef &sec : Obj.sections()) {
+                auto name = sec.getName();
+                if (!name) continue;
+                // Section names reach DWARF without their leading punctuation:
+                // ELF spells it .debug_line and MachO __debug_line.
+                StringRef n = name.get();
+                size_t start = n.find_first_not_of("._");
+                if (start == StringRef::npos) continue;
+                n = n.substr(start);
+                if (n.substr(0, 6) != "debug_") continue;
+                auto contents = sec.getContents();
+                if (!contents) continue;
+                copies[Obj.mapDebugSectionName(n)] =
+                        MemoryBuffer::getMemBufferCopy(contents.get());
+            }
+            if (copies.empty()) return NULL;
+            dwarf = DWARFContext::create(copies, Obj.getBytesInAddress(),
+                                         Obj.isLittleEndian());
+            loadedsections(Obj, L, &sections);
+        }
+        if (!dwarf) return NULL;
+        std::shared_ptr<TerraDebugInfo> debug = std::make_shared<TerraDebugInfo>();
+        readlinetable(dwarf.get(), sections, debug.get());
+        if (debug->lines.empty()) return NULL;
+        return debug;
     }
 
     virtual void notifyObjectLoaded(ObjectKey K, const object::ObjectFile &Obj,
                                     const RuntimeDyld::LoadedObjectInfo &L) override {
+        // Without -g there are no line tables to read.
+        std::shared_ptr<TerraDebugInfo> debug;
+        if (T->options.debug != 0) debug = readdebuginfo(Obj, L);
         auto size_map = llvm::object::computeSymbolSizes(Obj);
         for (auto &S : size_map) {
             object::SymbolRef sym = S.first;
             auto name = sym.getName();
             auto type = sym.getType();
-            if (name && type) InitializeDebugData(name.get(), type.get(), S.second);
+            if (!name || !type) continue;
+            InitializeDebugData(name.get(), type.get(), S.second, debug);
         }
     }
 };
@@ -473,8 +607,8 @@ int terra_compilerinit(struct terra_State *T) {
     lua_pop(T->L, 1);  // remove terra from stack
 
     T->C = new terra_CompilerState();
-    memset(T->C, 0, sizeof(terra_CompilerState));
     T->C->nreferences = 1;
+    T->C->debug = T->options.debug;
     return 0;
 }
 void freetarget(TerraTarget *TT) {
@@ -498,6 +632,7 @@ static void freecompilationunit(TerraCompilationUnit *CU) {
         delete CU->fpm;
         if (CU->ee) {
             CU->ee->UnregisterJITEventListener(CU->jiteventlistener);
+            ((DisassembleFunctionListener *)CU->jiteventlistener)->forgetfunctions();
             delete CU->jiteventlistener;
             delete CU->ee;
         }
@@ -1986,7 +2121,7 @@ struct FunctionEmitter {
     Locals *locals;
 
     IRBuilder<> *B;
-    std::vector<std::pair<BasicBlock *, size_t> >
+    std::vector<std::pair<BasicBlock *, size_t>>
             breakpoints;  // stack of basic blocks where a break statement should go
 
     DIBuilder *DB;
@@ -2076,6 +2211,10 @@ struct FunctionEmitter {
                     fstate->func->addFnAttr(Attribute::NoInline);
                 }
             }
+            if (CU->T->options.debug != 0) {
+                fstate->func->addFnAttr("frame-pointer", "all");
+            }
+
             if (funcobj->hasfield("noreturn")) {
                 if (funcobj->boolean("noreturn")) {
                     fstate->func->addFnAttr(Attribute::NoReturn);
@@ -4152,7 +4291,7 @@ static int terra_linkllvmimpl(lua_State *L) {
     size_t length;
     const char *filename = lua_tolstring(L, 2, &length);
     bool fromstring = lua_toboolean(L, 3);
-    ErrorOr<std::unique_ptr<MemoryBuffer> > mb = std::error_code();
+    ErrorOr<std::unique_ptr<MemoryBuffer>> mb = std::error_code();
     if (fromstring) {
         std::unique_ptr<MemoryBuffer> mbcontents(
                 MemoryBuffer::getMemBuffer(StringRef(filename, length), "", false));
@@ -4167,7 +4306,7 @@ static int terra_linkllvmimpl(lua_State *L) {
             terra_reporterror(T, "linkllvm(%s): %s\n", filename,
                               mb.getError().message().c_str());
     }
-    Expected<std::unique_ptr<Module> > mm =
+    Expected<std::unique_ptr<Module>> mm =
             parseBitcodeFile(mb.get()->getMemBufferRef(), *TT->ctx);
     if (!mm) {
         if (fromstring) {
