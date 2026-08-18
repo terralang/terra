@@ -1241,18 +1241,16 @@ A low-level interface to the disassembler. Print the disassembly of instructions
 
 ---
 
-    terra terralib.lookupsymbol(ip : &opaque, addr : &&opaque, size : &uint64, name : &rawstring, namelength : &uint64) : bool
+    terra terralib.lookupsymbol(ip : &opaque, info : &terralib.SymbolInfo) : bool
 
-Attempts to look up information about a Terra function given a pointer  `ip` to any instruction in the function. Returns `true` if successful,
-filling in `addr` with the start of the function and `size` with the size of the function in bytes. Fills in `name` with a pointer to a fixed-width string of to `namemax` characters holding the function name.
+Attempts to look up information about a Terra function given a pointer `ip` to any instruction in the function. Returns `true` if successful, filling in `info`, whose fields are `addr`, the start of the function, `size`, the size of the function in bytes, and `name` and `namelength`, which describe the function name.
 
 ---
 
-    terra terralib.lookupline(fnaddr : &opaque, ip : &opaque, filename : &rawstring, namelength : &uint64, line : &uint64) : bool
+    terra terralib.lookupline(fnaddr : &opaque, ip : &opaque, info : &terralib.LineInfo) : bool
 
-Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it.
-Returns `true` if successful, filling in `line` with line on which the instruction occurred and `filename` with a pointer to a fixed-width string of to `namemax` characters holding the filename.
-Fills up to `namemax` characters of the function's name into `name`.
+Attempts to look up information about a Terra instruction given a pointer `ip` to the instruction and a pointer `fnaddr` to the start of the function containing it, as returned in the `addr` field by `terralib.lookupsymbol`.
+Returns `true` if successful, filling in `info`, whose fields are `linenum`, the line on which the instruction occurred, and `name` and `namelength`, which describe the file name. Requires that the program was compiled with debugging information (`-g`).
 
 Embedding Terra inside C code
 =============================

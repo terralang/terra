@@ -3,7 +3,7 @@
 #include "terrastate.h"
 #include "tcompilerstate.h"
 
-#if !defined(__arm__) && !defined(__aarch64__) && !defined(__PPC__)
+#if !defined(__arm__) && !defined(__PPC__)
 
 #ifndef _WIN32
 #include <execinfo.h>
@@ -20,38 +20,28 @@
 
 using namespace llvm;
 
-static bool pointisbeforeinstruction(uintptr_t point, uintptr_t inst, bool isNextInst) {
-    return point < inst || (!isNextInst && point == inst);
-}
-static bool stacktrace_findline(terra_CompilerState *C, const TerraFunctionInfo *fi,
-                                uintptr_t ip, bool isNextInstr, StringRef *file,
-                                size_t *lineno) {
-#if LLVM_VERSION < 80
-    const std::vector<JITEvent_EmittedFunctionDetails::LineStart> &LineStarts =
-            fi->efd.LineStarts;
-    size_t i;
-    for (i = 0; i + 1 < LineStarts.size() &&
-                pointisbeforeinstruction(LineStarts[i + 1].Address, ip, isNextInstr);
-         i++) {
-        // printf("\nscanning for %p, %s:%d
-        // %p\n",(void*)ip,DIFile(LineStarts[i].Loc.getScope(*C->ctx)).getFilename().data(),(int)LineStarts[i].Loc.getLine(),(void*)LineStarts[i].Address);
+// Runs from a signal handler, so it must not allocate.
+static bool stacktrace_findline(const TerraFunctionInfo *fi, uintptr_t ip,
+                                bool isNextInstr, StringRef *file, size_t *lineno) {
+    if (!fi->debug) return false;
+    const std::vector<TerraLineInfo> &lines = fi->debug->lines;
+    // A return address points at the instruction after the call, which can
+    // already belong to the next statement. Look up the call itself.
+    uint64_t addr = isNextInstr ? ip - 1 : ip;
+    size_t lo = 0, hi = lines.size();
+    while (lo < hi) {  // the last row at or before addr
+        size_t mid = lo + (hi - lo) / 2;
+        if (lines[mid].addr <= addr)
+            lo = mid + 1;
+        else
+            hi = mid;
     }
-
-    if (i < LineStarts.size()) {
-        if (lineno) *lineno = LineStarts[i].Loc.getLine();
-        // getFilename was just converting the 0th operand to a string
-        if (file && LineStarts[i].Loc.getScope()) {
-            if (auto *s = llvm::cast_or_null<MDString>(
-                        LineStarts[i].Loc.getScope()->getOperand(0)))
-                *file = s->getString();
-            else
-                *file = StringRef();
-        }
-        return true;
-    }
-#endif
-
-    return false;
+    if (lo == 0) return false;
+    const TerraLineInfo &li = lines[lo - 1];
+    if (li.line == 0) return false;
+    if (lineno) *lineno = li.line;
+    if (file) *file = fi->debug->filenames[li.fileid];
+    return true;
 }
 
 static bool stacktrace_findsymbol(terra_CompilerState *C, uintptr_t ip,
@@ -87,7 +77,7 @@ static int terra_backtrace(void **frames, int maxN, void *rip, void *rbp) {
     int i;
 #ifndef _WIN32
     int fds[2];
-    pipe(fds);
+    if (pipe(fds) != 0) return 1;
 #endif
     // successful write to a pipe checks that we can read
     // Frame's memory. Otherwise we might segfault if rbp holds junk.
@@ -135,7 +125,7 @@ static bool printfunctioninfo(terra_CompilerState *C, uintptr_t ip, bool isNextI
                fi->name.c_str(), (int)(ip - fstart));
         StringRef filename;
         size_t lineno;
-        if (stacktrace_findline(C, fi, ip, isNextInst, &filename, &lineno)) {
+        if (stacktrace_findline(fi, ip, isNextInst, &filename, &lineno)) {
             printf("(%s:%d)\n", filename.data(), (int)lineno);
             stacktrace_printsourceline(filename.data(), lineno);
         } else {
@@ -150,6 +140,7 @@ static void printstacktrace(void *uap, void *data) {
     terra_CompilerState *C = (terra_CompilerState *)data;
     const int maxN = 128;
     void *frames[maxN];
+    bool anyterra = false;
     void *rip;
     void *rbp;
 
@@ -160,15 +151,30 @@ static void printstacktrace(void *uap, void *data) {
     } else {
         ucontext_t *uc = (ucontext_t *)uap;
 #ifdef __linux__
+#if defined(__aarch64__)
+        rip = (void *)uc->uc_mcontext.pc;
+        rbp = (void *)uc->uc_mcontext.regs[29];
+#else
         rip = (void *)uc->uc_mcontext.gregs[REG_RIP];
         rbp = (void *)uc->uc_mcontext.gregs[REG_RBP];
+#endif
 #else
 #ifdef __FreeBSD__
+#if defined(__aarch64__)
+        rip = (void *)uc->uc_mcontext.mc_gpregs.gp_elr;
+        rbp = (void *)uc->uc_mcontext.mc_gpregs.gp_x[29];
+#else
         rip = (void *)uc->uc_mcontext.mc_rip;
         rbp = (void *)uc->uc_mcontext.mc_rbp;
+#endif
+#else
+#if defined(__aarch64__)
+        rip = (void *)uc->uc_mcontext->__ss.__pc;
+        rbp = (void *)uc->uc_mcontext->__ss.__fp;
 #else
         rip = (void *)uc->uc_mcontext->__ss.__rip;
         rbp = (void *)uc->uc_mcontext->__ss.__rbp;
+#endif
 #endif
 #endif
     }
@@ -199,7 +205,9 @@ static void printstacktrace(void *uap, void *data) {
                 uap == NULL;  // unless this is the first entry in suspended context then
                               // the address is really a pointer to the _next_ instruction
         uintptr_t ip = (uintptr_t)frames[i];
-        if (!printfunctioninfo(C, ip, isNextInst, i)) {
+        if (printfunctioninfo(C, ip, isNextInst, i)) {
+            anyterra = true;
+        } else {
 #ifndef _WIN32
             printf("%s\n", symbols[i]);
 #else
@@ -218,6 +226,12 @@ static void printstacktrace(void *uap, void *data) {
 #ifndef _WIN32
     free(symbols);
 #endif
+    // Without -g the JIT keeps no frame pointer, so the walk leaves the
+    // innermost Terra function and lands in whatever called into Terra. Whether
+    // it stepped over any Terra frames on the way is not knowable from here: a
+    // single frame is also what a complete stack looks like.
+    if (anyterra && !C->debug)
+        printf("some Terra frames may be missing; run with -g to see the full stack\n");
 }
 
 struct SymbolInfo {
@@ -247,19 +261,39 @@ static bool terra_lookupline(void *fnaddr, void *ip, LineInfo *r,
     if (C->functioninfo.count(fnaddr) == 0) return false;
     const TerraFunctionInfo &fi = C->functioninfo[fnaddr];
     StringRef sr;
-    if (!stacktrace_findline(C, &fi, (uintptr_t)ip, false, &sr, &r->linenum))
-        return false;
+    if (!stacktrace_findline(&fi, (uintptr_t)ip, false, &sr, &r->linenum)) return false;
     r->name = sr.data();
     r->namelength = sr.size();
     return true;
 }
 
-#define CLOSURE_MAX_SIZE 64
+/* AArch64 needs 20 bytes plus 16 per captured argument, of which there are 4 */
+#define CLOSURE_MAX_SIZE 96
 
 static void *createclosure(uint8_t *buf, void *fn, int nargs, void **env, int nenv) {
     assert(nargs <= 4);
     assert(*env);
     uint8_t *code = buf;
+#if defined(__aarch64__)
+    // A 64 bit immediate takes a movz and three movk on a fixed width encoding.
+#define ENCODE_MOV(reg, imm)                                                     \
+    do {                                                                         \
+        uint64_t data = (uint64_t)(imm);                                         \
+        for (int shift = 0; shift < 64; shift += 16) {                           \
+            uint32_t inst = ((shift == 0) ? 0xd2800000 : 0xf2800000) |           \
+                            ((uint32_t)(shift / 16) << 21) |                     \
+                            ((uint32_t)((data >> shift) & 0xffff) << 5) | (reg); \
+            memcpy(code, &inst, 4);                                              \
+            code += 4;                                                           \
+        }                                                                        \
+    } while (0);
+    const uint8_t regnums[] = {0, 1, 2, 3};
+    ENCODE_MOV(16, fn); /* x16 is the scratch register reserved for veneers */
+    for (int i = nargs - nenv; i < nargs; i++) ENCODE_MOV(regnums[i], *env++);
+    uint32_t branch = 0xd61f0000 | (16 << 5); /* br x16 */
+    memcpy(code, &branch, 4);
+    code += 4;
+#else
 #define ENCODE_MOV(reg, imm)           \
     do {                               \
         *code++ = 0x48 | ((reg) >> 3); \
@@ -277,6 +311,8 @@ static void *createclosure(uint8_t *buf, void *fn, int nargs, void **env, int ne
     for (int i = nargs - nenv; i < nargs; i++) ENCODE_MOV(regnums[i], *env++);
     *code++ = 0xff; /* jmp rax */
     *code++ = 0xe0;
+#endif
+    assert(code - buf <= CLOSURE_MAX_SIZE);
     return (void *)buf;
 #undef ENCODE_MOV
 }
@@ -285,9 +321,8 @@ int terra_debuginit(struct terra_State *T) {
     std::error_code ec;
     T->C->MB = llvm::sys::Memory::allocateMappedMemory(
             CLOSURE_MAX_SIZE * 3, NULL,
-            llvm::sys::Memory::MF_READ | llvm::sys::Memory::MF_WRITE |
-                    llvm::sys::Memory::MF_EXEC,
-            ec);
+            llvm::sys::Memory::MF_READ | llvm::sys::Memory::MF_WRITE, ec);
+    if (ec || !T->C->MB.base()) return 0; /* no closures, so no debug interface */
 
     void *stacktracefn = createclosure((uint8_t *)T->C->MB.base(),
                                        (void *)printstacktrace, 2, (void **)&T->C, 1);
@@ -295,6 +330,11 @@ int terra_debuginit(struct terra_State *T) {
                                        (void *)terra_lookupsymbol, 3, (void **)&T->C, 1);
     void *lookupline = createclosure((uint8_t *)T->C->MB.base() + 2 * CLOSURE_MAX_SIZE,
                                      (void *)terra_lookupline, 4, (void **)&T->C, 1);
+
+    // Also flushes the instruction cache.
+    ec = llvm::sys::Memory::protectMappedMemory(
+            T->C->MB, llvm::sys::Memory::MF_READ | llvm::sys::Memory::MF_EXEC);
+    if (ec) return 0;
 
     lua_getfield(T->L, LUA_GLOBALSINDEX, "terra");
     lua_getfield(T->L, -1, "initdebugfns");
@@ -308,7 +348,7 @@ int terra_debuginit(struct terra_State *T) {
     return 0;
 }
 
-#else /* it arm code just don't include debug interface for now */
+#else /* no closure encoding for 32 bit ARM or PowerPC yet */
 
 int terra_debuginit(struct terra_State *T) { return 0; }
 

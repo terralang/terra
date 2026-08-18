@@ -100,7 +100,7 @@ ManualInliner::ManualInliner(TargetMachine *TM, Module *m, FunctionAnalysisManag
 // recursive cycle forever.
 static bool inlineHistoryIncludes(
         Function *F, int HistoryID,
-        const SmallVectorImpl<std::pair<Function *, int> > &InlineHistory) {
+        const SmallVectorImpl<std::pair<Function *, int>> &InlineHistory) {
     while (HistoryID != -1) {
         assert(unsigned(HistoryID) < InlineHistory.size() && "invalid inline history ID");
         if (InlineHistory[HistoryID].first == F) return true;

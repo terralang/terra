@@ -28,4 +28,17 @@ function test.time(fn)
     local e = os.clock()
     return e - s
 end
+
+-- The line number of the line in `path` tagged with a marker comment, so that
+-- editing a test file cannot silently invalidate the lines it asserts on.
+function test.markerline(path, name)
+	local tag = "@" .. "@" .. name
+	local n = 0
+	for line in io.lines(path) do
+		n = n + 1
+		if line:find(tag, 1, true) then return n end
+	end
+	error("no line in " .. path .. " is tagged " .. tag, 2)
+end
+
 return test
