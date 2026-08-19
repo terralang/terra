@@ -117,16 +117,55 @@ void registerhandler() {
     sigaction(SIGFPE, &sa, NULL);
 }
 #else
-LONG WINAPI windowsheapcorruptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
-    if (ExceptionInfo->ExceptionRecord->ExceptionCode == STATUS_HEAP_CORRUPTION) {
-        // The traceback is often useless, so make it clear what happened
-        printf("Heap corruption detected!\n");
-        if (terratraceback) terratraceback(ExceptionInfo->ContextRecord);
-        fflush(NULL);
-        TerminateProcess(GetCurrentProcess(),
-                         ExceptionInfo->ExceptionRecord->ExceptionCode);
+// A fault, as opposed to the exception codes C++ and LuaJIT raise to unwind
+// with, which are somebody's business to catch.
+static bool isfault(DWORD code) {
+    switch (code) {
+        case EXCEPTION_ACCESS_VIOLATION:
+        case EXCEPTION_IN_PAGE_ERROR:
+        case EXCEPTION_ILLEGAL_INSTRUCTION:
+        case EXCEPTION_PRIV_INSTRUCTION:
+        case EXCEPTION_DATATYPE_MISALIGNMENT:
+        case EXCEPTION_INT_DIVIDE_BY_ZERO:
+        case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+        case EXCEPTION_STACK_OVERFLOW:
+            return true;
+        default:
+            return false;
     }
-    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+// Vectored handlers run before the search for a frame based one, which is the
+// only reason a fault inside JIT'd code can be reported at all: that search
+// walks the stack through .pdata, the JIT emits an ELF container and so has
+// none, and the search runs off the frame instead of finding anything. The
+// process dies there, before any unhandled exception filter is reached.
+//
+// So take a fault only where that search cannot get past it, and leave
+// everything Windows can dispatch to the filter below. A frame with no unwind
+// info is either JIT'd code or a leaf function, and nothing recovers from a
+// fault in a leaf either, so claiming both is fine.
+//
+// Heap corruption is the exception: it is raised somewhere unrelated to the
+// damage, so the traceback is usually useless and the point is to say what
+// happened. See
+// https://peteronprogramming.wordpress.com/2017/07/30/crashes-you-cant-handle-easily-3-status_heap_corruption-on-windows/
+LONG WINAPI windowsvectoredhandler(EXCEPTION_POINTERS *ExceptionInfo) {
+    DWORD code = ExceptionInfo->ExceptionRecord->ExceptionCode;
+    if (code == STATUS_HEAP_CORRUPTION) {
+        printf("Heap corruption detected!\n");
+    } else {
+        DWORD64 imagebase;
+        if (!isfault(code) ||
+            RtlLookupFunctionEntry(ExceptionInfo->ContextRecord->Rip, &imagebase, NULL))
+            return EXCEPTION_CONTINUE_SEARCH;
+    }
+    // Cleared once shutdown has torn down the state it reads, which is exactly
+    // when heap corruption is most likely, so say so either way.
+    if (terratraceback) terratraceback(ExceptionInfo->ContextRecord);
+    fflush(NULL);
+    TerminateProcess(GetCurrentProcess(), code);
+    return EXCEPTION_CONTINUE_SEARCH; /* not reached */
 }
 LONG WINAPI windowsexceptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
     if (terratraceback) terratraceback(ExceptionInfo->ContextRecord);
@@ -134,8 +173,12 @@ LONG WINAPI windowsexceptionhandler(EXCEPTION_POINTERS *ExceptionInfo) {
     return EXCEPTION_EXECUTE_HANDLER;
 }
 void registerhandler() {
-    // https://peteronprogramming.wordpress.com/2017/07/30/crashes-you-cant-handle-easily-3-status_heap_corruption-on-windows/
-    AddVectoredExceptionHandler(1, windowsheapcorruptionhandler);
+    // Reserve space on stack overflow so that we can still run the backtrace
+    // code in the handler.
+    ULONG guarantee = 64 * 1024;
+    SetThreadStackGuarantee(&guarantee);
+
+    AddVectoredExceptionHandler(1, windowsvectoredhandler);
     SetUnhandledExceptionFilter(windowsexceptionhandler);
 }
 void releasesignalstack() {}

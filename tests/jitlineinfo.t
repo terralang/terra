@@ -125,18 +125,13 @@ for i = 0, size - 1 do
   end
 end
 
+-- Ensure we actually get line info (except where not supported).
 local located = 0
 for _ in pairs(lines) do located = located + 1 end
-
--- Reading the line table takes either a copy of the emitted object with its
--- debug sections relocated to where the code was loaded, which RuntimeDyld
--- only builds for ELF, or the object's own sections read as emitted and
--- addresses biased by where the code landed, which is what MachO needs. A
--- platform with neither has nothing to read and nothing to check.
 if located == 0 then
-  assert(ffi.os ~= "Linux" and ffi.os ~= "BSD" and ffi.os ~= "OSX",
+  assert(ffi.os == "Windows" and terralib.llvmversion < 120,
          "no address in work() has line info, out of " .. size .. " bytes")
-  print("skipping: " .. ffi.os .. " JIT objects carry no usable debug info")
+  print("skipping: LLVM 11 on Windows reads back no line table")
   return
 end
 

@@ -15,7 +15,6 @@
 #else
 #include "twindows.h"
 #include <imagehlp.h>
-#include <intrin.h>
 #endif
 
 using namespace llvm;
@@ -99,6 +98,71 @@ static int terra_backtrace(void **frames, int maxN, void *rip, void *rbp) {
     return i;
 }
 
+#ifdef _WIN32
+// Win64 keeps no frame pointer chain: rbp is an ordinary register there and
+// native code is unwound from the RUNTIME_FUNCTION tables in .pdata. JIT'd code
+// has no such tables, because the JIT emits an ELF container and ELF carries
+// none, but under -g every Terra function keeps rbp, so a Terra frame can be
+// stepped by hand instead. Walking both in one loop is what lets the stack
+// cross between them in either direction: the hand written step also rebuilds
+// the rsp and rbp that the table driven one needs to carry on above a Terra
+// frame, and the table driven one restores whatever rbp the Terra frame below
+// it was using.
+
+// One table driven step, for a frame that is not Terra's. Returns false when
+// there is nothing above that can be accounted for.
+static bool unwindnative(CONTEXT *ctx, bool innermost) {
+    DWORD64 imagebase;
+    PRUNTIME_FUNCTION rf = RtlLookupFunctionEntry(ctx->Rip, &imagebase, NULL);
+    if (!rf) {
+        // No entry at all is how the ABI spells a leaf function: it saved
+        // nothing, so the return address is still on top of the stack. Only the
+        // innermost frame can be a leaf though. Anywhere else this is code the
+        // walk cannot account for, another JIT's say, and reading the stack as
+        // if it were a leaf would print noise.
+        if (!innermost || IsBadReadPtr((void *)ctx->Rsp, sizeof(void *))) return false;
+        ctx->Rip = *(DWORD64 *)ctx->Rsp;
+        ctx->Rsp += sizeof(void *);
+        return true;
+    }
+    PVOID handlerdata;
+    DWORD64 establisher;
+    RtlVirtualUnwind(UNW_FLAG_NHANDLER, imagebase, ctx->Rip, rf, ctx, &handlerdata,
+                     &establisher, NULL);
+    return true;
+}
+
+// Runs from an exception handler, so it must not allocate. The context is
+// consumed.
+static int terra_backtrace_context(terra_CompilerState *C, void **frames, int maxN,
+                                   CONTEXT *ctx) {
+    int i = 0;
+    while (i < maxN && ctx->Rip) {
+        bool innermost = i == 0;
+        frames[i++] = (void *)ctx->Rip;
+        DWORD64 rsp = ctx->Rsp;
+        const TerraFunctionInfo *fi;
+        if (stacktrace_findsymbol(C, (uintptr_t)ctx->Rip, &fi)) {
+            // Without -g there is no frame record to read, and rbp holds
+            // whatever the register allocator put there, so stop rather than
+            // follow it. printstacktrace says so afterwards.
+            if (!C->debug) break;
+            // The prologue is push rbp; mov rbp, rsp, so the frame record is
+            // the two words at rbp and the caller resumes just above them.
+            Frame *frame = (Frame *)ctx->Rbp;
+            if (!frame || IsBadReadPtr(frame, sizeof(Frame)) || !frame->addr) break;
+            ctx->Rip = (DWORD64)frame->addr;
+            ctx->Rsp = (DWORD64)(frame + 1);
+            ctx->Rbp = (DWORD64)frame->next;
+        } else if (!unwindnative(ctx, innermost)) {
+            break;
+        }
+        if (ctx->Rsp <= rsp) break;  // a step has to shrink the stack, or it is junk
+    }
+    return i;
+}
+#endif
+
 static void stacktrace_printsourceline(const char *filename, size_t lineno) {
     FILE *file = fopen(filename, "r");
     if (!file) return;
@@ -141,10 +205,9 @@ static void printstacktrace(void *uap, void *data) {
     const int maxN = 128;
     void *frames[maxN];
     bool anyterra = false;
-    void *rip;
-    void *rbp;
 
 #ifndef _WIN32
+    void *rip, *rbp;
     if (uap == NULL) {
         rip = __builtin_return_address(0);
         rbp = __builtin_frame_address(1);
@@ -178,19 +241,19 @@ static void printstacktrace(void *uap, void *data) {
 #endif
 #endif
     }
-#else
-    if (uap == NULL) {
-        CONTEXT cur_context;
-        RtlCaptureContext(&cur_context);
-        rbp = (void *)cur_context.Rbp;
-        rip = _ReturnAddress();
-    } else {
-        CONTEXT *context = (CONTEXT *)uap;
-        rip = (void *)context->Rip;
-        rbp = (void *)context->Rbp;
-    }
-#endif
     int N = terra_backtrace(frames, maxN, rip, rbp);
+#else
+    CONTEXT context;
+    if (uap == NULL) {
+        RtlCaptureContext(&context);
+        // Step out of this function first, so that the walk starts in the frame
+        // that asked for the traceback, as it does on POSIX.
+        if (!unwindnative(&context, true)) return;
+    } else {
+        context = *(CONTEXT *)uap;
+    }
+    int N = terra_backtrace_context(C, frames, maxN, &context);
+#endif
 
 #ifndef _WIN32
     char **symbols = backtrace_symbols(frames, N);
