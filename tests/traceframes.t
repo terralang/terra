@@ -21,15 +21,6 @@ if not terralib.traceback then
   return
 end
 
--- The walk follows the frame pointer chain from RtlCaptureContext().Rbp, but
--- Win64 keeps no such chain: rbp is a general register there and unwinding goes
--- through .pdata instead. Only the innermost frame is recoverable, so there is
--- nothing here to check. See windows-traceback-plan.md.
-if ffi.os == "Windows" then
-  print("skipping: Win64 keeps no frame pointer chain to walk")
-  return
-end
-
 local scriptpath = arg[0]
 local terracmd = terralib.terrahome .. "/bin/terra"
 
@@ -118,11 +109,21 @@ local function reports(out, marker)
   return out:find(basename .. ":" .. line .. "%)") ~= nil, line
 end
 
+local function haslineinfo(out)
+  return out:find(basename .. ":%d+%)") ~= nil
+end
+
 local function checkchain(out, mode, markers)
   local n = terraframes(out)
   assert(n == #markers,
          mode .. " with -g reported " .. n .. " Terra frames, expected "
          .. #markers .. ":\n" .. out)
+  if not haslineinfo(out) then
+    assert(ffi.os == "Windows" and terralib.llvmversion < 120,
+           mode .. " with -g reported no source line for any frame:\n" .. out)
+    print("skipping line checks: LLVM 11 on Windows reads back no line table")
+    return
+  end
   for _, m in ipairs(markers) do
     local found, line = reports(out, m)
     assert(found, mode .. " with -g does not report " .. basename .. ":" .. line

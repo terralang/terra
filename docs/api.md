@@ -1209,8 +1209,7 @@ All entries in the table except the `Triple` field are optional. [Documentation]
 Debugging
 =========
 
-Terra provides a few library functions to help debug and performance tune code. Except for `currenttimeinseconds`,
-these debugging facilities are only available on OSX and Linux.
+Terra provides a few library functions to help debug and performance tune code.
 
 ---
 
@@ -1222,7 +1221,7 @@ A Lua function that returns the current time in seconds since some fixed time in
 
     terra terralib.traceback(uctx : &opaque)
 
-A Terra function that can be called from Terra code to print a stack trace. If `uctx` is `nil` then this will print the current stack. `uctx` can also be a pointer to a `ucontext_t` object (see `ucontext.h`) and will print the stack trace for that context.
+A Terra function that can be called from Terra code to print a stack trace. If `uctx` is `nil` then this will print the current stack. `uctx` can also be a pointer to a suspended context and will print the stack trace for that context: a `ucontext_t` object (see `ucontext.h`) on POSIX, or a `CONTEXT` record on Windows.
 By default, the interpreter will print this information when a program segfaults.
 
 ---
