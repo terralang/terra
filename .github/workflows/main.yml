@@ -57,7 +57,7 @@ jobs:
             llvm: '15'
 
           # CUDA: only LLVM 22
-          - llvm: '12'
+          - llvm: '11'
             cuda: '1'
           - llvm: '12'
             cuda: '1'
