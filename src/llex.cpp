@@ -198,6 +198,8 @@ void luaX_setinput(terra_State *LP, LexState *ls, ZIO *z, TString *source,
     ls->LP = LP;
     ls->current = firstchar;
     ls->currentoffset = 0;
+    ls->start_offset = 0;
+    ls->ws_start_offset = 0;
     ls->lookahead.token = TK_EOS; /* no look-ahead token */
     ls->z = z;
     ls->fs = NULL;
@@ -561,6 +563,8 @@ static int llex(LexState *ls, SemInfo *seminfo) {
             ls->output_buffer.N - 1;  //- 1 because we already recorded the first token
     seminfo->linebegin = ls->linenumber;  // no -1 because we haven't incremented line
                                           // info for this token yet
+
+    ls->ws_start_offset = ls->currentoffset;
     for (;;) {
         switch (ls->current) {
             case '\n':
@@ -576,6 +580,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 break;
             }
             case '-': { /* '-' or '--' (comment) */
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current == '>') {
                     next(ls);
@@ -600,6 +605,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 break;
             }
             case '[': { /* long string or simply '[' */
+                ls->start_offset = ls->currentoffset;
                 int sep = skip_sep(ls);
                 if (sep >= 0) {
                     read_long_string(ls, seminfo, sep);
@@ -610,6 +616,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                     lexerror(ls, "invalid long string delimiter", TK_STRING);
             }
             case '=': {
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current != '=')
                     return '=';
@@ -619,6 +626,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 }
             }
             case '<': {
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current == '=') {
                     next(ls);
@@ -630,6 +638,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                     return '<';
             }
             case '>': {
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current == '=') {
                     next(ls);
@@ -641,6 +650,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                     return '>';
             }
             case '~': {
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current != '=')
                     return '~';
@@ -650,6 +660,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 }
             }
             case ':': {
+                ls->start_offset = ls->currentoffset;
                 next(ls);
                 if (ls->current != ':')
                     return ':';
@@ -660,10 +671,12 @@ static int llex(LexState *ls, SemInfo *seminfo) {
             }
             case '"':
             case '\'': { /* short literal strings */
+                ls->start_offset = ls->currentoffset;
                 read_string(ls, ls->current, seminfo);
                 return TK_STRING;
             }
             case '.': { /* '.', '..', '...', or number */
+                ls->start_offset = ls->currentoffset;
                 save_and_next(ls);
                 if (check_next(ls, ".")) {
                     if (check_next(ls, "."))
@@ -684,6 +697,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
             case '7':
             case '8':
             case '9': {
+                ls->start_offset = ls->currentoffset;
                 read_numeral(ls, seminfo);
                 return TK_NUMBER;
             }
@@ -695,6 +709,7 @@ static int llex(LexState *ls, SemInfo *seminfo) {
                 return TK_EOS;
             }
             default: {
+                ls->start_offset = ls->currentoffset;
                 if (lislalpha(ls->current)) { /* identifier or reserved word? */
                     TString *ts;
                     do {
